@@ -18,3 +18,11 @@ if (dropdown && dropdownButton) {
     }
   });
 }
+
+document.querySelectorAll(".main-nav a").forEach((link) => {
+  link.addEventListener("click", () => {
+    if (window.innerWidth <= 860 && mainNav) {
+      mainNav.classList.remove("is-open");
+    }
+  });
+});
