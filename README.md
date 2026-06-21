@@ -70,3 +70,26 @@ Foram padronizadas as 10 páginas de serviços com:
 - Seções: Para quem é indicado, Benefícios/coberturas, Como a Transmares ajuda, FAQ e CTA final.
 - Textos mais comerciais e escaneáveis.
 - Layout responsivo para mobile.
+
+## Fase 8.3 — Blog, artigos e contato
+
+Foram refinados:
+- Blog transformado em Central de Conteúdo com hero, artigo em destaque e cards.
+- Página de contato com rotas claras: cotação, e-mail, SAC e assuntos principais.
+- Artigos receberam CTA final mais alinhado ao conteúdo e à conversão.
+- CSS responsivo para blog, contato e artigos.
+
+## Migração do Hub — Pasta `/hub`
+
+O Painel Operacional TRS foi integrado ao mesmo projeto do site, dentro da pasta `/hub`.
+
+Acesso de teste:
+- `https://transmares.netlify.app/hub/`
+
+Acesso planejado:
+- `https://hub.transmaresseguros.com.br`
+
+Configuração adicionada:
+- Regra em `_redirects` para direcionar o subdomínio `hub.transmaresseguros.com.br` para `/hub`.
+- Headers `noindex,nofollow` para reduzir indexação pública do painel.
+- Publicados apenas os arquivos necessários do frontend do hub; `.git`, handoff, scripts locais e `apps-script/Code.gs` não foram incluídos.
