@@ -9,8 +9,10 @@ Primeira versão de migração do site da Transmares Seguros para HTML/CSS/JS.
 - `contato.html`: contato
 - `servicos/`: páginas individuais de serviços
 - `artigos/`: páginas individuais do blog
-- `assets/css/styles.css`: estilos globais
-- `assets/js/main.js`: interações básicas
+- `src/site/styles.css`: estilos globais do site institucional
+- `src/site/main.js`: interações básicas do site institucional
+- `src/hub/style.css`: estilos do Hub/Painel
+- `src/hub/app.js`: aplicação principal do Hub/Painel
 
 ## Deploy recomendado
 
@@ -93,3 +95,29 @@ Configuração adicionada:
 - Regra em `_redirects` para direcionar o subdomínio `hub.transmaresseguros.com.br` para `/hub`.
 - Headers `noindex,nofollow` para reduzir indexação pública do painel.
 - Publicados apenas os arquivos necessários do frontend do hub; `.git`, handoff, scripts locais e `apps-script/Code.gs` não foram incluídos.
+
+
+## Fase 9 — Vite + Supabase
+
+Projeto migrado para Vite Vanilla na raiz do repositório.
+
+- `npm run dev`: ambiente local.
+- `npm run build`: build para Netlify.
+- `npm run preview`: prévia local do build.
+- `src/hub/supabaseClient.js`: cliente Supabase via variáveis de ambiente.
+- `src/hub/services/arService.js`: leitura de `produtos_ar`, `parceiros` e geração inicial de links AR.
+- `src/hub/api.js`: camada de dados do Hub com Supabase e fallback temporário do Apps Script legado.
+- `backup/fase-vite-supabase-original`: cópia dos arquivos antes desta fase.
+
+Limpeza desta versão:
+
+- Os arquivos duplicados antigos fora de `backup/` foram removidos.
+- Assets públicos finais ficaram em `public/`.
+- Código fonte editável ficou em `src/`.
+- A pasta `backup/` foi preservada integralmente.
+
+Configure as variáveis no Netlify:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_LEGACY_APPS_SCRIPT_URL` temporariamente, enquanto os módulos antigos ainda não forem migrados.
