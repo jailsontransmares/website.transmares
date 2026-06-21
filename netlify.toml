@@ -1,4 +1,4 @@
-ge[build]
+[build]
   publish = "."
 
 [[headers]]
@@ -7,7 +7,6 @@ ge[build]
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-
 
 [[headers]]
   for = "/hub/*"
