@@ -60,3 +60,13 @@ Foram refinados:
 - Menu mobile mais enxuto, ocultando descrições longas.
 - Favicon provisório em SVG.
 - Ajustes de hover, hierarquia e escaneabilidade.
+
+## Fase 8.2 — Páginas internas de serviços
+
+Foram padronizadas as 10 páginas de serviços com:
+- Hero específico do serviço.
+- Bloco de resumo.
+- Navegação lateral interna.
+- Seções: Para quem é indicado, Benefícios/coberturas, Como a Transmares ajuda, FAQ e CTA final.
+- Textos mais comerciais e escaneáveis.
+- Layout responsivo para mobile.
