@@ -1,5 +1,4 @@
 # Hub / Painel Operacional TRS
-/hub /hub/ 301
 https://hub.transmaresseguros.com.br/* /hub/:splat 200
 
 /planos-individuais /servicos/planos-individuais.html 301
