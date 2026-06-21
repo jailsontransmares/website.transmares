@@ -1,0 +1,18 @@
+# Hub / Painel Operacional TRS
+https://hub.transmaresseguros.com.br/* /hub/:splat 200
+
+/planos-individuais /servicos/planos-individuais.html 301
+/seguro-auto /servicos/seguro-auto.html 301
+/seguro-de-vida-individual /servicos/seguro-de-vida-individual.html 301
+/seguro-residencial /servicos/seguro-residencial.html 301
+/seguro-de-risco-empresarial /servicos/seguro-de-risco-empresarial.html 301
+/seguro-condominio /servicos/seguro-condominio.html 301
+/seguro-de-vida-coletivo /servicos/seguro-de-vida-coletivo.html 301
+/planos-empresa /servicos/planos-empresa.html 301
+/consorcio /servicos/consorcio.html 301
+/certificados-digitais /servicos/certificados-digitais.html 301
+/proteja-seu-futuro-a-importancia-do-seguro-para-doencas-graves /artigos/doencas-graves.html 301
+/seguro-de-vida-a-chave-para-um-planejamento-sucessorio-eficiente /artigos/planejamento-sucessorio.html 301
+/consorcio-imobiliario-uma-estrategia-inteligente-para-aposentadoria /artigos/consorcio-aposentadoria.html 301
+/certificado-digital-por-videoconferencia-tudo-o-que-voce-precisa-saber /artigos/certificado-digital-videoconferencia.html 301
+/tudo-que-voce-precisa-saber-sobre-o-consorcio-de-imoveis /artigos/consorcio-imoveis.html 301
