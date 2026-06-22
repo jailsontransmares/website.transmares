@@ -66,6 +66,7 @@
   --transition-fast: 120ms ease;
   --transition-default: 180ms ease;
   --transition-slow: 220ms ease;
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body.dark {
@@ -91,13 +92,21 @@ body.dark {
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--cor-principal) 7%, transparent), transparent 260px),
     var(--fundo);
   color: var(--texto);
 }
-
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
 #app {
   min-height: 100vh;
   padding: 24px;
@@ -125,7 +134,45 @@ body {
   max-width: 420px;
   margin-top: 8vh;
 }
+.login-loading-screen {
+  min-height: calc(100vh - 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
+.login-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  color: var(--texto);
+}
+
+.login-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 3px solid color-mix(in srgb, var(--cor-principal) 18%, transparent);
+  border-top-color: var(--cor-principal);
+  animation: loginLoadingSpin 0.85s linear infinite;
+}
+
+.login-loading-content p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--texto-suave);
+}
+
+@keyframes loginLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .login-logo {
   margin-bottom: 18px;
   display: flex;
@@ -2362,10 +2409,14 @@ body.dark .password-row h3 {
 }
 
 .ar-mvp-hero {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--cor-principal) 12%, var(--card)), var(--card));
-  border: 1px solid var(--borda);
-  border-radius: 16px;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--cor-principal) 10%, var(--card)),
+    color-mix(in srgb, var(--card) 86%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 14%, var(--borda));
+  border-radius: 18px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.07);
   padding: 18px;
 }
 
@@ -2396,19 +2447,46 @@ body.dark .password-row h3 {
   gap: 14px;
 }
 
+.ar-flow-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.ar-flow-product {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.ar-flow-budget {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.ar-flow-partner {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.ar-flow-links {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .ar-flow-card {
-  background: var(--card);
-  border: 1px solid var(--borda);
-  border-radius: 16px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
+  border-radius: 18px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
   display: grid;
   gap: 14px;
+  height: 100%;
+  min-width: 0;
   padding: 16px;
 }
 
 .ar-flow-card-header {
   align-items: flex-start;
-  border-bottom: 1px solid var(--borda);
+  border-bottom: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
   display: flex;
   gap: 12px;
   padding-bottom: 12px;
@@ -2428,8 +2506,9 @@ body.dark .password-row h3 {
 
 .ar-step-number {
   align-items: center;
-  background: var(--cor-principal);
+  background: linear-gradient(135deg, var(--cor-principal), color-mix(in srgb, var(--cor-principal) 72%, #ffffff));
   border-radius: 999px;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--cor-principal) 22%, transparent);
   color: white;
   display: inline-flex;
   flex: 0 0 auto;
@@ -2441,9 +2520,9 @@ body.dark .password-row h3 {
 }
 
 .ar-mvp-card {
-  background: color-mix(in srgb, var(--fundo) 70%, var(--card));
-  border: 1px solid var(--borda);
-  border-radius: 14px;
+  background: color-mix(in srgb, var(--fundo) 46%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 8%, var(--borda));
+  border-radius: 16px;
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -2487,21 +2566,23 @@ body.dark .password-row h3 {
 }
 
 .ar-mvp-input {
-  background: var(--card);
-  border: 1px solid var(--borda);
-  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
+  border-radius: 14px;
   color: var(--texto);
   font: inherit;
   font-size: 14px;
-  min-height: 42px;
+  min-height: 44px;
   outline: none;
-  padding: 10px 12px;
+  padding: 10px 13px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   width: 100%;
 }
 
 .ar-mvp-input:focus {
+  background: var(--card);
   border-color: var(--cor-principal);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-principal) 15%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cor-principal) 13%, transparent);
 }
 
 .ar-suggestions {
@@ -2615,25 +2696,36 @@ body.dark .password-row h3 {
   gap: 7px;
 }
 
-.ar-selected-product-meta span,
-.ar-selected-product-meta strong {
-  background: var(--fundo);
-  border: 1px solid var(--borda);
-  border-radius: 999px;
+.ar-selected-product-meta span {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--texto-suave);
   font-size: 12px;
-  padding: 6px 9px;
+  font-weight: 700;
+  padding: 0;
 }
 
-.ar-selected-product-meta strong {
-  color: var(--cor-destaque);
+.ar-selected-product-meta span + span::before {
+  content: "•";
+  color: color-mix(in srgb, var(--cor-principal) 48%, var(--texto-suave));
+  font-weight: 900;
+  margin-right: 7px;
+}
+.ar-product-suggestion-meta {
+  background: transparent;
+  border: 0;
+  color: var(--texto-suave);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
 }
 
 .ar-action-box {
   align-items: center;
-  background: color-mix(in srgb, var(--fundo) 75%, var(--card));
-  border: 1px solid var(--borda);
-  border-radius: 14px;
+  background: color-mix(in srgb, var(--fundo) 56%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
+  border-radius: 16px;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -2652,6 +2744,17 @@ body.dark .password-row h3 {
   margin: 0;
 }
 @media (max-width: 760px) {
+    .ar-flow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ar-flow-product,
+  .ar-flow-budget,
+  .ar-flow-partner,
+  .ar-flow-links {
+    grid-column: auto;
+    grid-row: auto;
+  }
   #app {
     padding: 14px;
   }
@@ -2684,13 +2787,15 @@ body.dark .password-row h3 {
 /* ===== Painel AR — Orçamento ===== */
 
 .ar-budget-card {
-  background: linear-gradient(135deg, var(--card), color-mix(in srgb, var(--cor-principal) 5%, var(--card)));
-  border: 1px solid color-mix(in srgb, var(--cor-principal) 18%, var(--borda));
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 16%, var(--borda));
   border-radius: 16px;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
   display: grid;
-  gap: 14px;
-  padding: 16px;
+  gap: 12px;
+  height: 100%;
+  align-content: start;
+  padding: 14px;
 }
 
 .ar-budget-top {
@@ -2701,15 +2806,15 @@ body.dark .password-row h3 {
 }
 
 .ar-budget-top h3 {
-  font-size: 17px;
-  line-height: 1.3;
-  margin: 4px 0 4px;
+  font-size: 15px;
+  line-height: 1.25;
+  margin: 3px 0 3px;
 }
 
 .ar-budget-top p {
   color: var(--texto-suave);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.35;
   margin: 0;
 }
 
@@ -2727,60 +2832,74 @@ body.dark .password-row h3 {
 
 .ar-budget-values {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.ar-budget-values-inline {
+  align-items: stretch;
+}
+
 .ar-budget-value {
-  background: var(--card);
-  border: 1px solid var(--borda);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 8%, var(--borda));
   border-radius: 14px;
   display: grid;
-  gap: 4px;
-  padding: 12px;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
 }
 
 .ar-budget-value span {
   color: var(--texto-suave);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
   text-transform: uppercase;
 }
 
 .ar-budget-value strong {
   color: var(--texto);
-  font-size: 17px;
+  font-size: 14px;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .ar-budget-value.primary {
-  border-color: color-mix(in srgb, var(--cor-principal) 35%, var(--borda));
+  background: color-mix(in srgb, var(--cor-principal) 9%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-principal) 34%, var(--borda));
 }
 
 .ar-budget-value.primary strong {
   color: var(--cor-principal);
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .ar-budget-value.economy {
-  background: color-mix(in srgb, var(--cor-destaque) 12%, var(--card));
-  border-color: color-mix(in srgb, var(--cor-destaque) 35%, var(--borda));
+  background: color-mix(in srgb, var(--cor-destaque) 10%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-destaque) 32%, var(--borda));
 }
 
 .ar-budget-value.economy strong {
   color: var(--cor-destaque);
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .ar-whatsapp-preview {
-  background: #0B141A;
+  background: color-mix(in srgb, var(--fundo) 62%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
   border-radius: 14px;
-  color: #E9EDEF;
+  color: var(--texto);
   display: grid;
   gap: 8px;
   padding: 13px;
 }
 
 .ar-whatsapp-preview span {
-  color: #AEBAC1;
+  color: var(--cor-principal);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.04em;
@@ -2788,8 +2907,8 @@ body.dark .password-row h3 {
 }
 
 .ar-whatsapp-preview pre {
-  color: #E9EDEF;
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--texto);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
@@ -2820,10 +2939,10 @@ body.dark .password-row h3 {
 /* ===== Painel AR — Parceiro ===== */
 
 .ar-partner-card-modern {
-  background: var(--card);
-  border: 1px solid var(--borda);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
   border-radius: 16px;
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -2940,9 +3059,9 @@ body.dark .password-row h3 {
 
 .ar-generated-link-card {
   align-items: center;
-  background: var(--card);
-  border: 1px solid var(--borda);
-  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, var(--borda));
+  border-radius: 15px;
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -106,15 +106,10 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', iniciarApp);
 
-async function iniciarApp() {
+async function iniciarApp(exibirLoadingInicial = true) {
   try {
-    renderLoading();
-
-    const sessao = await obterSessaoAtual();
-
-    if (!sessao) {
-      renderLogin();
-      return;
+    if (exibirLoadingInicial) {
+      renderLoading();
     }
 
     const response = await chamarApi('getInitialData');
@@ -172,6 +167,16 @@ function renderLogin() {
   `;
 }
 
+function renderLoginLoading() {
+  document.getElementById('app').innerHTML = `
+    <section class="login-loading-screen" aria-live="polite" aria-busy="true">
+      <div class="login-loading-content">
+        <div class="login-loading-spinner" aria-hidden="true"></div>
+        <p>Carregando...</p>
+      </div>
+    </section>
+  `;
+}
 async function entrarNoHub(event) {
   event.preventDefault();
 
@@ -182,10 +187,10 @@ async function entrarNoHub(event) {
     state.auth.email = email;
     state.auth.loading = true;
     state.auth.message = '';
-    renderLogin();
+  renderLoginLoading();
 
     await entrarComSenha(email, password);
-    await iniciarApp();
+    await iniciarApp(false);
   } catch (erro) {
     state.auth.loading = false;
     state.auth.message = erro.message || 'Não foi possível entrar. Confira e-mail e senha.';
@@ -1996,59 +2001,61 @@ function renderGeradorLinksAr() {
         </div>
       </div>
 
-      <div class="ar-flow">
-        <section class="ar-flow-card">
-          <div class="ar-flow-card-header">
-            <span class="ar-step-number">1</span>
-            <div>
-              <h3>Produto</h3>
-              <p>Selecione o certificado digital desejado.</p>
-            </div>
-          </div>
-
-          ${renderPainelProdutoMvpAr()}
-        </section>
-
-        <section class="ar-flow-card">
-          <div class="ar-flow-card-header">
-            <span class="ar-step-number">2</span>
-            <div>
-              <h3>Orçamento</h3>
-              <p>Confira os valores antes de gerar os links.</p>
-            </div>
-          </div>
-
-          ${renderOrcamentoAr()}
-        </section>
-
-        <section class="ar-flow-card">
-          <div class="ar-flow-card-header">
-            <span class="ar-step-number">3</span>
-            <div>
-              <h3>Parceiro</h3>
-              <p>Selecione o parceiro responsável pelo atendimento.</p>
-            </div>
-          </div>
-
-          ${renderPainelParceiroMvpAr()}
-        </section>
-
-        <section class="ar-flow-card">
-          <div class="ar-flow-card-header">
-            <span class="ar-step-number">4</span>
-            <div>
-              <h3>Links</h3>
-              <p>Gere, abra ou copie os links finais.</p>
-            </div>
-          </div>
-
-          ${renderAcaoGerarLinksAr()}
-          ${renderResultadoAr()}
-        </section>
+      <div class="ar-flow ar-flow-grid">
+  <section class="ar-flow-card ar-flow-product">
+    <div class="ar-flow-card-header">
+      <span class="ar-step-number">1</span>
+      <div>
+        <h3>Produto</h3>
+        <p>Selecione o certificado digital desejado.</p>
       </div>
+    </div>
+
+    ${renderPainelProdutoMvpAr()}
+  </section>
+
+  <section class="ar-flow-card ar-flow-budget">
+    <div class="ar-flow-card-header">
+      <span class="ar-step-number">2</span>
+      <div>
+        <h3>Orçamento</h3>
+        <p>Confira os valores antes de gerar os links.</p>
+      </div>
+    </div>
+
+    ${renderOrcamentoAr()}
+  </section>
+
+  <section class="ar-flow-card ar-flow-partner">
+    <div class="ar-flow-card-header">
+      <span class="ar-step-number">3</span>
+      <div>
+        <h3>Parceiro</h3>
+        <p>Selecione o parceiro responsável pelo atendimento.</p>
+      </div>
+    </div>
+
+    ${renderPainelParceiroMvpAr()}
+  </section>
+
+  <section class="ar-flow-card ar-flow-links">
+    <div class="ar-flow-card-header">
+      <span class="ar-step-number">4</span>
+      <div>
+        <h3>Links</h3>
+        <p>Gere, abra ou copie os links finais.</p>
+      </div>
+    </div>
+
+    ${renderAcaoGerarLinksAr()}
+    ${renderResultadoAr()}
+  </section>
+</div>
+  </div>
     </section>
   `;
 }
+
 function renderAcaoGerarLinksAr() {
   const produto = obterProdutoSelecionadoAr();
   const parceiro = obterParceiroSelecionadoAr();
@@ -2265,8 +2272,6 @@ function renderBuscaProdutoUnicaAr() {
   `;
 }
 function renderProdutoSelecionadoResumoAr(produto) {
-  const economia = formatarEconomiaProdutoAr(produto);
-
   return `
     <article class="ar-selected-product">
       <div>
@@ -2281,18 +2286,34 @@ function renderProdutoSelecionadoResumoAr(produto) {
       <div class="ar-selected-product-meta">
         ${produto.ac ? `<span>AC: ${escapeHtml(produto.ac)}</span>` : ''}
         ${produto.midia ? `<span>Mídia: ${escapeHtml(produto.midia)}</span>` : ''}
-        ${produto.preco_com_desconto ? `<span>Com desconto: ${escapeHtml(formatarMoedaProdutoAr(produto.preco_com_desconto))}</span>` : ''}
-        ${produto.preco_sem_desconto ? `<span>Sem desconto: ${escapeHtml(formatarMoedaProdutoAr(produto.preco_sem_desconto))}</span>` : ''}
-        ${economia ? `<strong>Economia: ${escapeHtml(economia)}</strong>` : ''}
       </div>
     </article>
   `;
 }
 function alterarBuscaProdutoAr(valor) {
+  const tinhaProdutoSelecionado = Boolean(state.ar.produtoId);
+
   state.ar.produtoBusca = valor;
   state.ar.produtoId = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
+
+  if (tinhaProdutoSelecionado) {
+    renderPainelAr();
+
+    requestAnimationFrame(() => {
+      const input = document.getElementById('ar_produto_busca');
+
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+
+      atualizarSugestoesProdutoUnicoDomAr();
+    });
+
+    return;
+  }
 
   atualizarEstadoBotaoGerarAr();
   atualizarSugestoesProdutoUnicoDomAr();
@@ -2311,31 +2332,20 @@ function atualizarSugestoesProdutoUnicoDomAr() {
   }
 
   box.hidden = false;
-  box.innerHTML = produtos.map(produto => {
-    const economia = formatarEconomiaProdutoAr(produto);
+  box.innerHTML = produtos.map(produto => `
+  <button type="button" onclick="selecionarProdutoCompletoAr('${escapeAttr(produto.id)}')">
+    <strong>${escapeHtml(produto.descricao_comercial || produto.produto || 'Certificado digital')}</strong>
 
-    return `
-      <button type="button" onclick="selecionarProdutoCompletoAr('${escapeAttr(produto.id)}')">
-        <strong>${escapeHtml(produto.descricao_comercial || produto.produto || 'Certificado digital')}</strong>
+    <span>
+      ${escapeHtml(produto.modelo || 'Modelo não informado')}
+      ${produto.validade ? ` · Validade: ${escapeHtml(produto.validade)}` : ''}
+    </span>
 
-        <span>
-          ${escapeHtml(produto.modelo || 'Modelo não informado')}
-          ${produto.validade ? ` · <b class="ar-validity-pill">Validade: ${escapeHtml(produto.validade)}</b>` : ''}
-        </span>
-
-        <small>
-          ${produto.ac ? `AC: ${escapeHtml(produto.ac)}` : ''}
-          ${produto.midia ? ` · Mídia: ${escapeHtml(produto.midia)}` : ''}
-        </small>
-
-        <small>
-          ${produto.preco_com_desconto ? `Com desconto: ${escapeHtml(formatarMoedaProdutoAr(produto.preco_com_desconto))}` : ''}
-          ${produto.preco_sem_desconto ? ` · Sem desconto: ${escapeHtml(formatarMoedaProdutoAr(produto.preco_sem_desconto))}` : ''}
-          ${economia ? ` · Economia: ${escapeHtml(economia)}` : ''}
-        </small>
-      </button>
-    `;
-  }).join('');
+    <small class="ar-product-suggestion-meta">
+      ${[produto.ac ? `AC: ${escapeHtml(produto.ac)}` : '', produto.midia ? `Mídia: ${escapeHtml(produto.midia)}` : ''].filter(Boolean).join(' · ')}
+    </small>
+  </button>
+`).join('');
 }
 
 function produtosFiltradosBuscaUnicaAr() {
@@ -2759,24 +2769,16 @@ function renderOrcamentoAr() {
 
   return `
     <article class="ar-budget-card">
-      <div class="ar-budget-top">
-        <div>
-          <span class="ar-mini-label">Orçamento do certificado digital</span>
-          <h3>${escapeHtml(produto.descricao_comercial || produto.produto || 'Certificado digital')}</h3>
-          <p>
-            ${escapeHtml(produto.modelo || 'Modelo não informado')}
-            ${produto.validade ? ` · Validade: ${escapeHtml(produto.validade)}` : ''}
-          </p>
+      <div class="ar-budget-top ar-budget-top-compact">
+  <div>
+    <span class="ar-mini-label">Orçamento</span>
+    <h3>${escapeHtml(produto.descricao_comercial || produto.produto || 'Certificado digital')}</h3>
+           <p>Resumo do produto selecionado.</p>
         </div>
 
-        ${produto.validade ? `
-          <span class="ar-budget-validity">
-            ${escapeHtml(produto.validade)}
-          </span>
-        ` : ''}
-      </div>
+        </div>
 
-      <div class="ar-budget-values">
+      <div class="ar-budget-values ar-budget-values-inline">
         <div class="ar-budget-value primary">
           <span>Com desconto</span>
           <strong>${escapeHtml(precoComDesconto)}</strong>
@@ -2799,12 +2801,12 @@ function renderOrcamentoAr() {
       </div>
 
       <button 
-        id="ar_copiar_orcamento" 
+        id="ar_copy_orcamento" 
         class="secondary-btn ar-copy-budget-btn" 
         type="button" 
         onclick="copiarOrcamentoAr()">
-        Copiar orçamento
-      </button>
+       Copiar orçamento
+    </button>
     </article>
   `;
 }
@@ -3252,15 +3254,50 @@ function parseMoedaAr(valor) {
     return null;
   }
 
-  const texto = String(valor).replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.');
+  let texto = String(valor)
+    .trim()
+    .replace(/[^\d,.-]/g, '');
 
   if (!texto) {
     return null;
   }
 
-  const numero = Number(texto);
+  const negativo = texto.includes('-');
+  texto = texto.replace(/-/g, '');
 
-  return Number.isNaN(numero) ? null : numero;
+  const temVirgula = texto.includes(',');
+  const temPonto = texto.includes('.');
+
+  let normalizado = texto;
+
+  if (temVirgula && temPonto) {
+    const ultimaVirgula = texto.lastIndexOf(',');
+    const ultimoPonto = texto.lastIndexOf('.');
+
+    if (ultimaVirgula > ultimoPonto) {
+      normalizado = texto.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalizado = texto.replace(/,/g, '');
+    }
+  } else if (temVirgula) {
+    normalizado = texto.replace(/\./g, '').replace(',', '.');
+  } else if (temPonto) {
+    const partes = texto.split('.');
+    const ultimaParte = partes[partes.length - 1];
+
+    if (ultimaParte.length <= 2) {
+      normalizado = texto.replace(/,/g, '');
+    } else {
+      normalizado = texto.replace(/\./g, '');
+    }
+  } else if (/^\d+$/.test(texto) && texto.length > 3) {
+    normalizado = String(Number(texto) / 100);
+  }
+
+  const numero = Number(normalizado);
+  const valorFinal = negativo ? -numero : numero;
+
+  return Number.isNaN(valorFinal) ? null : valorFinal;
 }
 
 function formatarMoedaNumeroAr(valor) {
