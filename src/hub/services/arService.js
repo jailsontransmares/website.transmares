@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient.js';
+import { exigirSupabaseConfigurado } from '../supabaseClient.js';
 
 function normalizarStatus(status) {
   return String(status || '').trim().toLowerCase();
@@ -27,6 +27,7 @@ function montarLinkProduto({ produto, parceiro, grupo }) {
 }
 
 export async function carregarProdutosAR() {
+  const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('produtos_ar')
     .select('*')
@@ -42,6 +43,7 @@ export async function carregarProdutosAR() {
 }
 
 export async function carregarParceirosAtivos() {
+  const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('parceiros')
     .select('*')
@@ -57,6 +59,7 @@ export async function carregarParceirosAtivos() {
 }
 
 export async function carregarHistoricoLinksAR() {
+  const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('historico_links')
     .select('*')
@@ -82,6 +85,7 @@ export async function carregarDadosAR() {
 }
 
 export async function gerarLinksAR({ produto_id, parceiro_id }) {
+  const supabase = exigirSupabaseConfigurado();
   const [{ data: produto, error: erroProduto }, { data: parceiro, error: erroParceiro }] = await Promise.all([
     supabase.from('produtos_ar').select('*').eq('id', produto_id).single(),
     supabase.from('parceiros').select('*').eq('id', parceiro_id).single()

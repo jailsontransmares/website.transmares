@@ -105,18 +105,44 @@ body {
 
 .loading-card,
 .error-card,
+.login-card,
 .dashboard {
   max-width: 1180px;
   margin: 0 auto;
 }
 
 .loading-card,
-.error-card {
+.error-card,
+.login-card {
   background: var(--card);
   border: var(--border-subtle);
   border-radius: var(--radius-card);
   padding: 28px;
   box-shadow: var(--shadow-card);
+}
+
+.login-card {
+  max-width: 420px;
+  margin-top: 8vh;
+}
+
+.login-logo {
+  margin-bottom: 18px;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.logout-btn {
+  margin-top: 8px;
 }
 
 .topbar {
