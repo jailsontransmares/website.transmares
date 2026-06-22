@@ -144,11 +144,11 @@ async function iniciarApp() {
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <section class="login-card">
-      <div class="brand-logo-slot login-logo" aria-label="Transmares Corretora de Seguros">
+      <div class="login-logo" aria-label="Transmares Corretora de Seguros">
         <img src="assets/logo-transmares.png" alt="Transmares Corretora de Seguros">
       </div>
 
-      <h1>PAINEL TRANSMARES</h1>
+    <h1>Hub Transmares</h1>
       <p>Entre com seu e-mail e senha para acessar o Hub.</p>
 
       <form class="login-form" onsubmit="entrarNoHub(event)">
@@ -213,7 +213,7 @@ async function sair() {
 function renderLoading() {
   document.getElementById('app').innerHTML = `
     <section class="loading-card">
-      <h1>PAINEL TRANSMARES</h1>
+    <h1>Hub Transmares</h1>
       <p>Carregando sistema...</p>
     </section>
   `;

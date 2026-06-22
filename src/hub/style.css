@@ -128,6 +128,15 @@ body {
 
 .login-logo {
   margin-bottom: 18px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-logo img {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .login-form {

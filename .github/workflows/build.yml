@@ -1,0 +1,31 @@
+name: Build Check
+
+on:
+  push:
+    branches:
+      - main
+      - preview
+  pull_request:
+    branches:
+      - main
+      - preview
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Usar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar build
+        run: npm run build
