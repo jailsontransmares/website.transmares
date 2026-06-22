@@ -112,6 +112,20 @@ async function iniciarApp(exibirLoadingInicial = true) {
       renderLoading();
     }
 
+    const sessao = await obterSessaoAtual();
+
+    if (!sessao?.user?.email) {
+      state.usuario = null;
+      state.config = null;
+      state.cards = [];
+      state.avisos = [];
+      state.aniversariantes = [];
+      state.favoritos = [];
+      state.meta = null;
+      renderLogin();
+      return;
+    }
+
     const response = await chamarApi('getInitialData');
 
     if (!response.ok) {
@@ -132,7 +146,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     renderDashboard();
 
   } catch (erro) {
-    renderErro(erro.message || 'Erro ao carregar o sistema.');
+    renderLogin();
   }
 }
 
@@ -190,6 +204,9 @@ async function entrarNoHub(event) {
   renderLoginLoading();
 
     await entrarComSenha(email, password);
+    if (!sessao?.user?.email) {
+    throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
+    }
     await iniciarApp(false);
   } catch (erro) {
     state.auth.loading = false;
