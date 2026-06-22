@@ -201,12 +201,14 @@ async function entrarNoHub(event) {
     state.auth.email = email;
     state.auth.loading = true;
     state.auth.message = '';
-  renderLoginLoading();
+    renderLoginLoading();
 
-    await entrarComSenha(email, password);
+    const sessao = await entrarComSenha(email, password);
+
     if (!sessao?.user?.email) {
-    throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
+      throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
     }
+
     await iniciarApp(false);
   } catch (erro) {
     state.auth.loading = false;
