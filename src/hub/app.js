@@ -1,5 +1,6 @@
 import './style.css';
 import { chamarApi } from './api.js';
+import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 
 const state = {
   usuario: null,
@@ -9,6 +10,11 @@ const state = {
   aniversariantes: [],
   favoritos: [],
   meta: null,
+  auth: {
+    email: '',
+    loading: false,
+    message: ''
+  },
   admin: {
     aba: 'identidade',
     config: [],
@@ -104,6 +110,13 @@ async function iniciarApp() {
   try {
     renderLoading();
 
+    const sessao = await obterSessaoAtual();
+
+    if (!sessao) {
+      renderLogin();
+      return;
+    }
+
     const response = await chamarApi('getInitialData');
 
     if (!response.ok) {
@@ -126,6 +139,75 @@ async function iniciarApp() {
   } catch (erro) {
     renderErro(erro.message || 'Erro ao carregar o sistema.');
   }
+}
+
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+    <section class="login-card">
+      <div class="brand-logo-slot login-logo" aria-label="Transmares Corretora de Seguros">
+        <img src="assets/logo-transmares.png" alt="Transmares Corretora de Seguros">
+      </div>
+
+      <h1>PAINEL TRANSMARES</h1>
+      <p>Entre com seu e-mail e senha para acessar o Hub.</p>
+
+      <form class="login-form" onsubmit="entrarNoHub(event)">
+        <label>
+          <span>E-mail</span>
+          <input id="login_email" class="config-input" type="email" value="${escapeAttr(state.auth.email)}" autocomplete="email" required>
+        </label>
+
+        <label>
+          <span>Senha</span>
+          <input id="login_password" class="config-input" type="password" autocomplete="current-password" required>
+        </label>
+
+        ${state.auth.message ? `<p class="admin-message">${escapeHtml(state.auth.message)}</p>` : ''}
+
+        <button class="save-btn" type="submit" ${state.auth.loading ? 'disabled' : ''}>
+          ${state.auth.loading ? 'Entrando...' : 'Entrar'}
+        </button>
+      </form>
+    </section>
+  `;
+}
+
+async function entrarNoHub(event) {
+  event.preventDefault();
+
+  const email = document.getElementById('login_email')?.value || '';
+  const password = document.getElementById('login_password')?.value || '';
+
+  try {
+    state.auth.email = email;
+    state.auth.loading = true;
+    state.auth.message = '';
+    renderLogin();
+
+    await entrarComSenha(email, password);
+    await iniciarApp();
+  } catch (erro) {
+    state.auth.loading = false;
+    state.auth.message = erro.message || 'Não foi possível entrar. Confira e-mail e senha.';
+    renderLogin();
+  }
+}
+
+async function sair() {
+  try {
+    await sairDoHub();
+  } catch (erro) {
+    console.warn('Não foi possível encerrar a sessão:', erro);
+  }
+
+  state.usuario = null;
+  state.config = null;
+  state.cards = [];
+  state.avisos = [];
+  state.aniversariantes = [];
+  state.favoritos = [];
+  state.meta = null;
+  renderLogin();
 }
 
 function renderLoading() {
@@ -208,6 +290,7 @@ function renderDashboard() {
           <button class="theme-btn icon-only" onclick="alternarTema()" title="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}" aria-label="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}">
             ${state.temaAtual === 'escuro' ? '☀️' : '🌙'}
           </button>
+          <button class="secondary-btn logout-btn" type="button" onclick="sair()">Sair</button>
         </div>
       </header>
 
@@ -3270,9 +3353,11 @@ Object.assign(window, {
   fecharModalNovoRegistro,
   fecharModalSenha,
   filtrarAdmin,
+  entrarNoHub,
   gerarLinksAr,
   renderDashboard,
   restaurarCoresPadrao,
+  sair,
   salvarConfigAdmin,
   salvarLinkItem,
   salvarRegistroAdmin,

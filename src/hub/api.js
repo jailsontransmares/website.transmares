@@ -1,50 +1,23 @@
 import { carregarDadosAR, gerarLinksAR } from './services/arService.js';
-
-const LEGACY_APPS_SCRIPT_URL = import.meta.env.VITE_LEGACY_APPS_SCRIPT_URL;
-
-function chamarApiLegada(action, payload = {}) {
-  // TODO: substituir chamada Apps Script por Supabase.
-  if (!LEGACY_APPS_SCRIPT_URL) {
-    return Promise.resolve({
-      ok: false,
-      message: `Ação ${action} ainda depende do Apps Script legado. Configure VITE_LEGACY_APPS_SCRIPT_URL ou migre esta ação para Supabase.`
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const callbackName =
-      'jsonpCallback_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-
-    const params = new URLSearchParams({
-      action,
-      callback: callbackName,
-      payload: JSON.stringify(payload)
-    });
-
-    const script = document.createElement('script');
-    script.src = `${LEGACY_APPS_SCRIPT_URL}?${params.toString()}`;
-
-    window[callbackName] = function (response) {
-      cleanup();
-      resolve(response);
-    };
-
-    script.onerror = function () {
-      cleanup();
-      reject(new Error('Não foi possível conectar à API legada.'));
-    };
-
-    function cleanup() {
-      delete window[callbackName];
-
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    }
-
-    document.body.appendChild(script);
-  });
-}
+import {
+  carregarAdminData,
+  listarRegistrosAdmin,
+  restaurarCoresPadrao,
+  salvarConfig,
+  salvarRegistroAdmin,
+  salvarTemaUsuario
+} from './services/adminService.js';
+import { carregarDadosIniciaisSupabase } from './services/hubService.js';
+import {
+  alternarFavoritoLink,
+  carregarLinksData,
+  salvarLinkItem
+} from './services/linksService.js';
+import {
+  carregarPasswordsData,
+  salvarPasswordItem
+} from './services/passwordService.js';
+import { isSupabaseConfigured } from './supabaseClient.js';
 
 async function testarConexaoSupabase() {
   try {
@@ -55,10 +28,17 @@ async function testarConexaoSupabase() {
   }
 }
 
-testarConexaoSupabase();
+if (isSupabaseConfigured) {
+  testarConexaoSupabase();
+}
 
 export async function chamarApi(action, payload = {}) {
   try {
+    if (action === 'getInitialData') {
+      const dados = await carregarDadosIniciaisSupabase();
+      return { ok: true, data: dados };
+    }
+
     if (action === 'getArData') {
       const dados = await carregarDadosAR();
       return { ok: true, data: dados };
@@ -69,7 +49,29 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: resultado };
     }
 
-    return await chamarApiLegada(action, payload);
+    const acoes = {
+      getAdminData: () => carregarAdminData(),
+      listAdminRecords: () => listarRegistrosAdmin(payload),
+      saveAdminRecord: () => salvarRegistroAdmin(payload),
+      saveConfig: () => salvarConfig(payload),
+      restoreDefaultColors: () => restaurarCoresPadrao(),
+      saveUserTheme: () => salvarTemaUsuario(payload),
+      getLinksData: () => carregarLinksData(payload),
+      saveLinkItem: () => salvarLinkItem(payload),
+      toggleFavoriteLink: () => alternarFavoritoLink(payload),
+      getPasswordsData: () => carregarPasswordsData(payload),
+      savePasswordItem: () => salvarPasswordItem(payload)
+    };
+
+    if (!acoes[action]) {
+      return {
+        ok: false,
+        message: `Ação ${action} não foi implementada no Supabase.`
+      };
+    }
+
+    const dados = await acoes[action]();
+    return { ok: true, data: dados };
   } catch (erro) {
     console.error(`Erro ao executar ação ${action}:`, erro);
     return {
