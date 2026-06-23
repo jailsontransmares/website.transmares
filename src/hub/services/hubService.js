@@ -127,19 +127,34 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
 function normalizarCards(registros, usuario) {
   const ativos = registros.filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo');
   const cards = ativos
-    .map(item => ({
-      id: item.id_modulo || item.modulo_id || item.slug || item.id,
-      titulo: item.titulo || item.nome || item.label
-    }))
+    .map(item => {
+      const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
+      const ordem = Number(dados.ordem);
+
+      return {
+        id: dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.id,
+        titulo: item.titulo || item.nome || item.label,
+        ordem: Number.isFinite(ordem) ? ordem : 9999
+      };
+    })
     .filter(item => item.id && item.titulo);
+  cards.sort((a, b) => {
+    if (a.ordem !== b.ordem) {
+      return a.ordem - b.ordem;
+    }
+
+    return String(a.titulo || '').localeCompare(String(b.titulo || ''), 'pt-BR');
+  });
 
   const lista = cards.length ? cards : DEFAULT_CARDS;
 
   if (usuario?.perfil === 'gestor') {
-    return lista;
+    return lista.map(({ ordem, ...card }) => card);
   }
 
-  return lista.filter(card => card.id !== 'administracao');
+  return lista
+    .filter(card => card.id !== 'administracao')
+    .map(({ ordem, ...card }) => card);
 }
 
 function normalizarAvisos(registros, limite) {
@@ -221,7 +236,10 @@ export async function carregarDadosIniciaisSupabase() {
 
   const config = normalizarConfiguracoes(configuracoes);
   const usuario = normalizarUsuario(usuarios, authData?.user, perfis, grupos);
-  const moduloItens = itens.filter(item => ['modulo', 'card'].includes(obterTipoItem(item)));
+  const modulosCadastrados = itens.filter(item => obterTipoItem(item) === 'modulo');
+  const moduloItens = modulosCadastrados.length
+    ? modulosCadastrados
+    : itens.filter(item => obterTipoItem(item) === 'card');
   const linkItens = itens.filter(item => {
     const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
     const favoritos = Array.isArray(dados.favoritos) ? dados.favoritos : [];

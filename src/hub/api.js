@@ -10,10 +10,12 @@ import {
 } from './services/arValidacoesService.js';
 import {
   carregarAdminData,
+  listarModulosAdmin,
   listarRegistrosAdmin,
   restaurarCoresPadrao,
   salvarConfig,
   salvarRegistroAdmin,
+  salvarStatusModuloAdmin,
   salvarTemaUsuario
 } from './services/adminService.js';
 import { carregarDadosIniciaisSupabase } from './services/hubService.js';
@@ -95,8 +97,10 @@ export async function chamarApi(action, payload = {}) {
 
     const acoes = {
       getAdminData: () => carregarAdminData(),
+      listAdminModules: () => listarModulosAdmin(),
       listAdminRecords: () => listarRegistrosAdmin(payload),
       saveAdminRecord: () => salvarRegistroAdmin(payload),
+      updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
       saveConfig: () => salvarConfig(payload),
       restoreDefaultColors: () => restaurarCoresPadrao(),
       saveUserTheme: () => salvarTemaUsuario(payload),

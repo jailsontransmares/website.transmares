@@ -840,7 +840,7 @@ body.dark .module-card {
   padding: 0 6px;
 }
 
-.crud-header span:first-child {
+.crud-list:not(.admin-modules-list) .crud-header span:first-child {
   grid-column: 2;
 }
 

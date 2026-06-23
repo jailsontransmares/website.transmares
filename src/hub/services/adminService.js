@@ -11,6 +11,35 @@ const ENTIDADES_ADMIN = {
   grupos: 'grupos'
 };
 
+function normalizarStatus(status) {
+  return String(status || 'ativo').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo';
+}
+
+function getDadosItem(item) {
+  return item?.dados && typeof item.dados === 'object' ? item.dados : {};
+}
+
+function isModuloItem(item) {
+  return String(getDadosItem(item).tipo || item?.tipo || '').trim().toLowerCase() === 'modulo';
+}
+
+function normalizarModuloAdmin(item) {
+  const dados = getDadosItem(item);
+  const slug = String(dados.slug || item.slug || item.id_modulo || item.modulo_id || item.id || '').trim();
+  const ordem = Number(dados.ordem);
+  const bloqueavel = dados.bloqueavel === false ? false : slug !== 'administracao';
+
+  return {
+    id: item.id,
+    slug,
+    nome: item.titulo || item.nome || item.label || slug,
+    descricao: item.descricao || dados.descricao || '',
+    status: normalizarStatus(item.status),
+    ordem: Number.isFinite(ordem) ? ordem : 9999,
+    bloqueavel
+  };
+}
+
 function normalizarConfigLista(registros) {
   return [...(registros || [])].sort((a, b) => {
     const grupo = String(a.grupo || '').localeCompare(String(b.grupo || ''), 'pt-BR');
@@ -74,6 +103,32 @@ export async function listarRegistrosAdmin({ entidade }) {
   return { records: data || [] };
 }
 
+export async function listarModulosAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('itens')
+    .select('*')
+    .order('titulo', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar módulos.');
+  }
+
+  const modules = (data || [])
+    .filter(isModuloItem)
+    .map(normalizarModuloAdmin)
+    .filter(item => item.slug)
+    .sort((a, b) => {
+      if (a.ordem !== b.ordem) {
+        return a.ordem - b.ordem;
+      }
+
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    });
+
+  return { modules };
+}
+
 export async function salvarRegistroAdmin({ entidade, id, nome, descricao, status }) {
   const supabase = exigirSupabaseConfigurado();
   const tabela = validarEntidade(entidade);
@@ -98,6 +153,62 @@ export async function salvarRegistroAdmin({ entidade, id, nome, descricao, statu
   }
 
   return { record: data };
+}
+
+export async function salvarStatusModuloAdmin({ id, status }) {
+  const supabase = exigirSupabaseConfigurado();
+  const statusNormalizado = normalizarStatus(status);
+
+  if (!id) {
+    throw new Error('Informe o módulo que será atualizado.');
+  }
+
+  const { data: atual, error: erroConsulta } = await supabase
+    .from('itens')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroConsulta) {
+    throw new Error(erroConsulta.message || 'Não foi possível localizar o módulo.');
+  }
+
+  if (!isModuloItem(atual)) {
+    throw new Error('O registro informado não é um módulo.');
+  }
+
+  const modulo = normalizarModuloAdmin(atual);
+
+  if (!modulo.bloqueavel && statusNormalizado === 'inativo') {
+    throw new Error('O módulo Administração não pode ser inativado.');
+  }
+
+  const { error } = await supabase
+    .from('itens')
+    .update({ status: statusNormalizado })
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível atualizar o status do módulo.');
+  }
+
+  const { data: atualizado, error: erroVerificacao } = await supabase
+    .from('itens')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroVerificacao) {
+    throw new Error(erroVerificacao.message || 'Não foi possível confirmar o status do módulo.');
+  }
+
+  const moduloAtualizado = normalizarModuloAdmin(atualizado);
+
+  if (moduloAtualizado.status !== statusNormalizado) {
+    throw new Error('O Supabase não confirmou a alteração. Verifique as permissões de update da tabela itens.');
+  }
+
+  return { module: moduloAtualizado };
 }
 
 export async function salvarConfig({ chave, valor }) {

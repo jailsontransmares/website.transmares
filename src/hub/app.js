@@ -20,15 +20,18 @@ const state = {
     config: [],
     categorias: [],
     grupos: [],
+    modulos: [],
     filtros: {
       categorias: 'todos',
-      grupos: 'todos'
+      grupos: 'todos',
+      modulos: 'todos'
     },
     editando: {
       categorias: '',
       grupos: ''
     },
     modalNovo: '',
+    moduloAtualizando: '',
     loading: false,
     message: ''
   },
@@ -140,6 +143,11 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', iniciarApp);
 document.addEventListener('click', fecharFiltrosListaAoClicarForaAr);
+window.addEventListener('popstate', () => {
+  if (state.usuario) {
+    renderizarRotaAtual();
+  }
+});
 
 async function iniciarApp(exibirLoadingInicial = true) {
   try {
@@ -178,7 +186,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
 
     aplicarConfigVisual();
     definirTemaInicial();
-    renderDashboard();
+    await renderizarRotaAtual();
 
   } catch (erro) {
     renderLogin();
@@ -325,7 +333,7 @@ function alternarTema() {
     console.warn('Não foi possível salvar a preferência de tema.');
   });
 
-  renderDashboard();
+  renderizarRotaAtual();
 }
 
 function renderDashboard() {
@@ -416,6 +424,101 @@ function acionarCardModulo(event, id) {
   }
 }
 
+function obterBaseHub() {
+  const pathname = window.location.pathname || '/';
+
+  return pathname === '/hub' || pathname.startsWith('/hub/')
+    ? '/hub'
+    : '';
+}
+
+function obterModuloDaRotaAtual() {
+  const base = obterBaseHub();
+  const pathname = window.location.pathname || '/';
+  const rota = base ? pathname.slice(base.length) : pathname;
+
+  return rota
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/^index\.html$/i, '');
+}
+
+function montarCaminhoHub(idModulo = '') {
+  const base = obterBaseHub();
+  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+
+  if (!base) {
+    return slug ? `/${slug}` : '/';
+  }
+
+  return slug ? `${base}/${slug}` : `${base}/`;
+}
+
+function navegarParaRota(caminho) {
+  if (window.location.pathname !== caminho) {
+    window.history.pushState({}, '', caminho);
+  }
+
+  return renderizarRotaAtual();
+}
+
+function navegarHome() {
+  return navegarParaRota(montarCaminhoHub());
+}
+
+async function renderizarRotaAtual() {
+  const idModulo = obterModuloDaRotaAtual();
+
+  if (!idModulo) {
+    renderDashboard();
+    return;
+  }
+
+  await abrirModuloDireto(idModulo);
+}
+
+function navegarParaModulo(idModulo) {
+  return navegarParaRota(montarCaminhoHub(idModulo));
+}
+
+function moduloEstaAtivo(idModulo) {
+  return (state.cards || []).some(card => card.id === idModulo);
+}
+
+function renderModuloIndisponivel(idModulo) {
+  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
+  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
+
+  document.getElementById('app').innerHTML = `
+    <main class="dashboard">
+      <header class="topbar">
+        ${renderHeaderLogo()}
+        <div class="brand">
+          <h1>${escapeHtml(nomeSistema)}</h1>
+          <p>${escapeHtml(subtitulo)}</p>
+        </div>
+
+        <div class="user-box">
+          <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
+          ${escapeHtml(state.usuario.email || '')}<br>
+          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
+        </div>
+      </header>
+
+      <section class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h2>Módulo indisponível</h2>
+            <p>Este módulo está inativo, indisponível ou seu usuário não possui acesso.</p>
+          </div>
+        </div>
+
+        <p class="quick-link-empty">Rota solicitada: ${escapeHtml(idModulo || '-')}</p>
+        <button class="save-btn" type="button" onclick="navegarHome()">Voltar para a Home</button>
+      </section>
+    </main>
+  `;
+}
+
 function renderAvisos() {
   if (!state.avisos.length) {
     return '<p>Nenhum aviso ativo no momento.</p>';
@@ -456,23 +559,32 @@ function renderFavoritos() {
 }
 
 function abrirModulo(id) {
+  navegarParaModulo(id);
+}
+
+async function abrirModuloDireto(id) {
+  if (!moduloEstaAtivo(id)) {
+    renderModuloIndisponivel(id);
+    return;
+  }
+
   if (id === 'administracao') {
-    abrirAdministracao();
+    await abrirAdministracao();
     return;
   }
 
   if (['links-corretora', 'links-ar', 'links-gestao'].indexOf(id) >= 0) {
-    abrirLinksUteis(id);
+    await abrirLinksUteis(id);
     return;
   }
 
   if (id === 'central-senhas') {
-    abrirCentralSenhas();
+    await abrirCentralSenhas();
     return;
   }
 
   if (id === 'painel-ar') {
-    abrirPainelAr();
+    await abrirPainelAr();
     return;
   }
 
@@ -524,7 +636,7 @@ function renderAdministracao() {
         <div class="user-box">
           <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
           ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="renderDashboard()">Voltar</button>
+          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
         </div>
       </header>
 
@@ -576,7 +688,7 @@ function renderAdminPanel() {
   }
 
   if (state.admin.aba === 'modulos') {
-    return renderModulosAdmin();
+    return renderModulosAdminReal();
   }
 
   if (state.admin.aba === 'usuarios') {
@@ -653,6 +765,11 @@ async function selecionarAbaAdmin(aba) {
 
   if (aba === 'categorias' || aba === 'grupos') {
     await carregarRegistrosAdmin(aba);
+    return;
+  }
+
+  if (aba === 'modulos') {
+    await carregarModulosAdmin();
     return;
   }
 
@@ -812,6 +929,87 @@ function renderAdminModuleCard(titulo, descricao, status) {
         <p>${escapeHtml(descricao)}</p>
       </div>
       <span>${escapeHtml(status)}</span>
+    </article>
+  `;
+}
+
+function renderModulosAdminReal() {
+  const modules = state.admin.modulos || [];
+  const resumo = obterResumoRegistros(modules);
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Configurações por Módulo</h2>
+          <p>Ative ou inative os módulos exibidos na Home. O ID funcional vem do slug salvo no Supabase.</p>
+        </div>
+      </div>
+
+      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      <p class="quick-link-empty">${resumo.total} módulos · ${resumo.ativos} ativos · ${resumo.inativos} inativos</p>
+
+      <div class="crud-filters" role="group" aria-label="Filtro de status dos módulos">
+        ${renderFiltroModuloAdmin('todos', 'Todos')}
+        ${renderFiltroModuloAdmin('ativo', 'Ativos')}
+        ${renderFiltroModuloAdmin('inativo', 'Inativos')}
+      </div>
+
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando módulos...</p>' : renderListaModulosAdmin(modules)}
+    </section>
+  `;
+}
+
+function renderFiltroModuloAdmin(filtro, label) {
+  const ativo = state.admin.filtros.modulos === filtro;
+
+  return `
+    <button class="filter-btn ${ativo ? 'active' : ''}" type="button" onclick="filtrarAdmin('modulos', '${filtro}')">
+      ${escapeHtml(label)}
+    </button>
+  `;
+}
+
+function renderListaModulosAdmin(modules) {
+  const filtrados = filtrarRegistrosAdmin('modulos', modules);
+
+  if (!filtrados.length) {
+    return '<p class="quick-link-empty">Nenhum módulo encontrado.</p>';
+  }
+
+  return `
+    <div class="crud-list admin-modules-list">
+      <div class="crud-header">
+        <span>Módulo</span>
+        <span>Descrição</span>
+        <span>Status</span>
+        <span>Ação</span>
+      </div>
+      ${filtrados.map(item => renderModuloAdmin(item)).join('')}
+    </div>
+  `;
+}
+
+function renderModuloAdmin(item) {
+  const atualizando = state.admin.moduloAtualizando === item.id;
+  const status = item.status === 'inativo' ? 'inativo' : 'ativo';
+  const acao = status === 'ativo' ? 'Inativar' : 'Reativar';
+  const proximoStatus = status === 'ativo' ? 'inativo' : 'ativo';
+  const descricao = item.descricao || `Slug: ${item.slug}`;
+  const botaoDesabilitado = atualizando || !item.bloqueavel;
+  const rotuloBotao = !item.bloqueavel ? 'Protegido' : (atualizando ? 'Salvando...' : acao);
+
+  return `
+    <article class="crud-row">
+      <input class="config-input" type="text" value="${escapeAttr(item.nome || item.slug || '')}" disabled>
+      <input class="config-input" type="text" value="${escapeAttr(descricao)}" disabled>
+      <select class="config-input status-${escapeAttr(status)}" disabled>
+        <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>ativo</option>
+        <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>inativo</option>
+      </select>
+      <div class="crud-actions">
+        <button class="${status === 'ativo' ? 'secondary-btn' : 'save-btn'}" type="button" onclick="alternarStatusModuloAdmin('${escapeAttr(item.id)}', '${proximoStatus}')" ${botaoDesabilitado ? 'disabled' : ''}>${escapeHtml(rotuloBotao)}</button>
+      </div>
     </article>
   `;
 }
@@ -1030,7 +1228,9 @@ function filtrarRegistrosAdmin(entidade, records) {
 
 function filtrarAdmin(entidade, filtro) {
   state.admin.filtros[entidade] = filtro;
-  state.admin.editando[entidade] = '';
+  if (Object.prototype.hasOwnProperty.call(state.admin.editando, entidade)) {
+    state.admin.editando[entidade] = '';
+  }
   renderAdministracao();
 }
 
@@ -1059,6 +1259,72 @@ async function carregarRegistrosAdmin(entidade) {
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar registros.';
+    renderAdministracao();
+  }
+}
+
+async function carregarModulosAdmin(preservarMensagem = false) {
+  state.admin.loading = true;
+  state.admin.moduloAtualizando = '';
+
+  if (!preservarMensagem) {
+    state.admin.message = '';
+  }
+
+  renderAdministracao();
+
+  try {
+    const response = await chamarApi('listAdminModules');
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar módulos.'));
+    }
+
+    state.admin.modulos = response.data.modules || [];
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar módulos.';
+    renderAdministracao();
+  }
+}
+
+async function alternarStatusModuloAdmin(id, status) {
+  const modulo = (state.admin.modulos || []).find(item => item.id === id);
+
+  if (!modulo) {
+    state.admin.message = 'Módulo não encontrado.';
+    renderAdministracao();
+    return;
+  }
+
+  if (!modulo.bloqueavel && status === 'inativo') {
+    state.admin.message = 'O módulo Administração não pode ser inativado.';
+    renderAdministracao();
+    return;
+  }
+
+  try {
+    state.admin.moduloAtualizando = id;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('updateAdminModuleStatus', {
+      id,
+      status
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível atualizar o módulo.'));
+    }
+
+    await carregarDadosIniciaisSilencioso();
+    state.admin.message = `Módulo ${status === 'inativo' ? 'inativado' : 'reativado'}.`;
+    await carregarModulosAdmin(true);
+  } catch (erro) {
+    state.admin.moduloAtualizando = '';
+    state.admin.message = erro.message || 'Erro ao atualizar módulo.';
     renderAdministracao();
   }
 }
@@ -1248,7 +1514,7 @@ function renderLinksUteis() {
         <div class="user-box">
           <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
           ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="renderDashboard()">Voltar</button>
+          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
         </div>
       </header>
 
@@ -1610,7 +1876,7 @@ function renderCentralSenhas() {
         <div class="user-box">
           <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
           ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="renderDashboard()">Voltar</button>
+          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
         </div>
       </header>
 
@@ -1948,7 +2214,7 @@ function renderPainelAr() {
         <div class="user-box">
           <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
           ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="renderDashboard()">Voltar</button>
+          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
         </div>
       </header>
 
@@ -4752,6 +5018,7 @@ Object.assign(window, {
   alterarFiltroSenha,
   alternarFiltrosListaProdutosAr,
   alternarFavoritoLink,
+  alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
@@ -4783,6 +5050,8 @@ Object.assign(window, {
   limparFiltrosListaProdutosAr,
   limparSelecaoValidacoesAr,
   limparProdutosListaSelecionadosAr,
+  navegarHome,
+  navegarParaModulo,
   processarArquivoRepasseAr,
   renderDashboard,
   restaurarCoresPadrao,
