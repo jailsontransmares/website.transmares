@@ -1,5 +1,14 @@
 import { carregarDadosAR, gerarLinksAR } from './services/arService.js';
 import {
+  cancelarReciboAR,
+  carregarDadosValidacoesAR,
+  criarValidacaoManual,
+  emitirReciboAR,
+  excluirImportacaoRepasseAR,
+  importarRepasseAR,
+  verificarImportacaoRepasseAR
+} from './services/arValidacoesService.js';
+import {
   carregarAdminData,
   listarRegistrosAdmin,
   restaurarCoresPadrao,
@@ -47,6 +56,41 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'generateArLinks') {
       const resultado = await gerarLinksAR(payload);
       return { ok: true, data: resultado };
+    }
+
+    if (action === 'getArValidacoesData') {
+      const dados = await carregarDadosValidacoesAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'createArValidacaoManual') {
+      const dados = await criarValidacaoManual(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'checkArRepasseImportado') {
+      const dados = await verificarImportacaoRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'importArRepasse') {
+      const dados = await importarRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'deleteArRepasseImportado') {
+      const dados = await excluirImportacaoRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'emitirArRecibo') {
+      const dados = await emitirReciboAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'cancelarArRecibo') {
+      const dados = await cancelarReciboAR(payload);
+      return { ok: true, data: dados };
     }
 
     const acoes = {

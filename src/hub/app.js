@@ -87,6 +87,34 @@ const state = {
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
   modalVisualizacaoProdutos: false,
+  validacoes: {
+    aba: 'emitir',
+    filtros: {
+      parceiro: '',
+      codigoEntidade: '',
+      dataInicio: '',
+      dataFim: '',
+      produto: '',
+      pedido: '',
+      cliente: ''
+    },
+    pendentes: [],
+    selecionados: [],
+    recibos: [],
+    reciboAtivo: null,
+    importacaoRepasse: {
+      mesBase: '',
+      arquivoNome: '',
+      linhas: [],
+      erros: [],
+      resumo: null,
+      loteExistente: null,
+      loading: false,
+      message: ''
+    },
+    loading: false,
+    message: ''
+  },
   produtoBusca: '',
   filtros: {
     ac: '',
@@ -1925,15 +1953,22 @@ function renderPainelAr() {
       </header>
 
       <section class="admin-panel">
-        <div class="admin-panel-header">
-          <div>
-            <h2>Painel AR Transmares</h2>
+        <div class="admin-panel-header ar-panel-header">
+          <div class="ar-panel-title">
+            <button type="button" onclick="selecionarAbaAr('inicio')" title="Ir para o início do Painel AR">
+              <h2>Painel AR Transmares</h2>
+            </button>
             <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
           </div>
           <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
-            <button class="${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')">Início</button>
+            <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.2a.5.5 0 0 1-.5-.5v-5.2H9.2v5.2a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-9.7Z"></path>
+              </svg>
+            </button>
             <button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>
             <button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>
+            <button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>
             ${gestor ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
           </div>
         </div>
@@ -1956,6 +1991,10 @@ function renderConteudoAr(gestor) {
 
   if (state.ar.aba === 'produtos') {
     return renderListaProdutosAr();
+  }
+
+  if (state.ar.aba === 'validacoes') {
+    return renderValidacoesAr();
   }
 
   return renderGeradorLinksAr();
@@ -1987,6 +2026,422 @@ function acionarCardAr(event, aba) {
     event.preventDefault();
     selecionarAbaAr(aba);
   }
+}
+
+function renderValidacoesAr() {
+  const validacoes = state.ar.validacoes;
+
+  return `
+    <section class="ar-validacoes">
+      <div class="ar-validacoes-subnav" role="group" aria-label="Subáreas de Validações">
+        <button class="${validacoes.aba === 'emitir' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>
+        <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
+        <button class="${validacoes.aba === 'importacao' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importação</button>
+      </div>
+
+      ${validacoes.message ? `<p class="admin-message">${escapeHtml(validacoes.message)}</p>` : ''}
+      ${renderConteudoValidacoesAr()}
+    </section>
+  `;
+}
+
+function renderConteudoValidacoesAr() {
+  const aba = state.ar.validacoes.aba;
+
+  if (aba === 'consultar') {
+    return renderConsultarRecibosAr();
+  }
+
+  if (aba === 'importacao') {
+    return renderImportacaoValidacoesAr();
+  }
+
+  return renderEmitirReciboAr();
+}
+
+function renderEmitirReciboAr() {
+  const validacoes = state.ar.validacoes;
+  const filtros = validacoes.filtros;
+  const totalPendente = validacoes.pendentes
+    .reduce((total, item) => total + (Number(item.valor_tot_comiss) || 0), 0);
+  const totalSelecionado = validacoes.pendentes
+    .filter(item => validacoes.selecionados.includes(item.id))
+    .reduce((total, item) => total + (Number(item.valor_tot_comiss) || 0), 0);
+
+  return `
+    <div class="ar-validacoes-panel">
+      <div class="ar-validacoes-header">
+        <div>
+          <span class="ar-eyebrow">Validações</span>
+          <h3>Emitir recibo</h3>
+          <p>Consulte lançamentos pendentes, selecione itens por parceiro e emita recibos atômicos via Supabase RPC.</p>
+        </div>
+        <button class="secondary-btn" type="button" onclick="carregarValidacoesAr()">Atualizar</button>
+      </div>
+
+      <div class="ar-validacoes-filters">
+        <input class="config-input" value="${escapeAttr(filtros.parceiro)}" placeholder="Parceiro" oninput="alterarFiltroValidacoesAr('parceiro', this.value)">
+        <input class="config-input" value="${escapeAttr(filtros.codigoEntidade)}" placeholder="Código da entidade" oninput="alterarFiltroValidacoesAr('codigoEntidade', this.value)">
+        <input class="config-input" type="date" value="${escapeAttr(filtros.dataInicio)}" onchange="alterarFiltroValidacoesAr('dataInicio', this.value)">
+        <input class="config-input" type="date" value="${escapeAttr(filtros.dataFim)}" onchange="alterarFiltroValidacoesAr('dataFim', this.value)">
+        <input class="config-input" value="${escapeAttr(filtros.produto)}" placeholder="Produto" oninput="alterarFiltroValidacoesAr('produto', this.value)">
+        <input class="config-input" value="${escapeAttr(filtros.pedido)}" placeholder="Pedido" oninput="alterarFiltroValidacoesAr('pedido', this.value)">
+        <input class="config-input" value="${escapeAttr(filtros.cliente)}" placeholder="Nome do cliente" oninput="alterarFiltroValidacoesAr('cliente', this.value)">
+        <button class="save-btn" type="button" onclick="carregarValidacoesAr()" ${validacoes.loading ? 'disabled' : ''}>Aplicar filtros</button>
+      </div>
+
+      <div class="ar-validacoes-summary">
+        <div>
+          <span>Pendentes</span>
+          <strong>${validacoes.pendentes.length}</strong>
+        </div>
+        <div>
+          <span>Total pendente</span>
+          <strong>${formatarMoedaNumeroAr(totalPendente)}</strong>
+        </div>
+        <div>
+          <span>Selecionados</span>
+          <strong>${validacoes.selecionados.length}</strong>
+        </div>
+        <div>
+          <span>Total selecionado</span>
+          <strong>${formatarMoedaNumeroAr(totalSelecionado)}</strong>
+        </div>
+      </div>
+
+      <div class="ar-validacoes-actions">
+        <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()" ${validacoes.selecionados.length ? '' : 'disabled'}>Limpar seleção</button>
+        <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${validacoes.selecionados.length ? '' : 'disabled'}>Emitir recibo</button>
+      </div>
+
+      ${renderBarraSelecaoValidacoesAr(totalSelecionado)}
+      ${renderTabelaValidacoesPendentesAr()}
+      ${renderLancamentoManualValidacoesAr()}
+    </div>
+  `;
+}
+
+function renderBarraSelecaoValidacoesAr(totalSelecionado) {
+  const { pendentes, selecionados } = state.ar.validacoes;
+
+  if (!selecionados.length) return '';
+
+  const primeiro = pendentes.find(item => selecionados.includes(item.id));
+  const parceiro = primeiro?.parceiro_nome || primeiro?.codigo_entidade || 'Parceiro selecionado';
+
+  return `
+    <div class="ar-validacoes-selection-bar">
+      <div>
+        <strong>${selecionados.length} lançamento(s) selecionado(s)</strong>
+        <span>${escapeHtml(parceiro)} · ${escapeHtml(formatarMoedaNumeroAr(totalSelecionado))}</span>
+      </div>
+      <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()">Limpar</button>
+      <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()">Emitir recibo</button>
+    </div>
+  `;
+}
+
+function renderTabelaValidacoesPendentesAr() {
+  const { pendentes, selecionados, loading } = state.ar.validacoes;
+  const todosSelecionados = pendentes.length > 0 && pendentes.every(item => selecionados.includes(item.id));
+
+  if (loading) {
+    return '<p class="quick-link-empty">Carregando lançamentos pendentes...</p>';
+  }
+
+  if (!pendentes.length) {
+    return '<p class="quick-link-empty">Nenhum lançamento pendente encontrado.</p>';
+  }
+
+  return `
+    <div class="ar-validacoes-table">
+      <div class="ar-validacoes-row head">
+        <span><input type="checkbox" ${todosSelecionados ? 'checked' : ''} onchange="alternarTodasValidacoesVisiveisAr(this.checked)" aria-label="Selecionar todos os lançamentos visíveis"></span>
+        <span>Parceiro</span>
+        <span>Data</span>
+        <span>Produto</span>
+        <span>Pedido</span>
+        <span>Cliente</span>
+        <span>Comissão</span>
+      </div>
+      ${pendentes.map(item => `
+        <article class="ar-validacoes-row ${selecionados.includes(item.id) ? 'selected' : ''}">
+          <span><input type="checkbox" ${selecionados.includes(item.id) ? 'checked' : ''} onchange="alternarValidacaoSelecionadaAr('${escapeAttr(item.id)}')"></span>
+          <span><strong>${escapeHtml(item.parceiro_nome || '-')}</strong>${item.codigo_entidade ? `<small>${escapeHtml(item.codigo_entidade)}</small>` : ''}</span>
+          <span>${escapeHtml(formatarDataCurtaAr(item.data_validacao))}</span>
+          <span>${escapeHtml(item.produto || '-')}</span>
+          <span>${escapeHtml(item.pedido || '-')}</span>
+          <span>${escapeHtml(item.nome_cliente || '-')}</span>
+          <span>${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</span>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderLancamentoManualValidacoesAr() {
+  return `
+    <details class="ar-validacoes-manual">
+      <summary>Lançamento manual</summary>
+      <div class="ar-validacoes-manual-grid">
+        <input id="ar_manual_parceiro" class="config-input" placeholder="Parceiro">
+        <input id="ar_manual_codigo" class="config-input" placeholder="Código da entidade">
+        <input id="ar_manual_data" class="config-input" type="date">
+        <input id="ar_manual_produto" class="config-input" placeholder="Produto">
+        <input id="ar_manual_pedido" class="config-input" placeholder="Pedido">
+        <input id="ar_manual_cliente" class="config-input" placeholder="Nome do cliente">
+        <input id="ar_manual_valor" class="config-input" type="number" step="0.01" min="0" placeholder="Valor comissão">
+        <button class="save-btn" type="button" onclick="criarLancamentoManualValidacoesAr()">Salvar lançamento</button>
+      </div>
+    </details>
+  `;
+}
+
+function renderConsultarRecibosAr() {
+  const { recibos, loading } = state.ar.validacoes;
+  const totalEmitido = recibos
+    .filter(recibo => recibo.status !== 'cancelado')
+    .reduce((total, recibo) => total + (Number(recibo.valor_total) || 0), 0);
+  const cancelados = recibos.filter(recibo => recibo.status === 'cancelado').length;
+
+  return `
+    <div class="ar-validacoes-panel">
+      <div class="ar-validacoes-header">
+        <div>
+          <span class="ar-eyebrow">Validações</span>
+          <h3>Consultar recibos</h3>
+          <p>Últimos recibos emitidos, com opção de visualização, impressão e cancelamento.</p>
+        </div>
+        <button class="secondary-btn" type="button" onclick="carregarValidacoesAr()">Atualizar</button>
+      </div>
+
+      <div class="ar-validacoes-summary">
+        <div>
+          <span>Recibos</span>
+          <strong>${recibos.length}</strong>
+        </div>
+        <div>
+          <span>Emitidos</span>
+          <strong>${recibos.length - cancelados}</strong>
+        </div>
+        <div>
+          <span>Cancelados</span>
+          <strong>${cancelados}</strong>
+        </div>
+        <div>
+          <span>Total emitido</span>
+          <strong>${formatarMoedaNumeroAr(totalEmitido)}</strong>
+        </div>
+      </div>
+
+      ${loading ? '<p class="quick-link-empty">Carregando recibos...</p>' : renderTabelaRecibosAr(recibos)}
+    </div>
+  `;
+}
+
+function renderTabelaRecibosAr(recibos) {
+  if (!recibos.length) {
+    return '<p class="quick-link-empty">Nenhum recibo emitido até agora.</p>';
+  }
+
+  return `
+    <div class="ar-recibos-table">
+      <div class="ar-recibos-row head">
+        <span>Número</span>
+        <span>Parceiro</span>
+        <span>Data</span>
+        <span>Valor</span>
+        <span>Status</span>
+        <span>Ações</span>
+      </div>
+      ${recibos.map(recibo => `
+        <article class="ar-recibos-row">
+          <span>${escapeHtml(recibo.numero || '-')}</span>
+          <span>${escapeHtml(recibo.parceiro_nome || '-')}</span>
+          <span>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</span>
+          <span>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</span>
+          <span><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(recibo.status || '-')}</mark></span>
+          <span class="ar-recibos-actions">
+            <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
+            <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' ? 'disabled' : ''}>Cancelar</button>
+          </span>
+        </article>
+      `).join('')}
+    </div>
+    ${renderModalReciboValidacoesAr()}
+  `;
+}
+
+function renderModalReciboValidacoesAr() {
+  const recibo = state.ar.validacoes.reciboAtivo;
+
+  if (!recibo) return '';
+
+  const itens = recibo.ar_recibo_itens || [];
+
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Recibo">
+      <section class="small-modal ar-recibo-modal">
+        <div class="small-modal-header no-print">
+          <h3>${escapeHtml(recibo.numero || 'Recibo')}</h3>
+          <button class="icon-btn" type="button" onclick="fecharReciboValidacoesAr()" aria-label="Fechar">×</button>
+        </div>
+
+        <div class="ar-recibo-print">
+          <header>
+            <div>
+              <h2>Recibo de pagamento</h2>
+              <p>${escapeHtml(recibo.parceiro_nome || '-')}</p>
+            </div>
+            <strong>${escapeHtml(recibo.numero || '-')}</strong>
+          </header>
+
+          <dl>
+            <div><dt>Emissão</dt><dd>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</dd></div>
+            <div><dt>Status</dt><dd>${escapeHtml(recibo.status || '-')}</dd></div>
+            <div><dt>Total</dt><dd>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</dd></div>
+            <div><dt>Código</dt><dd>${escapeHtml(recibo.codigo_entidade || '-')}</dd></div>
+          </dl>
+
+          <table>
+            <thead><tr><th>Descrição</th><th>Valor</th></tr></thead>
+            <tbody>
+              ${itens.length
+                ? itens.map(item => `<tr><td>${escapeHtml(item.descricao || '-')}</td><td>${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</td></tr>`).join('')
+                : '<tr><td colspan="2">Nenhum item vinculado.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="small-modal-actions no-print">
+          <button class="secondary-btn" type="button" onclick="fecharReciboValidacoesAr()">Fechar</button>
+          <button class="save-btn" type="button" onclick="window.print()">Imprimir / salvar PDF</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderImportacaoValidacoesAr() {
+  const itens = [
+    ['Validações', 'Preparado para importação de validações em fase futura.'],
+    ['Renovações', 'Preparado para importação de renovações em fase futura.'],
+    ['Emissões', 'Preparado para importação de emissões em fase futura.']
+  ];
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  const podeSelecionarArquivo = Boolean(repasse.mesBase) && !repasse.loteExistente && !repasse.loading;
+  const podeImportar = Boolean(repasse.mesBase) && repasse.linhas.length > 0 && !repasse.erros.length && !repasse.loteExistente && !repasse.loading;
+
+  return `
+    <div class="ar-validacoes-panel">
+      <div class="ar-validacoes-header">
+        <div>
+          <span class="ar-eyebrow">Validações</span>
+          <h3>Importação</h3>
+          <p>Importe o repasse por mês-base para gerar lançamentos pendentes de recibo.</p>
+        </div>
+      </div>
+
+      <section class="ar-import-repasse">
+        <div class="ar-import-repasse-header">
+          <div>
+            <strong>Repasse</strong>
+            <span>Informe o mês-base antes de anexar a planilha.</span>
+          </div>
+          <button class="secondary-btn" type="button" onclick="limparImportacaoRepasseAr()">Limpar</button>
+        </div>
+
+        <div class="ar-import-controls">
+          <label>
+            <span>Mês-base</span>
+            <input class="config-input" type="month" value="${escapeAttr(repasse.mesBase)}" onchange="alterarMesBaseRepasseAr(this.value)">
+          </label>
+          <label>
+            <span>Planilha de repasse</span>
+            <input class="config-input" type="file" accept=".xlsx,.xls" onchange="processarArquivoRepasseAr(event)" ${podeSelecionarArquivo ? '' : 'disabled'}>
+          </label>
+          <button class="save-btn" type="button" onclick="importarRepasseValidacoesAr()" ${podeImportar ? '' : 'disabled'}>
+            ${repasse.loading ? 'Importando...' : 'Importar repasse'}
+          </button>
+        </div>
+
+        ${repasse.message ? `<p class="admin-message">${escapeHtml(repasse.message)}</p>` : ''}
+        ${repasse.loteExistente ? `
+          <div class="ar-import-existing">
+            <p>Já existe importação de repasse para ${escapeHtml(formatarMesBaseRepasseAr(repasse.mesBase))}. Para importar novamente, exclua este mês-base primeiro.</p>
+            <button class="secondary-btn danger" type="button" onclick="excluirMesBaseRepasseAr()" ${repasse.loading ? 'disabled' : ''}>Excluir mês-base</button>
+          </div>
+        ` : ''}
+        ${repasse.resumo ? renderResumoImportacaoRepasseAr(repasse) : ''}
+        ${repasse.erros.length ? renderErrosImportacaoRepasseAr(repasse.erros) : ''}
+        ${repasse.linhas.length ? renderPreviewImportacaoRepasseAr(repasse.linhas) : ''}
+      </section>
+
+      <div class="ar-validacoes-import-grid">
+        ${itens.map(([titulo, texto]) => `
+          <article>
+            <strong>${escapeHtml(titulo)}</strong>
+            <p>${escapeHtml(texto)}</p>
+          </article>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderResumoImportacaoRepasseAr(repasse) {
+  return `
+    <div class="ar-import-summary">
+      <div><span>Mês-base</span><strong>${escapeHtml(formatarMesBaseRepasseAr(repasse.mesBase))}</strong></div>
+      <div><span>Arquivo</span><strong>${escapeHtml(repasse.arquivoNome || '-')}</strong></div>
+      <div><span>Linhas válidas</span><strong>${repasse.linhas.length}</strong></div>
+      <div><span>Alertas</span><strong>${repasse.erros.length}</strong></div>
+    </div>
+  `;
+}
+
+function renderErrosImportacaoRepasseAr(erros) {
+  return `
+    <div class="ar-import-errors">
+      <strong>Corrija antes de importar</strong>
+      ${erros.slice(0, 8).map(erro => `<span>${escapeHtml(erro)}</span>`).join('')}
+      ${erros.length > 8 ? `<small>+ ${erros.length - 8} alerta(s)</small>` : ''}
+    </div>
+  `;
+}
+
+function renderPreviewImportacaoRepasseAr(linhas) {
+  const total = linhas.reduce((soma, linha) => soma + (Number(linha.valor_tot_comiss) || 0), 0);
+
+  return `
+    <div class="ar-import-preview">
+      <div class="ar-import-preview-head">
+        <strong>Prévia do repasse</strong>
+        <span>${linhas.length} linha(s) · ${escapeHtml(formatarMoedaNumeroAr(total))}</span>
+      </div>
+      <div class="ar-import-preview-table">
+        <div class="ar-import-preview-row head">
+          <span>Parceiro</span>
+          <span>Pedido</span>
+          <span>Produto</span>
+          <span>Cliente</span>
+          <span>Validação</span>
+          <span>Comissão</span>
+        </div>
+        ${linhas.slice(0, 10).map(linha => `
+          <div class="ar-import-preview-row">
+            <span>${escapeHtml(linha.nome_vendedor || linha.codigo_entidade || '-')}</span>
+            <span>${escapeHtml(linha.pedido || '-')}</span>
+            <span>${escapeHtml(linha.produto || '-')}</span>
+            <span>${escapeHtml(linha.nome_cliente || '-')}</span>
+            <span>${escapeHtml(formatarDataCurtaAr(linha.data_validacao))}</span>
+            <span>${escapeHtml(formatarMoedaNumeroAr(Number(linha.valor_tot_comiss) || 0))}</span>
+          </div>
+        `).join('')}
+      </div>
+      ${linhas.length > 10 ? `<small>Mostrando 10 de ${linhas.length} linha(s).</small>` : ''}
+    </div>
+  `;
 }
 
 function renderGeradorLinksAr() {
@@ -3366,6 +3821,408 @@ function selecionarParceiroAr(id) {
 function selecionarAbaAr(aba) {
   state.ar.aba = aba;
   renderPainelAr();
+
+  if (aba === 'validacoes' && !state.ar.validacoes.loading) {
+    carregarValidacoesAr();
+  }
+}
+
+function selecionarSubabaValidacoesAr(aba) {
+  state.ar.validacoes.aba = aba;
+  state.ar.validacoes.message = '';
+  renderPainelAr();
+
+  if (!state.ar.validacoes.loading && (aba === 'emitir' || aba === 'consultar')) {
+    carregarValidacoesAr();
+  }
+}
+
+function alterarFiltroValidacoesAr(chave, valor) {
+  state.ar.validacoes.filtros[chave] = valor;
+}
+
+async function carregarValidacoesAr(manterMensagem = false) {
+  try {
+    state.ar.validacoes.loading = true;
+    if (!manterMensagem) {
+      state.ar.validacoes.message = '';
+    }
+    renderPainelAr();
+
+    const response = await chamarApi('getArValidacoesData', {
+      filtros: state.ar.validacoes.filtros
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar as validações.'));
+    }
+
+    state.ar.validacoes.pendentes = response.data.pendentes || [];
+    state.ar.validacoes.recibos = response.data.recibos || [];
+    state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => {
+      return state.ar.validacoes.pendentes.some(item => item.id === id);
+    });
+  } catch (erro) {
+    state.ar.validacoes.message = erro.message || 'Erro ao carregar as validações.';
+  } finally {
+    state.ar.validacoes.loading = false;
+    renderPainelAr();
+  }
+}
+
+function alternarValidacaoSelecionadaAr(id) {
+  const selecionados = state.ar.validacoes.selecionados;
+
+  if (selecionados.includes(id)) {
+    state.ar.validacoes.selecionados = selecionados.filter(item => item !== id);
+  } else {
+    state.ar.validacoes.selecionados = [...selecionados, id];
+  }
+
+  renderPainelAr();
+}
+
+function alternarTodasValidacoesVisiveisAr(marcar) {
+  const idsVisiveis = state.ar.validacoes.pendentes.map(item => item.id);
+
+  if (marcar) {
+    state.ar.validacoes.selecionados = Array.from(new Set([
+      ...state.ar.validacoes.selecionados,
+      ...idsVisiveis
+    ]));
+  } else {
+    state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => !idsVisiveis.includes(id));
+  }
+
+  renderPainelAr();
+}
+
+function limparSelecaoValidacoesAr() {
+  state.ar.validacoes.selecionados = [];
+  renderPainelAr();
+}
+
+async function criarLancamentoManualValidacoesAr() {
+  const valor = document.getElementById('ar_manual_valor')?.value || '';
+  const parceiroNome = document.getElementById('ar_manual_parceiro')?.value || '';
+  const dataValidacao = document.getElementById('ar_manual_data')?.value || '';
+  const produto = document.getElementById('ar_manual_produto')?.value || '';
+
+  if (!parceiroNome.trim() || !dataValidacao || !produto.trim() || !valor) {
+    state.ar.validacoes.message = 'Informe parceiro, data, produto e valor da comissão.';
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    state.ar.validacoes.loading = true;
+    state.ar.validacoes.message = '';
+    renderPainelAr();
+
+    const response = await chamarApi('createArValidacaoManual', {
+      parceiro_nome: parceiroNome.trim(),
+      codigo_entidade: document.getElementById('ar_manual_codigo')?.value || '',
+      data_validacao: dataValidacao,
+      produto: produto.trim(),
+      pedido: document.getElementById('ar_manual_pedido')?.value || '',
+      nome_cliente: document.getElementById('ar_manual_cliente')?.value || '',
+      valor_tot_comiss: valor
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar o lançamento manual.'));
+    }
+
+    state.ar.validacoes.message = 'Lançamento manual salvo.';
+    await carregarValidacoesAr(true);
+  } catch (erro) {
+    state.ar.validacoes.loading = false;
+    state.ar.validacoes.message = erro.message || 'Erro ao salvar o lançamento manual.';
+    renderPainelAr();
+  }
+}
+
+async function emitirReciboValidacoesAr() {
+  const selecionados = state.ar.validacoes.pendentes.filter(item => {
+    return state.ar.validacoes.selecionados.includes(item.id);
+  });
+
+  if (!selecionados.length) {
+    state.ar.validacoes.message = 'Selecione ao menos um lançamento.';
+    renderPainelAr();
+    return;
+  }
+
+  const chavesParceiro = new Set(selecionados.map(item => {
+    return item.parceiro_id || item.codigo_entidade || item.parceiro_nome || 'sem-parceiro';
+  }));
+
+  if (chavesParceiro.size > 1) {
+    state.ar.validacoes.message = 'Selecione lançamentos de um único parceiro para emitir o recibo.';
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    state.ar.validacoes.loading = true;
+    state.ar.validacoes.message = '';
+    renderPainelAr();
+
+    const response = await chamarApi('emitirArRecibo', {
+      parceiro_id: selecionados[0].parceiro_id || null,
+      validacao_ids: selecionados.map(item => item.id)
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível emitir o recibo.'));
+    }
+
+    state.ar.validacoes.selecionados = [];
+    state.ar.validacoes.aba = 'consultar';
+    state.ar.validacoes.message = 'Recibo emitido com sucesso.';
+    await carregarValidacoesAr(true);
+  } catch (erro) {
+    state.ar.validacoes.loading = false;
+    state.ar.validacoes.message = erro.message || 'Erro ao emitir o recibo.';
+    renderPainelAr();
+  }
+}
+
+function visualizarReciboValidacoesAr(id) {
+  state.ar.validacoes.reciboAtivo = state.ar.validacoes.recibos.find(item => item.id === id) || null;
+  renderPainelAr();
+}
+
+function fecharReciboValidacoesAr() {
+  state.ar.validacoes.reciboAtivo = null;
+  renderPainelAr();
+}
+
+async function cancelarReciboValidacoesAr(id) {
+  const recibo = state.ar.validacoes.recibos.find(item => item.id === id);
+
+  if (!window.confirm(`Cancelar o recibo ${recibo?.numero || ''}? Os lançamentos vinculados voltarão para pendente.`)) {
+    return;
+  }
+
+  try {
+    state.ar.validacoes.loading = true;
+    state.ar.validacoes.message = '';
+    renderPainelAr();
+
+    const response = await chamarApi('cancelarArRecibo', {
+      recibo_id: id
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível cancelar o recibo.'));
+    }
+
+    state.ar.validacoes.reciboAtivo = null;
+    state.ar.validacoes.message = 'Recibo cancelado. Lançamentos retornaram para pendente.';
+    await carregarValidacoesAr(true);
+  } catch (erro) {
+    state.ar.validacoes.loading = false;
+    state.ar.validacoes.message = erro.message || 'Erro ao cancelar o recibo.';
+    renderPainelAr();
+  }
+}
+
+async function alterarMesBaseRepasseAr(valor) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  repasse.mesBase = valor;
+  repasse.linhas = [];
+  repasse.erros = [];
+  repasse.resumo = null;
+  repasse.loteExistente = null;
+  repasse.message = '';
+
+  if (!valor) {
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    repasse.loading = true;
+    renderPainelAr();
+
+    const response = await chamarApi('checkArRepasseImportado', {
+      mes_base: normalizarMesBaseRepasseAr(valor)
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível verificar o mês-base.'));
+    }
+
+    repasse.loteExistente = response.data || null;
+    repasse.message = repasse.loteExistente ? 'Este mês-base já possui importação de repasse.' : '';
+  } catch (erro) {
+    repasse.message = erro.message || 'Erro ao verificar o mês-base.';
+  } finally {
+    repasse.loading = false;
+    renderPainelAr();
+  }
+}
+
+async function processarArquivoRepasseAr(event) {
+  const arquivo = event.target.files?.[0];
+  const repasse = state.ar.validacoes.importacaoRepasse;
+
+  if (!repasse.mesBase) {
+    repasse.message = 'Informe o mês-base antes de selecionar a planilha.';
+    renderPainelAr();
+    return;
+  }
+
+  if (!arquivo) return;
+
+  try {
+    repasse.loading = true;
+    repasse.message = '';
+    repasse.arquivoNome = arquivo.name;
+    repasse.linhas = [];
+    repasse.erros = [];
+    repasse.resumo = null;
+    renderPainelAr();
+
+    const xlsx = await carregarXlsxAr();
+    const buffer = await arquivo.arrayBuffer();
+    const workbook = xlsx.read(buffer, { type: 'array', cellDates: true });
+    const sheetName = escolherAbaRepasseAr(workbook, xlsx);
+
+    if (!sheetName) {
+      throw new Error('Não encontrei uma aba com a estrutura de Base de Dados.');
+    }
+
+    const worksheet = workbook.Sheets[sheetName];
+    const linhasOriginais = xlsx.utils.sheet_to_json(worksheet, {
+      defval: '',
+      raw: true
+    });
+    const { linhas, erros } = normalizarLinhasRepasseAr(linhasOriginais);
+
+    repasse.linhas = linhas;
+    repasse.erros = erros;
+    repasse.resumo = {
+      aba: sheetName,
+      total: linhasOriginais.length,
+      validas: linhas.length
+    };
+    repasse.message = linhas.length
+      ? `Planilha lida: ${linhas.length} linha(s) válida(s) na aba ${sheetName}.`
+      : 'Nenhuma linha válida encontrada na planilha.';
+  } catch (erro) {
+    repasse.message = erro.message || 'Erro ao ler a planilha de repasse.';
+  } finally {
+    repasse.loading = false;
+    renderPainelAr();
+  }
+}
+
+async function importarRepasseValidacoesAr() {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+
+  if (!repasse.mesBase || !repasse.linhas.length || repasse.erros.length || repasse.loteExistente) {
+    repasse.message = 'Confira mês-base, planilha e alertas antes de importar.';
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    repasse.loading = true;
+    repasse.message = '';
+    renderPainelAr();
+
+    const response = await chamarApi('importArRepasse', {
+      mes_base: normalizarMesBaseRepasseAr(repasse.mesBase),
+      nome_arquivo: repasse.arquivoNome,
+      linhas: repasse.linhas
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível importar o repasse.'));
+    }
+
+    state.ar.validacoes.message = `Repasse importado com sucesso: ${response.data?.total_importadas || repasse.linhas.length} lançamento(s).`;
+    repasse.message = '';
+    repasse.loteExistente = {
+      id: response.data?.importacao_id,
+      mes_base: response.data?.mes_base
+    };
+    repasse.linhas = [];
+    repasse.erros = [];
+    repasse.resumo = null;
+    repasse.loading = false;
+    state.ar.validacoes.aba = 'emitir';
+    await carregarValidacoesAr(true);
+  } catch (erro) {
+    repasse.loading = false;
+    repasse.message = erro.message || 'Erro ao importar o repasse.';
+    renderPainelAr();
+  }
+}
+
+async function excluirMesBaseRepasseAr() {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+
+  if (!repasse.mesBase || !repasse.loteExistente) {
+    repasse.message = 'Selecione um mês-base importado para excluir.';
+    renderPainelAr();
+    return;
+  }
+
+  const mesBaseFormatado = formatarMesBaseRepasseAr(repasse.mesBase);
+  const confirmado = window.confirm(
+    `Excluir a importação de repasse de ${mesBaseFormatado}? Apenas lançamentos pendentes e sem recibo serão removidos.`
+  );
+
+  if (!confirmado) return;
+
+  try {
+    repasse.loading = true;
+    repasse.message = '';
+    renderPainelAr();
+
+    const response = await chamarApi('deleteArRepasseImportado', {
+      mes_base: normalizarMesBaseRepasseAr(repasse.mesBase)
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível excluir o mês-base.'));
+    }
+
+    const total = response.data?.total_excluidas || 0;
+    state.ar.validacoes.message = `Mês-base ${mesBaseFormatado} excluído: ${total} lançamento(s) removido(s).`;
+    state.ar.validacoes.importacaoRepasse = {
+      mesBase: '',
+      arquivoNome: '',
+      linhas: [],
+      erros: [],
+      resumo: null,
+      loteExistente: null,
+      loading: false,
+      message: ''
+    };
+    await carregarValidacoesAr(true);
+  } catch (erro) {
+    repasse.loading = false;
+    repasse.message = erro.message || 'Erro ao excluir o mês-base.';
+    renderPainelAr();
+  }
+}
+
+function limparImportacaoRepasseAr() {
+  state.ar.validacoes.importacaoRepasse = {
+    mesBase: '',
+    arquivoNome: '',
+    linhas: [],
+    erros: [],
+    resumo: null,
+    loteExistente: null,
+    loading: false,
+    message: ''
+  };
+  renderPainelAr();
 }
 
 function tentarGerarLinksAutomaticamenteAr() {
@@ -3600,6 +4457,225 @@ function formatarMoedaNumeroAr(valor) {
   });
 }
 
+function formatarDataCurtaAr(valor) {
+  if (!valor) return '-';
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(valor))) {
+    const [ano, mes, dia] = String(valor).split('-');
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  const data = new Date(valor);
+
+  if (Number.isNaN(data.getTime())) {
+    return String(valor);
+  }
+
+  return data.toLocaleDateString('pt-BR');
+}
+
+function formatarMesBaseRepasseAr(valor) {
+  if (!valor) return '-';
+
+  const [ano, mes] = String(valor).slice(0, 7).split('-');
+  const data = new Date(Number(ano), Number(mes) - 1, 1);
+
+  if (Number.isNaN(data.getTime())) {
+    return String(valor);
+  }
+
+  const nomeMes = data.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+}
+
+function normalizarMesBaseRepasseAr(valor) {
+  if (!valor) return '';
+  return `${String(valor).slice(0, 7)}-01`;
+}
+
+function normalizarCabecalhoRepasseAr(valor) {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function obterValorRepasseAr(linha, aliases) {
+  const mapa = Object.entries(linha).reduce((acc, [chave, valor]) => {
+    acc[normalizarCabecalhoRepasseAr(chave)] = valor;
+    return acc;
+  }, {});
+
+  for (const alias of aliases) {
+    const valor = mapa[normalizarCabecalhoRepasseAr(alias)];
+    if (valor !== '' && valor != null) return valor;
+  }
+
+  return '';
+}
+
+function textoRepasseAr(valor) {
+  if (valor == null) return '';
+  return String(valor).trim();
+}
+
+function numeroRepasseAr(valor) {
+  if (typeof valor === 'number') return valor;
+  const texto = textoRepasseAr(valor).replace(/[^\d,.-]/g, '');
+  if (!texto) return null;
+
+  const normalizado = texto.includes(',')
+    ? texto.replace(/\./g, '').replace(',', '.')
+    : texto;
+  const numero = Number(normalizado);
+
+  return Number.isNaN(numero) ? null : numero;
+}
+
+function dataRepasseAr(valor) {
+  if (!valor) return '';
+
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    return valor.toISOString().slice(0, 10);
+  }
+
+  if (typeof valor === 'number') {
+    const base = new Date(Date.UTC(1899, 11, 30));
+    base.setUTCDate(base.getUTCDate() + valor);
+    return base.toISOString().slice(0, 10);
+  }
+
+  const texto = textoRepasseAr(valor);
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+    return texto.slice(0, 10);
+  }
+
+  const partes = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (partes) {
+    const ano = partes[3].length === 2 ? `20${partes[3]}` : partes[3];
+    return `${ano}-${partes[2].padStart(2, '0')}-${partes[1].padStart(2, '0')}`;
+  }
+
+  const data = new Date(texto);
+  return Number.isNaN(data.getTime()) ? '' : data.toISOString().slice(0, 10);
+}
+
+function normalizarLinhasRepasseAr(linhasOriginais) {
+  const linhas = [];
+  const erros = [];
+
+  linhasOriginais.forEach((linha, index) => {
+    const numeroLinha = index + 2;
+    const codigoEntidade = textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Ent.', 'Cod Ent', 'Cod. Entidade']));
+    const nomeVendedor = textoRepasseAr(obterValorRepasseAr(linha, ['Nome Vendedor']));
+    const descEntidade = textoRepasseAr(obterValorRepasseAr(linha, ['Des. Entidade', 'Desc. Entidade']));
+    const produto = textoRepasseAr(obterValorRepasseAr(linha, ['Desc.Produto', 'Desc Produto']));
+    const pedido = textoRepasseAr(obterValorRepasseAr(linha, ['Pedido']));
+    const cliente = textoRepasseAr(obterValorRepasseAr(linha, ['Nome Cliente']));
+    const dataValidacao = dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Validação', 'Dt.Validacao', 'Dt Validação']));
+    const valorComissao = numeroRepasseAr(obterValorRepasseAr(linha, ['Valor Tot. Comiss.', 'Valor Tot Comiss', 'Valor Total Comissão']));
+
+    if (!codigoEntidade && !nomeVendedor && !produto && !pedido && !cliente && valorComissao == null) {
+      return;
+    }
+
+    if (!nomeVendedor && !codigoEntidade) {
+      erros.push(`Linha ${numeroLinha}: parceiro não identificado.`);
+    }
+
+    if (!produto) {
+      erros.push(`Linha ${numeroLinha}: produto não informado.`);
+    }
+
+    if (!pedido) {
+      erros.push(`Linha ${numeroLinha}: pedido não informado.`);
+    }
+
+    if (valorComissao == null) {
+      erros.push(`Linha ${numeroLinha}: valor de comissão inválido.`);
+    }
+
+    linhas.push({
+      codigo_entidade: codigoEntidade,
+      entidade: descEntidade,
+      cod_vendedor: textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Vendedor', 'Cod Vendedor'])),
+      nome_vendedor: nomeVendedor || descEntidade,
+      agente_validacao: textoRepasseAr(obterValorRepasseAr(linha, ['Desc. Agente Val.', 'Desc Agente Val'])),
+      cod_produto: textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Produto', 'Cod Produto'])),
+      produto,
+      pedido,
+      status_pedido: textoRepasseAr(obterValorRepasseAr(linha, ['Status Pedido'])),
+      data_pedido: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Pedido', 'Dt Pedido'])),
+      data_validacao: dataValidacao,
+      data_verificacao: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Verificação', 'Dt.Verificacao', 'Dt Verificação'])),
+      data_emissao_renovacao: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Emissão/Renovação', 'Dt.Emissao/Renovacao'])),
+      nome_cliente: cliente,
+      cod_ac: textoRepasseAr(obterValorRepasseAr(linha, ['Cód. AC', 'Cod. AC', 'Cod AC'])),
+      grupo_produto: textoRepasseAr(obterValorRepasseAr(linha, ['Desc. Grupo', 'Desc Grupo'])),
+      link_repasse: textoRepasseAr(obterValorRepasseAr(linha, ['Link'])),
+      valor_bruto: numeroRepasseAr(obterValorRepasseAr(linha, ['Val. Bruto', 'Valor Bruto'])),
+      valor_faturamento: numeroRepasseAr(obterValorRepasseAr(linha, ['Val. Faturamento', 'Valor Faturamento'])),
+      valor_tot_comiss: valorComissao ?? 0
+    });
+  });
+
+  return { linhas, erros };
+}
+
+function escolherAbaRepasseAr(workbook, xlsx) {
+  const nomes = workbook.SheetNames || [];
+  const candidatas = nomes.map(nome => {
+    const worksheet = workbook.Sheets[nome];
+    const primeiraLinha = xlsx.utils.sheet_to_json(worksheet, {
+      header: 1,
+      range: 0,
+      blankrows: false
+    })[0] || [];
+    const headers = primeiraLinha.map(normalizarCabecalhoRepasseAr);
+    const score = [
+      'codent',
+      'nomevendedor',
+      'descproduto',
+      'pedido',
+      'dtvalidacao',
+      'valortotcomiss'
+    ].filter(cabecalho => headers.includes(cabecalho)).length;
+    const nomeNormalizado = normalizarBuscaAr(nome);
+    const bonus = nomeNormalizado.includes('base') && nomeNormalizado.includes('dados') ? 2 : 0;
+    return { nome, score: score + bonus };
+  });
+
+  return candidatas.sort((a, b) => b.score - a.score)[0]?.score > 3
+    ? candidatas.sort((a, b) => b.score - a.score)[0].nome
+    : '';
+}
+
+function carregarXlsxAr() {
+  if (window.XLSX) {
+    return Promise.resolve(window.XLSX);
+  }
+
+  return new Promise((resolve, reject) => {
+    const scriptExistente = document.querySelector('script[data-ar-xlsx]');
+    if (scriptExistente) {
+      scriptExistente.addEventListener('load', () => resolve(window.XLSX));
+      scriptExistente.addEventListener('error', () => reject(new Error('Não foi possível carregar o leitor de planilhas.')));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    script.async = true;
+    script.dataset.arXlsx = 'true';
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error('Não foi possível carregar o leitor de planilhas.'));
+    document.head.appendChild(script);
+  });
+}
+
 function normalizarBuscaAr(texto) {
   return String(texto || '')
     .trim()
@@ -3671,29 +4747,43 @@ Object.assign(window, {
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
   alterarFiltroLinks,
+  alterarFiltroValidacoesAr,
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
   alternarFiltrosListaProdutosAr,
   alternarFavoritoLink,
+  alternarTodasValidacoesVisiveisAr,
+  alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
   alternarTema,
   alternarTodosGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
+  cancelarReciboValidacoesAr,
+  carregarValidacoesAr,
+  alterarMesBaseRepasseAr,
   copiarLink,
   copiarLinkResultadoAr,
   copiarOrcamentoAr,
   copiarVisualizacaoProdutosClienteAr,
+  criarLancamentoManualValidacoesAr,
   editarLinkItem,
   editarRegistroAdmin,
+  emitirReciboValidacoesAr,
+  excluirMesBaseRepasseAr,
   fecharVisualizacaoProdutosClienteAr,
   fecharModalNovoLink,
   fecharModalNovoRegistro,
   fecharModalSenha,
+  fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
   gerarLinksAr,
+  importarRepasseValidacoesAr,
+  limparImportacaoRepasseAr,
   limparFiltrosListaProdutosAr,
+  limparSelecaoValidacoesAr,
   limparProdutosListaSelecionadosAr,
+  processarArquivoRepasseAr,
   renderDashboard,
   restaurarCoresPadrao,
   sair,
@@ -3704,8 +4794,10 @@ Object.assign(window, {
   selecionarAbaAdmin,
   selecionarAbaAr,
   selecionarAbaSenhas,
+  selecionarSubabaValidacoesAr,
   selecionarParceiroAr,
   selecionarProdutoAr,
   selecionarProdutoCompletoAr,
-  selecionarSugestaoProdutoAr
+  selecionarSugestaoProdutoAr,
+  visualizarReciboValidacoesAr
 });
