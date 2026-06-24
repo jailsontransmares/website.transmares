@@ -10,11 +10,19 @@ import {
 } from './services/arValidacoesService.js';
 import {
   carregarAdminData,
+  listarPerfisAdmin,
   listarModulosAdmin,
+  listarPermissoesAdmin,
+  listarPermissoesUsuarioAdmin,
   listarRegistrosAdmin,
+  listarUsuariosAdmin,
   restaurarCoresPadrao,
   salvarConfig,
+  salvarPerfilAdmin,
+  salvarPermissaoPerfilAdmin,
+  salvarPermissaoUsuarioAdmin,
   salvarRegistroAdmin,
+  salvarUsuarioAdmin,
   salvarStatusModuloAdmin,
   salvarTemaUsuario
 } from './services/adminService.js';
@@ -26,6 +34,7 @@ import {
 } from './services/linksService.js';
 import {
   carregarPasswordsData,
+  excluirPasswordItem,
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
@@ -98,7 +107,15 @@ export async function chamarApi(action, payload = {}) {
     const acoes = {
       getAdminData: () => carregarAdminData(),
       listAdminModules: () => listarModulosAdmin(),
+      listAdminUsers: () => listarUsuariosAdmin(),
+      listAdminProfiles: () => listarPerfisAdmin(),
+      listAdminPermissions: () => listarPermissoesAdmin(),
+      listAdminUserPermissions: () => listarPermissoesUsuarioAdmin(payload),
       listAdminRecords: () => listarRegistrosAdmin(payload),
+      saveAdminUser: () => salvarUsuarioAdmin(payload),
+      saveAdminProfile: () => salvarPerfilAdmin(payload),
+      saveAdminProfilePermission: () => salvarPermissaoPerfilAdmin(payload),
+      saveAdminUserPermission: () => salvarPermissaoUsuarioAdmin(payload),
       saveAdminRecord: () => salvarRegistroAdmin(payload),
       updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
       saveConfig: () => salvarConfig(payload),
@@ -108,6 +125,7 @@ export async function chamarApi(action, payload = {}) {
       saveLinkItem: () => salvarLinkItem(payload),
       toggleFavoriteLink: () => alternarFavoritoLink(payload),
       getPasswordsData: () => carregarPasswordsData(payload),
+      deletePasswordItem: () => excluirPasswordItem(payload),
       savePasswordItem: () => salvarPasswordItem(payload)
     };
 

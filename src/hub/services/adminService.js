@@ -129,6 +129,319 @@ export async function listarModulosAdmin() {
   return { modules };
 }
 
+export async function listarUsuariosAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const [usuarios, perfis] = await Promise.all([
+    supabase
+      .from('usuarios')
+      .select('*')
+      .order('nome', { ascending: true }),
+    supabase
+      .from('perfis')
+      .select('*')
+      .order('nivel', { ascending: false })
+  ]);
+
+  if (usuarios.error) {
+    throw new Error(usuarios.error.message || 'Não foi possível carregar usuários.');
+  }
+
+  if (perfis.error) {
+    throw new Error(perfis.error.message || 'Não foi possível carregar perfis.');
+  }
+
+  const perfisPorId = new Map((perfis.data || []).map(perfil => [perfil.id, perfil]));
+  const records = (usuarios.data || []).map(usuario => {
+    const perfil = perfisPorId.get(usuario.perfil_id) || {};
+
+    return {
+      id: usuario.id,
+      nome: usuario.nome || usuario.email || 'Usuário',
+      email: usuario.email || '',
+      perfil_id: usuario.perfil_id || '',
+      perfil: perfil.nome || usuario.perfil || '',
+      perfil_slug: perfil.slug || usuario.perfil || '',
+      status: usuario.status || 'pendente',
+      is_master: Boolean(usuario.is_master),
+      ultimo_login_em: usuario.ultimo_login_em || '',
+      bloqueado_em: usuario.bloqueado_em || ''
+    };
+  });
+
+  return { records };
+}
+
+export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!usuario_id) {
+    throw new Error('Informe o usuário.');
+  }
+
+  const [recursos, permissoes] = await Promise.all([
+    supabase
+      .from('recursos_acesso')
+      .select('*')
+      .order('ordem', { ascending: true }),
+    supabase
+      .from('usuario_permissoes')
+      .select('*')
+      .eq('usuario_id', usuario_id)
+  ]);
+
+  if (recursos.error) {
+    throw new Error(recursos.error.message || 'Não foi possível carregar recursos.');
+  }
+
+  if (permissoes.error) {
+    throw new Error(permissoes.error.message || 'Não foi possível carregar permissões do usuário.');
+  }
+
+  return {
+    recursos: recursos.data || [],
+    permissoes: permissoes.data || []
+  };
+}
+
+export async function salvarUsuarioAdmin({ id, nome, email, perfil_id, status }) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = {
+    nome: String(nome || '').trim(),
+    email: String(email || '').trim().toLowerCase(),
+    perfil_id: perfil_id || null,
+    status: ['pendente', 'ativo', 'bloqueado', 'inativo'].includes(status) ? status : 'pendente',
+    updated_at: new Date().toISOString()
+  };
+
+  if (!payload.nome) {
+    throw new Error('Informe o nome do usuário.');
+  }
+
+  if (!payload.email) {
+    throw new Error('Informe o e-mail do usuário.');
+  }
+
+  const query = id
+    ? supabase.from('usuarios').update(payload).eq('id', id).select('*').single()
+    : supabase.from('usuarios').insert(payload).select('*').single();
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar o usuário.');
+  }
+
+  await supabase.rpc('app_registrar_auditoria', {
+    p_acao: id ? 'usuario.atualizar' : 'usuario.criar',
+    p_recurso: 'admin.usuarios',
+    p_alvo_usuario_id: data.id,
+    p_detalhes: {
+      email: data.email,
+      status: data.status,
+      perfil_id: data.perfil_id
+    }
+  });
+
+  return { record: data };
+}
+
+export async function listarPerfisAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('perfis')
+    .select('*')
+    .order('nivel', { ascending: false })
+    .order('nome', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar perfis.');
+  }
+
+  return { records: data || [] };
+}
+
+export async function salvarPerfilAdmin({ id, slug, nome, descricao, nivel, status }) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = {
+    slug: String(slug || nome || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
+    nome: String(nome || '').trim(),
+    descricao: String(descricao || '').trim() || null,
+    nivel: Number(nivel) || 0,
+    status: status === 'inativo' ? 'inativo' : 'ativo',
+    updated_at: new Date().toISOString()
+  };
+
+  if (!payload.slug) {
+    throw new Error('Informe o identificador do perfil.');
+  }
+
+  if (!payload.nome) {
+    throw new Error('Informe o nome do perfil.');
+  }
+
+  const query = id
+    ? supabase.from('perfis').update(payload).eq('id', id).select('*').single()
+    : supabase.from('perfis').insert(payload).select('*').single();
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar o perfil.');
+  }
+
+  await supabase.rpc('app_registrar_auditoria', {
+    p_acao: id ? 'perfil.atualizar' : 'perfil.criar',
+    p_recurso: 'admin.perfis',
+    p_alvo_usuario_id: null,
+    p_detalhes: {
+      perfil_id: data.id,
+      slug: data.slug,
+      nivel: data.nivel,
+      status: data.status
+    }
+  });
+
+  return { record: data };
+}
+
+export async function listarPermissoesAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const [recursos, perfis, permissoes] = await Promise.all([
+    supabase
+      .from('recursos_acesso')
+      .select('*')
+      .order('ordem', { ascending: true }),
+    supabase
+      .from('perfis')
+      .select('*')
+      .order('nivel', { ascending: false }),
+    supabase
+      .from('perfil_permissoes')
+      .select('*')
+  ]);
+
+  if (recursos.error) {
+    throw new Error(recursos.error.message || 'Não foi possível carregar recursos de acesso.');
+  }
+
+  if (perfis.error) {
+    throw new Error(perfis.error.message || 'Não foi possível carregar perfis.');
+  }
+
+  if (permissoes.error) {
+    throw new Error(permissoes.error.message || 'Não foi possível carregar permissões.');
+  }
+
+  return {
+    recursos: recursos.data || [],
+    perfis: perfis.data || [],
+    permissoes: permissoes.data || []
+  };
+}
+
+export async function salvarPermissaoPerfilAdmin({ perfil_id, recurso_chave, acao, permitido }) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!perfil_id || !recurso_chave || !acao) {
+    throw new Error('Informe perfil, recurso e ação.');
+  }
+
+  const payload = {
+    perfil_id,
+    recurso_chave,
+    acao,
+    permitido: Boolean(permitido),
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await supabase
+    .from('perfil_permissoes')
+    .upsert(payload, { onConflict: 'perfil_id,recurso_chave,acao' })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar a permissão.');
+  }
+
+  await supabase.rpc('app_registrar_auditoria', {
+    p_acao: 'perfil_permissao.alterar',
+    p_recurso: 'admin.permissoes',
+    p_alvo_usuario_id: null,
+    p_detalhes: {
+      perfil_id,
+      recurso_chave,
+      acao,
+      permitido: Boolean(permitido)
+    }
+  });
+
+  return { permission: data };
+}
+
+export async function salvarPermissaoUsuarioAdmin({ usuario_id, recurso_chave, acao, efeito }) {
+  const supabase = exigirSupabaseConfigurado();
+  const efeitoNormalizado = ['permitir', 'negar'].includes(efeito) ? efeito : '';
+
+  if (!usuario_id || !recurso_chave || !acao) {
+    throw new Error('Informe usuário, recurso e ação.');
+  }
+
+  if (!efeitoNormalizado) {
+    const { error } = await supabase
+      .from('usuario_permissoes')
+      .delete()
+      .eq('usuario_id', usuario_id)
+      .eq('recurso_chave', recurso_chave)
+      .eq('acao', acao);
+
+    if (error) {
+      throw new Error(error.message || 'Não foi possível remover a permissão individual.');
+    }
+
+    await supabase.rpc('app_registrar_auditoria', {
+      p_acao: 'usuario_permissao.remover',
+      p_recurso: 'admin.usuarios',
+      p_alvo_usuario_id: usuario_id,
+      p_detalhes: {
+        recurso_chave,
+        acao
+      }
+    });
+
+    return { permission: null };
+  }
+
+  const payload = {
+    usuario_id,
+    recurso_chave,
+    acao,
+    efeito: efeitoNormalizado,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await supabase
+    .from('usuario_permissoes')
+    .upsert(payload, { onConflict: 'usuario_id,recurso_chave,acao' })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar a permissão individual.');
+  }
+
+  await supabase.rpc('app_registrar_auditoria', {
+    p_acao: 'usuario_permissao.alterar',
+    p_recurso: 'admin.usuarios',
+    p_alvo_usuario_id: usuario_id,
+    p_detalhes: {
+      recurso_chave,
+      acao,
+      efeito: efeitoNormalizado
+    }
+  });
+
+  return { permission: data };
+}
+
 export async function salvarRegistroAdmin({ entidade, id, nome, descricao, status }) {
   const supabase = exigirSupabaseConfigurado();
   const tabela = validarEntidade(entidade);

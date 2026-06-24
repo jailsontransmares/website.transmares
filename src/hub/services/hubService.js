@@ -1,4 +1,9 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import {
+  canAccessModule,
+  montarPermissoesLegadas,
+  normalizarPermissoes
+} from './permissionService.js';
 
 const DEFAULT_CONFIG = {
   nome_sistema: 'PAINEL TRANSMARES',
@@ -124,7 +129,7 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
   };
 }
 
-function normalizarCards(registros, usuario) {
+function normalizarCards(registros, usuario, permissoes) {
   const ativos = registros.filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo');
   const cards = ativos
     .map(item => {
@@ -149,11 +154,14 @@ function normalizarCards(registros, usuario) {
   const lista = cards.length ? cards : DEFAULT_CARDS;
 
   if (usuario?.perfil === 'gestor') {
-    return lista.map(({ ordem, ...card }) => card);
+    return lista
+      .map(({ ordem, ...card }) => card)
+      .filter(card => canAccessModule(permissoes, card.id));
   }
 
   return lista
     .filter(card => card.id !== 'administracao')
+    .filter(card => canAccessModule(permissoes, card.id))
     .map(({ ordem, ...card }) => card);
 }
 
@@ -220,6 +228,22 @@ function obterTipoItem(item) {
   return normalizarStatus(item.tipo || item.categoria_tipo || dados.tipo);
 }
 
+async function carregarPermissoesEfetivas(supabase, usuario) {
+  const { data, error } = await supabase.rpc('app_permissoes_efetivas');
+
+  if (error) {
+    const rpcNaoExiste = error.code === 'PGRST202' || /app_permissoes_efetivas/i.test(error.message || '');
+
+    if (!rpcNaoExiste) {
+      console.warn('Permissões efetivas não carregadas:', error);
+    }
+
+    return normalizarPermissoes(montarPermissoesLegadas(usuario));
+  }
+
+  return normalizarPermissoes(data || []);
+}
+
 export async function carregarDadosIniciaisSupabase() {
   const supabase = exigirSupabaseConfigurado();
   const { data: authData } = await supabase.auth.getUser();
@@ -236,6 +260,7 @@ export async function carregarDadosIniciaisSupabase() {
 
   const config = normalizarConfiguracoes(configuracoes);
   const usuario = normalizarUsuario(usuarios, authData?.user, perfis, grupos);
+  const permissions = await carregarPermissoesEfetivas(supabase, usuario);
   const modulosCadastrados = itens.filter(item => obterTipoItem(item) === 'modulo');
   const moduloItens = modulosCadastrados.length
     ? modulosCadastrados
@@ -249,7 +274,8 @@ export async function carregarDadosIniciaisSupabase() {
   return {
     usuario,
     config,
-    cards: normalizarCards(moduloItens, usuario),
+    permissions,
+    cards: normalizarCards(moduloItens, usuario, permissions),
     avisos: normalizarAvisos(avisosInternos, config.limite_avisos),
     aniversariantes: normalizarAniversariantes(aniversarios, config.limite_aniversariantes),
     favoritos: normalizarFavoritos(linkItens, config.limite_favoritos),

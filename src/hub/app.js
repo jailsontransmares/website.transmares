@@ -1,6 +1,7 @@
 import './style.css';
 import { chamarApi } from './api.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
+import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
 
 const state = {
   usuario: null,
@@ -10,6 +11,7 @@ const state = {
   aniversariantes: [],
   favoritos: [],
   meta: null,
+  permissions: normalizarPermissoes([]),
   auth: {
     email: '',
     loading: false,
@@ -21,6 +23,12 @@ const state = {
     categorias: [],
     grupos: [],
     modulos: [],
+    usuarios: [],
+    perfis: [],
+    recursos: [],
+    perfilPermissoes: [],
+    usuarioPermissoes: [],
+    usuarioPermissoesId: '',
     filtros: {
       categorias: 'todos',
       grupos: 'todos',
@@ -28,7 +36,9 @@ const state = {
     },
     editando: {
       categorias: '',
-      grupos: ''
+      grupos: '',
+      usuarios: '',
+      perfis: ''
     },
     modalNovo: '',
     moduloAtualizando: '',
@@ -165,6 +175,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
       state.aniversariantes = [];
       state.favoritos = [];
       state.meta = null;
+      state.permissions = normalizarPermissoes([]);
       renderLogin();
       return;
     }
@@ -183,6 +194,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.aniversariantes = response.data.aniversariantes || [];
     state.favoritos = response.data.favoritos || [];
     state.meta = response.data.meta || null;
+    state.permissions = response.data.permissions || normalizarPermissoes([]);
 
     aplicarConfigVisual();
     definirTemaInicial();
@@ -274,6 +286,7 @@ async function sair() {
   state.aniversariantes = [];
   state.favoritos = [];
   state.meta = null;
+  state.permissions = normalizarPermissoes([]);
   renderLogin();
 }
 
@@ -451,7 +464,7 @@ function obterModuloDaRotaAtual() {
 
 function montarCaminhoHub(idModulo = '') {
   const base = obterBaseHub();
-  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+  const slug = obterRotaModulo(idModulo);
 
   if (!base) {
     return slug ? `/${slug}` : '/';
@@ -473,7 +486,7 @@ function navegarHome() {
 }
 
 async function renderizarRotaAtual() {
-  const idModulo = obterModuloDaRotaAtual();
+  const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
 
   if (!idModulo) {
     renderDashboard();
@@ -487,8 +500,47 @@ function navegarParaModulo(idModulo) {
   return navegarParaRota(montarCaminhoHub(idModulo));
 }
 
+function normalizarIdModuloRota(idModulo = '') {
+  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+  return slug === 'admin' ? 'administracao' : slug;
+}
+
+function obterRotaModulo(idModulo = '') {
+  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+  return slug === 'administracao' ? 'admin' : slug;
+}
+
 function moduloEstaAtivo(idModulo) {
-  return (state.cards || []).some(card => card.id === idModulo);
+  const idNormalizado = normalizarIdModuloRota(idModulo);
+  return (state.cards || []).some(card => card.id === idNormalizado)
+    && canAccessModule(state.permissions, idNormalizado);
+}
+
+function pode(recurso, acao = 'view') {
+  return hasPermission(state.permissions, recurso, acao);
+}
+
+function podeAcessarAbaAdmin(aba) {
+  const permissoesPorAba = {
+    usuarios: ['admin.usuarios', 'view'],
+    perfis: ['admin.perfis', 'view'],
+    permissoes: ['admin.permissoes', 'view']
+  };
+  const regra = permissoesPorAba[aba];
+
+  return regra ? pode(regra[0], regra[1]) : pode('admin', 'view');
+}
+
+function podeAcessarAbaAr(aba) {
+  const permissoesPorAba = {
+    gerar: ['painel_ar.gerar_links', 'view'],
+    produtos: ['painel_ar.gerar_links', 'view'],
+    validacoes: ['painel_ar.validacoes', 'view'],
+    historico: ['painel_ar.validacoes', 'view']
+  };
+  const regra = permissoesPorAba[aba];
+
+  return regra ? pode(regra[0], regra[1]) : pode('painel_ar', 'view');
 }
 
 function renderModuloIndisponivel(idModulo) {
@@ -570,37 +622,39 @@ function abrirModulo(id) {
 }
 
 async function abrirModuloDireto(id) {
-  if (!moduloEstaAtivo(id)) {
-    renderModuloIndisponivel(id);
+  const idModulo = normalizarIdModuloRota(id);
+
+  if (!moduloEstaAtivo(idModulo)) {
+    renderModuloIndisponivel(idModulo);
     return;
   }
 
-  if (id === 'administracao') {
+  if (idModulo === 'administracao') {
     await abrirAdministracao();
     return;
   }
 
-  if (['links-corretora', 'links-ar', 'links-gestao'].indexOf(id) >= 0) {
-    await abrirLinksUteis(id);
+  if (['links-corretora', 'links-ar', 'links-gestao'].indexOf(idModulo) >= 0) {
+    await abrirLinksUteis(idModulo);
     return;
   }
 
-  if (id === 'central-senhas') {
+  if (idModulo === 'central-senhas') {
     await abrirCentralSenhas();
     return;
   }
 
-  if (id === 'painel-ar') {
+  if (idModulo === 'painel-ar') {
     await abrirPainelAr();
     return;
   }
 
-  alert(`Módulo ainda não implementado: ${id}`);
+  alert(`Módulo ainda não implementado: ${idModulo}`);
 }
 
 async function abrirAdministracao(preservarMensagem = false) {
-  if (state.usuario?.perfil !== 'gestor') {
-    renderErro('Acesso permitido apenas para gestor.');
+  if (!hasPermission(state.permissions, 'admin', 'view')) {
+    renderModuloIndisponivel('administracao');
     return;
   }
 
@@ -662,9 +716,9 @@ function renderAdministracao() {
           <span class="admin-nav-label">Estrutura futura</span>
           ${renderAdminTab('home-exibicao', 'Home e Exibição')}
           ${renderAdminTab('modulos', 'Configurações por Módulo')}
-          ${renderAdminTab('usuarios', 'Usuários')}
-          ${renderAdminTab('perfis', 'Perfis de Acesso')}
-          ${renderAdminTab('permissoes', 'Permissões por Módulo')}
+          ${pode('admin.usuarios', 'view') ? renderAdminTab('usuarios', 'Usuários') : ''}
+          ${pode('admin.perfis', 'view') ? renderAdminTab('perfis', 'Perfis de Acesso') : ''}
+          ${pode('admin.permissoes', 'view') ? renderAdminTab('permissoes', 'Permissões por Módulo') : ''}
         </div>
 
         ${renderAdminPanel()}
@@ -682,6 +736,10 @@ function renderAdminTab(aba, label) {
 }
 
 function renderAdminPanel() {
+  if (!podeAcessarAbaAdmin(state.admin.aba)) {
+    state.admin.aba = 'identidade';
+  }
+
   if (state.admin.aba === 'categorias') {
     return renderCrudAdmin('categorias', 'Categorias', 'Organize os futuros itens do HUB por categorias.');
   }
@@ -699,27 +757,15 @@ function renderAdminPanel() {
   }
 
   if (state.admin.aba === 'usuarios') {
-    return renderAdminPreparado('Usuários', 'A planilha de usuários já existe e é usada para autenticação, mas ainda não há endpoint administrativo para cadastro e edição nesta tela.', [
-      'Evita simular gestão de usuários sem persistência própria.',
-      'Próximo passo técnico: criar API segura para listar, criar, editar e inativar usuários.',
-      'A autenticação atual continua preservada pelo backend.'
-    ]);
+    return renderUsuariosAdmin();
   }
 
   if (state.admin.aba === 'perfis') {
-    return renderAdminPreparado('Perfis de Acesso', 'Os perfis atuais são lidos diretamente do usuário, mas ainda não existe cadastro dedicado de perfis.', [
-      'Hoje o perfil gestor controla acesso ao Admin e a cards específicos.',
-      'Próximo passo técnico: definir tabela ou configuração persistida de perfis.',
-      'Sem backend próprio, esta área fica apenas preparada visualmente.'
-    ]);
+    return renderPerfisAdmin();
   }
 
   if (state.admin.aba === 'permissoes') {
-    return renderAdminPreparado('Permissões por Módulo', 'As permissões por módulo ainda não possuem tabela, endpoint ou regra de enforcement configurável.', [
-      'Não serão exibidos controles falsos de segurança.',
-      'Os cards atuais continuam sendo definidos pelo backend conforme o perfil.',
-      'Próximo passo técnico: criar modelo de permissões e aplicar as regras nos endpoints.'
-    ]);
+    return renderPermissoesAdmin();
   }
 
   const gruposPorAba = {
@@ -767,6 +813,12 @@ function renderAdminPanel() {
 }
 
 async function selecionarAbaAdmin(aba) {
+  if (!podeAcessarAbaAdmin(aba)) {
+    state.admin.message = 'Seu usuário não possui acesso a esta área.';
+    renderAdministracao();
+    return;
+  }
+
   state.admin.aba = aba;
   state.admin.message = '';
 
@@ -777,6 +829,21 @@ async function selecionarAbaAdmin(aba) {
 
   if (aba === 'modulos') {
     await carregarModulosAdmin();
+    return;
+  }
+
+  if (aba === 'usuarios') {
+    await carregarUsuariosAdmin();
+    return;
+  }
+
+  if (aba === 'perfis') {
+    await carregarPerfisAdmin();
+    return;
+  }
+
+  if (aba === 'permissoes') {
+    await carregarPermissoesAdmin();
     return;
   }
 
@@ -1043,6 +1110,325 @@ function renderAdminPreparado(titulo, descricao, itens) {
   `;
 }
 
+function renderUsuariosAdmin() {
+  const records = state.admin.usuarios || [];
+  const resumo = records.reduce((acc, usuario) => {
+    acc.total += 1;
+    acc[usuario.status] = (acc[usuario.status] || 0) + 1;
+    return acc;
+  }, { total: 0 });
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Usuários</h2>
+          <p>${resumo.total} usuários · ${resumo.ativo || 0} ativos · ${resumo.pendente || 0} pendentes · ${(resumo.bloqueado || 0) + (resumo.inativo || 0)} bloqueados/inativos</p>
+        </div>
+        ${pode('admin.usuarios', 'create') ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro(\'usuarios\')">+ Adicionar</button>' : ''}
+      </div>
+
+      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(records)}
+      ${renderModalUsuarioAdmin()}
+      ${renderPermissoesUsuarioAdmin()}
+    </section>
+  `;
+}
+
+function renderListaUsuariosAdmin(records) {
+  if (!records.length) {
+    return '<p class="quick-link-empty">Nenhum usuário cadastrado.</p>';
+  }
+
+  return `
+    <div class="crud-list admin-users-list">
+      <div class="crud-header">
+        <span>Usuário</span>
+        <span>Perfil</span>
+        <span>Status</span>
+        <span>Ação</span>
+      </div>
+      ${records.map(usuario => `
+        ${renderUsuarioAdmin(usuario)}
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderUsuarioAdmin(usuario) {
+  const id = escapeAttr(usuario.id || '');
+  const editando = state.admin.editando.usuarios === usuario.id;
+  const disabled = editando ? '' : 'disabled';
+  const podeEditar = pode('admin.usuarios', 'update');
+
+  return `
+    <article class="crud-row ${editando ? 'editing' : ''}">
+      <input id="usuario_${id}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}" ${disabled}>
+      <select id="usuario_${id}_perfil" class="config-input" ${disabled}>
+        ${renderOptionsPerfisAdmin(usuario.perfil_id)}
+      </select>
+      <select id="usuario_${id}_status" class="config-input status-${escapeAttr(usuario.status || 'pendente')}" ${disabled}>
+        ${renderOptionsStatusUsuario(usuario.status)}
+      </select>
+      <div class="crud-actions">
+        ${editando
+          ? `<button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${id}')">Salvar</button>`
+          : `<button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}>✎</button>`
+        }
+        <button class="secondary-btn" type="button" onclick="abrirPermissoesUsuarioAdmin('${id}')" ${pode('admin.usuarios', 'manage_permissions') ? '' : 'disabled'}>Permissões</button>
+      </div>
+      <input id="usuario_${id}_email" type="hidden" value="${escapeAttr(usuario.email || '')}">
+    </article>
+  `;
+}
+
+function renderOptionsPerfisAdmin(valorAtual) {
+  return (state.admin.perfis || []).map(perfil => `
+    <option value="${escapeAttr(perfil.id || '')}" ${perfil.id === valorAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || '')}</option>
+  `).join('');
+}
+
+function renderOptionsStatusUsuario(valorAtual = 'pendente') {
+  return ['pendente', 'ativo', 'bloqueado', 'inativo'].map(status => `
+    <option value="${status}" ${status === valorAtual ? 'selected' : ''}>${status}</option>
+  `).join('');
+}
+
+function renderModalUsuarioAdmin() {
+  if (state.admin.modalNovo !== 'usuarios') {
+    return '';
+  }
+
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Adicionar usuário">
+      <section class="small-modal">
+        <div class="small-modal-header">
+          <h3>Adicionar usuário</h3>
+          <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <label><span>Nome</span><input id="usuario_novo_nome" class="config-input" type="text"></label>
+        <label><span>E-mail</span><input id="usuario_novo_email" class="config-input" type="email"></label>
+        <label><span>Perfil</span><select id="usuario_novo_perfil" class="config-input">${renderOptionsPerfisAdmin('')}</select></label>
+        <label><span>Status</span><select id="usuario_novo_status" class="config-input">${renderOptionsStatusUsuario('pendente')}</select></label>
+        <div class="small-modal-actions">
+          <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('')">Salvar</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderPermissoesUsuarioAdmin() {
+  const usuarioId = state.admin.usuarioPermissoesId;
+
+  if (!usuarioId) {
+    return '';
+  }
+
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const recursos = state.admin.recursos || [];
+  const permissoes = state.admin.usuarioPermissoes || [];
+  const permissoesPorChave = permissoes.reduce((acc, item) => {
+    acc[`${item.recurso_chave}:${item.acao}`] = item.efeito;
+    return acc;
+  }, {});
+  const acoes = ['view', 'create', 'update', 'delete', 'execute', 'view_secret', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'];
+
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Permissões individuais">
+      <section class="small-modal link-modal">
+        <div class="small-modal-header">
+          <h3>Permissões individuais</h3>
+          <button class="icon-btn" type="button" onclick="fecharPermissoesUsuarioAdmin()" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <p class="quick-link-empty">${escapeHtml(usuario.nome || usuario.email || 'Usuário')} · bloqueios individuais vencem permissões do perfil.</p>
+        <div class="admin-prepared-list">
+          ${recursos.map(recurso => `
+            <article>
+              <strong>${escapeHtml(recurso.nome || recurso.chave)}</strong>
+              <span>${escapeHtml(recurso.chave)}</span>
+              <small>
+                ${acoes.map(acao => {
+                  const efeito = permissoesPorChave[`${recurso.chave}:${acao}`] || '';
+                  return `
+                    <label>
+                      ${escapeHtml(acao)}
+                      <select class="config-input" onchange="alterarPermissaoUsuarioAdmin('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.value)">
+                        <option value="" ${!efeito ? 'selected' : ''}>herdar</option>
+                        <option value="permitir" ${efeito === 'permitir' ? 'selected' : ''}>permitir</option>
+                        <option value="negar" ${efeito === 'negar' ? 'selected' : ''}>negar</option>
+                      </select>
+                    </label>
+                  `;
+                }).join('')}
+              </small>
+            </article>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderPerfisAdmin() {
+  const records = state.admin.perfis || [];
+  const resumo = obterResumoRegistros(records);
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Perfis de Acesso</h2>
+          <p>${resumo.total} perfis · ${resumo.ativos} ativos · ${resumo.inativos} inativos</p>
+        </div>
+        ${pode('admin.perfis', 'create') ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro(\'perfis\')">+ Adicionar</button>' : ''}
+      </div>
+
+      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando perfis...</p>' : renderListaPerfisAdmin(records)}
+      ${renderModalPerfilAdmin()}
+    </section>
+  `;
+}
+
+function renderListaPerfisAdmin(records) {
+  if (!records.length) {
+    return '<p class="quick-link-empty">Nenhum perfil cadastrado.</p>';
+  }
+
+  return `
+    <div class="crud-list admin-profiles-list">
+      <div class="crud-header">
+        <span>Perfil</span>
+        <span>Descrição</span>
+        <span>Nível</span>
+        <span>Status</span>
+      </div>
+      ${records.map(perfil => renderPerfilAdmin(perfil)).join('')}
+    </div>
+  `;
+}
+
+function renderPerfilAdmin(perfil) {
+  const id = escapeAttr(perfil.id || '');
+  const editando = state.admin.editando.perfis === perfil.id;
+  const disabled = editando ? '' : 'disabled';
+  const podeEditar = pode('admin.perfis', 'update');
+
+  return `
+    <article class="crud-row ${editando ? 'editing' : ''}">
+      <input id="perfil_${id}_nome" class="config-input" type="text" value="${escapeAttr(perfil.nome || perfil.slug || '')}" ${disabled}>
+      <input id="perfil_${id}_descricao" class="config-input" type="text" value="${escapeAttr(perfil.descricao || '')}" ${disabled}>
+      <input id="perfil_${id}_nivel" class="config-input" type="number" value="${escapeAttr(String(perfil.nivel ?? 0))}" ${disabled}>
+      <div class="crud-actions">
+        <select id="perfil_${id}_status" class="config-input status-${escapeAttr(perfil.status || 'inativo')}" ${disabled}>
+          <option value="ativo" ${perfil.status === 'ativo' ? 'selected' : ''}>ativo</option>
+          <option value="inativo" ${perfil.status === 'inativo' ? 'selected' : ''}>inativo</option>
+        </select>
+        ${editando
+          ? `<button class="save-btn" type="button" onclick="salvarPerfilAdmin('${id}')">Salvar</button>`
+          : `<button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>✎</button>`
+        }
+      </div>
+      <input id="perfil_${id}_slug" type="hidden" value="${escapeAttr(perfil.slug || '')}">
+    </article>
+  `;
+}
+
+function renderModalPerfilAdmin() {
+  if (state.admin.modalNovo !== 'perfis') {
+    return '';
+  }
+
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Adicionar perfil">
+      <section class="small-modal">
+        <div class="small-modal-header">
+          <h3>Adicionar perfil</h3>
+          <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <label><span>Identificador</span><input id="perfil_novo_slug" class="config-input" type="text" placeholder="ex: financeiro"></label>
+        <label><span>Nome</span><input id="perfil_novo_nome" class="config-input" type="text"></label>
+        <label><span>Descrição</span><input id="perfil_novo_descricao" class="config-input" type="text"></label>
+        <label><span>Nível</span><input id="perfil_novo_nivel" class="config-input" type="number" value="20"></label>
+        <label><span>Status</span><select id="perfil_novo_status" class="config-input"><option value="ativo">ativo</option><option value="inativo">inativo</option></select></label>
+        <div class="small-modal-actions">
+          <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarPerfilAdmin('')">Salvar</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderPermissoesAdmin() {
+  const recursos = state.admin.recursos || [];
+  const perfis = state.admin.perfis || [];
+  const permissoes = state.admin.perfilPermissoes || [];
+
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Permissões por Módulo</h2>
+          <p>${recursos.length} recursos · ${perfis.length} perfis · ${permissoes.length} permissões concedidas</p>
+        </div>
+      </div>
+
+      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando permissões...</p>' : renderMatrizPermissoesAdmin(recursos, perfis, permissoes)}
+    </section>
+  `;
+}
+
+function renderMatrizPermissoesAdmin(recursos, perfis, permissoes) {
+  if (!recursos.length || !perfis.length) {
+    return '<p class="quick-link-empty">Nenhum recurso ou perfil encontrado.</p>';
+  }
+
+  const permissoesPorPerfil = permissoes.reduce((acc, item) => {
+    const chave = `${item.perfil_id}:${item.recurso_chave}`;
+    acc[chave] ||= [];
+    if (item.permitido !== false) {
+      acc[chave].push(item.acao);
+    }
+    return acc;
+  }, {});
+
+  const podeAlterar = pode('admin.permissoes', 'update');
+
+  return `
+    <div class="admin-prepared-list">
+      ${recursos.map(recurso => `
+        <article>
+          <strong>${escapeHtml(recurso.nome || recurso.chave)}</strong>
+          <span>${escapeHtml(recurso.tipo || 'recurso')} · ${escapeHtml(recurso.chave)}</span>
+          <small>${perfis.map(perfil => renderPermissoesPerfilRecurso(perfil, recurso, permissoesPorPerfil, podeAlterar)).join('')}</small>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderPermissoesPerfilRecurso(perfil, recurso, permissoesPorPerfil, podeAlterar) {
+  const acoes = ['view', 'create', 'update', 'delete', 'execute', 'view_secret', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'];
+  const concedidas = new Set(permissoesPorPerfil[`${perfil.id}:${recurso.chave}`] || []);
+
+  return `
+    <span class="permission-profile-line">
+      <strong>${escapeHtml(perfil.nome || perfil.slug || '')}</strong>
+      ${acoes.map(acao => `
+        <label>
+          <input type="checkbox" ${concedidas.has(acao) ? 'checked' : ''} ${podeAlterar ? '' : 'disabled'} onchange="alterarPermissaoPerfilAdmin('${escapeAttr(perfil.id)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
+          ${escapeHtml(acao)}
+        </label>
+      `).join('')}
+    </span>
+  `;
+}
+
 function obterRotuloConfig(chave) {
   const rotulos = {
     nome_sistema: 'Nome do sistema',
@@ -1293,6 +1679,236 @@ async function carregarModulosAdmin(preservarMensagem = false) {
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar módulos.';
+    renderAdministracao();
+  }
+}
+
+async function carregarUsuariosAdmin() {
+  state.admin.loading = true;
+  state.admin.message = '';
+  renderAdministracao();
+
+  try {
+    const [usuariosResponse, perfisResponse] = await Promise.all([
+      chamarApi('listAdminUsers'),
+      chamarApi('listAdminProfiles')
+    ]);
+
+    if (!usuariosResponse.ok) {
+      throw new Error(obterMensagemApi(usuariosResponse, 'Não foi possível carregar usuários.'));
+    }
+
+    if (!perfisResponse.ok) {
+      throw new Error(obterMensagemApi(perfisResponse, 'Não foi possível carregar perfis.'));
+    }
+
+    state.admin.usuarios = usuariosResponse.data.records || [];
+    state.admin.perfis = perfisResponse.data.records || [];
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar usuários.';
+    renderAdministracao();
+  }
+}
+
+function editarUsuarioAdmin(id) {
+  state.admin.editando.usuarios = id;
+  renderAdministracao();
+}
+
+async function salvarUsuarioAdmin(id) {
+  const prefixo = id ? `usuario_${id}` : 'usuario_novo';
+  const payload = {
+    id,
+    nome: document.getElementById(`${prefixo}_nome`)?.value || '',
+    email: document.getElementById(`${prefixo}_email`)?.value || '',
+    perfil_id: document.getElementById(`${prefixo}_perfil`)?.value || '',
+    status: document.getElementById(`${prefixo}_status`)?.value || 'pendente'
+  };
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('saveAdminUser', payload);
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar o usuário.'));
+    }
+
+    state.admin.editando.usuarios = '';
+    state.admin.modalNovo = '';
+    state.admin.message = 'Usuário salvo. Se for novo, crie ou vincule o login correspondente no Supabase Auth antes de ativar o acesso.';
+    await carregarUsuariosAdmin();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao salvar usuário.';
+    renderAdministracao();
+  }
+}
+
+async function abrirPermissoesUsuarioAdmin(id) {
+  if (!pode('admin.usuarios', 'manage_permissions')) {
+    state.admin.message = 'Seu usuário não possui permissão para alterar permissões individuais.';
+    renderAdministracao();
+    return;
+  }
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    state.admin.usuarioPermissoesId = id;
+    renderAdministracao();
+
+    const response = await chamarApi('listAdminUserPermissions', {
+      usuario_id: id
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar permissões individuais.'));
+    }
+
+    state.admin.recursos = response.data.recursos || [];
+    state.admin.usuarioPermissoes = response.data.permissoes || [];
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar permissões individuais.';
+    renderAdministracao();
+  }
+}
+
+function fecharPermissoesUsuarioAdmin() {
+  state.admin.usuarioPermissoesId = '';
+  state.admin.usuarioPermissoes = [];
+  renderAdministracao();
+}
+
+async function alterarPermissaoUsuarioAdmin(usuarioId, recursoChave, acao, efeito) {
+  try {
+    const response = await chamarApi('saveAdminUserPermission', {
+      usuario_id: usuarioId,
+      recurso_chave: recursoChave,
+      acao,
+      efeito
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão individual.'));
+    }
+
+    await abrirPermissoesUsuarioAdmin(usuarioId);
+  } catch (erro) {
+    state.admin.message = erro.message || 'Erro ao salvar permissão individual.';
+    renderAdministracao();
+  }
+}
+
+async function alterarPermissaoPerfilAdmin(perfilId, recursoChave, acao, permitido) {
+  try {
+    state.admin.message = '';
+    const response = await chamarApi('saveAdminProfilePermission', {
+      perfil_id: perfilId,
+      recurso_chave: recursoChave,
+      acao,
+      permitido
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão.'));
+    }
+
+    await carregarPermissoesAdmin();
+  } catch (erro) {
+    state.admin.message = erro.message || 'Erro ao salvar permissão.';
+    renderAdministracao();
+  }
+}
+
+async function carregarPerfisAdmin() {
+  state.admin.loading = true;
+  state.admin.message = '';
+  renderAdministracao();
+
+  try {
+    const response = await chamarApi('listAdminProfiles');
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar perfis.'));
+    }
+
+    state.admin.perfis = response.data.records || [];
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar perfis.';
+    renderAdministracao();
+  }
+}
+
+function editarPerfilAdmin(id) {
+  state.admin.editando.perfis = id;
+  renderAdministracao();
+}
+
+async function salvarPerfilAdmin(id) {
+  const prefixo = id ? `perfil_${id}` : 'perfil_novo';
+  const payload = {
+    id,
+    slug: document.getElementById(`${prefixo}_slug`)?.value || '',
+    nome: document.getElementById(`${prefixo}_nome`)?.value || '',
+    descricao: document.getElementById(`${prefixo}_descricao`)?.value || '',
+    nivel: document.getElementById(`${prefixo}_nivel`)?.value || '0',
+    status: document.getElementById(`${prefixo}_status`)?.value || 'ativo'
+  };
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('saveAdminProfile', payload);
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar o perfil.'));
+    }
+
+    state.admin.editando.perfis = '';
+    state.admin.modalNovo = '';
+    state.admin.message = 'Perfil salvo. Ajuste as permissões desse perfil na aba Permissões por Módulo.';
+    await carregarPerfisAdmin();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao salvar perfil.';
+    renderAdministracao();
+  }
+}
+
+async function carregarPermissoesAdmin() {
+  state.admin.loading = true;
+  state.admin.message = '';
+  renderAdministracao();
+
+  try {
+    const response = await chamarApi('listAdminPermissions');
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar permissões.'));
+    }
+
+    state.admin.recursos = response.data.recursos || [];
+    state.admin.perfis = response.data.perfis || [];
+    state.admin.perfilPermissoes = response.data.permissoes || [];
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar permissões.';
     renderAdministracao();
   }
 }
@@ -1794,6 +2410,7 @@ async function carregarDadosIniciaisSilencioso() {
   state.aniversariantes = response.data.aniversariantes || [];
   state.favoritos = response.data.favoritos || [];
   state.meta = response.data.meta || null;
+  state.permissions = response.data.permissions || normalizarPermissoes([]);
 }
 
 function atualizarBotaoSalvarLink(texto, disabled, classe) {
@@ -1867,7 +2484,8 @@ async function carregarCentralSenhas() {
 }
 
 function renderCentralSenhas() {
-  const gestor = state.usuario?.perfil === 'gestor';
+  const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeVerSenha = pode('central_senhas', 'view_secret');
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
@@ -1891,9 +2509,9 @@ function renderCentralSenhas() {
         <div class="admin-panel-header">
           <div>
             <h2>Central de Senhas</h2>
-            <p>${gestor ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
+            <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
           </div>
-          ${gestor ? `
+          ${podeGerenciar ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
               <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
               <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
@@ -1901,11 +2519,11 @@ function renderCentralSenhas() {
           ` : ''}
         </div>
 
-        ${renderResumoSenhas(gestor)}
-        ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(gestor) : ''}
+        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? '<p class="quick-link-empty">Carregando acessos...</p>' : renderConteudoSenhas(gestor)}
+        ${state.passwords.loading ? '<p class="quick-link-empty">Carregando acessos...</p>' : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
       </section>
     </main>
@@ -1953,23 +2571,26 @@ function renderToolbarSenhas(gestor) {
   `;
 }
 
-function renderConteudoSenhas(gestor) {
+function renderConteudoSenhas(gestor, podeVerSenha) {
   if (state.passwords.aba === 'historico' && gestor) {
     return renderHistoricoSenhas();
   }
 
-  return renderListaSenhas(gestor);
+  return renderListaSenhas(gestor, podeVerSenha);
 }
 
-function renderListaSenhas(gestor) {
+function renderListaSenhas(gestor, podeVerSenha) {
   if (!state.passwords.items.length) {
     return '<p class="quick-link-empty">Nenhum acesso cadastrado.</p>';
   }
 
-  return `<div class="password-list">${state.passwords.items.map(item => renderSenhaItem(item, gestor)).join('')}</div>`;
+  return `<div class="password-list">${state.passwords.items.map(item => renderSenhaItem(item, gestor, podeVerSenha)).join('')}</div>`;
 }
 
-function renderSenhaItem(item, gestor) {
+function renderSenhaItem(item, gestor, podeVerSenha) {
+  const podeEditar = pode('central_senhas', 'update');
+  const podeExcluir = pode('central_senhas', 'delete');
+
   return `
     <article class="password-row status-line-${escapeAttr(item.status || 'inativo')}">
       <div>
@@ -1980,7 +2601,7 @@ function renderSenhaItem(item, gestor) {
 
       <div class="password-fields">
         <span>Login: ${escapeHtml(item.login || '-')}</span>
-        <span>Senha: ${escapeHtml(item.senha || '-')}</span>
+        <span>Senha: ${podeVerSenha ? escapeHtml(item.senha || '-') : 'restrita'}</span>
         ${item.url ? `
           <div class="link-buttons">
             <a class="link-sub-btn" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">Abrir</a>
@@ -1989,7 +2610,12 @@ function renderSenhaItem(item, gestor) {
         ` : ''}
       </div>
 
-      ${gestor ? `<div class="crud-actions"><button class="icon-btn" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" title="Editar" aria-label="Editar acesso">✎</button></div>` : ''}
+      ${gestor ? `
+        <div class="crud-actions">
+          ${podeEditar ? `<button class="icon-btn" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" title="Editar" aria-label="Editar acesso">✎</button>` : ''}
+          ${podeExcluir ? `<button class="icon-btn danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" title="Excluir" aria-label="Excluir acesso">×</button>` : ''}
+        </div>
+      ` : ''}
     </article>
   `;
 }
@@ -2066,12 +2692,26 @@ function alterarFiltroSenha(chave, valor) {
 }
 
 function selecionarAbaSenhas(aba) {
+  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
+    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
+    renderCentralSenhas();
+    return;
+  }
+
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
   renderCentralSenhas();
 }
 
 function abrirModalSenha(id) {
+  const acao = id ? 'update' : 'create';
+
+  if (!pode('central_senhas', acao)) {
+    state.passwords.message = 'Seu usuário não possui permissão para gerenciar acessos.';
+    renderCentralSenhas();
+    return;
+  }
+
   state.passwords.modalAberto = true;
   state.passwords.modalId = id || '';
   state.passwords.erros = {};
@@ -2090,6 +2730,14 @@ function fecharModalSenha() {
 }
 
 async function salvarSenhaItem(id) {
+  const acao = id ? 'update' : 'create';
+
+  if (!pode('central_senhas', acao)) {
+    state.passwords.message = 'Seu usuário não possui permissão para salvar acessos.';
+    renderCentralSenhas();
+    return;
+  }
+
   const payload = {
     id,
     titulo: document.getElementById('senha_titulo')?.value || '',
@@ -2133,6 +2781,35 @@ async function salvarSenhaItem(id) {
     state.passwords.salvo = false;
     atualizarBotaoSenha('Salvar', false, '');
     state.passwords.message = erro.message || 'Erro ao salvar acesso.';
+    renderCentralSenhas();
+  }
+}
+
+async function excluirSenhaItem(id) {
+  if (!pode('central_senhas', 'delete')) {
+    state.passwords.message = 'Seu usuário não possui permissão para excluir acessos.';
+    renderCentralSenhas();
+    return;
+  }
+
+  const item = state.passwords.items.find(acesso => acesso.id === id);
+  const titulo = item?.titulo || 'este acesso';
+
+  if (!window.confirm(`Excluir ${titulo}?`)) {
+    return;
+  }
+
+  try {
+    const response = await chamarApi('deletePasswordItem', { id });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível excluir o acesso.'));
+    }
+
+    state.passwords.message = 'Acesso excluído.';
+    await carregarCentralSenhas();
+  } catch (erro) {
+    state.passwords.message = erro.message || 'Erro ao excluir acesso.';
     renderCentralSenhas();
   }
 }
@@ -2205,7 +2882,7 @@ async function carregarPainelAr() {
 }
 
 function renderPainelAr() {
-  const gestor = state.usuario?.perfil === 'gestor';
+  const podeHistorico = podeAcessarAbaAr('historico');
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
@@ -2239,26 +2916,30 @@ function renderPainelAr() {
                 <path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.2a.5.5 0 0 1-.5-.5v-5.2H9.2v5.2a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-9.7Z"></path>
               </svg>
             </button>
-            <button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>
-            <button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>
-            <button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>
-            ${gestor ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
+            ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
+            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>` : ''}
+            ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
+            ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
           </div>
         </div>
 
         ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-        ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr(gestor)}
+        ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
       </section>
     </main>
   `;
 }
 
-function renderConteudoAr(gestor) {
-  if (state.ar.aba === 'inicio') {
-    return renderInicioPainelAr(gestor);
+function renderConteudoAr() {
+  if (!podeAcessarAbaAr(state.ar.aba)) {
+    state.ar.aba = 'inicio';
   }
 
-  if (state.ar.aba === 'historico' && gestor) {
+  if (state.ar.aba === 'inicio') {
+    return renderInicioPainelAr();
+  }
+
+  if (state.ar.aba === 'historico') {
     return renderHistoricoAr();
   }
 
@@ -2273,7 +2954,7 @@ function renderConteudoAr(gestor) {
   return renderGeradorLinksAr();
 }
 
-function renderInicioPainelAr(gestor) {
+function renderInicioPainelAr() {
   return `
     <section class="ar-home-shell">
       <div class="ar-dashboard-placeholder"></div>
@@ -2303,13 +2984,23 @@ function acionarCardAr(event, aba) {
 
 function renderValidacoesAr() {
   const validacoes = state.ar.validacoes;
+  const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
+  const podeImportar = pode('painel_ar.validacoes', 'importar');
+
+  if (validacoes.aba === 'emitir' && !podeEmitir) {
+    validacoes.aba = 'consultar';
+  }
+
+  if (validacoes.aba === 'importacao' && !podeImportar) {
+    validacoes.aba = 'consultar';
+  }
 
   return `
     <section class="ar-validacoes">
       <div class="ar-validacoes-subnav" role="group" aria-label="Subáreas de Validações">
-        <button class="${validacoes.aba === 'emitir' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>
+        ${podeEmitir ? `<button class="${validacoes.aba === 'emitir' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>` : ''}
         <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
-        <button class="${validacoes.aba === 'importacao' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importação</button>
+        ${podeImportar ? `<button class="${validacoes.aba === 'importacao' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importação</button>` : ''}
       </div>
 
       ${validacoes.message ? `<p class="admin-message">${escapeHtml(validacoes.message)}</p>` : ''}
@@ -2334,6 +3025,7 @@ function renderConteudoValidacoesAr() {
 
 function renderEmitirReciboAr() {
   const validacoes = state.ar.validacoes;
+  const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
   const filtros = validacoes.filtros;
   const totalPendente = validacoes.pendentes
     .reduce((total, item) => total + (Number(item.valor_tot_comiss) || 0), 0);
@@ -2384,7 +3076,7 @@ function renderEmitirReciboAr() {
 
       <div class="ar-validacoes-actions">
         <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()" ${validacoes.selecionados.length ? '' : 'disabled'}>Limpar seleção</button>
-        <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${validacoes.selecionados.length ? '' : 'disabled'}>Emitir recibo</button>
+        <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${validacoes.selecionados.length && podeEmitir ? '' : 'disabled'}>Emitir recibo</button>
       </div>
 
       ${renderBarraSelecaoValidacoesAr(totalSelecionado)}
@@ -2396,6 +3088,7 @@ function renderEmitirReciboAr() {
 
 function renderBarraSelecaoValidacoesAr(totalSelecionado) {
   const { pendentes, selecionados } = state.ar.validacoes;
+  const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
 
   if (!selecionados.length) return '';
 
@@ -2409,7 +3102,7 @@ function renderBarraSelecaoValidacoesAr(totalSelecionado) {
         <span>${escapeHtml(parceiro)} · ${escapeHtml(formatarMoedaNumeroAr(totalSelecionado))}</span>
       </div>
       <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()">Limpar</button>
-      <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()">Emitir recibo</button>
+      <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${podeEmitir ? '' : 'disabled'}>Emitir recibo</button>
     </div>
   `;
 }
@@ -2453,6 +3146,10 @@ function renderTabelaValidacoesPendentesAr() {
 }
 
 function renderLancamentoManualValidacoesAr() {
+  if (!pode('painel_ar.validacoes', 'importar')) {
+    return '';
+  }
+
   return `
     <details class="ar-validacoes-manual">
       <summary>Lançamento manual</summary>
@@ -2513,6 +3210,8 @@ function renderConsultarRecibosAr() {
 }
 
 function renderTabelaRecibosAr(recibos) {
+  const podeCancelar = pode('painel_ar.validacoes', 'cancelar_recibo');
+
   if (!recibos.length) {
     return '<p class="quick-link-empty">Nenhum recibo emitido até agora.</p>';
   }
@@ -2536,7 +3235,7 @@ function renderTabelaRecibosAr(recibos) {
           <span><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(recibo.status || '-')}</mark></span>
           <span class="ar-recibos-actions">
             <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
-            <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' ? 'disabled' : ''}>Cancelar</button>
+            <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' || !podeCancelar ? 'disabled' : ''}>Cancelar</button>
           </span>
         </article>
       `).join('')}
@@ -2602,8 +3301,10 @@ function renderImportacaoValidacoesAr() {
     ['Emissões', 'Preparado para importação de emissões em fase futura.']
   ];
   const repasse = state.ar.validacoes.importacaoRepasse;
-  const podeSelecionarArquivo = Boolean(repasse.mesBase) && !repasse.loteExistente && !repasse.loading;
-  const podeImportar = Boolean(repasse.mesBase) && repasse.linhas.length > 0 && !repasse.erros.length && !repasse.loteExistente && !repasse.loading;
+  const podeImportarPermissao = pode('painel_ar.validacoes', 'importar');
+  const podeExcluirImportacao = pode('painel_ar.validacoes', 'excluir_importacao');
+  const podeSelecionarArquivo = podeImportarPermissao && Boolean(repasse.mesBase) && !repasse.loteExistente && !repasse.loading;
+  const podeImportar = podeImportarPermissao && Boolean(repasse.mesBase) && repasse.linhas.length > 0 && !repasse.erros.length && !repasse.loteExistente && !repasse.loading;
 
   return `
     <div class="ar-validacoes-panel">
@@ -2642,7 +3343,7 @@ function renderImportacaoValidacoesAr() {
         ${repasse.loteExistente ? `
           <div class="ar-import-existing">
             <p>Já existe importação de repasse para ${escapeHtml(formatarMesBaseRepasseAr(repasse.mesBase))}. Para importar novamente, exclua este mês-base primeiro.</p>
-            <button class="secondary-btn danger" type="button" onclick="excluirMesBaseRepasseAr()" ${repasse.loading ? 'disabled' : ''}>Excluir mês-base</button>
+            <button class="secondary-btn danger" type="button" onclick="excluirMesBaseRepasseAr()" ${repasse.loading || !podeExcluirImportacao ? 'disabled' : ''}>Excluir mês-base</button>
           </div>
         ` : ''}
         ${repasse.resumo ? renderResumoImportacaoRepasseAr(repasse) : ''}
@@ -4092,6 +4793,12 @@ function selecionarParceiroAr(id) {
 }
 
 function selecionarAbaAr(aba) {
+  if (!podeAcessarAbaAr(aba)) {
+    state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
+    renderPainelAr();
+    return;
+  }
+
   state.ar.aba = aba;
   renderPainelAr();
 
@@ -4101,6 +4808,18 @@ function selecionarAbaAr(aba) {
 }
 
 function selecionarSubabaValidacoesAr(aba) {
+  if (aba === 'emitir' && !pode('painel_ar.validacoes', 'emitir_recibo')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para emitir recibos.';
+    renderPainelAr();
+    return;
+  }
+
+  if (aba === 'importacao' && !pode('painel_ar.validacoes', 'importar')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para importar repasses.';
+    renderPainelAr();
+    return;
+  }
+
   state.ar.validacoes.aba = aba;
   state.ar.validacoes.message = '';
   renderPainelAr();
@@ -4176,6 +4895,12 @@ function limparSelecaoValidacoesAr() {
 }
 
 async function criarLancamentoManualValidacoesAr() {
+  if (!pode('painel_ar.validacoes', 'importar')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para criar lançamentos.';
+    renderPainelAr();
+    return;
+  }
+
   const valor = document.getElementById('ar_manual_valor')?.value || '';
   const parceiroNome = document.getElementById('ar_manual_parceiro')?.value || '';
   const dataValidacao = document.getElementById('ar_manual_data')?.value || '';
@@ -4216,6 +4941,12 @@ async function criarLancamentoManualValidacoesAr() {
 }
 
 async function emitirReciboValidacoesAr() {
+  if (!pode('painel_ar.validacoes', 'emitir_recibo')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para emitir recibos.';
+    renderPainelAr();
+    return;
+  }
+
   const selecionados = state.ar.validacoes.pendentes.filter(item => {
     return state.ar.validacoes.selecionados.includes(item.id);
   });
@@ -4272,6 +5003,12 @@ function fecharReciboValidacoesAr() {
 }
 
 async function cancelarReciboValidacoesAr(id) {
+  if (!pode('painel_ar.validacoes', 'cancelar_recibo')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para cancelar recibos.';
+    renderPainelAr();
+    return;
+  }
+
   const recibo = state.ar.validacoes.recibos.find(item => item.id === id);
 
   if (!window.confirm(`Cancelar o recibo ${recibo?.numero || ''}? Os lançamentos vinculados voltarão para pendente.`)) {
@@ -4338,6 +5075,12 @@ async function alterarMesBaseRepasseAr(valor) {
 }
 
 async function processarArquivoRepasseAr(event) {
+  if (!pode('painel_ar.validacoes', 'importar')) {
+    state.ar.validacoes.importacaoRepasse.message = 'Seu usuário não possui permissão para importar repasses.';
+    renderPainelAr();
+    return;
+  }
+
   const arquivo = event.target.files?.[0];
   const repasse = state.ar.validacoes.importacaoRepasse;
 
@@ -4393,6 +5136,12 @@ async function processarArquivoRepasseAr(event) {
 }
 
 async function importarRepasseValidacoesAr() {
+  if (!pode('painel_ar.validacoes', 'importar')) {
+    state.ar.validacoes.importacaoRepasse.message = 'Seu usuário não possui permissão para importar repasses.';
+    renderPainelAr();
+    return;
+  }
+
   const repasse = state.ar.validacoes.importacaoRepasse;
 
   if (!repasse.mesBase || !repasse.linhas.length || repasse.erros.length || repasse.loteExistente) {
@@ -4436,6 +5185,12 @@ async function importarRepasseValidacoesAr() {
 }
 
 async function excluirMesBaseRepasseAr() {
+  if (!pode('painel_ar.validacoes', 'excluir_importacao')) {
+    state.ar.validacoes.importacaoRepasse.message = 'Seu usuário não possui permissão para excluir importações.';
+    renderPainelAr();
+    return;
+  }
+
   const repasse = state.ar.validacoes.importacaoRepasse;
 
   if (!repasse.mesBase || !repasse.loteExistente) {
@@ -5013,6 +5768,7 @@ Object.assign(window, {
   abrirModalNovoRegistro,
   abrirModalSenha,
   abrirModulo,
+  abrirPermissoesUsuarioAdmin,
   acionarCardAr,
   acionarCardModulo,
   alterarBuscaAr,
@@ -5032,6 +5788,8 @@ Object.assign(window, {
   alternarTema,
   alternarTodosGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
+  alterarPermissaoPerfilAdmin,
+  alterarPermissaoUsuarioAdmin,
   cancelarReciboValidacoesAr,
   carregarValidacoesAr,
   alterarMesBaseRepasseAr,
@@ -5041,13 +5799,17 @@ Object.assign(window, {
   copiarVisualizacaoProdutosClienteAr,
   criarLancamentoManualValidacoesAr,
   editarLinkItem,
+  editarPerfilAdmin,
   editarRegistroAdmin,
+  editarUsuarioAdmin,
   emitirReciboValidacoesAr,
   excluirMesBaseRepasseAr,
+  excluirSenhaItem,
   fecharVisualizacaoProdutosClienteAr,
   fecharModalNovoLink,
   fecharModalNovoRegistro,
   fecharModalSenha,
+  fecharPermissoesUsuarioAdmin,
   fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
@@ -5065,8 +5827,10 @@ Object.assign(window, {
   sair,
   salvarConfigAdmin,
   salvarLinkItem,
+  salvarPerfilAdmin,
   salvarRegistroAdmin,
   salvarSenhaItem,
+  salvarUsuarioAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
   selecionarAbaSenhas,
