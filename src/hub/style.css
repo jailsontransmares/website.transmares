@@ -791,6 +791,10 @@ body.dark .module-card {
   margin-bottom: 10px;
 }
 
+.admin-user-filters {
+  margin: 8px 0 0;
+}
+
 .filter-btn {
   background: var(--color-surface-muted);
   border: var(--border-subtle);
@@ -802,11 +806,75 @@ body.dark .module-card {
   padding: 5px 10px;
 }
 
+.admin-user-filters .filter-btn {
+  align-items: center;
+  position: relative;
+  display: inline-flex;
+  gap: 6px;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.admin-user-filters .filter-btn span {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-user-filters .filter-btn::after {
+  background: transparent;
+  border-radius: 999px;
+  bottom: -6px;
+  content: '';
+  height: 3px;
+  left: 10px;
+  opacity: 0;
+  position: absolute;
+  right: 10px;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
 .filter-btn.active {
-  background: var(--color-primary-soft);
-  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--borda));
+  background: var(--color-surface-muted);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
   color: var(--color-primary);
   font-weight: 700;
+}
+
+.filter-btn.active::after {
+  background: var(--color-primary);
+  opacity: 1;
+}
+
+.admin-user-filters .filter-btn.filter-status-ativo {
+  background: color-mix(in srgb, #1f9d55 12%, white);
+  border-color: color-mix(in srgb, #1f9d55 35%, var(--borda));
+  color: #166534;
+}
+
+.admin-user-filters .filter-btn.filter-status-ativo.active {
+  background: color-mix(in srgb, #1f9d55 14%, white);
+  border-color: color-mix(in srgb, #1f9d55 55%, var(--borda));
+  color: #14532d;
+}
+
+.admin-user-filters .filter-btn.filter-status-ativo.active::after {
+  background: #1f9d55;
+}
+
+.admin-user-filters .filter-btn.filter-status-bloqueados-inativos {
+  background: color-mix(in srgb, #dc2626 10%, white);
+  border-color: color-mix(in srgb, #dc2626 42%, var(--borda));
+  color: #991b1b;
+}
+
+.admin-user-filters .filter-btn.filter-status-bloqueados-inativos.active {
+  background: color-mix(in srgb, #dc2626 14%, white);
+  border-color: color-mix(in srgb, #dc2626 58%, var(--borda));
+  color: #7f1d1d;
+}
+
+.admin-user-filters .filter-btn.filter-status-bloqueados-inativos.active::after {
+  background: #dc2626;
 }
 
 .add-small-btn {
@@ -840,8 +908,13 @@ body.dark .module-card {
   padding: 0 6px;
 }
 
-.crud-list:not(.admin-modules-list) .crud-header span:first-child {
+.crud-list:not(.admin-modules-list):not(.admin-users-list) .crud-header span:first-child {
   grid-column: 2;
+}
+
+.admin-users-list .crud-header,
+.admin-users-list .crud-row {
+  grid-template-columns: 88px minmax(240px, 1.6fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
 }
 
 .crud-row {
@@ -864,6 +937,143 @@ body.dark .module-card {
 .crud-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.admin-user-row {
+  min-height: 56px;
+}
+
+.admin-user-actions {
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.admin-user-main {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.admin-user-status-dot {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.admin-user-status-dot.status-ativo {
+  background: #1f9d55;
+}
+
+.admin-user-status-dot.status-pendente {
+  background: #d4a017;
+}
+
+.admin-user-status-dot.status-bloqueado {
+  background: #dc2626;
+}
+
+.admin-user-status-dot.status-inativo {
+  background: #dc2626;
+}
+
+.admin-user-identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-user-identity strong,
+.admin-user-identity small,
+.admin-user-permissions-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-identity strong {
+  color: var(--texto);
+  font-size: 14px;
+}
+
+.admin-user-identity small {
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+
+.admin-user-profile-badge {
+  margin-top: 0;
+  justify-self: start;
+}
+
+.admin-user-permissions-summary {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.admin-user-access-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.admin-user-access-header {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-user-access-header strong,
+.admin-user-password-header strong {
+  color: var(--color-navy);
+  font-size: 14px;
+}
+
+.admin-user-access-header p,
+.admin-user-password-header p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.admin-user-access-actions,
+.admin-user-password-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-user-password-box {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), var(--glass-blue-bg)),
+    var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card-compact);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.admin-user-password-header {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-user-password-value {
+  background: color-mix(in srgb, var(--color-primary-soft) 32%, white);
+  border: 1px dashed color-mix(in srgb, var(--color-primary) 30%, var(--borda));
+  border-radius: 10px;
+  color: var(--color-navy);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  padding: 10px 12px;
+  word-break: break-all;
 }
 
 .admin-preview-grid,
@@ -1011,6 +1221,28 @@ body.dark .module-card {
   width: min(420px, 100%);
 }
 
+.admin-user-modal {
+  min-height: 0;
+}
+
+.admin-user-modal.is-permissions-stage {
+  gap: 10px;
+  grid-template-rows: auto 1fr auto;
+  height: min(calc(100vh - 48px), 760px);
+  margin: 0 auto;
+  max-width: 860px;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  padding: 10px 12px;
+  width: min(860px, calc(100vw - 72px));
+}
+
+.admin-user-modal-backdrop {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 8px;
+}
+
 .small-modal-header {
   align-items: center;
   display: flex;
@@ -1038,6 +1270,21 @@ body.dark .module-card {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 4px;
+}
+
+.admin-user-modal.is-permissions-stage .small-modal-actions {
+  margin-top: 0;
+}
+
+.admin-user-permissions-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-user-permissions-actions-right {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .links-toolbar {
@@ -2418,6 +2665,237 @@ body.dark .password-row h3 {
   width: min(520px, 100%);
 }
 
+.permission-user-modal {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto 1fr;
+  border-radius: 18px;
+  height: calc(100vh - 16px);
+  margin: 0 auto;
+  max-width: none;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  padding: 12px 14px;
+  width: calc(100vw - 16px);
+}
+
+.modal-backdrop:has(.permission-user-modal) {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 8px;
+}
+
+.permission-modal-layout {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+.permission-modal-content {
+  align-self: stretch;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.permission-module-list {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-module-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), var(--glass-blue-bg)),
+    var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card-compact);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+}
+
+.permission-module-header {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.permission-module-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 20px minmax(0, 1fr);
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.permission-module-toggle strong {
+  color: var(--color-navy);
+  display: block;
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.permission-module-control {
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--borda));
+  border-radius: 999px;
+  color: var(--texto);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  justify-self: start;
+  line-height: 1;
+  width: 20px;
+}
+
+.permission-module-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.permission-global-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.permission-global-toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.permission-table-wrap {
+  overflow: auto;
+}
+
+.permission-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.permission-table th,
+.permission-table td {
+  border-bottom: 1px solid var(--borda);
+  padding: 5px 3px;
+  vertical-align: top;
+}
+
+.permission-table th {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  background: color-mix(in srgb, var(--surface-glass-strong) 92%, var(--card));
+  z-index: 1;
+}
+
+.permission-table th:first-child,
+.permission-table td:first-child {
+  width: 165px;
+  text-align: left;
+}
+
+.permission-table td:first-child strong {
+  color: var(--texto);
+  display: block;
+  font-size: 12px;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.permission-cell {
+  width: 32px;
+  max-width: 32px;
+  text-align: center;
+}
+
+.permission-checkbox {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.permission-checkbox input {
+  height: 18px;
+  opacity: 0;
+  position: absolute;
+  width: 18px;
+}
+
+.permission-checkbox span {
+  background: color-mix(in srgb, var(--surface-glass-strong) 94%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--borda));
+  border-radius: 4px;
+  display: inline-flex;
+  height: 14px;
+  position: relative;
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+  width: 14px;
+}
+
+.permission-checkbox input:checked + span {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.permission-checkbox input:checked + span::after {
+  border-bottom: 2px solid white;
+  border-right: 2px solid white;
+  content: "";
+  height: 6px;
+  left: 3px;
+  position: absolute;
+  top: 1px;
+  transform: rotate(45deg);
+  width: 3px;
+}
+
+.permission-checkbox input:focus-visible + span {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.permission-checkbox input:disabled + span {
+  opacity: 0.55;
+}
+
+.permission-table td:first-child small {
+  color: var(--texto-suave);
+  display: block;
+  font-size: 10px;
+  margin-top: 2px;
+}
+.permission-cell-empty {
+  color: var(--texto-suave);
+  text-align: center;
+}
+
 .field-error {
   color: #DC2626;
   font-size: 11px;
@@ -2533,6 +3011,20 @@ body.dark .password-row h3 {
   }
 
   .crud-actions {
+    justify-content: flex-start;
+  }
+
+  .permission-user-modal {
+    height: 96vh;
+    padding: 10px;
+    width: 98vw;
+  }
+
+  .permission-module-header {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-module-toolbar {
     justify-content: flex-start;
   }
 

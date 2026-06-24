@@ -131,7 +131,7 @@ export async function listarModulosAdmin() {
 
 export async function listarUsuariosAdmin() {
   const supabase = exigirSupabaseConfigurado();
-  const [usuarios, perfis] = await Promise.all([
+  const [usuarios, perfis, permissoesUsuario, permissoesPerfil] = await Promise.all([
     supabase
       .from('usuarios')
       .select('*')
@@ -139,7 +139,13 @@ export async function listarUsuariosAdmin() {
     supabase
       .from('perfis')
       .select('*')
-      .order('nivel', { ascending: false })
+      .order('nivel', { ascending: false }),
+    supabase
+      .from('usuario_permissoes')
+      .select('usuario_id, recurso_chave, acao, efeito, updated_at'),
+    supabase
+      .from('perfil_permissoes')
+      .select('perfil_id, recurso_chave, acao, permitido, updated_at')
   ]);
 
   if (usuarios.error) {
@@ -150,9 +156,91 @@ export async function listarUsuariosAdmin() {
     throw new Error(perfis.error.message || 'Não foi possível carregar perfis.');
   }
 
+  if (permissoesUsuario.error) {
+    throw new Error(permissoesUsuario.error.message || 'Não foi possível carregar o resumo de permissões dos usuários.');
+  }
+
+  if (permissoesPerfil.error) {
+    throw new Error(permissoesPerfil.error.message || 'Não foi possível carregar o padrão de permissões dos perfis.');
+  }
+
   const perfisPorId = new Map((perfis.data || []).map(perfil => [perfil.id, perfil]));
+  const permissoesPerfilPorChave = (permissoesPerfil.data || []).reduce((acc, permissao) => {
+    const perfilId = permissao.perfil_id;
+    const recursoChave = permissao.recurso_chave;
+    const acao = permissao.acao;
+
+    if (!perfilId || !recursoChave || !acao) {
+      return acc;
+    }
+
+    const chavePermissao = `${perfilId}:${recursoChave}:${acao}`;
+    const registroAtual = acc.get(chavePermissao);
+    const dataAtual = String(permissao.updated_at || '');
+    const dataExistente = String(registroAtual?.updated_at || '');
+
+    if (!registroAtual || dataAtual >= dataExistente) {
+      acc.set(chavePermissao, {
+        permitido: permissao.permitido !== false,
+        updated_at: permissao.updated_at || ''
+      });
+    }
+
+    return acc;
+  }, new Map());
+  const permissoesUnicasPorUsuario = (permissoesUsuario.data || []).reduce((acc, permissao) => {
+    const usuarioId = permissao.usuario_id;
+    const recursoChave = permissao.recurso_chave;
+    const acao = permissao.acao;
+
+    if (!usuarioId || !recursoChave || !acao) {
+      return acc;
+    }
+
+    const chavePermissao = `${recursoChave}:${acao}`;
+    const permissoesDoUsuario = acc.get(usuarioId) || new Map();
+    const registroAtual = permissoesDoUsuario.get(chavePermissao);
+    const dataAtual = String(permissao.updated_at || '');
+    const dataExistente = String(registroAtual?.updated_at || '');
+
+    if (!registroAtual || dataAtual >= dataExistente) {
+      permissoesDoUsuario.set(chavePermissao, {
+        recurso_chave: recursoChave,
+        acao,
+        efeito: permissao.efeito,
+        updated_at: permissao.updated_at || ''
+      });
+    }
+
+    acc.set(usuarioId, permissoesDoUsuario);
+    return acc;
+  }, new Map());
+  const resumoPermissoesPorUsuario = new Map(
+    Array.from(permissoesUnicasPorUsuario.entries()).map(([usuarioId, permissoes]) => {
+      const usuario = (usuarios.data || []).find(item => item.id === usuarioId) || {};
+      const perfilId = usuario.perfil_id || '';
+      const resumo = Array.from(permissoes.values()).reduce((acc, permissao) => {
+        const permitidoNoPerfil = Boolean(
+          permissoesPerfilPorChave.get(`${perfilId}:${permissao.recurso_chave}:${permissao.acao}`)?.permitido
+        );
+
+        if (permissao.efeito === 'permitir' && !permitidoNoPerfil) {
+          acc.permitidas += 1;
+        }
+
+        if (permissao.efeito === 'negar' && permitidoNoPerfil) {
+          acc.bloqueadas += 1;
+        }
+
+        return acc;
+      }, { permitidas: 0, bloqueadas: 0 });
+
+      return [usuarioId, resumo];
+    })
+  );
   const records = (usuarios.data || []).map(usuario => {
     const perfil = perfisPorId.get(usuario.perfil_id) || {};
+    const resumoPermissoes = resumoPermissoesPorUsuario.get(usuario.id) || { permitidas: 0, bloqueadas: 0 };
 
     return {
       id: usuario.id,
@@ -164,7 +252,9 @@ export async function listarUsuariosAdmin() {
       status: usuario.status || 'pendente',
       is_master: Boolean(usuario.is_master),
       ultimo_login_em: usuario.ultimo_login_em || '',
-      bloqueado_em: usuario.bloqueado_em || ''
+      bloqueado_em: usuario.bloqueado_em || '',
+      permissoes_permitidas: resumoPermissoes.permitidas,
+      permissoes_bloqueadas: resumoPermissoes.bloqueadas
     };
   });
 
@@ -440,6 +530,29 @@ export async function salvarPermissaoUsuarioAdmin({ usuario_id, recurso_chave, a
   });
 
   return { permission: data };
+}
+
+export async function salvarPermissoesUsuarioAdminLote({ usuario_id, alteracoes }) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!usuario_id) {
+    throw new Error('Informe o usuário.');
+  }
+
+  if (!Array.isArray(alteracoes)) {
+    throw new Error('Informe a lista de alterações.');
+  }
+
+  const { data, error } = await supabase.rpc('app_salvar_permissoes_usuario_lote', {
+    p_usuario_id: usuario_id,
+    p_alteracoes: alteracoes
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar as permissões adicionais em lote.');
+  }
+
+  return data || { ok: true, total_alteracoes: alteracoes.length };
 }
 
 export async function salvarRegistroAdmin({ entidade, id, nome, descricao, status }) {

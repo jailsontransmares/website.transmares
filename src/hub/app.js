@@ -28,11 +28,27 @@ const state = {
     recursos: [],
     perfilPermissoes: [],
     usuarioPermissoes: [],
+    perfilPermissoesId: '',
     usuarioPermissoesId: '',
+    permissionModal: {
+      expandedModules: {},
+      applying: false,
+      moduleUpdating: '',
+      originalEffects: {},
+      draftEffects: {},
+      dirty: false,
+      submitMode: ''
+    },
+    credencialModal: {
+      senhaTemporaria: '',
+      senhaCopiada: false
+    },
+    usuarioModalEtapa: 'dados',
     filtros: {
       categorias: 'todos',
       grupos: 'todos',
-      modulos: 'todos'
+      modulos: 'todos',
+      usuarios: 'todos'
     },
     editando: {
       categorias: '',
@@ -718,8 +734,7 @@ function renderAdministracao() {
           ${renderAdminTab('modulos', 'Configurações por Módulo')}
           ${pode('admin.usuarios', 'view') ? renderAdminTab('usuarios', 'Usuários') : ''}
           ${pode('admin.perfis', 'view') ? renderAdminTab('perfis', 'Perfis de Acesso') : ''}
-          ${pode('admin.permissoes', 'view') ? renderAdminTab('permissoes', 'Permissões por Módulo') : ''}
-        </div>
+                 </div>
 
         ${renderAdminPanel()}
       </section>
@@ -762,10 +777,6 @@ function renderAdminPanel() {
 
   if (state.admin.aba === 'perfis') {
     return renderPerfisAdmin();
-  }
-
-  if (state.admin.aba === 'permissoes') {
-    return renderPermissoesAdmin();
   }
 
   const gruposPorAba = {
@@ -819,6 +830,7 @@ async function selecionarAbaAdmin(aba) {
     return;
   }
 
+  resetarFluxoModalUsuarioAdmin(false);
   state.admin.aba = aba;
   state.admin.message = '';
 
@@ -839,11 +851,6 @@ async function selecionarAbaAdmin(aba) {
 
   if (aba === 'perfis') {
     await carregarPerfisAdmin();
-    return;
-  }
-
-  if (aba === 'permissoes') {
-    await carregarPermissoesAdmin();
     return;
   }
 
@@ -1112,6 +1119,7 @@ function renderAdminPreparado(titulo, descricao, itens) {
 
 function renderUsuariosAdmin() {
   const records = state.admin.usuarios || [];
+  const recordsFiltrados = obterUsuariosFiltradosAdmin(records);
   const resumo = records.reduce((acc, usuario) => {
     acc.total += 1;
     acc[usuario.status] = (acc[usuario.status] || 0) + 1;
@@ -1123,16 +1131,76 @@ function renderUsuariosAdmin() {
       <div class="admin-panel-header">
         <div>
           <h2>Usuários</h2>
-          <p>${resumo.total} usuários · ${resumo.ativo || 0} ativos · ${resumo.pendente || 0} pendentes · ${(resumo.bloqueado || 0) + (resumo.inativo || 0)} bloqueados/inativos</p>
+          <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos usuários">
+            ${renderFiltroUsuariosAdmin('todos', 'Todos', resumo.total)}
+            ${renderFiltroUsuariosAdmin('ativo', 'Ativos', resumo.ativo || 0)}
+            ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos', (resumo.bloqueado || 0) + (resumo.inativo || 0))}
+          </div>
         </div>
         ${pode('admin.usuarios', 'create') ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro(\'usuarios\')">+ Adicionar</button>' : ''}
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(records)}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(recordsFiltrados)}
       ${renderModalUsuarioAdmin()}
       ${renderPermissoesUsuarioAdmin()}
     </section>
+  `;
+}
+
+function renderFiltroUsuariosAdmin(filtro, label, total) {
+  const ativo = state.admin.filtros.usuarios === filtro;
+  const classes = [
+    'filter-btn',
+    filtro === 'ativo' ? 'filter-status-ativo' : '',
+    filtro === 'bloqueados_inativos' ? 'filter-status-bloqueados-inativos' : '',
+    ativo ? 'active' : ''
+  ].filter(Boolean).join(' ');
+
+  return `
+    <button class="${classes}" type="button" onclick="selecionarFiltroUsuariosAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
+      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
+    </button>
+  `;
+}
+
+function renderPermissoesPerfilAdmin() {
+  const perfilId = state.admin.perfilPermissoesId;
+
+  if (!perfilId) {
+    return '';
+  }
+
+  const perfil = (state.admin.perfis || []).find(item => item.id === perfilId) || {};
+  const recursos = state.admin.recursos || [];
+  const permissoes = state.admin.perfilPermissoes || [];
+  const modal = state.admin.permissionModal || {};
+
+  const permissoesPorChave = permissoes.reduce((acc, item) => {
+    if (item.perfil_id === perfilId && item.permitido !== false) {
+      acc[`${item.recurso_chave}:${item.acao}`] = true;
+    }
+    return acc;
+  }, {});
+
+  const modulos = construirEstruturaPermissoesUsuario(recursos);
+
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Permissões do perfil">
+      <section class="small-modal link-modal permission-user-modal">
+        <div class="small-modal-header">
+          <h3>Permissões</h3>
+          <button class="icon-btn" type="button" onclick="fecharPermissoesPerfilAdmin()" title="Fechar" aria-label="Fechar">×</button>
+        </div>
+        <div class="permission-modal-layout">
+          <div class="permission-modal-content">
+            <div class="permission-module-list">
+              ${modulos.map(modulo => renderModuloPermissoesPerfilAdmin(perfilId, perfil, modulo, permissoesPorChave, modal)).join('')}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1144,10 +1212,10 @@ function renderListaUsuariosAdmin(records) {
   return `
     <div class="crud-list admin-users-list">
       <div class="crud-header">
+        <span>Ações</span>
         <span>Usuário</span>
         <span>Perfil</span>
-        <span>Status</span>
-        <span>Ação</span>
+        <span>Permissões adicionais</span>
       </div>
       ${records.map(usuario => `
         ${renderUsuarioAdmin(usuario)}
@@ -1158,27 +1226,27 @@ function renderListaUsuariosAdmin(records) {
 
 function renderUsuarioAdmin(usuario) {
   const id = escapeAttr(usuario.id || '');
-  const editando = state.admin.editando.usuarios === usuario.id;
-  const disabled = editando ? '' : 'disabled';
   const podeEditar = pode('admin.usuarios', 'update');
+  const status = usuario.status || 'pendente';
+  const rotuloStatus = obterRotuloStatusUsuario(status);
+  const perfil = (state.admin.perfis || []).find(item => item.id === usuario.perfil_id);
+  const perfilNome = perfil?.nome || perfil?.slug || usuario.perfil_nome || 'Sem perfil';
+  const resumoPermissoes = obterResumoPermissoesEspecificasUsuario(usuario);
 
   return `
-    <article class="crud-row ${editando ? 'editing' : ''}">
-      <input id="usuario_${id}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}" ${disabled}>
-      <select id="usuario_${id}_perfil" class="config-input" ${disabled}>
-        ${renderOptionsPerfisAdmin(usuario.perfil_id)}
-      </select>
-      <select id="usuario_${id}_status" class="config-input status-${escapeAttr(usuario.status || 'pendente')}" ${disabled}>
-        ${renderOptionsStatusUsuario(usuario.status)}
-      </select>
-      <div class="crud-actions">
-        ${editando
-          ? `<button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${id}')">Salvar</button>`
-          : `<button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}>✎</button>`
-        }
-        <button class="secondary-btn" type="button" onclick="abrirPermissoesUsuarioAdmin('${id}')" ${pode('admin.usuarios', 'manage_permissions') ? '' : 'disabled'}>Permissões</button>
+    <article class="crud-row admin-user-row">
+      <div class="crud-actions admin-user-actions">
+        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
+        <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}>&#128269;</button>
       </div>
-      <input id="usuario_${id}_email" type="hidden" value="${escapeAttr(usuario.email || '')}">
+      <div class="admin-user-main">
+        <div class="admin-user-identity">
+          <strong>${escapeHtml(usuario.nome || 'Sem nome')}</strong>
+          ${usuario.email ? `<small>${escapeHtml(usuario.email)}</small>` : ''}
+        </div>
+      </div>
+      <span class="badge admin-user-profile-badge">${escapeHtml(perfilNome)}</span>
+      <span class="admin-user-permissions-summary">${escapeHtml(resumoPermissoes)}</span>
     </article>
   `;
 }
@@ -1189,88 +1257,545 @@ function renderOptionsPerfisAdmin(valorAtual) {
   `).join('');
 }
 
-function renderOptionsStatusUsuario(valorAtual = 'pendente') {
-  return ['pendente', 'ativo', 'bloqueado', 'inativo'].map(status => `
-    <option value="${status}" ${status === valorAtual ? 'selected' : ''}>${status}</option>
-  `).join('');
+function obterRotuloStatusUsuario(status) {
+  const rotulos = {
+    ativo: 'Ativo',
+    pendente: 'Pendente',
+    bloqueado: 'Bloqueado',
+    inativo: 'Inativo'
+  };
+
+  return rotulos[status] || status || 'Pendente';
 }
 
-function renderModalUsuarioAdmin() {
-  if (state.admin.modalNovo !== 'usuarios') {
+function obterUsuariosFiltradosAdmin(records) {
+  const filtro = state.admin.filtros.usuarios || 'todos';
+
+  if (filtro === 'todos') {
+    return records;
+  }
+
+  if (filtro === 'ativo') {
+    return records.filter(usuario => usuario.status === 'ativo');
+  }
+
+  if (filtro === 'bloqueados_inativos') {
+    return records.filter(usuario => usuario.status === 'bloqueado' || usuario.status === 'inativo');
+  }
+
+  return records;
+}
+
+function selecionarFiltroUsuariosAdmin(filtro) {
+  state.admin.filtros.usuarios = filtro;
+  renderAdministracao();
+}
+
+function resetarFluxoModalUsuarioAdmin(render = true) {
+  state.admin.modalNovo = '';
+  state.admin.editando.usuarios = '';
+  state.admin.usuarioModalEtapa = 'dados';
+  state.admin.usuarioPermissoesId = '';
+  state.admin.usuarioPermissoes = [];
+  state.admin.permissionModal = {
+    expandedModules: state.admin.permissionModal?.expandedModules || {},
+    applying: false,
+    moduleUpdating: '',
+    originalEffects: {},
+    draftEffects: {},
+    dirty: false,
+    submitMode: ''
+  };
+  state.admin.credencialModal = {
+    senhaTemporaria: '',
+    senhaCopiada: false
+  };
+
+  if (render) {
+    renderAdministracao();
+  }
+}
+
+function obterResumoPermissoesEspecificasUsuario(usuario) {
+  if (!usuario) {
+    return 'Nenhuma exceção';
+  }
+
+  if (typeof usuario.permissoes_especificas_resumo === 'string' && usuario.permissoes_especificas_resumo.trim()) {
+    return usuario.permissoes_especificas_resumo.trim();
+  }
+
+  const contagemPermitidas =
+    Number(usuario.permissoes_permitidas ?? usuario.permissoes_especificas_permitidas ?? usuario.total_permissoes_permitidas ?? 0) || 0;
+  const contagemBloqueadas =
+    Number(usuario.permissoes_bloqueadas ?? usuario.permissoes_especificas_bloqueadas ?? usuario.total_permissoes_bloqueadas ?? 0) || 0;
+
+  if (!contagemPermitidas && !contagemBloqueadas && Array.isArray(usuario.permissoes_especificas)) {
+    const resumo = obterResumoPermissoesUsuario(usuario.permissoes_especificas);
+    return formatarResumoPermissoesEspecificasUsuario(resumo.permitidas, resumo.bloqueadas);
+  }
+
+  return formatarResumoPermissoesEspecificasUsuario(contagemPermitidas, contagemBloqueadas);
+}
+
+function formatarResumoPermissoesEspecificasUsuario(permitidas, bloqueadas) {
+  if (!permitidas && !bloqueadas) {
+    return 'Nenhuma exceção';
+  }
+
+  if (permitidas && bloqueadas) {
+    return `${permitidas} permitida${permitidas > 1 ? 's' : ''} / ${bloqueadas} bloqueada${bloqueadas > 1 ? 's' : ''}`;
+  }
+
+  if (permitidas) {
+    return `${permitidas} permitida${permitidas > 1 ? 's' : ''}`;
+  }
+
+  return `${bloqueadas} bloqueada${bloqueadas > 1 ? 's' : ''}`;
+}
+
+function obterRotuloAcaoPermissao(acao) {
+  const rotulos = {
+    view: 'Visualizar',
+    create: 'Criar',
+    update: 'Editar',
+    delete: 'Excluir',
+    execute: 'Executar',
+    view_secret: 'Ver senha',
+    importar: 'Importar repasse',
+    excluir_importacao: 'Excluir importação',
+    emitir_recibo: 'Emitir recibo',
+    cancelar_recibo: 'Cancelar recibo',
+    manage_permissions: 'Gerenciar permissões',
+    block: 'Bloquear'
+  };
+
+  return rotulos[acao] || acao;
+}
+
+function obterAcoesDisponiveisRecurso(recurso) {
+  const chave = recurso?.chave || '';
+  const porRecurso = {
+    links_corretora: ['view'],
+    links_ar: ['view'],
+    links_gestao: ['view'],
+    painel_ar: ['view'],
+    'painel_ar.gerar_links': ['view', 'execute'],
+    'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
+    'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
+    'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
+    central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
+    admin: ['view'],
+    'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
+    'admin.perfis': ['view', 'create', 'update'],
+    'admin.permissoes': ['view', 'update']
+  };
+
+  return porRecurso[chave] || ['view'];
+}
+
+function obterGrupoRecursoPermissao(recurso) {
+  const chave = recurso?.chave || '';
+
+  if (chave.startsWith('admin')) return 'Administração';
+  if (chave === 'central_senhas') return 'Central de Senhas';
+  if (chave.startsWith('painel_ar')) return 'Painel AR';
+  if (chave.startsWith('links_')) return 'Links';
+
+  return 'Outros';
+}
+
+function agruparRecursosPermissao(recursos) {
+  return recursos.reduce((acc, recurso) => {
+    const grupo = obterGrupoRecursoPermissao(recurso);
+    acc[grupo] ||= [];
+    acc[grupo].push(recurso);
+    return acc;
+  }, {});
+}
+
+function obterOrdemAcaoPermissao(acao) {
+  const ordem = {
+    view: 1,
+    view_secret: 2,
+    create: 3,
+    update: 4,
+    delete: 5,
+    execute: 6,
+    importar: 7,
+    excluir_importacao: 8,
+    emitir_recibo: 9,
+    cancelar_recibo: 10,
+    manage_permissions: 11,
+    block: 12
+  };
+
+  return ordem[acao] || 999;
+}
+
+function obterSimboloModuloPermissao(moduloChave) {
+  const simbolos = {
+    admin: '[]',
+    central_senhas: '##',
+    painel_ar: '<>',
+    links_corretora: 'o-',
+    links_ar: 'o-',
+    links_gestao: 'o-'
+  };
+
+  return simbolos[moduloChave] || '[]';
+}
+
+function construirEstruturaPermissoesUsuario(recursos) {
+  const porChave = new Map((recursos || []).map(recurso => [recurso.chave, recurso]));
+  const modulos = (recursos || [])
+    .filter(recurso => recurso.tipo === 'modulo')
+    .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+
+  function obterModuloRaiz(recurso) {
+    let atual = recurso;
+
+    while (atual?.recurso_pai) {
+      const pai = porChave.get(atual.recurso_pai);
+
+      if (!pai) break;
+      if (pai.tipo === 'modulo') return pai;
+      atual = pai;
+    }
+
+    return recurso?.tipo === 'modulo' ? recurso : null;
+  }
+
+  function obterRotuloRecurso(recurso) {
+    const partes = [];
+    let atual = recurso;
+
+    while (atual) {
+      partes.unshift(atual.nome || atual.chave);
+      if (!atual.recurso_pai) break;
+      atual = porChave.get(atual.recurso_pai);
+    }
+
+    if (partes.length > 1) {
+      partes.shift();
+    }
+
+    return partes.join(' / ') || recurso.nome || recurso.chave;
+  }
+
+  return modulos.map(modulo => {
+    const itensRelacionados = (recursos || [])
+      .filter(recurso => {
+        if (!recurso?.chave) return false;
+        if (recurso.chave === modulo.chave) return true;
+        return obterModuloRaiz(recurso)?.chave === modulo.chave;
+      })
+      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+
+    const recursosFuncionais = itensRelacionados.filter(recurso => recurso.chave !== modulo.chave);
+    const linhas = (recursosFuncionais.length ? recursosFuncionais : [modulo]).map(recurso => ({
+      ...recurso,
+      modulo_chave: modulo.chave,
+      modulo_nome: modulo.nome || modulo.chave,
+      rotulo_recurso: obterRotuloRecurso(recurso)
+    }));
+
+    const acoes = Array.from(new Set(
+      linhas.flatMap(recurso => obterAcoesDisponiveisRecurso(recurso))
+    )).sort((a, b) => obterOrdemAcaoPermissao(a) - obterOrdemAcaoPermissao(b));
+
+    return {
+      chave: modulo.chave,
+      nome: modulo.nome || modulo.chave,
+      linhas,
+      acoes
+    };
+  });
+}
+
+function obterResumoPermissoesUsuario(permissoes) {
+  return (permissoes || []).reduce((acc, permissao) => {
+    acc.total += 1;
+    if (permissao.efeito === 'permitir') acc.permitidas += 1;
+    if (permissao.efeito === 'negar') acc.bloqueadas += 1;
+    return acc;
+  }, { total: 0, permitidas: 0, bloqueadas: 0 });
+}
+
+function obterPermissoesPerfilPorChave(perfilPermissoes) {
+  return (perfilPermissoes || []).reduce((acc, item) => {
+    if (item.permitido === false) {
+      return acc;
+    }
+
+    acc[`${item.perfil_id}:${item.recurso_chave}:${item.acao}`] = true;
+    return acc;
+  }, {});
+}
+
+function obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recursoChave, acao) {
+  const efeito = permissoesUsuarioPorChave[`${recursoChave}:${acao}`] || '';
+
+  if (efeito === 'permitir') return true;
+  if (efeito === 'negar') return false;
+
+  return Boolean(perfilPermissoesPorChave[`${usuario?.perfil_id}:${recursoChave}:${acao}`]);
+}
+
+function obterEfeitoAoAlternarPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recursoChave, acao, marcado) {
+  const herdado = Boolean(perfilPermissoesPorChave[`${usuario?.perfil_id}:${recursoChave}:${acao}`]);
+  const atual = obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recursoChave, acao);
+
+  if (atual === marcado) {
+    return permissoesUsuarioPorChave[`${recursoChave}:${acao}`] || '';
+  }
+
+  if (marcado === herdado) {
     return '';
   }
 
+  return marcado ? 'permitir' : 'negar';
+}
+
+function obterResumoModuloUsuario(modulo, permissoesPorChave) {
+  return modulo.linhas.reduce((acc, recurso) => {
+    modulo.acoes.forEach(acao => {
+      if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) return;
+      const efeito = permissoesPorChave[`${recurso.chave}:${acao}`] || '';
+      acc.total += 1;
+      if (!efeito) acc.herdadas += 1;
+      if (efeito === 'permitir') acc.permitidas += 1;
+      if (efeito === 'negar') acc.bloqueadas += 1;
+    });
+    return acc;
+  }, { total: 0, herdadas: 0, permitidas: 0, bloqueadas: 0 });
+}
+
+function renderOptionsStatusUsuario(valorAtual = 'pendente') {
+  return ['pendente', 'ativo', 'bloqueado', 'inativo'].map(status => `
+    <option value="${status}" ${status === valorAtual ? 'selected' : ''}>${obterRotuloStatusUsuario(status)}</option>
+  `).join('');
+}
+
+function mapearPermissoesUsuarioPorChave(permissoes) {
+  return (permissoes || []).reduce((acc, item) => {
+    acc[`${item.recurso_chave}:${item.acao}`] = item.efeito;
+    return acc;
+  }, {});
+}
+
+function verificarAlteracoesPermissoesUsuario(originalEffects = {}, draftEffects = {}) {
+  const chaves = new Set([
+    ...Object.keys(originalEffects || {}),
+    ...Object.keys(draftEffects || {})
+  ]);
+
+  return Array.from(chaves).some(chave => (originalEffects?.[chave] || '') !== (draftEffects?.[chave] || ''));
+}
+
+function obterScrollPermissoesUsuarioAdmin() {
+  return document.querySelector('.permission-modal-content')?.scrollTop || 0;
+}
+
+function renderAdministracaoPreservandoScrollPermissoes(scrollTop) {
+  renderAdministracao();
+  const container = document.querySelector('.permission-modal-content');
+  if (container) {
+    container.scrollTop = scrollTop;
+  }
+}
+
+function obterUsuarioAdminEmEdicao() {
+  const usuarioId = state.admin.editando.usuarios || '';
+  const editando = Boolean(usuarioId);
+  const usuario = editando
+    ? (state.admin.usuarios || []).find(item => item.id === usuarioId) || {}
+    : {};
+
+  return {
+    usuarioId,
+    editando,
+    usuario,
+    prefixo: editando ? `usuario_${usuarioId}` : 'usuario_novo'
+  };
+}
+
+function renderModalUsuarioAdmin() {
+  const {
+    usuarioId,
+    editando,
+    usuario,
+    prefixo
+  } = obterUsuarioAdminEmEdicao();
+  const senhaTemporaria = state.admin.credencialModal?.senhaTemporaria || '';
+  const senhaCopiada = Boolean(state.admin.credencialModal?.senhaCopiada);
+  const etapa = state.admin.usuarioModalEtapa || 'dados';
+  const emPermissoes = etapa === 'permissoes' && editando;
+
+  if (state.admin.modalNovo !== 'usuarios' && !editando) {
+    return '';
+  }
+
+  const recursos = state.admin.recursos || [];
+  const permissoes = state.admin.usuarioPermissoes || [];
+  const perfilPermissoes = state.admin.perfilPermissoes || [];
+  const modal = state.admin.permissionModal || {};
+  const permissoesUsuarioPorChave = Object.keys(modal.draftEffects || {}).length
+    ? (modal.draftEffects || {})
+    : mapearPermissoesUsuarioPorChave(permissoes);
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(perfilPermissoes);
+  const modulos = construirEstruturaPermissoesUsuario(recursos);
+  const textoBotaoSalvar = modal.applying && modal.submitMode !== 'close' ? 'Salvando...' : 'Salvar';
+  const textoBotaoSalvarFechar = modal.applying && modal.submitMode === 'close' ? 'Salvando...' : 'Salvar e fechar';
+
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Adicionar usuário">
-      <section class="small-modal">
+    <div class="modal-backdrop ${emPermissoes ? 'admin-user-modal-backdrop' : ''}" role="dialog" aria-modal="true" aria-label="${editando ? 'Editar usuário' : 'Adicionar usuário'}">
+      <section class="small-modal admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}">
         <div class="small-modal-header">
-          <h3>Adicionar usuário</h3>
+          <h3>${emPermissoes ? 'Permissões Adicionais' : editando ? 'Editar usuário' : 'Adicionar usuário'}</h3>
           <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
         </div>
-        <label><span>Nome</span><input id="usuario_novo_nome" class="config-input" type="text"></label>
-        <label><span>E-mail</span><input id="usuario_novo_email" class="config-input" type="email"></label>
-        <label><span>Perfil</span><select id="usuario_novo_perfil" class="config-input">${renderOptionsPerfisAdmin('')}</select></label>
-        <label><span>Status</span><select id="usuario_novo_status" class="config-input">${renderOptionsStatusUsuario('pendente')}</select></label>
-        <div class="small-modal-actions">
-          <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
-          <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('')">Salvar</button>
-        </div>
+        ${emPermissoes
+          ? `
+            <div class="permission-modal-layout">
+              <div class="permission-modal-content">
+                ${renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal)}
+              </div>
+            </div>
+            <div class="small-modal-actions admin-user-permissions-actions">
+              <button class="secondary-btn" type="button" onclick="voltarEtapaModalUsuarioAdmin()">Voltar para usuário</button>
+              <div class="admin-user-permissions-actions-right">
+                <button class="save-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvar}</button>
+                <button class="secondary-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}', true)" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvarFechar}</button>
+              </div>
+            </div>
+          `
+          : `
+            <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
+            <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
+            <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
+            <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
+            ${editando ? `
+              <section class="admin-user-access-panel">
+                <div class="admin-user-access-header">
+                  <strong>Acesso</strong>
+                  <p>Centralize aqui as ações operacionais deste usuário.</p>
+                </div>
+                <div class="admin-user-access-actions">
+                  <button class="secondary-btn" type="button" onclick="abrirPermissoesPeloModalUsuario('${escapeAttr(usuarioId)}')">Editar permissões</button>
+                  <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()">Gerar nova senha</button>
+                </div>
+                ${senhaTemporaria ? `
+                  <div class="admin-user-password-box">
+                    <div class="admin-user-password-header">
+                      <strong>Senha provisória</strong>
+                      <p>Esta senha ainda não está sincronizada com o Supabase.</p>
+                    </div>
+                    <div class="admin-user-password-value" aria-live="polite">${escapeHtml(senhaTemporaria)}</div>
+                    <div class="admin-user-password-actions">
+                      <button class="secondary-btn" type="button" onclick="copiarSenhaTemporariaUsuarioAdmin()">${senhaCopiada ? 'Copiada' : 'Copiar'}</button>
+                      <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()">Gerar outra</button>
+                    </div>
+                  </div>
+                ` : ''}
+              </section>
+            ` : ''}
+            <div class="small-modal-actions">
+              <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
+              <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${escapeAttr(usuarioId)}')">Salvar</button>
+            </div>
+          `}
       </section>
     </div>
   `;
 }
 
 function renderPermissoesUsuarioAdmin() {
-  const usuarioId = state.admin.usuarioPermissoesId;
+  return '';
+}
 
-  if (!usuarioId) {
-    return '';
-  }
-
-  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
-  const recursos = state.admin.recursos || [];
-  const permissoes = state.admin.usuarioPermissoes || [];
-  const permissoesPorChave = permissoes.reduce((acc, item) => {
-    acc[`${item.recurso_chave}:${item.acao}`] = item.efeito;
-    return acc;
-  }, {});
-  const acoes = ['view', 'create', 'update', 'delete', 'execute', 'view_secret', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'];
-
+function renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) {
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Permissões individuais">
-      <section class="small-modal link-modal">
-        <div class="small-modal-header">
-          <h3>Permissões individuais</h3>
-          <button class="icon-btn" type="button" onclick="fecharPermissoesUsuarioAdmin()" title="Fechar" aria-label="Fechar">×</button>
+    <div class="permission-module-list">
+      <div class="permission-global-toolbar">
+        <div class="permission-global-toolbar-group">
+          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(true)">Expandir todos</button>
+          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(false)">Recolher todos</button>
         </div>
-        <p class="quick-link-empty">${escapeHtml(usuario.nome || usuario.email || 'Usuário')} · bloqueios individuais vencem permissões do perfil.</p>
-        <div class="admin-prepared-list">
-          ${recursos.map(recurso => `
-            <article>
-              <strong>${escapeHtml(recurso.nome || recurso.chave)}</strong>
-              <span>${escapeHtml(recurso.chave)}</span>
-              <small>
-                ${acoes.map(acao => {
-                  const efeito = permissoesPorChave[`${recurso.chave}:${acao}`] || '';
-                  return `
-                    <label>
-                      ${escapeHtml(acao)}
-                      <select class="config-input" onchange="alterarPermissaoUsuarioAdmin('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.value)">
-                        <option value="" ${!efeito ? 'selected' : ''}>herdar</option>
-                        <option value="permitir" ${efeito === 'permitir' ? 'selected' : ''}>permitir</option>
-                        <option value="negar" ${efeito === 'negar' ? 'selected' : ''}>negar</option>
-                      </select>
-                    </label>
-                  `;
-                }).join('')}
-              </small>
-            </article>
-          `).join('')}
+        <div class="permission-global-toolbar-group">
+          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
         </div>
-      </section>
+      </div>
+      ${modulos.map(modulo => renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal)).join('')}
     </div>
   `;
 }
+
+function renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) {
+  const expandido = modal.expandedModules?.[modulo.chave] !== false;
+  const atualizando = modal.moduleUpdating === modulo.chave;
+  const controle = expandido ? '-' : '+';
+
+  return `
+    <article class="permission-module-card ${expandido ? 'is-open' : ''}">
+      <div class="permission-module-header">
+        <button class="permission-module-toggle" type="button" onclick="alternarModuloPermissoesUsuario('${escapeAttr(modulo.chave)}')" aria-expanded="${expandido ? 'true' : 'false'}">
+          <span class="permission-module-control" aria-hidden="true">${controle}</span>
+          <strong>${escapeHtml(modulo.nome)}</strong>
+        </button>
+        <div class="permission-module-toolbar">
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
+        </div>
+      </div>
+      ${atualizando ? '<p class="quick-link-empty">Aplicando alterações neste módulo...</p>' : ''}
+      ${expandido ? renderTabelaModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) : ''}
+    </article>
+  `;
+}
+
+function renderTabelaModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) {
+  return `
+    <div class="permission-table-wrap">
+      <table class="permission-table">
+        <thead>
+          <tr>
+            <th>Recurso</th>
+            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${modulo.linhas.map(recurso => `
+            <tr>
+              <td>
+                <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
+              </td>
+              ${modulo.acoes.map(acao => {
+                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+                  return '<td class="permission-cell permission-cell-empty">-</td>';
+                }
+
+                const marcado = obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao);
+                return `
+                  <td class="permission-cell">
+                    <label class="permission-checkbox">
+                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
+                      <span aria-hidden="true"></span>
+                    </label>
+                  </td>
+                `;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 
 function renderPerfisAdmin() {
   const records = state.admin.perfis || [];
@@ -1289,6 +1814,7 @@ function renderPerfisAdmin() {
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${state.admin.loading ? '<p class="quick-link-empty">Carregando perfis...</p>' : renderListaPerfisAdmin(records)}
       ${renderModalPerfilAdmin()}
+      ${renderPermissoesPerfilAdmin()}
     </section>
   `;
 }
@@ -1318,23 +1844,24 @@ function renderPerfilAdmin(perfil) {
   const podeEditar = pode('admin.perfis', 'update');
 
   return `
-    <article class="crud-row ${editando ? 'editing' : ''}">
-      <input id="perfil_${id}_nome" class="config-input" type="text" value="${escapeAttr(perfil.nome || perfil.slug || '')}" ${disabled}>
-      <input id="perfil_${id}_descricao" class="config-input" type="text" value="${escapeAttr(perfil.descricao || '')}" ${disabled}>
-      <input id="perfil_${id}_nivel" class="config-input" type="number" value="${escapeAttr(String(perfil.nivel ?? 0))}" ${disabled}>
-      <div class="crud-actions">
-        <select id="perfil_${id}_status" class="config-input status-${escapeAttr(perfil.status || 'inativo')}" ${disabled}>
-          <option value="ativo" ${perfil.status === 'ativo' ? 'selected' : ''}>ativo</option>
-          <option value="inativo" ${perfil.status === 'inativo' ? 'selected' : ''}>inativo</option>
-        </select>
-        ${editando
-          ? `<button class="save-btn" type="button" onclick="salvarPerfilAdmin('${id}')">Salvar</button>`
-          : `<button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>✎</button>`
-        }
-      </div>
-      <input id="perfil_${id}_slug" type="hidden" value="${escapeAttr(perfil.slug || '')}">
-    </article>
-  `;
+  <article class="crud-row ${editando ? 'editing' : ''}">
+    <input id="perfil_${id}_nome" class="config-input" type="text" value="${escapeAttr(perfil.nome || perfil.slug || '')}" ${disabled}>
+    <input id="perfil_${id}_descricao" class="config-input" type="text" value="${escapeAttr(perfil.descricao || '')}" ${disabled}>
+    <input id="perfil_${id}_nivel" class="config-input" type="number" value="${escapeAttr(String(perfil.nivel ?? 0))}" ${disabled}>
+    <div class="crud-actions">
+      <select id="perfil_${id}_status" class="config-input status-${escapeAttr(perfil.status || 'inativo')}" ${disabled}>
+        <option value="ativo" ${perfil.status === 'ativo' ? 'selected' : ''}>Ativo</option>
+        <option value="inativo" ${perfil.status === 'inativo' ? 'selected' : ''}>Inativo</option>
+      </select>
+      ${editando
+        ? `<button class="save-btn" type="button" onclick="salvarPerfilAdmin('${id}')">Salvar</button>`
+        : `<button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>✎</button>`
+      }
+      <button class="secondary-btn" type="button" onclick="abrirPermissoesPerfilAdmin('${id}')" ${pode('admin.permissoes', 'view') ? '' : 'disabled'}>Permissões</button>
+    </div>
+    <input id="perfil_${id}_slug" type="hidden" value="${escapeAttr(perfil.slug || '')}">
+  </article>
+`;
 }
 
 function renderModalPerfilAdmin() {
@@ -1353,7 +1880,7 @@ function renderModalPerfilAdmin() {
         <label><span>Nome</span><input id="perfil_novo_nome" class="config-input" type="text"></label>
         <label><span>Descrição</span><input id="perfil_novo_descricao" class="config-input" type="text"></label>
         <label><span>Nível</span><input id="perfil_novo_nivel" class="config-input" type="number" value="20"></label>
-        <label><span>Status</span><select id="perfil_novo_status" class="config-input"><option value="ativo">ativo</option><option value="inativo">inativo</option></select></label>
+        <label><span>Status</span><select id="perfil_novo_status" class="config-input"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></label>
         <div class="small-modal-actions">
           <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
           <button class="save-btn" type="button" onclick="salvarPerfilAdmin('')">Salvar</button>
@@ -1363,70 +1890,196 @@ function renderModalPerfilAdmin() {
   `;
 }
 
-function renderPermissoesAdmin() {
-  const recursos = state.admin.recursos || [];
-  const perfis = state.admin.perfis || [];
-  const permissoes = state.admin.perfilPermissoes || [];
+function renderModuloPermissoesPerfilAdmin(perfilId, perfil, modulo, permissoesPorChave, modal) {
+  const expandido = modal.expandedModules?.[modulo.chave] !== false;
+  const atualizando = modal.moduleUpdating === modulo.chave;
+  const controle = expandido ? '-' : '+';
 
   return `
-    <section class="admin-panel">
-      <div class="admin-panel-header">
-        <div>
-          <h2>Permissões por Módulo</h2>
-          <p>${recursos.length} recursos · ${perfis.length} perfis · ${permissoes.length} permissões concedidas</p>
+    <article class="permission-module-card ${expandido ? 'is-open' : ''}">
+      <div class="permission-module-header">
+        <button class="permission-module-toggle" type="button" onclick="alternarModuloPermissoesPerfil('${escapeAttr(modulo.chave)}')" aria-expanded="${expandido ? 'true' : 'false'}">
+          <span class="permission-module-control" aria-hidden="true">${controle}</span>
+          <strong>${escapeHtml(modulo.nome)}</strong>
+        </button>
+        <div class="permission-module-toolbar">
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', true)">Conceder tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', false)">Remover tudo</button>
         </div>
       </div>
-
-      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando permissões...</p>' : renderMatrizPermissoesAdmin(recursos, perfis, permissoes)}
-    </section>
+      ${atualizando ? '<p class="quick-link-empty">Aplicando alterações neste módulo...</p>' : ''}
+      ${expandido ? renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPorChave, modal) : ''}
+    </article>
   `;
 }
 
-function renderMatrizPermissoesAdmin(recursos, perfis, permissoes) {
-  if (!recursos.length || !perfis.length) {
-    return '<p class="quick-link-empty">Nenhum recurso ou perfil encontrado.</p>';
-  }
-
-  const permissoesPorPerfil = permissoes.reduce((acc, item) => {
-    const chave = `${item.perfil_id}:${item.recurso_chave}`;
-    acc[chave] ||= [];
-    if (item.permitido !== false) {
-      acc[chave].push(item.acao);
-    }
-    return acc;
-  }, {});
-
-  const podeAlterar = pode('admin.permissoes', 'update');
-
+function renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPorChave, modal) {
   return `
-    <div class="admin-prepared-list">
-      ${recursos.map(recurso => `
-        <article>
-          <strong>${escapeHtml(recurso.nome || recurso.chave)}</strong>
-          <span>${escapeHtml(recurso.tipo || 'recurso')} · ${escapeHtml(recurso.chave)}</span>
-          <small>${perfis.map(perfil => renderPermissoesPerfilRecurso(perfil, recurso, permissoesPorPerfil, podeAlterar)).join('')}</small>
-        </article>
-      `).join('')}
+    <div class="permission-table-wrap">
+      <table class="permission-table">
+        <thead>
+          <tr>
+            <th>Recurso</th>
+            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${modulo.linhas.map(recurso => `
+            <tr>
+              <td>
+                <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
+              </td>
+              ${modulo.acoes.map(acao => {
+                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+                  return '<td class="permission-cell permission-cell-empty">-</td>';
+                }
+
+                const marcado = Boolean(permissoesPorChave[`${recurso.chave}:${acao}`]);
+
+                return `
+                  <td class="permission-cell">
+                    <label class="permission-checkbox">
+                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoPerfil('${escapeAttr(perfilId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
+                      <span aria-hidden="true"></span>
+                    </label>
+                  </td>
+                `;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function renderPermissoesPerfilRecurso(perfil, recurso, permissoesPorPerfil, podeAlterar) {
-  const acoes = ['view', 'create', 'update', 'delete', 'execute', 'view_secret', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'];
-  const concedidas = new Set(permissoesPorPerfil[`${perfil.id}:${recurso.chave}`] || []);
+function alternarModuloPermissoesPerfil(moduloChave) {
+  state.admin.permissionModal ||= {
+    expandedModules: {},
+    applying: false,
+    moduleUpdating: ''
+  };
 
-  return `
-    <span class="permission-profile-line">
-      <strong>${escapeHtml(perfil.nome || perfil.slug || '')}</strong>
-      ${acoes.map(acao => `
-        <label>
-          <input type="checkbox" ${concedidas.has(acao) ? 'checked' : ''} ${podeAlterar ? '' : 'disabled'} onchange="alterarPermissaoPerfilAdmin('${escapeAttr(perfil.id)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
-          ${escapeHtml(acao)}
-        </label>
-      `).join('')}
-    </span>
-  `;
+  state.admin.permissionModal.expandedModules[moduloChave] =
+    !(state.admin.permissionModal.expandedModules?.[moduloChave] !== false);
+
+  renderAdministracao();
+}
+
+async function abrirPermissoesPerfilAdmin(id) {
+  if (!pode('admin.permissoes', 'view')) {
+    state.admin.message = 'Seu usuário não possui permissão para visualizar permissões de perfil.';
+    renderAdministracao();
+    return;
+  }
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    state.admin.perfilPermissoesId = id;
+    renderAdministracao();
+
+    if (!state.admin.recursos.length || !state.admin.perfilPermissoes.length) {
+      const response = await chamarApi('listAdminPermissions');
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, 'Não foi possível carregar permissões do perfil.'));
+      }
+
+      state.admin.recursos = response.data.recursos || [];
+      state.admin.perfis = response.data.perfis || [];
+      state.admin.perfilPermissoes = response.data.permissoes || [];
+    }
+
+    const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+    const expandedModules = modulos.reduce((acc, modulo) => {
+      acc[modulo.chave] = state.admin.permissionModal?.expandedModules?.[modulo.chave] ?? true;
+      return acc;
+    }, {});
+
+    state.admin.permissionModal = {
+      expandedModules,
+      applying: false,
+      moduleUpdating: ''
+    };
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar permissões do perfil.';
+    renderAdministracao();
+  }
+}
+
+function fecharPermissoesPerfilAdmin() {
+  state.admin.perfilPermissoesId = '';
+  state.admin.permissionModal = {
+    expandedModules: {},
+    applying: false,
+    moduleUpdating: ''
+  };
+  renderAdministracao();
+}
+
+async function alternarCheckboxPermissaoPerfil(perfilId, recursoChave, acao, permitido) {
+  try {
+    const response = await chamarApi('saveAdminProfilePermission', {
+      perfil_id: perfilId,
+      recurso_chave: recursoChave,
+      acao,
+      permitido
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão do perfil.'));
+    }
+
+    await carregarPermissoesAdmin();
+    state.admin.perfilPermissoesId = perfilId;
+  } catch (erro) {
+    state.admin.message = erro.message || 'Erro ao salvar permissão do perfil.';
+    renderAdministracao();
+  }
+}
+
+async function aplicarLoteModuloPermissoesPerfil(perfilId, moduloChave, permitido) {
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  const modulo = modulos.find(item => item.chave === moduloChave);
+
+  if (!modulo) return;
+
+  try {
+    state.admin.permissionModal.applying = true;
+    state.admin.permissionModal.moduleUpdating = moduloChave;
+    state.admin.message = '';
+    renderAdministracao();
+
+    for (const recurso of modulo.linhas) {
+      for (const acao of obterAcoesDisponiveisRecurso(recurso)) {
+        const response = await chamarApi('saveAdminProfilePermission', {
+          perfil_id: perfilId,
+          recurso_chave: recurso.chave,
+          acao,
+          permitido
+        });
+
+        if (!response.ok) {
+          throw new Error(obterMensagemApi(response, 'Não foi possível aplicar permissões em lote no perfil.'));
+        }
+      }
+    }
+
+    await carregarPermissoesAdmin();
+    state.admin.perfilPermissoesId = perfilId;
+    state.admin.permissionModal.applying = false;
+    state.admin.permissionModal.moduleUpdating = '';
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.permissionModal.applying = false;
+    state.admin.permissionModal.moduleUpdating = '';
+    state.admin.message = erro.message || 'Erro ao aplicar permissões em lote no perfil.';
+    renderAdministracao();
+  }
 }
 
 function obterRotuloConfig(chave) {
@@ -1518,8 +2171,8 @@ function renderRegistroAdmin(entidade, record) {
       <input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(record.nome || '')}" placeholder="Nome" ${disabled}>
       <input id="${prefixo}_descricao" class="config-input" type="text" value="${escapeAttr(record.descricao || '')}" placeholder="Descrição" ${disabled}>
       <select id="${prefixo}_status" class="config-input status-${escapeAttr(record.status || 'inativo')}" ${disabled}>
-        <option value="ativo" ${record.status === 'ativo' ? 'selected' : ''}>ativo</option>
-        <option value="inativo" ${record.status === 'inativo' ? 'selected' : ''}>inativo</option>
+        <option value="ativo" ${record.status === 'ativo' ? 'selected' : ''}>Ativo</option>
+        <option value="inativo" ${record.status === 'inativo' ? 'selected' : ''}>Inativo</option>
       </select>
       <div class="crud-actions">
         ${editando
@@ -1582,13 +2235,82 @@ function renderModalNovoRegistro(entidade) {
 }
 
 function abrirModalNovoRegistro(entidade) {
+  if (entidade === 'usuarios') {
+    abrirModalUsuarioAdmin('');
+    return;
+  }
+
   state.admin.modalNovo = entidade;
   renderAdministracao();
 }
 
 function fecharModalNovoRegistro() {
-  state.admin.modalNovo = '';
+  resetarFluxoModalUsuarioAdmin(true);
+}
+
+function abrirModalUsuarioAdmin(id = '') {
+  state.admin.modalNovo = 'usuarios';
+  state.admin.editando.usuarios = id || '';
+  state.admin.usuarioModalEtapa = 'dados';
+  state.admin.message = '';
+  state.admin.permissionModal = {
+    expandedModules: state.admin.permissionModal?.expandedModules || {},
+    applying: false,
+    moduleUpdating: '',
+    originalEffects: {},
+    draftEffects: {},
+    dirty: false,
+    submitMode: ''
+  };
+  state.admin.credencialModal = {
+    senhaTemporaria: '',
+    senhaCopiada: false
+  };
   renderAdministracao();
+}
+
+function voltarEtapaModalUsuarioAdmin() {
+  state.admin.usuarioModalEtapa = 'dados';
+  renderAdministracao();
+}
+
+function gerarSenhaAleatoriaAdmin(tamanho = 14) {
+  const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
+  const array = new Uint32Array(tamanho);
+  crypto.getRandomValues(array);
+  return Array.from(array, numero => caracteres[numero % caracteres.length]).join('');
+}
+
+function gerarSenhaTemporariaUsuarioAdmin() {
+  state.admin.credencialModal = {
+    senhaTemporaria: gerarSenhaAleatoriaAdmin(),
+    senhaCopiada: false
+  };
+  renderAdministracao();
+}
+
+async function copiarSenhaTemporariaUsuarioAdmin() {
+  const senha = state.admin.credencialModal?.senhaTemporaria || '';
+
+  if (!senha) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(senha);
+    state.admin.credencialModal.senhaCopiada = true;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.message = 'Não foi possível copiar a senha provisória.';
+    renderAdministracao();
+  }
+}
+
+async function abrirPermissoesPeloModalUsuario(usuarioId) {
+  if (!usuarioId) {
+    return;
+  }
+  await abrirPermissoesUsuarioAdmin(usuarioId);
 }
 
 function obterResumoRegistros(records) {
@@ -1713,9 +2435,18 @@ async function carregarUsuariosAdmin() {
   }
 }
 
+async function atualizarResumoUsuariosAdmin() {
+  const response = await chamarApi('listAdminUsers');
+
+  if (!response.ok) {
+    throw new Error(obterMensagemApi(response, 'Não foi possível atualizar os usuários.'));
+  }
+
+  state.admin.usuarios = response.data.records || [];
+}
+
 function editarUsuarioAdmin(id) {
-  state.admin.editando.usuarios = id;
-  renderAdministracao();
+  abrirModalUsuarioAdmin(id);
 }
 
 async function salvarUsuarioAdmin(id) {
@@ -1741,6 +2472,13 @@ async function salvarUsuarioAdmin(id) {
 
     state.admin.editando.usuarios = '';
     state.admin.modalNovo = '';
+    state.admin.usuarioModalEtapa = 'dados';
+    state.admin.usuarioPermissoesId = '';
+    state.admin.usuarioPermissoes = [];
+    state.admin.credencialModal = {
+      senhaTemporaria: '',
+      senhaCopiada: false
+    };
     state.admin.message = 'Usuário salvo. Se for novo, crie ou vincule o login correspondente no Supabase Auth antes de ativar o acesso.';
     await carregarUsuariosAdmin();
   } catch (erro) {
@@ -1750,7 +2488,7 @@ async function salvarUsuarioAdmin(id) {
   }
 }
 
-async function abrirPermissoesUsuarioAdmin(id) {
+async function abrirPermissoesUsuarioAdmin(id, options = {}) {
   if (!pode('admin.usuarios', 'manage_permissions')) {
     state.admin.message = 'Seu usuário não possui permissão para alterar permissões individuais.';
     renderAdministracao();
@@ -1759,20 +2497,62 @@ async function abrirPermissoesUsuarioAdmin(id) {
 
   try {
     state.admin.loading = true;
-    state.admin.message = '';
+    if (!options.manterMensagem) {
+      state.admin.message = '';
+    }
     state.admin.usuarioPermissoesId = id;
     renderAdministracao();
 
-    const response = await chamarApi('listAdminUserPermissions', {
-      usuario_id: id
-    });
+    const chamadas = [
+      chamarApi('listAdminUserPermissions', {
+        usuario_id: id
+      })
+    ];
+
+    const precisaCarregarPerfis = !state.admin.perfilPermissoes.length;
+
+    if (precisaCarregarPerfis) {
+      chamadas.push(chamarApi('listAdminPermissions'));
+    }
+
+    const [response, responsePerfis] = await Promise.all(chamadas);
 
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível carregar permissões individuais.'));
     }
 
-    state.admin.recursos = response.data.recursos || [];
+    if (responsePerfis && !responsePerfis.ok) {
+      throw new Error(obterMensagemApi(responsePerfis, 'Não foi possível carregar permissões de perfil.'));
+    }
+
+    const recursos = response.data.recursos || [];
+    const modulos = construirEstruturaPermissoesUsuario(recursos);
+    const expandedModules = modulos.reduce((acc, modulo) => {
+      acc[modulo.chave] = state.admin.permissionModal?.expandedModules?.[modulo.chave] ?? true;
+      return acc;
+    }, {});
+    const originalEffects = mapearPermissoesUsuarioPorChave(response.data.permissoes || []);
+
+    state.admin.recursos = recursos;
     state.admin.usuarioPermissoes = response.data.permissoes || [];
+    if (responsePerfis) {
+      state.admin.perfilPermissoes = responsePerfis.data.permissoes || [];
+    }
+    state.admin.permissionModal = {
+      expandedModules,
+      applying: false,
+      moduleUpdating: '',
+      originalEffects,
+      draftEffects: { ...originalEffects },
+      dirty: false,
+      submitMode: ''
+    };
+    state.admin.modalNovo = 'usuarios';
+    state.admin.editando.usuarios = id;
+    state.admin.usuarioModalEtapa = 'permissoes';
+    if (options.messageSuccess) {
+      state.admin.message = options.messageSuccess;
+    }
     state.admin.loading = false;
     renderAdministracao();
   } catch (erro) {
@@ -1783,27 +2563,157 @@ async function abrirPermissoesUsuarioAdmin(id) {
 }
 
 function fecharPermissoesUsuarioAdmin() {
-  state.admin.usuarioPermissoesId = '';
-  state.admin.usuarioPermissoes = [];
+  state.admin.usuarioModalEtapa = 'dados';
   renderAdministracao();
 }
 
-async function alterarPermissaoUsuarioAdmin(usuarioId, recursoChave, acao, efeito) {
+function alternarModuloPermissoesUsuario(moduloChave) {
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  state.admin.permissionModal.expandedModules[moduloChave] = !(state.admin.permissionModal.expandedModules?.[moduloChave] !== false);
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+function alternarCheckboxPermissaoUsuario(usuarioId, recursoChave, acao, marcado) {
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
+  const modal = state.admin.permissionModal || {};
+  const permissoesUsuarioPorChave = { ...(modal.draftEffects || {}) };
+  const efeito = obterEfeitoAoAlternarPermissaoUsuario(
+    usuario,
+    perfilPermissoesPorChave,
+    permissoesUsuarioPorChave,
+    recursoChave,
+    acao,
+    marcado
+  );
+
+  const chave = `${recursoChave}:${acao}`;
+  permissoesUsuarioPorChave[chave] = efeito;
+  state.admin.permissionModal.draftEffects = permissoesUsuarioPorChave;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesUsuario(
+    state.admin.permissionModal.originalEffects,
+    permissoesUsuarioPorChave
+  );
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+function aplicarLoteModuloPermissoesUsuario(usuarioId, moduloChave, efeito) {
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  const modulo = modulos.find(item => item.chave === moduloChave);
+
+  if (!modulo) {
+    return;
+  }
+
+  const draftEffects = { ...(state.admin.permissionModal.draftEffects || {}) };
+
+  modulo.linhas.forEach(recurso => {
+    obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+      draftEffects[`${recurso.chave}:${acao}`] = efeito;
+    });
+  });
+
+  state.admin.permissionModal.draftEffects = draftEffects;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesUsuario(
+    state.admin.permissionModal.originalEffects,
+    draftEffects
+  );
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+function alternarTodosModulosPermissoesUsuario(expandidos) {
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  const expandedModules = modulos.reduce((acc, modulo) => {
+    acc[modulo.chave] = expandidos;
+    return acc;
+  }, {});
+
+  state.admin.permissionModal.expandedModules = expandedModules;
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+function aplicarLoteGlobalPermissoesUsuario(usuarioId, efeito) {
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  const draftEffects = { ...(state.admin.permissionModal.draftEffects || {}) };
+
+  modulos.forEach(modulo => {
+    modulo.linhas.forEach(recurso => {
+      obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+        draftEffects[`${recurso.chave}:${acao}`] = efeito;
+      });
+    });
+  });
+
+  state.admin.permissionModal.draftEffects = draftEffects;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesUsuario(
+    state.admin.permissionModal.originalEffects,
+    draftEffects
+  );
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
+  const originalEffects = state.admin.permissionModal.originalEffects || {};
+  const draftEffects = state.admin.permissionModal.draftEffects || {};
+  const chaves = new Set([
+    ...Object.keys(originalEffects),
+    ...Object.keys(draftEffects)
+  ]);
+  const alteracoes = Array.from(chaves)
+    .map(chave => {
+      const [recurso_chave, acao] = chave.split(':');
+      return {
+        recurso_chave,
+        acao,
+        anterior: originalEffects[chave] || '',
+        proximo: draftEffects[chave] || ''
+      };
+    })
+    .filter(item => item.anterior !== item.proximo);
+
+  if (!alteracoes.length) {
+    return;
+  }
+
   try {
-    const response = await chamarApi('saveAdminUserPermission', {
+    state.admin.permissionModal.applying = true;
+    state.admin.message = '';
+    state.admin.permissionModal.submitMode = fecharAoSalvar ? 'close' : 'stay';
+    renderAdministracao();
+
+    const response = await chamarApi('saveAdminUserPermissionsBatch', {
       usuario_id: usuarioId,
-      recurso_chave: recursoChave,
-      acao,
-      efeito
+      alteracoes: alteracoes.map(item => ({
+        recurso_chave: item.recurso_chave,
+        acao: item.acao,
+        efeito: item.proximo
+      }))
     });
 
     if (!response.ok) {
-      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão individual.'));
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar as permissões adicionais.'));
     }
 
-    await abrirPermissoesUsuarioAdmin(usuarioId);
+    await atualizarResumoUsuariosAdmin();
+    if (fecharAoSalvar) {
+      state.admin.message = 'Permissões adicionais atualizadas.';
+      resetarFluxoModalUsuarioAdmin(false);
+      renderAdministracao();
+      return;
+    }
+
+    await abrirPermissoesUsuarioAdmin(usuarioId, {
+      manterMensagem: true,
+      messageSuccess: 'Permissões adicionais atualizadas.'
+    });
   } catch (erro) {
-    state.admin.message = erro.message || 'Erro ao salvar permissão individual.';
+    state.admin.permissionModal.applying = false;
+    state.admin.permissionModal.submitMode = '';
+    state.admin.message = erro.message || 'Erro ao salvar permissões adicionais.';
     renderAdministracao();
   }
 }
@@ -2590,6 +3500,8 @@ function renderListaSenhas(gestor, podeVerSenha) {
 function renderSenhaItem(item, gestor, podeVerSenha) {
   const podeEditar = pode('central_senhas', 'update');
   const podeExcluir = pode('central_senhas', 'delete');
+  const senhaTexto = podeVerSenha ? escapeHtml(item.senha || '-') : 'Senha oculta por permissão';
+  const senhaAjuda = podeVerSenha ? '' : '<small>Seu acesso permite consultar este item, mas não visualizar a senha.</small>';
 
   return `
     <article class="password-row status-line-${escapeAttr(item.status || 'inativo')}">
@@ -2601,7 +3513,8 @@ function renderSenhaItem(item, gestor, podeVerSenha) {
 
       <div class="password-fields">
         <span>Login: ${escapeHtml(item.login || '-')}</span>
-        <span>Senha: ${podeVerSenha ? escapeHtml(item.senha || '-') : 'restrita'}</span>
+        <span>Senha: ${senhaTexto}</span>
+        ${senhaAjuda}
         ${item.url ? `
           <div class="link-buttons">
             <a class="link-sub-btn" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">Abrir</a>
@@ -2613,7 +3526,7 @@ function renderSenhaItem(item, gestor, podeVerSenha) {
       ${gestor ? `
         <div class="crud-actions">
           ${podeEditar ? `<button class="icon-btn" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" title="Editar" aria-label="Editar acesso">✎</button>` : ''}
-          ${podeExcluir ? `<button class="icon-btn danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" title="Excluir" aria-label="Excluir acesso">×</button>` : ''}
+          ${podeExcluir ? `<button class="secondary-btn danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" title="Excluir acesso" aria-label="Excluir acesso">Excluir</button>` : ''}
         </div>
       ` : ''}
     </article>
@@ -2795,7 +3708,7 @@ async function excluirSenhaItem(id) {
   const item = state.passwords.items.find(acesso => acesso.id === id);
   const titulo = item?.titulo || 'este acesso';
 
-  if (!window.confirm(`Excluir ${titulo}?`)) {
+  if (!window.confirm(`Tem certeza que deseja excluir ${titulo}? Esta ação não poderá ser desfeita.`)) {
     return;
   }
 
@@ -5766,9 +6679,16 @@ Object.assign(window, {
   abrirLink,
   abrirModalNovoLink,
   abrirModalNovoRegistro,
+  abrirModalUsuarioAdmin,
   abrirModalSenha,
   abrirModulo,
+  abrirPermissoesPeloModalUsuario,
   abrirPermissoesUsuarioAdmin,
+  abrirPermissoesPerfilAdmin,
+  fecharPermissoesPerfilAdmin,
+  alternarModuloPermissoesPerfil,
+  alternarCheckboxPermissaoPerfil,
+  aplicarLoteModuloPermissoesPerfil,
   acionarCardAr,
   acionarCardModulo,
   alterarBuscaAr,
@@ -5785,17 +6705,21 @@ Object.assign(window, {
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
+  alternarModuloPermissoesPerfil,
+  aplicarLoteModuloPermissoesPerfil,
   alternarTema,
   alternarTodosGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
   alterarPermissaoPerfilAdmin,
-  alterarPermissaoUsuarioAdmin,
+  alternarCheckboxPermissaoUsuario,
+  alternarTodosModulosPermissoesUsuario,
   cancelarReciboValidacoesAr,
   carregarValidacoesAr,
   alterarMesBaseRepasseAr,
   copiarLink,
   copiarLinkResultadoAr,
   copiarOrcamentoAr,
+  copiarSenhaTemporariaUsuarioAdmin,
   copiarVisualizacaoProdutosClienteAr,
   criarLancamentoManualValidacoesAr,
   editarLinkItem,
@@ -5813,6 +6737,7 @@ Object.assign(window, {
   fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
+  gerarSenhaTemporariaUsuarioAdmin,
   gerarLinksAr,
   importarRepasseValidacoesAr,
   limparImportacaoRepasseAr,
@@ -5827,10 +6752,12 @@ Object.assign(window, {
   sair,
   salvarConfigAdmin,
   salvarLinkItem,
+  salvarPermissoesUsuarioAdmin,
   salvarPerfilAdmin,
   salvarRegistroAdmin,
   salvarSenhaItem,
   salvarUsuarioAdmin,
+  selecionarFiltroUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
   selecionarAbaSenhas,
@@ -5839,5 +6766,9 @@ Object.assign(window, {
   selecionarProdutoAr,
   selecionarProdutoCompletoAr,
   selecionarSugestaoProdutoAr,
+  alternarModuloPermissoesUsuario,
+  aplicarLoteGlobalPermissoesUsuario,
+  aplicarLoteModuloPermissoesUsuario,
+  voltarEtapaModalUsuarioAdmin,
   visualizarReciboValidacoesAr
 });
