@@ -14,12 +14,12 @@ Primeira versão de migração do site da Transmares Seguros para HTML/CSS/JS.
 - `src/hub/style.css`: estilos do Hub/Painel
 - `src/hub/app.js`: aplicação principal do Hub/Painel
 
-## Deploy recomendado
+## Deploy recomendado — Site institucional
 
 1. Criar repositório no GitHub.
 2. Subir estes arquivos.
-3. Conectar o repositório ao Netlify Free.
-4. Publicar primeiro no domínio temporário do Netlify.
+3. Conectar o repositório ao serviço de hospedagem estática escolhido.
+4. Publicar primeiro em domínio temporário.
 5. Validar páginas e links.
 6. Só depois apontar o DNS do domínio oficial.
 
@@ -81,20 +81,25 @@ Foram refinados:
 - Artigos receberam CTA final mais alinhado ao conteúdo e à conversão.
 - CSS responsivo para blog, contato e artigos.
 
-## Migração do Hub — Pasta `/hub`
+## Hub — Subdomínio próprio
 
-O Painel Operacional TRS foi integrado ao mesmo projeto do site, dentro da pasta `/hub`.
+O Painel Operacional TRS continua no mesmo repositório, mas deve ser publicado como uma aplicação estática própria:
 
-Acesso de teste:
-- `https://transmares.netlify.app/hub/`
+- `https://hub.transmares.com.br`
 
-Acesso planejado:
-- `https://hub.transmaresseguros.com.br`
+Build exclusivo do Hub:
 
-Configuração adicionada:
-- Regra em `_redirects` para direcionar o subdomínio `hub.transmaresseguros.com.br` para `/hub`.
-- Headers `noindex,nofollow` para reduzir indexação pública do painel.
-- Publicados apenas os arquivos necessários do frontend do hub; `.git`, handoff, scripts locais e `apps-script/Code.gs` não foram incluídos.
+- `npm run build:hub`
+- diretório de publicação: `dist-hub`
+
+Configuração recomendada no Render:
+
+- Tipo: Static Site
+- Build Command: `npm ci && npm run build:hub`
+- Publish Directory: `dist-hub`
+- Rewrite SPA: `/*` para `/index.html`
+
+O build do Hub usa `vite.hub.config.js`, publica os assets de `public/hub` na raiz do serviço e mantém o painel funcionando tanto em `/hub/` quanto na raiz do subdomínio.
 
 
 ## Fase 9 — Vite + Supabase
@@ -102,7 +107,9 @@ Configuração adicionada:
 Projeto migrado para Vite Vanilla na raiz do repositório.
 
 - `npm run dev`: ambiente local.
-- `npm run build`: build para Netlify.
+- `npm run build`: build completo do site.
+- `npm run build:site`: alias explícito do build completo do site.
+- `npm run build:hub`: build exclusivo do Hub para `dist-hub`.
 - `npm run preview`: prévia local do build.
 - `src/hub/supabaseClient.js`: cliente Supabase via variáveis de ambiente.
 - `src/hub/services/arService.js`: leitura de `produtos_ar`, `parceiros` e geração inicial de links AR.
@@ -116,7 +123,7 @@ Limpeza desta versão:
 - Código fonte editável ficou em `src/`.
 - A pasta `backup/` foi preservada integralmente.
 
-Configure as variáveis no Netlify:
+Configure as variáveis no serviço que publicar o Hub:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`

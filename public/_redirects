@@ -1,6 +1,3 @@
-# Hub / Painel Operacional TRS
-https://hub.transmaresseguros.com.br/* /hub/:splat 200
-
 /planos-individuais /servicos/planos-individuais.html 301
 /seguro-auto /servicos/seguro-auto.html 301
 /seguro-de-vida-individual /servicos/seguro-de-vida-individual.html 301

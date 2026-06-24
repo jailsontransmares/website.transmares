@@ -197,7 +197,7 @@ function renderLogin() {
   document.getElementById('app').innerHTML = `
     <section class="login-card">
       <div class="login-logo" aria-label="Transmares Corretora de Seguros">
-        <img src="assets/logo-transmares.png" alt="Transmares Corretora de Seguros">
+        <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
       </div>
 
     <h1>Hub Transmares</h1>
@@ -412,7 +412,7 @@ function renderDashboard() {
 function renderHeaderLogo() {
   return `
     <div class="brand-logo-slot" aria-label="Transmares Corretora de Seguros">
-      <img src="assets/logo-transmares.png" alt="Transmares Corretora de Seguros">
+      <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
     </div>
   `;
 }
@@ -430,6 +430,13 @@ function obterBaseHub() {
   return pathname === '/hub' || pathname.startsWith('/hub/')
     ? '/hub'
     : '';
+}
+
+function obterCaminhoAssetHub(caminhoAsset) {
+  const base = obterBaseHub();
+  const caminhoLimpo = String(caminhoAsset || '').replace(/^\/+/, '');
+
+  return base ? `${base}/${caminhoLimpo}` : `/${caminhoLimpo}`;
 }
 
 function obterModuloDaRotaAtual() {
