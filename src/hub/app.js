@@ -50,6 +50,11 @@ const state = {
       modulos: 'todos',
       usuarios: 'todos'
     },
+    buscaUsuariosDigitada: '',
+    buscaUsuariosAplicada: '',
+    buscaUsuariosTimer: null,
+    paginaUsuarios: 1,
+    limiteUsuarios: 15,
     editando: {
       categorias: '',
       grupos: '',
@@ -1120,28 +1125,48 @@ function renderAdminPreparado(titulo, descricao, itens) {
 function renderUsuariosAdmin() {
   const records = state.admin.usuarios || [];
   const recordsFiltrados = obterUsuariosFiltradosAdmin(records);
+  const limite = Math.max(1, Number(state.admin.limiteUsuarios) || 15);
+  const totalPaginas = Math.max(1, Math.ceil(recordsFiltrados.length / limite));
+  const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaUsuarios) || 1), totalPaginas);
+  const inicio = (paginaAtual - 1) * limite;
+  const recordsPagina = recordsFiltrados.slice(inicio, inicio + limite);
   const resumo = records.reduce((acc, usuario) => {
     acc.total += 1;
     acc[usuario.status] = (acc[usuario.status] || 0) + 1;
     return acc;
   }, { total: 0 });
 
+  state.admin.paginaUsuarios = paginaAtual;
+
   return `
     <section class="admin-panel">
       <div class="admin-panel-header">
-        <div>
+        <div class="admin-users-header-row">
           <h2>Usuários</h2>
-          <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos usuários">
-            ${renderFiltroUsuariosAdmin('todos', 'Todos', resumo.total)}
-            ${renderFiltroUsuariosAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-            ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos', (resumo.bloqueado || 0) + (resumo.inativo || 0))}
+          <div class="action-toolbar admin-users-toolbar">
+            ${pode('admin.usuarios', 'create') ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalNovoRegistro(\'usuarios\')">+ Adicionar</button>' : ''}
+            <label class="action-toolbar-field admin-users-search" for="admin_usuario_busca" aria-label="Filtrar usuários">
+              <input
+                id="admin_usuario_busca"
+                class="config-input action-toolbar-input admin-users-search-input"
+                type="search"
+                value="${escapeAttr(state.admin.buscaUsuariosDigitada || '')}"
+                placeholder="Filtrar usuários"
+                oninput="alterarBuscaUsuariosAdmin(this.value)"
+              >
+            </label>
           </div>
         </div>
-        ${pode('admin.usuarios', 'create') ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro(\'usuarios\')">+ Adicionar</button>' : ''}
+        <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos usuários">
+          ${renderFiltroUsuariosAdmin('todos', 'Todos', resumo.total)}
+          ${renderFiltroUsuariosAdmin('ativo', 'Ativos', resumo.ativo || 0)}
+          ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos', (resumo.bloqueado || 0) + (resumo.inativo || 0))}
+        </div>
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(recordsFiltrados)}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(recordsPagina)}
+      ${state.admin.loading ? '' : renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual)}
       ${renderModalUsuarioAdmin()}
       ${renderPermissoesUsuarioAdmin()}
     </section>
@@ -1270,25 +1295,85 @@ function obterRotuloStatusUsuario(status) {
 
 function obterUsuariosFiltradosAdmin(records) {
   const filtro = state.admin.filtros.usuarios || 'todos';
-
-  if (filtro === 'todos') {
-    return records;
-  }
+  const busca = normalizarBuscaAr(state.admin.buscaUsuariosAplicada || '');
+  const termos = busca.split(' ').filter(Boolean);
+  let filtrados = records;
 
   if (filtro === 'ativo') {
-    return records.filter(usuario => usuario.status === 'ativo');
+    filtrados = filtrados.filter(usuario => usuario.status === 'ativo');
   }
 
   if (filtro === 'bloqueados_inativos') {
-    return records.filter(usuario => usuario.status === 'bloqueado' || usuario.status === 'inativo');
+    filtrados = filtrados.filter(usuario => usuario.status === 'bloqueado' || usuario.status === 'inativo');
   }
 
-  return records;
+  if (!termos.length) {
+    return filtrados;
+  }
+
+  return filtrados.filter(usuario => {
+    const baseBusca = normalizarBuscaAr([
+      usuario.nome,
+      usuario.email
+    ].filter(Boolean).join(' '));
+
+    return termos.every(termo => baseBusca.includes(termo));
+  });
 }
 
 function selecionarFiltroUsuariosAdmin(filtro) {
   state.admin.filtros.usuarios = filtro;
+  state.admin.paginaUsuarios = 1;
   renderAdministracao();
+}
+
+function alterarBuscaUsuariosAdmin(valor) {
+  state.admin.buscaUsuariosDigitada = valor;
+  window.clearTimeout(state.admin.buscaUsuariosTimer);
+  state.admin.buscaUsuariosTimer = window.setTimeout(() => {
+    if ((state.admin.buscaUsuariosAplicada || '') === (state.admin.buscaUsuariosDigitada || '')) {
+      return;
+    }
+
+    state.admin.buscaUsuariosAplicada = state.admin.buscaUsuariosDigitada;
+    state.admin.paginaUsuarios = 1;
+    renderAdministracao();
+  }, 320);
+}
+
+function selecionarPaginaUsuariosAdmin(pagina) {
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(obterUsuariosFiltradosAdmin(state.admin.usuarios || []).length / (Math.max(1, Number(state.admin.limiteUsuarios) || 15)))
+  );
+
+  state.admin.paginaUsuarios = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
+  renderAdministracao();
+}
+
+function renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual) {
+  if (totalPaginas <= 1) {
+    return '';
+  }
+
+  return `
+    <nav class="admin-users-pagination" aria-label="Paginação de usuários">
+      ${Array.from({ length: totalPaginas }, (_, index) => {
+        const pagina = index + 1;
+        const classes = ['admin-users-page-btn', pagina === paginaAtual ? 'active' : ''].filter(Boolean).join(' ');
+        return `
+          <button
+            class="${classes}"
+            type="button"
+            onclick="selecionarPaginaUsuariosAdmin(${pagina})"
+            aria-current="${pagina === paginaAtual ? 'page' : 'false'}"
+          >
+            ${pagina}
+          </button>
+        `;
+      }).join('')}
+    </nav>
+  `;
 }
 
 function resetarFluxoModalUsuarioAdmin(render = true) {
@@ -6692,6 +6777,7 @@ Object.assign(window, {
   acionarCardAr,
   acionarCardModulo,
   alterarBuscaAr,
+  alterarBuscaUsuariosAdmin,
   alterarFiltroListaProdutosAr,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
@@ -6758,6 +6844,7 @@ Object.assign(window, {
   salvarSenhaItem,
   salvarUsuarioAdmin,
   selecionarFiltroUsuariosAdmin,
+  selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
   selecionarAbaSenhas,
