@@ -1,5 +1,4 @@
 import './style.css';
-import { renderSidebarTeste } from './mocks/sidebarTeste.js';
 import { chamarApi } from './api.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
@@ -454,10 +453,6 @@ function renderDashboard() {
         <h2>Módulos ${renderBotaoConfigurarModulosHome()}</h2>
         <p>Acesse as principais áreas operacionais do painel.</p>
       </div>
-
-      <button class="secondary-btn" type="button" onclick="navegarParaModulo('sidebar-teste')">
-        Abrir teste da sidebar
-      </button>
 
       <section class="module-grid">
         ${state.cards.map(card => `
@@ -939,18 +934,6 @@ function navegarHome() {
 
 async function renderizarRotaAtual() {
   const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
-
-  if (idModulo === 'sidebar-teste') {
-    renderSidebarTeste({
-      state,
-      renderHeaderLogo,
-      renderAvisos,
-      renderAniversariantes,
-      renderFavoritos,
-      navegarParaModulo
-    });
-    return;
-  }
 
   if (!idModulo) {
     renderDashboard();
@@ -7806,6 +7789,788 @@ function abrirLink(url) {
   window.open(url, '_blank', 'noopener');
 }
 
+const hubSidebarUi = {
+  gruposAbertos: {},
+  subgruposAbertos: {}
+};
+
+function obterItensNavegacaoHub() {
+  const cardsPorId = new Map((state.cards || []).map(card => [card.id, card]));
+  const itens = [
+    {
+      grupo: 'Visao geral',
+      links: [
+        { id: 'inicio', label: 'Inicio', descricao: 'Resumo operacional', rota: '', visivel: true }
+      ]
+    },
+    {
+      grupo: 'Operacao',
+      links: [
+        {
+          id: 'painel-ar',
+          label: cardsPorId.get('painel-ar')?.titulo || 'Painel AR',
+          descricao: 'Links, produtos e validacoes',
+          rota: 'painel-ar',
+          visivel: moduloEstaAtivo('painel-ar')
+        },
+        {
+          id: 'central-senhas',
+          label: cardsPorId.get('central-senhas')?.titulo || 'Central de Senhas',
+          descricao: 'Acessos e historico',
+          rota: 'central-senhas',
+          visivel: moduloEstaAtivo('central-senhas')
+        }
+      ]
+    },
+    {
+      grupo: 'Links uteis',
+      links: [
+        {
+          id: 'links-corretora',
+          label: cardsPorId.get('links-corretora')?.titulo || 'Links Corretora',
+          descricao: 'Base comercial',
+          rota: 'links-corretora',
+          visivel: moduloEstaAtivo('links-corretora')
+        },
+        {
+          id: 'links-ar',
+          label: cardsPorId.get('links-ar')?.titulo || 'Links AR',
+          descricao: 'Certificacao e apoio',
+          rota: 'links-ar',
+          visivel: moduloEstaAtivo('links-ar')
+        },
+        {
+          id: 'links-gestao',
+          label: cardsPorId.get('links-gestao')?.titulo || 'Links Gestao',
+          descricao: 'Rotinas internas',
+          rota: 'links-gestao',
+          visivel: moduloEstaAtivo('links-gestao')
+        }
+      ]
+    },
+    {
+      grupo: 'Administracao',
+      links: [
+        {
+          id: 'administracao',
+          label: 'Administracao',
+          rota: 'admin',
+          visivel: pode('admin', 'view'),
+          subgrupos: obterSubgruposMenuAdministracao(),
+          destaque: true
+        }
+      ]
+    }
+  ];
+
+  return itens
+    .map(grupo => ({
+      ...grupo,
+      links: grupo.links.filter(link => link.visivel)
+    }))
+    .filter(grupo => grupo.links.length);
+}
+
+function obterSubgruposMenuAdministracao() {
+  if (!pode('admin', 'view')) {
+    return [];
+  }
+
+  return [
+    {
+      titulo: 'Painel',
+      itens: [
+        { id: 'admin-identidade', label: 'Identidade', hash: 'identidade', visivel: true },
+        { id: 'admin-aparencia', label: 'Aparencia', hash: 'aparencia', visivel: true },
+        { id: 'admin-logo', label: 'Marca', hash: 'logo', visivel: true },
+        { id: 'admin-limites', label: 'Limites', hash: 'limites', visivel: true }
+      ]
+    },
+    {
+      titulo: 'Cadastros',
+      itens: [
+        { id: 'admin-categorias', label: 'Categorias', hash: 'categorias', visivel: true },
+        { id: 'admin-grupos', label: 'Grupos', hash: 'grupos', visivel: true },
+        { id: 'admin-home-exibicao', label: 'Home', hash: 'home-exibicao', visivel: true }
+      ]
+    },
+    {
+      titulo: 'Acessos',
+      itens: [
+        { id: 'admin-usuarios', label: 'Usuarios', hash: 'usuarios', visivel: pode('admin.usuarios', 'view') },
+        { id: 'admin-perfis', label: 'Perfis', hash: 'perfis', visivel: pode('admin.perfis', 'view') }
+      ]
+    }
+  ]
+    .map(grupo => ({
+      ...grupo,
+      itens: grupo.itens.filter(item => item.visivel)
+    }))
+    .filter(grupo => grupo.itens.length);
+}
+
+function obterHashHubAtual() {
+  return String(window.location.hash || '').replace(/^#/, '').trim();
+}
+
+function normalizarHashHub(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^#+/, '')
+    .replace(/^\/+|\/+$/g, '');
+}
+
+function atualizarHashHub(hash = '', { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  const normalizado = normalizarHashHub(hash);
+  url.hash = normalizado ? `#${normalizado}` : '';
+
+  if (replace) {
+    window.history.replaceState({}, '', url);
+  } else if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== `${url.pathname}${url.search}${url.hash}`) {
+    window.history.pushState({}, '', url);
+  }
+}
+
+function obterContextoRotaHub() {
+  const modulo = normalizarIdModuloRota(obterModuloDaRotaAtual()) || 'inicio';
+  const hash = normalizarHashHub(obterHashHubAtual());
+  const partes = hash ? hash.split('/') : [];
+
+  return {
+    modulo,
+    hash,
+    principal: partes[0] || '',
+    secundaria: partes[1] || ''
+  };
+}
+
+function sincronizarContextoAdminPelaRota() {
+  const { modulo, principal } = obterContextoRotaHub();
+  if (modulo !== 'administracao' || !principal) return;
+
+  const abasValidas = ['identidade', 'aparencia', 'logo', 'limites', 'categorias', 'grupos', 'home-exibicao', 'usuarios', 'perfis'];
+  if (abasValidas.includes(principal)) {
+    state.admin.aba = principal;
+  }
+}
+
+function sincronizarContextoSenhasPelaRota() {
+  const { modulo, principal } = obterContextoRotaHub();
+  if (modulo !== 'central-senhas' || !principal) return;
+
+  if (principal === 'acessos' || principal === 'historico') {
+    state.passwords.aba = principal;
+  }
+}
+
+function sincronizarContextoArPelaRota() {
+  const { modulo, principal, secundaria } = obterContextoRotaHub();
+  if (modulo !== 'painel-ar') return;
+
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico'];
+  if (principal && abasValidas.includes(principal)) {
+    state.ar.aba = principal;
+  }
+
+  if (state.ar.aba === 'validacoes' && secundaria) {
+    const subAbasValidas = ['emitir', 'consultar', 'importacao'];
+    if (subAbasValidas.includes(secundaria)) {
+      state.ar.validacoes.aba = secundaria;
+    }
+  }
+}
+
+function sincronizarContextoHubPelaRota() {
+  sincronizarContextoAdminPelaRota();
+  sincronizarContextoSenhasPelaRota();
+  sincronizarContextoArPelaRota();
+}
+
+function obterChaveGrupoHub(nomeGrupo = '') {
+  return `hub-grupo-${normalizarSlugModulo(nomeGrupo)}`;
+}
+
+function obterChaveSubgrupoHub(nomeGrupo = '', nomeSubgrupo = '') {
+  return `hub-subgrupo-${normalizarSlugModulo(nomeGrupo)}-${normalizarSlugModulo(nomeSubgrupo)}`;
+}
+
+function grupoHubDeveIniciarAberto(grupo, rotaAtual) {
+  return (grupo.links || []).some(link => link.id === rotaAtual);
+}
+
+function grupoHubEstaAberto(grupo, rotaAtual) {
+  const chave = obterChaveGrupoHub(grupo.grupo);
+
+  if (Object.prototype.hasOwnProperty.call(hubSidebarUi.gruposAbertos, chave)) {
+    return hubSidebarUi.gruposAbertos[chave];
+  }
+
+  return grupoHubDeveIniciarAberto(grupo, rotaAtual);
+}
+
+function alternarGrupoHub(nomeGrupo) {
+  const chave = obterChaveGrupoHub(nomeGrupo);
+  const grupos = obterItensNavegacaoHub();
+  const grupo = grupos.find(item => item.grupo === nomeGrupo);
+  const rotaAtual = (obterContextoRotaHub().modulo || 'inicio');
+  const atual = grupo ? grupoHubEstaAberto(grupo, rotaAtual) : Boolean(hubSidebarUi.gruposAbertos[chave]);
+
+  hubSidebarUi.gruposAbertos[chave] = !atual;
+  renderizarRotaAtual();
+}
+
+function subgrupoHubDeveIniciarAberto(grupo, subgrupo, contexto) {
+  if (contexto.modulo !== 'administracao') {
+    return false;
+  }
+
+  return (subgrupo.itens || []).some(item => item.hash === contexto.principal);
+}
+
+function subgrupoHubEstaAberto(grupo, subgrupo, contexto) {
+  const chave = obterChaveSubgrupoHub(grupo.grupo, subgrupo.titulo);
+
+  if (Object.prototype.hasOwnProperty.call(hubSidebarUi.subgruposAbertos, chave)) {
+    return hubSidebarUi.subgruposAbertos[chave];
+  }
+
+  return subgrupoHubDeveIniciarAberto(grupo, subgrupo, contexto);
+}
+
+function alternarSubgrupoHub(nomeGrupo, nomeSubgrupo) {
+  const grupos = obterItensNavegacaoHub();
+  const grupo = grupos.find(item => item.grupo === nomeGrupo);
+  const link = grupo?.links?.[0];
+  const subgrupo = (link?.subgrupos || []).find(item => item.titulo === nomeSubgrupo);
+  const contexto = obterContextoRotaHub();
+  const chave = obterChaveSubgrupoHub(nomeGrupo, nomeSubgrupo);
+  const atual = (grupo && subgrupo)
+    ? subgrupoHubEstaAberto(grupo, subgrupo, contexto)
+    : Boolean(hubSidebarUi.subgruposAbertos[chave]);
+
+  hubSidebarUi.subgruposAbertos[chave] = !atual;
+  renderizarRotaAtual();
+}
+
+function renderSidebarHub() {
+  const contexto = obterContextoRotaHub();
+  const rotaAtual = contexto.modulo || 'inicio';
+  const grupos = obterItensNavegacaoHub();
+  const grupoInicio = grupos.find(grupo => grupo.grupo === 'Visao geral');
+  const linkInicio = grupoInicio?.links?.find(link => link.id === 'inicio') || null;
+  const grupoAdministracao = grupos.find(grupo => grupo.grupo === 'Administracao');
+  const linkAdministracao = grupoAdministracao?.links?.find(link => link.id === 'administracao') || null;
+  const gruposRestantes = grupos.filter(grupo => grupo.grupo !== 'Visao geral' && grupo.grupo !== 'Administracao');
+
+  return `
+    <aside class="hub-sidebar" aria-label="Navegacao principal do Hub">
+      <nav class="hub-sidebar-nav">
+        ${linkInicio ? `
+          <button
+            class="hub-sidebar-link ${rotaAtual === linkInicio.id ? 'active' : ''}"
+            type="button"
+            onclick="navegarHome()"
+            aria-current="${rotaAtual === linkInicio.id ? 'page' : 'false'}"
+          >
+            <strong>${escapeHtml(linkInicio.label)}</strong>
+          </button>
+        ` : ''}
+
+        ${gruposRestantes.map(grupo => {
+          const grupoAberto = grupoHubEstaAberto(grupo, rotaAtual);
+
+          return `
+          <section class="hub-sidebar-group">
+            <button
+              class="hub-sidebar-group-toggle ${grupoAberto ? 'active' : ''}"
+              type="button"
+              onclick="alternarGrupoHub('${escapeAttr(grupo.grupo)}')"
+              aria-expanded="${grupoAberto ? 'true' : 'false'}"
+            >
+              <span class="hub-sidebar-group-label">${escapeHtml(grupo.grupo)}</span>
+              <span class="hub-sidebar-group-caret" aria-hidden="true">${grupoAberto ? '▾' : '▸'}</span>
+            </button>
+
+            <div class="hub-sidebar-links ${grupoAberto ? '' : 'is-collapsed'}">
+              ${grupo.links.map(link => `
+                ${(() => {
+                  const ativo = rotaAtual === link.id;
+                  return `
+                <button
+                  class="hub-sidebar-link ${ativo ? 'active' : ''}"
+                  type="button"
+                  onclick="${link.rota ? `navegarParaModulo('${escapeAttr(link.rota)}')` : 'navegarHome()'}"
+                  aria-current="${ativo ? 'page' : 'false'}"
+                >
+                  <strong>${escapeHtml(link.label)}</strong>
+                </button>
+              `;
+                })()}
+              `).join('')}
+            </div>
+          </section>
+        `;
+        }).join('')}
+
+        ${linkAdministracao ? `
+          <section class="hub-sidebar-group hub-sidebar-group-standalone">
+            <button
+              class="hub-sidebar-link ${rotaAtual === linkAdministracao.id ? 'active' : ''}"
+              type="button"
+              onclick="navegarParaModulo('admin')"
+              aria-current="${rotaAtual === linkAdministracao.id ? 'page' : 'false'}"
+            >
+              <strong>${escapeHtml(linkAdministracao.label)}</strong>
+            </button>
+            ${rotaAtual === linkAdministracao.id ? `
+              <div class="hub-sidebar-submenu" aria-label="Submenu de ${escapeAttr(linkAdministracao.label)}">
+                ${linkAdministracao.subgrupos.map(subgrupo => {
+                  const subgrupoAberto = subgrupoHubEstaAberto(grupoAdministracao, subgrupo, contexto);
+
+                  return `
+                    <section class="hub-sidebar-subgroup">
+                      <button
+                        class="hub-sidebar-subgroup-toggle ${subgrupoAberto ? 'active' : ''}"
+                        type="button"
+                        onclick="alternarSubgrupoHub('Administracao', '${escapeAttr(subgrupo.titulo)}')"
+                        aria-expanded="${subgrupoAberto ? 'true' : 'false'}"
+                      >
+                        <span class="hub-sidebar-subgroup-label">${escapeHtml(subgrupo.titulo)}</span>
+                        <span class="hub-sidebar-group-caret" aria-hidden="true">${subgrupoAberto ? '▾' : '▸'}</span>
+                      </button>
+                      <div class="hub-sidebar-subitems ${subgrupoAberto ? '' : 'is-collapsed'}">
+                        ${subgrupo.itens.map(subitem => `
+                          <button
+                            class="hub-sidebar-subitem ${contexto.principal === subitem.hash ? 'active' : ''}"
+                            type="button"
+                            onclick="navegarParaModulo('admin', '${escapeAttr(subitem.hash)}')"
+                            aria-current="${contexto.principal === subitem.hash ? 'page' : 'false'}"
+                          >
+                            ${escapeHtml(subitem.label)}
+                          </button>
+                        `).join('')}
+                      </div>
+                    </section>
+                  `;
+                }).join('')}
+              </div>
+            ` : ''}
+          </section>
+        ` : ''}
+      </nav>
+    </aside>
+  `;
+}
+
+function renderHubUserBox() {
+  return `
+    <div class="user-box hub-user-box">
+      <div class="hub-user-box-copy">
+        <strong>${escapeHtml(state.usuario?.nome || '')}</strong>
+        <span>${escapeHtml(state.usuario?.email || '')}</span>
+      </div>
+      <div class="hub-user-box-actions">
+        <button class="theme-btn icon-only" onclick="alternarTema()" title="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}" aria-label="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}">
+          ${state.temaAtual === 'escuro' ? '☼' : '◐'}
+        </button>
+        <button class="secondary-btn logout-btn" type="button" onclick="sair()">Sair</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteudo = '' }) {
+  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
+  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
+
+  return `
+    <main class="dashboard hub-layout">
+      <header class="topbar">
+        ${renderHeaderLogo()}
+        <div class="brand">
+          <h1>${escapeHtml(nomeSistema)}</h1>
+          <p>${escapeHtml(subtitulo)}</p>
+        </div>
+
+        ${renderHubUserBox()}
+      </header>
+
+      <section class="hub-shell">
+        ${renderSidebarHub()}
+
+        <div class="hub-content ${escapeAttr(classeConteudo)}">
+          <section class="hub-page-intro">
+            <span class="hub-page-kicker">Hub operacional</span>
+            <h2>${escapeHtml(tituloPagina)}</h2>
+            <p>${escapeHtml(descricaoPagina)}</p>
+          </section>
+
+          ${conteudo}
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+const renderDashboardHubPhase1 = function() {
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: 'Inicio',
+    descricaoPagina: 'Visao consolidada do Hub com atalhos, comunicados e acesso aos modulos operacionais.',
+    conteudo: `
+      <section class="info-grid">
+        <div class="info-card">
+          <div class="info-card-header">
+            <span class="info-icon">📢</span>
+            <h2>Avisos internos</h2>
+          </div>
+          ${renderAvisos()}
+        </div>
+
+        <div class="info-card">
+          <div class="info-card-header">
+            <span class="info-icon">🎂</span>
+            <h2>Aniversariantes</h2>
+          </div>
+          ${renderAniversariantes()}
+        </div>
+      </section>
+
+      <section class="quick-links-strip">
+        <div class="quick-links-title">
+          <span>★</span>
+          <strong>Links rápidos</strong>
+        </div>
+
+        <div class="quick-links-list">
+          ${renderFavoritos()}
+        </div>
+      </section>
+
+      <div class="section-title">
+        <h2>Módulos ${renderBotaoConfigurarModulosHome()}</h2>
+        <p>Acesse as principais áreas operacionais do painel.</p>
+      </div>
+
+      <section class="module-grid">
+        ${state.cards.map(card => `
+          <article class="module-card" role="button" tabindex="0" onclick="abrirModulo('${escapeAttr(card.id)}')" onkeydown="acionarCardModulo(event, '${escapeAttr(card.id)}')">
+            <div class="module-card-top">
+              <h3>${escapeHtml(card.titulo)}</h3>
+              <span class="module-card-arrow" aria-hidden="true">›</span>
+            </div>
+          </article>
+        `).join('')}
+      </section>
+
+      ${renderModalConfigurarModulosHome()}
+    `
+  });
+};
+
+const renderizarRotaAtualHubPhase2 = async function() {
+  const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
+
+  if (idModulo === 'sidebar-teste') {
+    atualizarHashHub('', { replace: true });
+    await navegarHome();
+    return;
+  }
+
+  sincronizarContextoHubPelaRota();
+
+  if (!idModulo) {
+    renderDashboard();
+    return;
+  }
+
+  await abrirModuloDireto(idModulo);
+};
+
+const navegarParaModuloHubPhase2 = function(idModulo, hash = '') {
+  const caminho = montarCaminhoHub(idModulo);
+  const url = new URL(window.location.href);
+  url.pathname = caminho;
+  url.hash = normalizarHashHub(hash) ? `#${normalizarHashHub(hash)}` : '';
+
+  if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== `${url.pathname}${url.search}${url.hash}`) {
+    window.history.pushState({}, '', url);
+  }
+
+  return renderizarRotaAtual();
+};
+
+const renderModuloIndisponivelHubPhase1 = function(idModulo) {
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: 'Modulo indisponivel',
+    descricaoPagina: 'A rota existe, mas o modulo esta inativo ou seu perfil nao possui acesso liberado.',
+    conteudo: `
+      <section class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h2>Módulo indisponível</h2>
+            <p>Este módulo está inativo, indisponível ou seu usuário não possui acesso.</p>
+          </div>
+        </div>
+
+        <p class="quick-link-empty">Rota solicitada: ${escapeHtml(idModulo || '-')}</p>
+        <button class="save-btn" type="button" onclick="navegarHome()">Voltar para a Home</button>
+      </section>
+    `
+  });
+};
+
+const renderAdministracaoHubPhase1 = function() {
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: 'Administracao',
+    descricaoPagina: 'Configuracoes, cadastros e governanca do Hub em uma estrutura mais consistente com o restante do sistema.',
+    conteudo: `
+      <section class="admin-shell admin-shell-single">
+        ${renderAdminPanel()}
+      </section>
+    `
+  });
+};
+
+const renderLinksUteisHubPhase1 = function() {
+  const gestor = state.usuario?.perfil === 'gestor';
+
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: state.links.titulo || 'Links Uteis',
+    descricaoPagina: gestor ? 'Listagem e cadastro de links operacionais por escopo.' : 'Consulte os links disponiveis para seu perfil.',
+    conteudo: `
+      <section class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h2>${escapeHtml(state.links.titulo || 'Links Úteis')}</h2>
+            <p>${gestor ? 'Listagem e cadastro de links.' : 'Consulte os links disponíveis.'}</p>
+          </div>
+        </div>
+
+        <div class="links-toolbar">
+          <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
+            <option value="">Todas as categorias</option>
+            ${state.links.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+          </select>
+
+          <select class="config-input" onchange="alterarFiltroLinks('grupo', this.value)">
+            <option value="">Todos os grupos</option>
+            ${state.links.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+          </select>
+
+          ${gestor ? `
+            <select class="config-input" onchange="alterarFiltroLinks('status', this.value)">
+              <option value="">Todos os status</option>
+              <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
+              <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
+            </select>
+            <button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>
+          ` : ''}
+        </div>
+
+        <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
+        ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
+        ${state.links.loading ? '<p class="quick-link-empty">Carregando links...</p>' : renderListaLinksUteis(gestor)}
+        ${renderModalNovoLink()}
+      </section>
+    `
+  });
+};
+
+const renderCentralSenhasHubPhase1 = function() {
+  const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeVerSenha = pode('central_senhas', 'view_secret');
+
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: 'Central de Senhas',
+    descricaoPagina: podeGerenciar ? 'Gestao de acessos e historico operacional.' : 'Consulta dos acessos liberados ao seu perfil.',
+    conteudo: `
+      <section class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h2>Central de Senhas</h2>
+            <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
+          </div>
+          ${podeGerenciar ? `
+            <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
+              <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
+              <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
+            </div>
+          ` : ''}
+        </div>
+
+        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
+
+        ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
+        ${state.passwords.loading ? '<p class="quick-link-empty">Carregando acessos...</p>' : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
+        ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
+      </section>
+    `
+  });
+};
+
+const renderPainelArHubPhase1 = function() {
+  const podeHistorico = podeAcessarAbaAr('historico');
+
+  document.getElementById('app').innerHTML = renderHubShell({
+    tituloPagina: 'Painel AR',
+    descricaoPagina: 'Produtos, parceiros, geracao de links e validacoes em uma navegacao mais consistente com o Hub.',
+    conteudo: `
+      <section class="admin-panel">
+        <div class="admin-panel-header ar-panel-header">
+          <div class="ar-panel-title">
+            <button type="button" onclick="selecionarAbaAr('inicio')" title="Ir para o início do Painel AR">
+              <h2>Painel AR Transmares</h2>
+            </button>
+            <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
+          </div>
+          <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
+            <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.2a.5.5 0 0 1-.5-.5v-5.2H9.2v5.2a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-9.7Z"></path>
+              </svg>
+            </button>
+            ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
+            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>` : ''}
+            ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
+            ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
+          </div>
+        </div>
+
+        ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
+        ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
+      </section>
+    `
+  });
+};
+
+const selecionarAbaAdminHubPhase2 = async function(aba) {
+  if (!podeAcessarAbaAdmin(aba)) {
+    state.admin.message = 'Seu usuário não possui acesso a esta área.';
+    renderAdministracao();
+    return;
+  }
+
+  atualizarHashHub(aba, { replace: true });
+  resetarFluxoModalUsuarioAdmin(false);
+  state.admin.aba = aba;
+  state.admin.message = '';
+
+  if (aba === 'categorias' || aba === 'grupos') {
+    await carregarRegistrosAdmin(aba);
+    return;
+  }
+
+  if (aba === 'usuarios') {
+    await carregarUsuariosAdmin();
+    return;
+  }
+
+  if (aba === 'perfis') {
+    await carregarPerfisAdmin();
+    return;
+  }
+
+  renderAdministracao();
+};
+
+const selecionarAbaSenhasHubPhase2 = function(aba) {
+  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
+    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
+    renderCentralSenhas();
+    return;
+  }
+
+  atualizarHashHub(aba, { replace: true });
+  state.passwords.aba = aba;
+  state.passwords.modalAberto = false;
+  renderCentralSenhas();
+};
+
+const selecionarAbaArHubPhase2 = function(aba) {
+  if (!podeAcessarAbaAr(aba)) {
+    state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
+    renderPainelAr();
+    return;
+  }
+
+  const hash = aba === 'validacoes'
+    ? `validacoes/${state.ar.validacoes.aba || 'consultar'}`
+    : aba;
+
+  atualizarHashHub(hash, { replace: true });
+  state.ar.aba = aba;
+  renderPainelAr();
+
+  if (aba === 'validacoes' && !state.ar.validacoes.loading) {
+    carregarValidacoesAr();
+  }
+};
+
+const selecionarSubabaValidacoesArHubPhase2 = function(aba) {
+  if (aba === 'emitir' && !pode('painel_ar.validacoes', 'emitir_recibo')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para emitir recibos.';
+    renderPainelAr();
+    return;
+  }
+
+  if (aba === 'importacao' && !pode('painel_ar.validacoes', 'importar')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para importar repasses.';
+    renderPainelAr();
+    return;
+  }
+
+  atualizarHashHub(`validacoes/${aba}`, { replace: true });
+  state.ar.aba = 'validacoes';
+  state.ar.validacoes.aba = aba;
+  state.ar.validacoes.message = '';
+  renderPainelAr();
+
+  if (!state.ar.validacoes.loading && (aba === 'emitir' || aba === 'consultar')) {
+    carregarValidacoesAr();
+  }
+};
+
+const abrirAdministracaoHubPhase2 = async function(preservarMensagem = false) {
+  sincronizarContextoAdminPelaRota();
+  return abrirAdministracaoOriginal(preservarMensagem);
+};
+
+const abrirCentralSenhasHubPhase2 = async function() {
+  sincronizarContextoSenhasPelaRota();
+  return abrirCentralSenhasOriginal();
+};
+
+const abrirPainelArHubPhase2 = async function() {
+  sincronizarContextoArPelaRota();
+  state.ar.message = '';
+  state.ar.resultado = null;
+  state.ar.alertas = [];
+  await carregarPainelAr();
+};
+
+const abrirAdministracaoOriginal = abrirAdministracao;
+const abrirCentralSenhasOriginal = abrirCentralSenhas;
+const abrirPainelArOriginal = abrirPainelAr;
+
+renderDashboard = renderDashboardHubPhase1;
+renderModuloIndisponivel = renderModuloIndisponivelHubPhase1;
+renderAdministracao = renderAdministracaoHubPhase1;
+renderLinksUteis = renderLinksUteisHubPhase1;
+renderCentralSenhas = renderCentralSenhasHubPhase1;
+renderPainelAr = renderPainelArHubPhase1;
+renderizarRotaAtual = renderizarRotaAtualHubPhase2;
+navegarParaModulo = navegarParaModuloHubPhase2;
+selecionarAbaAdmin = selecionarAbaAdminHubPhase2;
+selecionarAbaSenhas = selecionarAbaSenhasHubPhase2;
+selecionarAbaAr = selecionarAbaArHubPhase2;
+selecionarSubabaValidacoesAr = selecionarSubabaValidacoesArHubPhase2;
+abrirAdministracao = abrirAdministracaoHubPhase2;
+abrirCentralSenhas = abrirCentralSenhasHubPhase2;
+abrirPainelAr = abrirPainelArHubPhase2;
+
 function escapeHtml(texto) {
   return String(texto || '')
     .replace(/&/g, '&amp;')
@@ -7888,6 +8653,8 @@ Object.assign(window, {
   alterarFiltroValidacoesAr,
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
+  alternarGrupoHub,
+  alternarSubgrupoHub,
   alternarFiltrosListaProdutosAr,
   alternarFavoritoLink,
   alternarStatusModuloAdmin,
