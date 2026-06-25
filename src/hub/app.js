@@ -1,4 +1,5 @@
 import './style.css';
+import { renderSidebarTeste } from './mocks/sidebarTeste.js';
 import { chamarApi } from './api.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
@@ -934,6 +935,18 @@ function navegarHome() {
 
 async function renderizarRotaAtual() {
   const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
+
+  if (idModulo === 'sidebar-teste') {
+    renderSidebarTeste({
+      state,
+      renderHeaderLogo,
+      renderAvisos,
+      renderAniversariantes,
+      renderFavoritos,
+      navegarParaModulo
+    });
+    return;
+  }
 
   if (!idModulo) {
     renderDashboard();
