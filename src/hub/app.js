@@ -455,6 +455,10 @@ function renderDashboard() {
         <p>Acesse as principais áreas operacionais do painel.</p>
       </div>
 
+      <button class="secondary-btn" type="button" onclick="navegarParaModulo('sidebar-teste')">
+        Abrir teste da sidebar
+      </button>
+
       <section class="module-grid">
         ${state.cards.map(card => `
           <article class="module-card" role="button" tabindex="0" onclick="abrirModulo('${escapeAttr(card.id)}')" onkeydown="acionarCardModulo(event, '${escapeAttr(card.id)}')">
