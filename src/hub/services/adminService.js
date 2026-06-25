@@ -15,6 +15,16 @@ function normalizarStatus(status) {
   return String(status || 'ativo').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo';
 }
 
+function normalizarSlugModulo(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 function getDadosItem(item) {
   return item?.dados && typeof item.dados === 'object' ? item.dados : {};
 }
@@ -25,9 +35,12 @@ function isModuloItem(item) {
 
 function normalizarModuloAdmin(item) {
   const dados = getDadosItem(item);
-  const slug = String(dados.slug || item.slug || item.id_modulo || item.modulo_id || item.id || '').trim();
+  const slugFonte = dados.slug || item.slug || item.id_modulo || item.modulo_id || item.titulo || item.nome || item.label || item.id || '';
+  const slug = normalizarSlugModulo(slugFonte);
   const ordem = Number(dados.ordem);
   const bloqueavel = dados.bloqueavel === false ? false : slug !== 'administracao';
+  const exibirHomeValor = dados.exibir_home;
+  const exibirHome = !(exibirHomeValor === false || String(exibirHomeValor).trim().toLowerCase() === 'false');
 
   return {
     id: item.id,
@@ -36,7 +49,8 @@ function normalizarModuloAdmin(item) {
     descricao: item.descricao || dados.descricao || '',
     status: normalizarStatus(item.status),
     ordem: Number.isFinite(ordem) ? ordem : 9999,
-    bloqueavel
+    bloqueavel,
+    exibir_home: exibirHome
   };
 }
 
@@ -337,17 +351,45 @@ export async function salvarUsuarioAdmin({ id, nome, email, perfil_id, status })
 
 export async function listarPerfisAdmin() {
   const supabase = exigirSupabaseConfigurado();
-  const { data, error } = await supabase
-    .from('perfis')
-    .select('*')
-    .order('nivel', { ascending: false })
-    .order('nome', { ascending: true });
+  const [perfis, permissoes] = await Promise.all([
+    supabase
+      .from('perfis')
+      .select('*')
+      .order('nivel', { ascending: false })
+      .order('nome', { ascending: true }),
+    supabase
+      .from('perfil_permissoes')
+      .select('perfil_id, recurso_chave, acao, permitido, updated_at')
+  ]);
 
-  if (error) {
-    throw new Error(error.message || 'Não foi possível carregar perfis.');
+  if (perfis.error) {
+    throw new Error(perfis.error.message || 'Não foi possível carregar perfis.');
   }
 
-  return { records: data || [] };
+  if (permissoes.error) {
+    throw new Error(permissoes.error.message || 'Não foi possível carregar o resumo de permissões dos perfis.');
+  }
+
+  const permissoesAtivasPorPerfil = (permissoes.data || []).reduce((acc, permissao) => {
+    if (!permissao.perfil_id || permissao.permitido === false) {
+      return acc;
+    }
+
+    const chaves = acc.get(permissao.perfil_id) || new Set();
+    chaves.add(`${permissao.recurso_chave}:${permissao.acao}`);
+    acc.set(permissao.perfil_id, chaves);
+    return acc;
+  }, new Map());
+
+  const records = (perfis.data || []).map(perfil => ({
+    ...perfil,
+    permissoes_ativas: permissoesAtivasPorPerfil.get(perfil.id)?.size || 0
+  }));
+
+  return {
+    records,
+    permissoes: permissoes.data || []
+  };
 }
 
 export async function salvarPerfilAdmin({ id, slug, nome, descricao, nivel, status }) {
@@ -392,6 +434,24 @@ export async function salvarPerfilAdmin({ id, slug, nome, descricao, nivel, stat
   });
 
   return { record: data };
+}
+
+export async function excluirPerfilAdmin({ id }) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!id) {
+    throw new Error('Informe o perfil.');
+  }
+
+  const { data, error } = await supabase.rpc('app_excluir_perfil_admin', {
+    p_perfil_id: id
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível excluir o perfil.');
+  }
+
+  return data || { deleted: true };
 }
 
 export async function listarPermissoesAdmin() {
@@ -466,6 +526,61 @@ export async function salvarPermissaoPerfilAdmin({ perfil_id, recurso_chave, aca
   });
 
   return { permission: data };
+}
+
+export async function salvarPermissoesPerfilAdminLote({ perfil_id, alteracoes }) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!perfil_id) {
+    throw new Error('Informe o perfil.');
+  }
+
+  if (!Array.isArray(alteracoes)) {
+    throw new Error('Informe a lista de alterações.');
+  }
+
+  const alteracoesValidas = alteracoes
+    .filter(item => item?.recurso_chave && item?.acao)
+    .map(item => ({
+      perfil_id,
+      recurso_chave: String(item.recurso_chave),
+      acao: String(item.acao),
+      permitido: Boolean(item.permitido),
+      updated_at: new Date().toISOString()
+    }));
+
+  if (!alteracoesValidas.length) {
+    return { ok: true, total_alteracoes: 0 };
+  }
+
+  const { data, error } = await supabase
+    .from('perfil_permissoes')
+    .upsert(alteracoesValidas, { onConflict: 'perfil_id,recurso_chave,acao' })
+    .select('*');
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar as permissões do perfil em lote.');
+  }
+
+  await supabase.rpc('app_registrar_auditoria', {
+    p_acao: 'perfil_permissao.alterar_lote',
+    p_recurso: 'admin.permissoes',
+    p_alvo_usuario_id: null,
+    p_detalhes: {
+      perfil_id,
+      total_alteracoes: alteracoesValidas.length,
+      alteracoes: alteracoesValidas.map(item => ({
+        recurso_chave: item.recurso_chave,
+        acao: item.acao,
+        permitido: item.permitido
+      }))
+    }
+  });
+
+  return {
+    permissions: data || [],
+    total_alteracoes: alteracoesValidas.length
+  };
 }
 
 export async function salvarPermissaoUsuarioAdmin({ usuario_id, recurso_chave, acao, efeito }) {
@@ -579,6 +694,80 @@ export async function salvarRegistroAdmin({ entidade, id, nome, descricao, statu
   }
 
   return { record: data };
+}
+
+
+export async function salvarVisibilidadeModulosHomeAdmin({ modulos = [] }) {
+  const supabase = exigirSupabaseConfigurado();
+  const alteracoes = Array.isArray(modulos)
+    ? modulos
+      .filter(item => item?.id)
+      .map(item => ({
+        id: item.id,
+        exibir_home: item.exibir_home !== false
+      }))
+    : [];
+
+  if (!alteracoes.length) {
+    throw new Error('Nenhum módulo informado para atualização.');
+  }
+
+  const ids = [...new Set(alteracoes.map(item => item.id))];
+  const { data: registrosAtuais, error: erroConsulta } = await supabase
+    .from('itens')
+    .select('*')
+    .in('id', ids);
+
+  if (erroConsulta) {
+    throw new Error(erroConsulta.message || 'Não foi possível localizar os módulos.');
+  }
+
+  const registrosPorId = new Map((registrosAtuais || []).map(item => [item.id, item]));
+
+  for (const alteracao of alteracoes) {
+    const atual = registrosPorId.get(alteracao.id);
+
+    if (!atual) {
+      throw new Error('Um dos módulos informados não foi encontrado.');
+    }
+
+    if (!isModuloItem(atual)) {
+      throw new Error('Um dos registros informados não é um módulo.');
+    }
+
+    const dadosAtuais = getDadosItem(atual);
+    const dadosAtualizados = {
+      ...dadosAtuais,
+      exibir_home: Boolean(alteracao.exibir_home)
+    };
+
+    const { error } = await supabase
+      .from('itens')
+      .update({ dados: dadosAtualizados })
+      .eq('id', alteracao.id);
+
+    if (error) {
+      throw new Error(error.message || 'Não foi possível atualizar a visibilidade dos módulos.');
+    }
+
+    const { data: confirmado, error: erroConfirmacao } = await supabase
+      .from('itens')
+      .select('*')
+      .eq('id', alteracao.id)
+      .single();
+
+    if (erroConfirmacao) {
+      throw new Error(erroConfirmacao.message || 'Não foi possível confirmar a visibilidade do módulo.');
+    }
+
+    const moduloAtualizado = normalizarModuloAdmin(confirmado);
+
+    if (moduloAtualizado.exibir_home !== Boolean(alteracao.exibir_home)) {
+      throw new Error('O Supabase não confirmou a alteração da visibilidade do módulo.');
+    }
+  }
+
+  return listarModulosAdmin();
 }
 
 export async function salvarStatusModuloAdmin({ id, status }) {

@@ -129,15 +129,38 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
   };
 }
 
+function obterDadosItem(item) {
+  return item?.dados && typeof item.dados === 'object' ? item.dados : {};
+}
+
+function normalizarSlugModulo(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function deveExibirModuloNaHome(item) {
+  const dados = obterDadosItem(item);
+  const visibilidade = dados.exibir_home;
+  const ocultoNaHome = visibilidade === false || String(visibilidade).trim().toLowerCase() === 'false';
+
+  return normalizarStatus(item.status || 'ativo') !== 'inativo' && !ocultoNaHome;
+}
+
 function normalizarCards(registros, usuario, permissoes) {
-  const ativos = registros.filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo');
+  const ativos = registros.filter(deveExibirModuloNaHome);
   const cards = ativos
     .map(item => {
-      const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
+      const dados = obterDadosItem(item);
       const ordem = Number(dados.ordem);
+      const slugFonte = dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.titulo || item.nome || item.label || item.id;
 
       return {
-        id: dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.id,
+        id: normalizarSlugModulo(slugFonte),
         titulo: item.titulo || item.nome || item.label,
         ordem: Number.isFinite(ordem) ? ordem : 9999
       };
@@ -151,7 +174,7 @@ function normalizarCards(registros, usuario, permissoes) {
     return String(a.titulo || '').localeCompare(String(b.titulo || ''), 'pt-BR');
   });
 
-  const lista = cards.length ? cards : DEFAULT_CARDS;
+  const lista = registros.length ? cards : DEFAULT_CARDS;
 
   if (usuario?.perfil === 'gestor') {
     return lista
@@ -224,7 +247,7 @@ function normalizarFavoritos(registros, limite) {
 }
 
 function obterTipoItem(item) {
-  const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
+  const dados = obterDadosItem(item);
   return normalizarStatus(item.tipo || item.categoria_tipo || dados.tipo);
 }
 

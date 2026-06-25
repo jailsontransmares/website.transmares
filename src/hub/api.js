@@ -15,17 +15,20 @@ import {
   listarPermissoesAdmin,
   listarPermissoesUsuarioAdmin,
   listarRegistrosAdmin,
+  excluirPerfilAdmin,
   listarUsuariosAdmin,
   restaurarCoresPadrao,
   salvarConfig,
   salvarPerfilAdmin,
   salvarPermissaoPerfilAdmin,
+  salvarPermissoesPerfilAdminLote,
   salvarPermissaoUsuarioAdmin,
   salvarPermissoesUsuarioAdminLote,
   salvarRegistroAdmin,
   salvarUsuarioAdmin,
   salvarStatusModuloAdmin,
-  salvarTemaUsuario
+  salvarTemaUsuario,
+  salvarVisibilidadeModulosHomeAdmin
 } from './services/adminService.js';
 import { carregarDadosIniciaisSupabase } from './services/hubService.js';
 import {
@@ -115,11 +118,14 @@ export async function chamarApi(action, payload = {}) {
       listAdminRecords: () => listarRegistrosAdmin(payload),
       saveAdminUser: () => salvarUsuarioAdmin(payload),
       saveAdminProfile: () => salvarPerfilAdmin(payload),
+      deleteAdminProfile: () => excluirPerfilAdmin(payload),
       saveAdminProfilePermission: () => salvarPermissaoPerfilAdmin(payload),
+      saveAdminProfilePermissionsBatch: () => salvarPermissoesPerfilAdminLote(payload),
       saveAdminUserPermission: () => salvarPermissaoUsuarioAdmin(payload),
       saveAdminUserPermissionsBatch: () => salvarPermissoesUsuarioAdminLote(payload),
       saveAdminRecord: () => salvarRegistroAdmin(payload),
       updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
+      saveAdminModuleHomeVisibilityBatch: () => salvarVisibilidadeModulosHomeAdmin(payload),
       saveConfig: () => salvarConfig(payload),
       restoreDefaultColors: () => restaurarCoresPadrao(),
       saveUserTheme: () => salvarTemaUsuario(payload),

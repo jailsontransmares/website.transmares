@@ -7,6 +7,16 @@ const MODULE_RESOURCE_MAP = {
   administracao: 'admin'
 };
 
+function normalizarIdentificadorModulo(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 export function montarMapaPermissoes(permissoes = []) {
   return (permissoes || []).reduce((acc, item) => {
     const recurso = String(item.recurso_chave || item.recurso || '').trim();
@@ -21,7 +31,8 @@ export function montarMapaPermissoes(permissoes = []) {
 }
 
 export function obterRecursoModulo(idModulo) {
-  return MODULE_RESOURCE_MAP[idModulo] || String(idModulo || '').replace(/-/g, '_');
+  const chaveNormalizada = normalizarIdentificadorModulo(idModulo);
+  return MODULE_RESOURCE_MAP[idModulo] || MODULE_RESOURCE_MAP[chaveNormalizada] || chaveNormalizada;
 }
 
 export function hasPermission(permissoes, recurso, acao = 'view') {

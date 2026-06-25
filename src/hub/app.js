@@ -17,6 +17,16 @@ const state = {
     loading: false,
     message: ''
   },
+  modulosHome: {
+    aberto: false,
+    filtro: 'todos',
+    modules: [],
+    original: {},
+    draft: {},
+    loading: false,
+    saving: false,
+    message: ''
+  },
   admin: {
     aba: 'identidade',
     config: [],
@@ -36,6 +46,8 @@ const state = {
       moduleUpdating: '',
       originalEffects: {},
       draftEffects: {},
+      originalProfilePermissions: {},
+      draftProfilePermissions: {},
       dirty: false,
       submitMode: ''
     },
@@ -44,17 +56,30 @@ const state = {
       senhaCopiada: false
     },
     usuarioModalEtapa: 'dados',
+    perfilModalEtapa: 'dados',
+    perfilModalDraft: {
+      slug: '',
+      nome: '',
+      descricao: '',
+      status: 'ativo'
+    },
     filtros: {
       categorias: 'todos',
       grupos: 'todos',
       modulos: 'todos',
-      usuarios: 'todos'
+      usuarios: 'todos',
+      perfis: 'todos'
     },
     buscaUsuariosDigitada: '',
     buscaUsuariosAplicada: '',
     buscaUsuariosTimer: null,
     paginaUsuarios: 1,
     limiteUsuarios: 15,
+    buscaPerfisDigitada: '',
+    buscaPerfisAplicada: '',
+    buscaPerfisTimer: null,
+    paginaPerfis: 1,
+    limitePerfis: 15,
     editando: {
       categorias: '',
       grupos: '',
@@ -425,7 +450,7 @@ function renderDashboard() {
       </section>
 
       <div class="section-title">
-        <h2>Módulos</h2>
+        <h2>Módulos ${renderBotaoConfigurarModulosHome()}</h2>
         <p>Acesse as principais áreas operacionais do painel.</p>
       </div>
 
@@ -439,8 +464,409 @@ function renderDashboard() {
           </article>
         `).join('')}
       </section>
+
+      ${renderModalConfigurarModulosHome()}
     </main>
   `;
+}
+
+
+function podeConfigurarModulosHome() {
+  return pode('admin.modulos', 'update') || pode('admin', 'update') || pode('admin', 'view');
+}
+
+function renderBotaoConfigurarModulosHome() {
+  if (!podeConfigurarModulosHome()) {
+    return '';
+  }
+
+  return `
+    <button
+      class="icon-btn module-config-edit-btn"
+      type="button"
+      onclick="abrirModalConfigurarModulosHome()"
+      title="Configurar módulos da Home"
+      aria-label="Configurar módulos da Home"
+    >✏️</button>
+  `;
+}
+
+function renderModalConfigurarModulosHome() {
+  const modal = state.modulosHome;
+
+  if (!modal.aberto) {
+    return '';
+  }
+
+  const alterado = verificarAlteracoesModulosHome();
+
+  return `
+    <div class="modal-backdrop admin-user-modal-backdrop" role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
+      <section class="small-modal admin-user-modal is-permissions-stage home-modules-modal">
+        <div class="small-modal-header">
+          <div>
+            <h3>Configurar módulos</h3>
+          </div>
+          <button class="icon-btn" type="button" onclick="fecharModalConfigurarModulosHome()" title="Fechar" aria-label="Fechar" ${modal.saving ? 'disabled' : ''}>×</button>
+        </div>
+
+        <div class="permission-modal-layout">
+          <div class="permission-modal-content">
+            ${modal.message ? `<p class="admin-message">${escapeHtml(modal.message)}</p>` : ''}
+            ${modal.loading ? '<p class="quick-link-empty">Carregando módulos...</p>' : renderConteudoModalConfigurarModulosHome()}
+          </div>
+        </div>
+
+        <div class="small-modal-actions admin-user-permissions-actions">
+          <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
+          <div class="admin-user-permissions-actions-right">
+            <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${modal.saving || !alterado ? 'disabled' : ''}>
+              ${modal.saving ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderConteudoModalConfigurarModulosHome() {
+  return `
+    <div class="home-modules-modal-table-wrap">
+      ${renderListaModulosHomeModal()}
+    </div>
+  `;
+}
+
+function renderFiltroModulosHome(filtro, label, total) {
+  const ativo = state.modulosHome.filtro === filtro;
+  const classes = [
+    'filter-btn',
+    filtro === 'visiveis' ? 'filter-status-ativo' : '',
+    filtro === 'ocultos' ? 'filter-status-bloqueados-inativos' : '',
+    ativo ? 'active' : ''
+  ].filter(Boolean).join(' ');
+
+  return `
+    <button class="${classes}" type="button" onclick="selecionarFiltroModulosHome('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
+      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
+    </button>
+  `;
+}
+
+function obterResumoVisibilidadeModulosHome() {
+  return (state.modulosHome.modules || []).reduce((acc, modulo) => {
+    const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
+    acc.total += 1;
+
+    if (visivel) {
+      acc.visiveis += 1;
+    } else {
+      acc.ocultos += 1;
+    }
+
+    return acc;
+  }, {
+    total: 0,
+    visiveis: 0,
+    ocultos: 0
+  });
+}
+
+function obterModuloHomeDraft(id) {
+  const draft = state.modulosHome.draft || {};
+
+  if (draft[id] && typeof draft[id] === 'object') {
+    return draft[id];
+  }
+
+  return {
+    exibir_home: true,
+    status: 'ativo'
+  };
+}
+
+function obterVisibilidadeModuloHomeDraft(id) {
+  return obterModuloHomeDraft(id).exibir_home !== false;
+}
+
+function obterStatusModuloHomeDraft(id) {
+  return obterModuloHomeDraft(id).status === 'inativo' ? 'inativo' : 'ativo';
+}
+
+function obterModulosHomeFiltrados() {
+  const filtro = state.modulosHome.filtro || 'todos';
+  const modules = state.modulosHome.modules || [];
+
+  if (filtro === 'visiveis') {
+    return modules.filter(modulo => obterVisibilidadeModuloHomeDraft(modulo.id));
+  }
+
+  if (filtro === 'ocultos') {
+    return modules.filter(modulo => !obterVisibilidadeModuloHomeDraft(modulo.id));
+  }
+
+  return modules;
+}
+
+function renderListaModulosHomeModal() {
+  const modules = state.modulosHome.modules || [];
+
+  if (!modules.length) {
+    return '<p class="quick-link-empty">Nenhum módulo encontrado.</p>';
+  }
+
+  return `
+    <div class="crud-list admin-modules-list home-modules-modal-list">
+      <div class="home-modules-modal-header home-modules-modal-grid">
+        <span>Módulo</span>
+        <span>Status</span>
+        <span>Exibição</span>
+      </div>
+      ${modules.map(modulo => renderLinhaModuloHomeModal(modulo)).join('')}
+    </div>
+  `;
+}
+
+function renderLinhaModuloHomeModal(modulo) {
+  const id = escapeAttr(modulo.id || '');
+  const status = obterStatusModuloHomeDraft(modulo.id);
+  const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
+  const toggleDisabled = status === 'inativo' || state.modulosHome.saving;
+  const botaoStatusDesabilitado = state.modulosHome.saving || (!modulo.bloqueavel && status === 'ativo');
+  const proximoStatus = status === 'ativo' ? 'inativo' : 'ativo';
+  const acaoStatus = status === 'ativo' ? 'Ativo' : 'Inativo';
+  const acaoVisibilidade = visivel ? 'Visível' : 'Oculto';
+  const tituloStatus = !modulo.bloqueavel && status === 'ativo'
+    ? 'Este módulo é protegido e não pode ser inativado.'
+    : 'Alterar status do módulo.';
+  const tituloVisibilidade = toggleDisabled
+    ? 'Módulos inativos não aparecem na Home.'
+    : 'Alterar visibilidade na Home.';
+
+  return `
+    <article class="home-modules-modal-row home-modules-modal-grid">
+      <div class="admin-user-identity">
+        <strong>${escapeHtml(modulo.nome || modulo.slug || 'Módulo')}</strong>
+      </div>
+      <div class="crud-actions home-modules-modal-action">
+        <button
+          class="${status === 'ativo' ? 'secondary-btn' : 'save-btn'}"
+          type="button"
+          onclick="alterarStatusModuloHome('${id}', '${proximoStatus}')"
+          title="${escapeAttr(tituloStatus)}"
+          ${botaoStatusDesabilitado ? 'disabled' : ''}
+        >
+          ${escapeHtml(!modulo.bloqueavel && status === 'ativo' ? 'Protegido' : acaoStatus)}
+        </button>
+      </div>
+      <div class="crud-actions home-modules-modal-action">
+        <button
+          class="${visivel ? 'secondary-btn' : 'save-btn'}"
+          type="button"
+          onclick="alterarVisibilidadeModuloHome('${id}', ${visivel ? 'false' : 'true'})"
+          title="${escapeAttr(tituloVisibilidade)}"
+          ${toggleDisabled ? 'disabled' : ''}
+        >
+          ${escapeHtml(acaoVisibilidade)}
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+async function abrirModalConfigurarModulosHome() {
+  if (!podeConfigurarModulosHome()) {
+    alert('Seu usuário não possui permissão para configurar módulos.');
+    return;
+  }
+
+  state.modulosHome = {
+    aberto: true,
+    filtro: 'todos',
+    modules: [],
+    original: {},
+    draft: {},
+    loading: true,
+    saving: false,
+    message: ''
+  };
+  renderDashboard();
+
+  try {
+    const response = await chamarApi('listAdminModules');
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar módulos.'));
+    }
+
+    const modules = response.data.modules || [];
+    const original = modules.reduce((acc, modulo) => {
+      acc[modulo.id] = {
+        exibir_home: modulo.exibir_home !== false,
+        status: modulo.status === 'inativo' ? 'inativo' : 'ativo'
+      };
+      return acc;
+    }, {});
+
+    state.modulosHome.modules = modules;
+    state.modulosHome.original = original;
+    state.modulosHome.draft = { ...original };
+    state.modulosHome.loading = false;
+    renderDashboard();
+  } catch (erro) {
+    state.modulosHome.loading = false;
+    state.modulosHome.message = erro.message || 'Erro ao carregar módulos.';
+    renderDashboard();
+  }
+}
+
+function fecharModalConfigurarModulosHome() {
+  state.modulosHome = {
+    aberto: false,
+    filtro: 'todos',
+    modules: [],
+    original: {},
+    draft: {},
+    loading: false,
+    saving: false,
+    message: ''
+  };
+  renderDashboard();
+}
+
+function selecionarFiltroModulosHome(filtro) {
+  state.modulosHome.filtro = filtro;
+  renderDashboard();
+}
+
+function alterarVisibilidadeModuloHome(id, exibirHome) {
+  const atual = obterModuloHomeDraft(id);
+
+  state.modulosHome.draft = {
+    ...(state.modulosHome.draft || {}),
+    [id]: {
+      ...atual,
+      exibir_home: Boolean(exibirHome)
+    }
+  };
+  renderDashboard();
+}
+
+function alterarStatusModuloHome(id, status) {
+  const atual = obterModuloHomeDraft(id);
+  const proximoStatus = status === 'inativo' ? 'inativo' : 'ativo';
+
+  state.modulosHome.draft = {
+    ...(state.modulosHome.draft || {}),
+    [id]: {
+      ...atual,
+      status: proximoStatus,
+      exibir_home: obterExibicaoModuloAposStatus(atual, proximoStatus)
+    }
+  };
+  renderDashboard();
+}
+
+function obterExibicaoModuloAposStatus(moduloDraft, status) {
+  if (status === 'inativo') {
+    return false;
+  }
+
+  return moduloDraft.exibir_home !== false;
+}
+
+function verificarAlteracoesModulosHome() {
+  const original = state.modulosHome.original || {};
+  const draft = state.modulosHome.draft || {};
+  const chaves = new Set([
+    ...Object.keys(original),
+    ...Object.keys(draft)
+  ]);
+
+  return Array.from(chaves).some(chave => {
+    const originalModulo = original[chave] || {};
+    const draftModulo = draft[chave] || {};
+
+    return Boolean(originalModulo.exibir_home) !== Boolean(draftModulo.exibir_home)
+      || String(originalModulo.status || 'ativo') !== String(draftModulo.status || 'ativo');
+  });
+}
+
+function obterAlteracoesModulosHome() {
+  const original = state.modulosHome.original || {};
+  const draft = state.modulosHome.draft || {};
+
+  return Object.keys(draft)
+    .filter(id => {
+      const originalModulo = original[id] || {};
+      const draftModulo = draft[id] || {};
+
+      return Boolean(originalModulo.exibir_home) !== Boolean(draftModulo.exibir_home)
+        || String(originalModulo.status || 'ativo') !== String(draftModulo.status || 'ativo');
+    })
+    .map(id => ({
+      id,
+      exibir_home: Boolean(draft[id]?.exibir_home),
+      status: draft[id]?.status === 'inativo' ? 'inativo' : 'ativo'
+    }));
+}
+
+async function salvarConfigModulosHome() {
+  if (!podeConfigurarModulosHome()) {
+    state.modulosHome.message = 'Seu usuário não possui permissão para configurar módulos.';
+    renderDashboard();
+    return;
+  }
+
+  const alteracoes = obterAlteracoesModulosHome();
+
+  if (!alteracoes.length) {
+    return;
+  }
+
+  try {
+    state.modulosHome.saving = true;
+    state.modulosHome.message = '';
+    renderDashboard();
+
+    const alteracoesStatus = alteracoes.filter(item => {
+      const original = state.modulosHome.original?.[item.id] || {};
+      return String(original.status || 'ativo') !== item.status;
+    });
+    const alteracoesVisibilidade = alteracoes.filter(item => {
+      const original = state.modulosHome.original?.[item.id] || {};
+      return Boolean(original.exibir_home) !== Boolean(item.exibir_home);
+    });
+
+    for (const alteracao of alteracoesStatus) {
+      const responseStatus = await chamarApi('updateAdminModuleStatus', {
+        id: alteracao.id,
+        status: alteracao.status
+      });
+
+      if (!responseStatus.ok) {
+        throw new Error(obterMensagemApi(responseStatus, 'Não foi possível salvar o status dos módulos.'));
+      }
+    }
+
+    if (alteracoesVisibilidade.length) {
+      const response = await chamarApi('saveAdminModuleHomeVisibilityBatch', {
+        modulos: alteracoesVisibilidade
+      });
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, 'Não foi possível salvar a visibilidade dos módulos.'));
+      }
+    }
+
+    await carregarDadosIniciaisSilencioso();
+    fecharModalConfigurarModulosHome();
+  } catch (erro) {
+    state.modulosHome.saving = false;
+    state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
+    renderDashboard();
+  }
 }
 
 function renderHeaderLogo() {
@@ -522,13 +948,23 @@ function navegarParaModulo(idModulo) {
 }
 
 function normalizarIdModuloRota(idModulo = '') {
-  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+  const slug = normalizarSlugModulo(idModulo);
   return slug === 'admin' ? 'administracao' : slug;
 }
 
 function obterRotaModulo(idModulo = '') {
-  const slug = String(idModulo || '').trim().replace(/^\/+|\/+$/g, '');
+  const slug = normalizarSlugModulo(idModulo);
   return slug === 'administracao' ? 'admin' : slug;
+}
+
+function normalizarSlugModulo(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function moduloEstaAtivo(idModulo) {
@@ -736,7 +1172,6 @@ function renderAdministracao() {
 
           <span class="admin-nav-label">Estrutura futura</span>
           ${renderAdminTab('home-exibicao', 'Home e Exibição')}
-          ${renderAdminTab('modulos', 'Configurações por Módulo')}
           ${pode('admin.usuarios', 'view') ? renderAdminTab('usuarios', 'Usuários') : ''}
           ${pode('admin.perfis', 'view') ? renderAdminTab('perfis', 'Perfis de Acesso') : ''}
                  </div>
@@ -770,10 +1205,6 @@ function renderAdminPanel() {
 
   if (state.admin.aba === 'home-exibicao') {
     return renderHomeExibicaoAdmin();
-  }
-
-  if (state.admin.aba === 'modulos') {
-    return renderModulosAdminReal();
   }
 
   if (state.admin.aba === 'usuarios') {
@@ -841,11 +1272,6 @@ async function selecionarAbaAdmin(aba) {
 
   if (aba === 'categorias' || aba === 'grupos') {
     await carregarRegistrosAdmin(aba);
-    return;
-  }
-
-  if (aba === 'modulos') {
-    await carregarModulosAdmin();
     return;
   }
 
@@ -1190,43 +1616,25 @@ function renderFiltroUsuariosAdmin(filtro, label, total) {
 }
 
 function renderPermissoesPerfilAdmin() {
-  const perfilId = state.admin.perfilPermissoesId;
+  return '';
+}
 
-  if (!perfilId) {
-    return '';
-  }
-
-  const perfil = (state.admin.perfis || []).find(item => item.id === perfilId) || {};
-  const recursos = state.admin.recursos || [];
-  const permissoes = state.admin.perfilPermissoes || [];
-  const modal = state.admin.permissionModal || {};
-
-  const permissoesPorChave = permissoes.reduce((acc, item) => {
+function mapearPermissoesPerfilPorChaveSimples(permissoes, perfilId) {
+  return (permissoes || []).reduce((acc, item) => {
     if (item.perfil_id === perfilId && item.permitido !== false) {
       acc[`${item.recurso_chave}:${item.acao}`] = true;
     }
     return acc;
   }, {});
+}
 
-  const modulos = construirEstruturaPermissoesUsuario(recursos);
+function verificarAlteracoesPermissoesPerfil(originalPermissions = {}, draftPermissions = {}) {
+  const chaves = new Set([
+    ...Object.keys(originalPermissions || {}),
+    ...Object.keys(draftPermissions || {})
+  ]);
 
-  return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Permissões do perfil">
-      <section class="small-modal link-modal permission-user-modal">
-        <div class="small-modal-header">
-          <h3>Permissões</h3>
-          <button class="icon-btn" type="button" onclick="fecharPermissoesPerfilAdmin()" title="Fechar" aria-label="Fechar">×</button>
-        </div>
-        <div class="permission-modal-layout">
-          <div class="permission-modal-content">
-            <div class="permission-module-list">
-              ${modulos.map(modulo => renderModuloPermissoesPerfilAdmin(perfilId, perfil, modulo, permissoesPorChave, modal)).join('')}
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-  `;
+  return Array.from(chaves).some(chave => Boolean(originalPermissions?.[chave]) !== Boolean(draftPermissions?.[chave]));
 }
 
 function renderListaUsuariosAdmin(records) {
@@ -1379,8 +1787,17 @@ function renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual) {
 function resetarFluxoModalUsuarioAdmin(render = true) {
   state.admin.modalNovo = '';
   state.admin.editando.usuarios = '';
+  state.admin.editando.perfis = '';
   state.admin.usuarioModalEtapa = 'dados';
+  state.admin.perfilModalEtapa = 'dados';
+  state.admin.perfilModalDraft = {
+    slug: '',
+    nome: '',
+    descricao: '',
+    status: 'ativo'
+  };
   state.admin.usuarioPermissoesId = '';
+  state.admin.perfilPermissoesId = '';
   state.admin.usuarioPermissoes = [];
   state.admin.permissionModal = {
     expandedModules: state.admin.permissionModal?.expandedModules || {},
@@ -1388,6 +1805,8 @@ function resetarFluxoModalUsuarioAdmin(render = true) {
     moduleUpdating: '',
     originalEffects: {},
     draftEffects: {},
+    originalProfilePermissions: {},
+    draftProfilePermissions: {},
     dirty: false,
     submitMode: ''
   };
@@ -1762,10 +2181,6 @@ function renderModalUsuarioAdmin() {
             <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
             ${editando ? `
               <section class="admin-user-access-panel">
-                <div class="admin-user-access-header">
-                  <strong>Acesso</strong>
-                  <p>Centralize aqui as ações operacionais deste usuário.</p>
-                </div>
                 <div class="admin-user-access-actions">
                   <button class="secondary-btn" type="button" onclick="abrirPermissoesPeloModalUsuario('${escapeAttr(usuarioId)}')">Editar permissões</button>
                   <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()">Gerar nova senha</button>
@@ -1884,23 +2299,149 @@ function renderTabelaModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, pe
 
 function renderPerfisAdmin() {
   const records = state.admin.perfis || [];
+  const recordsFiltrados = obterPerfisFiltradosAdmin(records);
+  const limite = Math.max(1, Number(state.admin.limitePerfis) || 15);
+  const totalPaginas = Math.max(1, Math.ceil(recordsFiltrados.length / limite));
+  const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaPerfis) || 1), totalPaginas);
+  const inicio = (paginaAtual - 1) * limite;
+  const recordsPagina = recordsFiltrados.slice(inicio, inicio + limite);
   const resumo = obterResumoRegistros(records);
+
+  state.admin.paginaPerfis = paginaAtual;
 
   return `
     <section class="admin-panel">
       <div class="admin-panel-header">
-        <div>
+        <div class="admin-users-header-row admin-profiles-header-row">
           <h2>Perfis de Acesso</h2>
-          <p>${resumo.total} perfis · ${resumo.ativos} ativos · ${resumo.inativos} inativos</p>
+          <div class="action-toolbar admin-users-toolbar admin-profiles-toolbar">
+            ${pode('admin.perfis', 'create') ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalNovoRegistro(\'perfis\')">+ Adicionar</button>' : ''}
+            <label class="action-toolbar-field admin-users-search admin-profiles-search" for="admin_perfil_busca" aria-label="Filtrar perfis">
+              <input
+                id="admin_perfil_busca"
+                class="config-input action-toolbar-input admin-users-search-input"
+                type="search"
+                value="${escapeAttr(state.admin.buscaPerfisDigitada || '')}"
+                placeholder="Filtrar perfis"
+                oninput="alterarBuscaPerfisAdmin(this.value)"
+              >
+            </label>
+          </div>
         </div>
-        ${pode('admin.perfis', 'create') ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro(\'perfis\')">+ Adicionar</button>' : ''}
+
+        <div class="crud-filters admin-user-filters admin-profile-filters" role="group" aria-label="Filtro de status dos perfis">
+          ${renderFiltroPerfisAdmin('todos', 'Todos', resumo.total)}
+          ${renderFiltroPerfisAdmin('ativo', 'Ativos', resumo.ativos || 0)}
+          ${renderFiltroPerfisAdmin('inativo', 'Inativos', resumo.inativos || 0)}
+        </div>
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando perfis...</p>' : renderListaPerfisAdmin(records)}
+      ${state.admin.loading ? '<p class="quick-link-empty">Carregando perfis...</p>' : renderListaPerfisAdmin(recordsPagina)}
+      ${state.admin.loading ? '' : renderPaginacaoPerfisAdmin(totalPaginas, paginaAtual)}
       ${renderModalPerfilAdmin()}
       ${renderPermissoesPerfilAdmin()}
     </section>
+  `;
+}
+
+function renderFiltroPerfisAdmin(filtro, label, total) {
+  const ativo = state.admin.filtros.perfis === filtro;
+  const classes = [
+    'filter-btn',
+    filtro === 'ativo' ? 'filter-status-ativo' : '',
+    filtro === 'inativo' ? 'filter-status-bloqueados-inativos' : '',
+    ativo ? 'active' : ''
+  ].filter(Boolean).join(' ');
+
+  return `
+    <button class="${classes}" type="button" onclick="selecionarFiltroPerfisAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
+      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
+    </button>
+  `;
+}
+
+function obterPerfisFiltradosAdmin(records) {
+  const filtro = state.admin.filtros.perfis || 'todos';
+  const busca = normalizarBuscaAr(state.admin.buscaPerfisAplicada || '');
+  const termos = busca.split(' ').filter(Boolean);
+  let filtrados = records;
+
+  if (filtro === 'ativo') {
+    filtrados = filtrados.filter(perfil => perfil.status === 'ativo');
+  }
+
+  if (filtro === 'inativo') {
+    filtrados = filtrados.filter(perfil => perfil.status === 'inativo');
+  }
+
+  if (!termos.length) {
+    return filtrados;
+  }
+
+  return filtrados.filter(perfil => {
+    const baseBusca = normalizarBuscaAr([
+      perfil.nome,
+      perfil.slug,
+      perfil.descricao
+    ].filter(Boolean).join(' '));
+
+    return termos.every(termo => baseBusca.includes(termo));
+  });
+}
+
+function selecionarFiltroPerfisAdmin(filtro) {
+  state.admin.filtros.perfis = filtro;
+  state.admin.paginaPerfis = 1;
+  renderAdministracao();
+}
+
+function alterarBuscaPerfisAdmin(valor) {
+  state.admin.buscaPerfisDigitada = valor;
+  window.clearTimeout(state.admin.buscaPerfisTimer);
+  state.admin.buscaPerfisTimer = window.setTimeout(() => {
+    if ((state.admin.buscaPerfisAplicada || '') === (state.admin.buscaPerfisDigitada || '')) {
+      return;
+    }
+
+    state.admin.buscaPerfisAplicada = state.admin.buscaPerfisDigitada;
+    state.admin.paginaPerfis = 1;
+    renderAdministracao();
+  }, 320);
+}
+
+function selecionarPaginaPerfisAdmin(pagina) {
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(obterPerfisFiltradosAdmin(state.admin.perfis || []).length / (Math.max(1, Number(state.admin.limitePerfis) || 15)))
+  );
+
+  state.admin.paginaPerfis = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
+  renderAdministracao();
+}
+
+function renderPaginacaoPerfisAdmin(totalPaginas, paginaAtual) {
+  if (totalPaginas <= 1) {
+    return '';
+  }
+
+  return `
+    <nav class="admin-users-pagination admin-profiles-pagination" aria-label="Paginação de perfis">
+      ${Array.from({ length: totalPaginas }, (_, index) => {
+        const pagina = index + 1;
+        const classes = ['admin-users-page-btn', pagina === paginaAtual ? 'active' : ''].filter(Boolean).join(' ');
+        return `
+          <button
+            class="${classes}"
+            type="button"
+            onclick="selecionarPaginaPerfisAdmin(${pagina})"
+            aria-current="${pagina === paginaAtual ? 'page' : 'false'}"
+          >
+            ${pagina}
+          </button>
+        `;
+      }).join('')}
+    </nav>
   `;
 }
 
@@ -1912,10 +2453,10 @@ function renderListaPerfisAdmin(records) {
   return `
     <div class="crud-list admin-profiles-list">
       <div class="crud-header">
+        <span>Ações</span>
         <span>Perfil</span>
-        <span>Descrição</span>
-        <span>Nível</span>
         <span>Status</span>
+        <span>Permissões-base</span>
       </div>
       ${records.map(perfil => renderPerfilAdmin(perfil)).join('')}
     </div>
@@ -1924,53 +2465,168 @@ function renderListaPerfisAdmin(records) {
 
 function renderPerfilAdmin(perfil) {
   const id = escapeAttr(perfil.id || '');
-  const editando = state.admin.editando.perfis === perfil.id;
-  const disabled = editando ? '' : 'disabled';
   const podeEditar = pode('admin.perfis', 'update');
+  const status = perfil.status || 'inativo';
+  const rotuloStatus = status === 'ativo' ? 'Ativo' : 'Inativo';
+  const resumoPermissoes = obterResumoPermissoesPerfilAdmin(perfil);
 
   return `
-  <article class="crud-row ${editando ? 'editing' : ''}">
-    <input id="perfil_${id}_nome" class="config-input" type="text" value="${escapeAttr(perfil.nome || perfil.slug || '')}" ${disabled}>
-    <input id="perfil_${id}_descricao" class="config-input" type="text" value="${escapeAttr(perfil.descricao || '')}" ${disabled}>
-    <input id="perfil_${id}_nivel" class="config-input" type="number" value="${escapeAttr(String(perfil.nivel ?? 0))}" ${disabled}>
-    <div class="crud-actions">
-      <select id="perfil_${id}_status" class="config-input status-${escapeAttr(perfil.status || 'inativo')}" ${disabled}>
-        <option value="ativo" ${perfil.status === 'ativo' ? 'selected' : ''}>Ativo</option>
-        <option value="inativo" ${perfil.status === 'inativo' ? 'selected' : ''}>Inativo</option>
-      </select>
-      ${editando
-        ? `<button class="save-btn" type="button" onclick="salvarPerfilAdmin('${id}')">Salvar</button>`
-        : `<button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>✎</button>`
-      }
-      <button class="secondary-btn" type="button" onclick="abrirPermissoesPerfilAdmin('${id}')" ${pode('admin.permissoes', 'view') ? '' : 'disabled'}>Permissões</button>
-    </div>
-    <input id="perfil_${id}_slug" type="hidden" value="${escapeAttr(perfil.slug || '')}">
-  </article>
-`;
+    <article class="crud-row admin-profile-row">
+      <div class="crud-actions admin-profile-actions">
+        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do perfil: ${escapeAttr(rotuloStatus)}"></span>
+        <button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar perfil" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>&#128269;</button>
+      </div>
+
+      <div class="admin-user-main admin-profile-main">
+        <div class="admin-user-identity admin-profile-identity">
+          <strong>${escapeHtml(perfil.nome || perfil.slug || 'Sem nome')}</strong>
+          ${perfil.descricao ? `<small>${escapeHtml(perfil.descricao)}</small>` : ''}
+        </div>
+      </div>
+
+      <span class="badge admin-profile-status-badge status-${escapeAttr(status)}">${escapeHtml(rotuloStatus)}</span>
+      <span class="admin-user-permissions-summary admin-profile-permissions-summary">${escapeHtml(resumoPermissoes)}</span>
+
+      <input id="perfil_${id}_slug" type="hidden" value="${escapeAttr(perfil.slug || '')}">
+    </article>
+  `;
+}
+
+function obterResumoPermissoesPerfilAdmin(perfil) {
+  if (!perfil) {
+    return 'Nenhuma permissão-base';
+  }
+
+  const totalInformado = Number(perfil.permissoes_ativas ?? perfil.total_permissoes ?? perfil.permissoes_base ?? 0) || 0;
+  const totalLocal = (state.admin.perfilPermissoes || [])
+    .filter(item => item.perfil_id === perfil.id && item.permitido !== false)
+    .length;
+  const total = totalInformado || totalLocal;
+
+  if (!total) {
+    return 'Nenhuma permissão-base';
+  }
+
+  return `${total} permissão${total > 1 ? 'ões' : ''}-base`;
 }
 
 function renderModalPerfilAdmin() {
-  if (state.admin.modalNovo !== 'perfis') {
+  const editandoId = state.admin.editando.perfis || '';
+  const editando = Boolean(editandoId);
+  const criando = state.admin.modalNovo === 'perfis' && !editando;
+  const perfil = editando
+    ? (state.admin.perfis || []).find(item => item.id === editandoId) || {}
+    : {};
+  const draft = state.admin.perfilModalDraft || {};
+  const etapa = state.admin.perfilModalEtapa || 'dados';
+  const emPermissoes = etapa === 'permissoes' && (editando || criando);
+
+  if (state.admin.modalNovo !== 'perfis' && !editando) {
     return '';
   }
 
+  const prefixo = editando ? `perfil_${editandoId}` : 'perfil_novo';
+  const recursos = state.admin.recursos || [];
+  const permissoes = state.admin.perfilPermissoes || [];
+  const modal = state.admin.permissionModal || {};
+  const permissoesOriginaisPorChave = editando
+    ? mapearPermissoesPerfilPorChaveSimples(permissoes, editandoId)
+    : {};
+  const permissoesPorChave = Object.keys(modal.draftProfilePermissions || {}).length
+    ? (modal.draftProfilePermissions || {})
+    : permissoesOriginaisPorChave;
+  const modulos = construirEstruturaPermissoesUsuario(recursos);
+  const textoBotaoSalvar = modal.applying && modal.submitMode !== 'close' ? 'Salvando...' : 'Salvar';
+  const textoBotaoSalvarFechar = modal.applying && modal.submitMode === 'close' ? 'Salvando...' : 'Salvar e fechar';
+  const totalPermissoesSelecionadas = Object.values(modal.draftProfilePermissions || {}).filter(Boolean).length;
+  const tituloModal = emPermissoes
+    ? editando ? 'Permissões do perfil' : 'Permissões do novo perfil'
+    : editando ? 'Editar perfil' : 'Adicionar perfil';
+
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Adicionar perfil">
-      <section class="small-modal">
+    <div class="modal-backdrop ${emPermissoes ? 'admin-user-modal-backdrop' : ''}" role="dialog" aria-modal="true" aria-label="${tituloModal}">
+      <section class="small-modal admin-profile-modal ${emPermissoes ? 'admin-user-modal is-permissions-stage' : ''}">
         <div class="small-modal-header">
-          <h3>Adicionar perfil</h3>
+          <h3>${tituloModal}</h3>
           <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
         </div>
-        <label><span>Identificador</span><input id="perfil_novo_slug" class="config-input" type="text" placeholder="ex: financeiro"></label>
-        <label><span>Nome</span><input id="perfil_novo_nome" class="config-input" type="text"></label>
-        <label><span>Descrição</span><input id="perfil_novo_descricao" class="config-input" type="text"></label>
-        <label><span>Nível</span><input id="perfil_novo_nivel" class="config-input" type="number" value="20"></label>
-        <label><span>Status</span><select id="perfil_novo_status" class="config-input"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></label>
-        <div class="small-modal-actions">
-          <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
-          <button class="save-btn" type="button" onclick="salvarPerfilAdmin('')">Salvar</button>
-        </div>
+        ${emPermissoes
+          ? `
+            <div class="permission-modal-layout">
+              <div class="permission-modal-content">
+                ${renderConteudoPermissoesPerfilAdmin(editando ? editandoId : '', editando ? perfil : draft, modulos, permissoesPorChave, modal)}
+              </div>
+            </div>
+            <div class="small-modal-actions admin-user-permissions-actions">
+              <button class="secondary-btn" type="button" onclick="voltarEtapaModalPerfilAdmin()">Voltar para perfil</button>
+              ${editando
+                ? `
+                  <div class="admin-user-permissions-actions-right">
+                    <button class="save-btn" type="button" onclick="salvarPermissoesPerfilAdmin('${escapeAttr(editandoId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvar}</button>
+                    <button class="secondary-btn" type="button" onclick="salvarPermissoesPerfilAdmin('${escapeAttr(editandoId)}', true)" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvarFechar}</button>
+                  </div>
+                `
+                : `
+                  <div class="admin-user-permissions-actions-right">
+                    ${totalPermissoesSelecionadas
+                      ? `<button class="save-btn" type="button" onclick="salvarNovoPerfilComPermissoesAdmin()" ${modal.applying ? 'disabled' : ''}>${modal.applying ? 'Salvando...' : 'Salvar perfil'}</button>`
+                      : '<span class="quick-link-empty admin-profile-save-hint">Selecione ao menos uma permissão para salvar.</span>'}
+                  </div>
+                `}
+            </div>
+          `
+          : `
+            ${!editando ? `
+              <label><span>Identificador</span><input id="${prefixo}_slug" class="config-input" type="text" placeholder="ex: financeiro" value="${escapeAttr(draft.slug || '')}"></label>
+            ` : ''}
+            <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(editando ? perfil.nome || '' : draft.nome || '')}"></label>
+            <label><span>Descrição</span><input id="${prefixo}_descricao" class="config-input" type="text" value="${escapeAttr(editando ? perfil.descricao || '' : draft.descricao || '')}"></label>
+            <label><span>Status</span><select id="${prefixo}_status" class="config-input"><option value="ativo" ${(editando ? perfil.status : draft.status) === 'ativo' || (!editando && !draft.status) ? 'selected' : ''}>Ativo</option><option value="inativo" ${(editando ? perfil.status : draft.status) === 'inativo' ? 'selected' : ''}>Inativo</option></select></label>
+            ${editando ? `
+              <section class="admin-user-access-panel admin-profile-permissions-panel">
+                <div class="admin-user-access-actions">
+                  <button class="secondary-btn" type="button" onclick="abrirPermissoesPerfilAdmin('${escapeAttr(editandoId)}')" ${pode('admin.permissoes', 'view') ? '' : 'disabled'}>Editar permissões</button>
+                </div>
+              </section>
+            ` : ''}
+            ${editando
+              ? `
+                <div class="small-modal-actions admin-user-permissions-actions">
+                  ${pode('admin.perfis', 'delete')
+                    ? `<button class="secondary-btn danger" type="button" onclick="excluirPerfilAdmin('${escapeAttr(editandoId)}')" ${perfil.sistema ? 'disabled title="Perfis do sistema não podem ser excluídos"' : ''}>Excluir perfil</button>`
+                    : '<span></span>'}
+                  <div class="admin-user-permissions-actions-right">
+                    <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
+                    <button class="save-btn" type="button" onclick="salvarPerfilAdmin('${escapeAttr(editandoId)}')">Salvar</button>
+                  </div>
+                </div>
+              `
+              : `
+                <div class="small-modal-actions">
+                  <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
+                  <button class="save-btn" type="button" onclick="avancarPermissoesNovoPerfilAdmin()">Avançar para permissões</button>
+                </div>
+              `}
+          `}
       </section>
+    </div>
+  `;
+}
+
+function renderConteudoPermissoesPerfilAdmin(perfilId, perfil, modulos, permissoesPorChave, modal) {
+  return `
+    <div class="permission-module-list">
+      <div class="permission-global-toolbar">
+        <div class="permission-global-toolbar-group">
+          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesPerfil(true)">Expandir todos</button>
+          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesPerfil(false)">Recolher todos</button>
+        </div>
+        <div class="permission-global-toolbar-group">
+          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesPerfil('${escapeAttr(perfilId)}', true)" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesPerfil('${escapeAttr(perfilId)}', false)" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
+        </div>
+      </div>
+      ${modulos.map(modulo => renderModuloPermissoesPerfilAdmin(perfilId, perfil, modulo, permissoesPorChave, modal)).join('')}
     </div>
   `;
 }
@@ -1988,8 +2644,8 @@ function renderModuloPermissoesPerfilAdmin(perfilId, perfil, modulo, permissoesP
           <strong>${escapeHtml(modulo.nome)}</strong>
         </button>
         <div class="permission-module-toolbar">
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', true)">Conceder tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', false)">Remover tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', true)" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesPerfil('${escapeAttr(perfilId)}', '${escapeAttr(modulo.chave)}', false)" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
         </div>
       </div>
       ${atualizando ? '<p class="quick-link-empty">Aplicando alterações neste módulo...</p>' : ''}
@@ -2042,7 +2698,13 @@ function alternarModuloPermissoesPerfil(moduloChave) {
   state.admin.permissionModal ||= {
     expandedModules: {},
     applying: false,
-    moduleUpdating: ''
+    moduleUpdating: '',
+    originalEffects: {},
+    draftEffects: {},
+    originalProfilePermissions: {},
+    draftProfilePermissions: {},
+    dirty: false,
+    submitMode: ''
   };
 
   state.admin.permissionModal.expandedModules[moduloChave] =
@@ -2051,7 +2713,52 @@ function alternarModuloPermissoesPerfil(moduloChave) {
   renderAdministracao();
 }
 
-async function abrirPermissoesPerfilAdmin(id) {
+function obterDadosPerfilModalAdmin(id = '') {
+  const prefixo = id ? `perfil_${id}` : 'perfil_novo';
+  const perfilAtual = id
+    ? (state.admin.perfis || []).find(item => item.id === id) || {}
+    : {};
+  const draft = state.admin.perfilModalDraft || {};
+
+  return {
+    id,
+    slug: id ? (perfilAtual.slug || '') : document.getElementById(`${prefixo}_slug`)?.value || draft.slug || '',
+    nome: document.getElementById(`${prefixo}_nome`)?.value || (id ? perfilAtual.nome || '' : draft.nome || ''),
+    descricao: document.getElementById(`${prefixo}_descricao`)?.value || (id ? perfilAtual.descricao || '' : draft.descricao || ''),
+    nivel: String(id ? perfilAtual.nivel ?? 20 : 20),
+    status: document.getElementById(`${prefixo}_status`)?.value || (id ? perfilAtual.status || 'ativo' : draft.status || 'ativo')
+  };
+}
+
+function validarDadosBasicosPerfilAdmin(payload) {
+  if (!String(payload.slug || '').trim()) {
+    return 'Informe o identificador do perfil.';
+  }
+
+  if (!String(payload.nome || '').trim()) {
+    return 'Informe o nome do perfil.';
+  }
+
+  return '';
+}
+
+async function avancarPermissoesNovoPerfilAdmin() {
+  const payload = obterDadosPerfilModalAdmin('');
+  const mensagemValidacao = validarDadosBasicosPerfilAdmin(payload);
+
+  state.admin.perfilModalDraft = {
+    slug: payload.slug,
+    nome: payload.nome,
+    descricao: payload.descricao,
+    status: payload.status
+  };
+
+  if (mensagemValidacao) {
+    state.admin.message = mensagemValidacao;
+    renderAdministracao();
+    return;
+  }
+
   if (!pode('admin.permissoes', 'view')) {
     state.admin.message = 'Seu usuário não possui permissão para visualizar permissões de perfil.';
     renderAdministracao();
@@ -2061,7 +2768,64 @@ async function abrirPermissoesPerfilAdmin(id) {
   try {
     state.admin.loading = true;
     state.admin.message = '';
+    renderAdministracao();
+
+    if (!state.admin.recursos.length) {
+      const response = await chamarApi('listAdminPermissions');
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, 'Não foi possível carregar permissões do perfil.'));
+      }
+
+      state.admin.recursos = response.data.recursos || [];
+      state.admin.perfis = response.data.perfis || [];
+      state.admin.perfilPermissoes = response.data.permissoes || [];
+    }
+
+    const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+    const expandedModules = modulos.reduce((acc, modulo) => {
+      acc[modulo.chave] = state.admin.permissionModal?.expandedModules?.[modulo.chave] ?? true;
+      return acc;
+    }, {});
+    const draftProfilePermissions = { ...(state.admin.permissionModal?.draftProfilePermissions || {}) };
+
+    state.admin.permissionModal = {
+      expandedModules,
+      applying: false,
+      moduleUpdating: '',
+      originalEffects: state.admin.permissionModal?.originalEffects || {},
+      draftEffects: state.admin.permissionModal?.draftEffects || {},
+      originalProfilePermissions: {},
+      draftProfilePermissions,
+      dirty: Object.keys(draftProfilePermissions).length > 0,
+      submitMode: ''
+    };
+    state.admin.perfilModalEtapa = 'permissoes';
+    state.admin.loading = false;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao carregar permissões do perfil.';
+    renderAdministracao();
+  }
+}
+
+async function abrirPermissoesPerfilAdmin(id, options = {}) {
+  if (!pode('admin.permissoes', 'view')) {
+    state.admin.message = 'Seu usuário não possui permissão para visualizar permissões de perfil.';
+    renderAdministracao();
+    return;
+  }
+
+  try {
+    state.admin.loading = true;
+    if (!options.manterMensagem) {
+      state.admin.message = '';
+    }
     state.admin.perfilPermissoesId = id;
+    state.admin.modalNovo = 'perfis';
+    state.admin.editando.perfis = id;
+    state.admin.perfilModalEtapa = 'permissoes';
     renderAdministracao();
 
     if (!state.admin.recursos.length || !state.admin.perfilPermissoes.length) {
@@ -2081,12 +2845,22 @@ async function abrirPermissoesPerfilAdmin(id) {
       acc[modulo.chave] = state.admin.permissionModal?.expandedModules?.[modulo.chave] ?? true;
       return acc;
     }, {});
+    const originalProfilePermissions = mapearPermissoesPerfilPorChaveSimples(state.admin.perfilPermissoes || [], id);
 
     state.admin.permissionModal = {
       expandedModules,
       applying: false,
-      moduleUpdating: ''
+      moduleUpdating: '',
+      originalEffects: state.admin.permissionModal?.originalEffects || {},
+      draftEffects: state.admin.permissionModal?.draftEffects || {},
+      originalProfilePermissions,
+      draftProfilePermissions: { ...originalProfilePermissions },
+      dirty: false,
+      submitMode: ''
     };
+    if (options.messageSuccess) {
+      state.admin.message = options.messageSuccess;
+    }
     state.admin.loading = false;
     renderAdministracao();
   } catch (erro) {
@@ -2097,72 +2871,185 @@ async function abrirPermissoesPerfilAdmin(id) {
 }
 
 function fecharPermissoesPerfilAdmin() {
+  voltarEtapaModalPerfilAdmin();
+}
+
+function voltarEtapaModalPerfilAdmin() {
+  const criandoPerfil = state.admin.modalNovo === 'perfis' && !state.admin.editando.perfis;
+
+  state.admin.perfilModalEtapa = 'dados';
+
+  if (criandoPerfil) {
+    renderAdministracao();
+    return;
+  }
+
   state.admin.perfilPermissoesId = '';
   state.admin.permissionModal = {
-    expandedModules: {},
+    expandedModules: state.admin.permissionModal?.expandedModules || {},
     applying: false,
-    moduleUpdating: ''
+    moduleUpdating: '',
+    originalEffects: state.admin.permissionModal?.originalEffects || {},
+    draftEffects: state.admin.permissionModal?.draftEffects || {},
+    originalProfilePermissions: {},
+    draftProfilePermissions: {},
+    dirty: false,
+    submitMode: ''
   };
   renderAdministracao();
 }
 
-async function alternarCheckboxPermissaoPerfil(perfilId, recursoChave, acao, permitido) {
-  try {
-    const response = await chamarApi('saveAdminProfilePermission', {
-      perfil_id: perfilId,
-      recurso_chave: recursoChave,
-      acao,
-      permitido
-    });
+function alternarCheckboxPermissaoPerfil(perfilId, recursoChave, acao, permitido) {
+  const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
+  const chave = `${recursoChave}:${acao}`;
 
-    if (!response.ok) {
-      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão do perfil.'));
-    }
-
-    await carregarPermissoesAdmin();
-    state.admin.perfilPermissoesId = perfilId;
-  } catch (erro) {
-    state.admin.message = erro.message || 'Erro ao salvar permissão do perfil.';
-    renderAdministracao();
+  if (permitido) {
+    draftPermissions[chave] = true;
+  } else {
+    delete draftPermissions[chave];
   }
+
+  state.admin.permissionModal.draftProfilePermissions = draftPermissions;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesPerfil(
+    state.admin.permissionModal.originalProfilePermissions,
+    draftPermissions
+  );
+
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
 }
 
-async function aplicarLoteModuloPermissoesPerfil(perfilId, moduloChave, permitido) {
+function aplicarLoteModuloPermissoesPerfil(perfilId, moduloChave, permitido) {
   const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
   const modulo = modulos.find(item => item.chave === moduloChave);
 
   if (!modulo) return;
 
+  const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
+
+  modulo.linhas.forEach(recurso => {
+    obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+      const chave = `${recurso.chave}:${acao}`;
+
+      if (permitido) {
+        draftPermissions[chave] = true;
+      } else {
+        delete draftPermissions[chave];
+      }
+    });
+  });
+
+  state.admin.permissionModal.draftProfilePermissions = draftPermissions;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesPerfil(
+    state.admin.permissionModal.originalProfilePermissions,
+    draftPermissions
+  );
+
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
+function alternarTodosModulosPermissoesPerfil(expandir) {
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  state.admin.permissionModal.expandedModules = modulos.reduce((acc, modulo) => {
+    acc[modulo.chave] = Boolean(expandir);
+    return acc;
+  }, {});
+  renderAdministracao();
+}
+
+function aplicarLoteGlobalPermissoesPerfil(perfilId, permitido) {
+  const modulos = construirEstruturaPermissoesUsuario(state.admin.recursos || []);
+  const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
+
+  modulos.forEach(modulo => {
+    modulo.linhas.forEach(recurso => {
+      obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+        const chave = `${recurso.chave}:${acao}`;
+
+        if (permitido) {
+          draftPermissions[chave] = true;
+        } else {
+          delete draftPermissions[chave];
+        }
+      });
+    });
+  });
+
+  state.admin.permissionModal.draftProfilePermissions = draftPermissions;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesPerfil(
+    state.admin.permissionModal.originalProfilePermissions,
+    draftPermissions
+  );
+
+  renderAdministracao();
+}
+
+async function salvarPermissoesPerfilAdmin(perfilId, fecharAoSalvar = false) {
+  const originalPermissions = state.admin.permissionModal.originalProfilePermissions || {};
+  const draftPermissions = state.admin.permissionModal.draftProfilePermissions || {};
+  const chaves = new Set([
+    ...Object.keys(originalPermissions),
+    ...Object.keys(draftPermissions)
+  ]);
+
+  const alteracoes = Array.from(chaves)
+    .map(chave => {
+      const [recurso_chave, acao] = chave.split(':');
+      return {
+        recurso_chave,
+        acao,
+        anterior: Boolean(originalPermissions[chave]),
+        proximo: Boolean(draftPermissions[chave])
+      };
+    })
+    .filter(item => item.anterior !== item.proximo);
+
+  if (!alteracoes.length) {
+    state.admin.permissionModal.dirty = false;
+    renderAdministracao();
+    return;
+  }
+
   try {
     state.admin.permissionModal.applying = true;
-    state.admin.permissionModal.moduleUpdating = moduloChave;
+    state.admin.permissionModal.submitMode = fecharAoSalvar ? 'close' : 'save';
     state.admin.message = '';
     renderAdministracao();
 
-    for (const recurso of modulo.linhas) {
-      for (const acao of obterAcoesDisponiveisRecurso(recurso)) {
-        const response = await chamarApi('saveAdminProfilePermission', {
-          perfil_id: perfilId,
-          recurso_chave: recurso.chave,
-          acao,
-          permitido
-        });
+    const response = await chamarApi('saveAdminProfilePermissionsBatch', {
+      perfil_id: perfilId,
+      alteracoes: alteracoes.map(item => ({
+        recurso_chave: item.recurso_chave,
+        acao: item.acao,
+        permitido: item.proximo
+      }))
+    });
 
-        if (!response.ok) {
-          throw new Error(obterMensagemApi(response, 'Não foi possível aplicar permissões em lote no perfil.'));
-        }
-      }
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível salvar permissões do perfil.'));
     }
 
     await carregarPermissoesAdmin();
-    state.admin.perfilPermissoesId = perfilId;
-    state.admin.permissionModal.applying = false;
-    state.admin.permissionModal.moduleUpdating = '';
-    renderAdministracao();
+
+    if (fecharAoSalvar) {
+      state.admin.message = 'Permissões do perfil atualizadas.';
+      state.admin.modalNovo = '';
+      state.admin.editando.perfis = '';
+      state.admin.perfilModalEtapa = 'dados';
+      state.admin.perfilPermissoesId = '';
+      renderAdministracao();
+      return;
+    }
+
+    await abrirPermissoesPerfilAdmin(perfilId, {
+      manterMensagem: true,
+      messageSuccess: 'Permissões do perfil atualizadas.'
+    });
   } catch (erro) {
     state.admin.permissionModal.applying = false;
-    state.admin.permissionModal.moduleUpdating = '';
-    state.admin.message = erro.message || 'Erro ao aplicar permissões em lote no perfil.';
+    state.admin.permissionModal.submitMode = '';
+    state.admin.message = erro.message || 'Erro ao salvar permissões do perfil.';
     renderAdministracao();
   }
 }
@@ -2325,6 +3212,28 @@ function abrirModalNovoRegistro(entidade) {
     return;
   }
 
+  if (entidade === 'perfis') {
+    state.admin.editando.perfis = '';
+    state.admin.perfilModalEtapa = 'dados';
+    state.admin.perfilModalDraft = {
+      slug: '',
+      nome: '',
+      descricao: '',
+      status: 'ativo'
+    };
+    state.admin.permissionModal = {
+      expandedModules: state.admin.permissionModal?.expandedModules || {},
+      applying: false,
+      moduleUpdating: '',
+      originalEffects: state.admin.permissionModal?.originalEffects || {},
+      draftEffects: state.admin.permissionModal?.draftEffects || {},
+      originalProfilePermissions: {},
+      draftProfilePermissions: {},
+      dirty: false,
+      submitMode: ''
+    };
+  }
+
   state.admin.modalNovo = entidade;
   renderAdministracao();
 }
@@ -2344,6 +3253,8 @@ function abrirModalUsuarioAdmin(id = '') {
     moduleUpdating: '',
     originalEffects: {},
     draftEffects: {},
+    originalProfilePermissions: {},
+    draftProfilePermissions: {},
     dirty: false,
     submitMode: ''
   };
@@ -2629,6 +3540,8 @@ async function abrirPermissoesUsuarioAdmin(id, options = {}) {
       moduleUpdating: '',
       originalEffects,
       draftEffects: { ...originalEffects },
+      originalProfilePermissions: state.admin.permissionModal?.originalProfilePermissions || {},
+      draftProfilePermissions: state.admin.permissionModal?.draftProfilePermissions || {},
       dirty: false,
       submitMode: ''
     };
@@ -2803,27 +3716,6 @@ async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
   }
 }
 
-async function alterarPermissaoPerfilAdmin(perfilId, recursoChave, acao, permitido) {
-  try {
-    state.admin.message = '';
-    const response = await chamarApi('saveAdminProfilePermission', {
-      perfil_id: perfilId,
-      recurso_chave: recursoChave,
-      acao,
-      permitido
-    });
-
-    if (!response.ok) {
-      throw new Error(obterMensagemApi(response, 'Não foi possível salvar a permissão.'));
-    }
-
-    await carregarPermissoesAdmin();
-  } catch (erro) {
-    state.admin.message = erro.message || 'Erro ao salvar permissão.';
-    renderAdministracao();
-  }
-}
-
 async function carregarPerfisAdmin() {
   state.admin.loading = true;
   state.admin.message = '';
@@ -2837,6 +3729,9 @@ async function carregarPerfisAdmin() {
     }
 
     state.admin.perfis = response.data.records || [];
+    if (Array.isArray(response.data.permissoes)) {
+      state.admin.perfilPermissoes = response.data.permissoes;
+    }
     state.admin.loading = false;
     renderAdministracao();
   } catch (erro) {
@@ -2847,20 +3742,30 @@ async function carregarPerfisAdmin() {
 }
 
 function editarPerfilAdmin(id) {
+  const perfil = (state.admin.perfis || []).find(item => item.id === id) || {};
+
   state.admin.editando.perfis = id;
+  state.admin.modalNovo = 'perfis';
+  state.admin.perfilModalEtapa = 'dados';
+  state.admin.perfilModalDraft = {
+    slug: perfil.slug || '',
+    nome: perfil.nome || '',
+    descricao: perfil.descricao || '',
+    status: perfil.status || 'ativo'
+  };
+  state.admin.message = '';
   renderAdministracao();
 }
 
 async function salvarPerfilAdmin(id) {
-  const prefixo = id ? `perfil_${id}` : 'perfil_novo';
-  const payload = {
-    id,
-    slug: document.getElementById(`${prefixo}_slug`)?.value || '',
-    nome: document.getElementById(`${prefixo}_nome`)?.value || '',
-    descricao: document.getElementById(`${prefixo}_descricao`)?.value || '',
-    nivel: document.getElementById(`${prefixo}_nivel`)?.value || '0',
-    status: document.getElementById(`${prefixo}_status`)?.value || 'ativo'
-  };
+  const payload = obterDadosPerfilModalAdmin(id);
+  const mensagemValidacao = validarDadosBasicosPerfilAdmin(payload);
+
+  if (mensagemValidacao) {
+    state.admin.message = mensagemValidacao;
+    renderAdministracao();
+    return;
+  }
 
   try {
     state.admin.loading = true;
@@ -2875,11 +3780,180 @@ async function salvarPerfilAdmin(id) {
 
     state.admin.editando.perfis = '';
     state.admin.modalNovo = '';
-    state.admin.message = 'Perfil salvo. Ajuste as permissões desse perfil na aba Permissões por Módulo.';
+    state.admin.perfilModalEtapa = 'dados';
+    state.admin.perfilModalDraft = {
+      slug: '',
+      nome: '',
+      descricao: '',
+      status: 'ativo'
+    };
+    state.admin.message = 'Perfil salvo.';
     await carregarPerfisAdmin();
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao salvar perfil.';
+    renderAdministracao();
+  }
+}
+
+async function excluirPerfilAdmin(id) {
+  const perfil = (state.admin.perfis || []).find(item => item.id === id) || {};
+  const nomePerfil = perfil.nome || perfil.slug || 'este perfil';
+
+  if (!id) {
+    state.admin.message = 'Perfil não identificado para exclusão.';
+    renderAdministracao();
+    return;
+  }
+
+  if (!pode('admin.perfis', 'delete')) {
+    state.admin.message = 'Seu usuário não possui permissão para excluir perfis.';
+    renderAdministracao();
+    return;
+  }
+
+  if (perfil.sistema) {
+    state.admin.message = 'Perfis do sistema não podem ser excluídos.';
+    renderAdministracao();
+    return;
+  }
+
+  const confirmado = window.confirm(
+    `Excluir o perfil "${nomePerfil}"? Esta ação não pode ser desfeita.`
+  );
+
+  if (!confirmado) {
+    return;
+  }
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('deleteAdminProfile', { id });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível excluir o perfil.'));
+    }
+
+    state.admin.editando.perfis = '';
+    state.admin.modalNovo = '';
+    state.admin.perfilModalEtapa = 'dados';
+    state.admin.perfilModalDraft = {
+      slug: '',
+      nome: '',
+      descricao: '',
+      status: 'ativo'
+    };
+    state.admin.perfilPermissoesId = '';
+    state.admin.permissionModal = {
+      expandedModules: {},
+      applying: false,
+      moduleUpdating: '',
+      originalEffects: state.admin.permissionModal?.originalEffects || {},
+      draftEffects: state.admin.permissionModal?.draftEffects || {},
+      originalProfilePermissions: {},
+      draftProfilePermissions: {},
+      dirty: false,
+      submitMode: ''
+    };
+    state.admin.message = 'Perfil excluído.';
+    await carregarPerfisAdmin();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao excluir perfil.';
+    renderAdministracao();
+  }
+}
+
+async function salvarNovoPerfilComPermissoesAdmin() {
+  const payload = {
+    id: '',
+    slug: state.admin.perfilModalDraft?.slug || '',
+    nome: state.admin.perfilModalDraft?.nome || '',
+    descricao: state.admin.perfilModalDraft?.descricao || '',
+    nivel: '20',
+    status: state.admin.perfilModalDraft?.status || 'ativo'
+  };
+  const mensagemValidacao = validarDadosBasicosPerfilAdmin(payload);
+  const draftPermissions = state.admin.permissionModal?.draftProfilePermissions || {};
+  const permissoesSelecionadas = Object.keys(draftPermissions).filter(chave => Boolean(draftPermissions[chave]));
+
+  if (mensagemValidacao) {
+    state.admin.message = mensagemValidacao;
+    state.admin.perfilModalEtapa = 'dados';
+    renderAdministracao();
+    return;
+  }
+
+  if (!permissoesSelecionadas.length) {
+    state.admin.message = 'Selecione ao menos uma permissão para criar o perfil.';
+    renderAdministracao();
+    return;
+  }
+
+  try {
+    state.admin.permissionModal.applying = true;
+    state.admin.permissionModal.submitMode = 'create';
+    state.admin.message = '';
+    renderAdministracao();
+
+    const perfilResponse = await chamarApi('saveAdminProfile', payload);
+
+    if (!perfilResponse.ok) {
+      throw new Error(obterMensagemApi(perfilResponse, 'Não foi possível criar o perfil.'));
+    }
+
+    const perfilCriado = perfilResponse.data?.record || {};
+
+    if (!perfilCriado.id) {
+      throw new Error('Perfil criado, mas o identificador interno não foi retornado.');
+    }
+
+    const permissoesResponse = await chamarApi('saveAdminProfilePermissionsBatch', {
+      perfil_id: perfilCriado.id,
+      alteracoes: permissoesSelecionadas.map(chave => {
+        const [recurso_chave, acao] = chave.split(':');
+        return {
+          recurso_chave,
+          acao,
+          permitido: true
+        };
+      })
+    });
+
+    if (!permissoesResponse.ok) {
+      throw new Error(obterMensagemApi(permissoesResponse, 'Perfil criado, mas não foi possível salvar as permissões.'));
+    }
+
+    state.admin.editando.perfis = '';
+    state.admin.modalNovo = '';
+    state.admin.perfilModalEtapa = 'dados';
+    state.admin.perfilModalDraft = {
+      slug: '',
+      nome: '',
+      descricao: '',
+      status: 'ativo'
+    };
+    state.admin.perfilPermissoesId = '';
+    state.admin.permissionModal = {
+      expandedModules: {},
+      applying: false,
+      moduleUpdating: '',
+      originalEffects: state.admin.permissionModal?.originalEffects || {},
+      draftEffects: state.admin.permissionModal?.draftEffects || {},
+      originalProfilePermissions: {},
+      draftProfilePermissions: {},
+      dirty: false,
+      submitMode: ''
+    };
+    state.admin.message = 'Perfil criado com permissões.';
+    await carregarPerfisAdmin();
+  } catch (erro) {
+    state.admin.permissionModal.applying = false;
+    state.admin.permissionModal.submitMode = '';
+    state.admin.message = erro.message || 'Erro ao criar perfil.';
     renderAdministracao();
   }
 }
@@ -6767,10 +7841,13 @@ Object.assign(window, {
   abrirModalUsuarioAdmin,
   abrirModalSenha,
   abrirModulo,
+  abrirModalConfigurarModulosHome,
   abrirPermissoesPeloModalUsuario,
   abrirPermissoesUsuarioAdmin,
   abrirPermissoesPerfilAdmin,
+  avancarPermissoesNovoPerfilAdmin,
   fecharPermissoesPerfilAdmin,
+  fecharModalConfigurarModulosHome,
   alternarModuloPermissoesPerfil,
   alternarCheckboxPermissaoPerfil,
   aplicarLoteModuloPermissoesPerfil,
@@ -6778,6 +7855,15 @@ Object.assign(window, {
   acionarCardModulo,
   alterarBuscaAr,
   alterarBuscaUsuariosAdmin,
+  alterarBuscaPerfisAdmin,
+  alterarStatusModuloHome,
+  alterarVisibilidadeModuloHome,
+  selecionarFiltroPerfisAdmin,
+  selecionarFiltroModulosHome,
+  selecionarPaginaPerfisAdmin,
+  alternarTodosModulosPermissoesPerfil,
+  aplicarLoteGlobalPermissoesPerfil,
+  salvarPermissoesPerfilAdmin,
   alterarFiltroListaProdutosAr,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
@@ -6791,12 +7877,9 @@ Object.assign(window, {
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
-  alternarModuloPermissoesPerfil,
-  aplicarLoteModuloPermissoesPerfil,
   alternarTema,
   alternarTodosGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
-  alterarPermissaoPerfilAdmin,
   alternarCheckboxPermissaoUsuario,
   alternarTodosModulosPermissoesUsuario,
   cancelarReciboValidacoesAr,
@@ -6810,6 +7893,7 @@ Object.assign(window, {
   criarLancamentoManualValidacoesAr,
   editarLinkItem,
   editarPerfilAdmin,
+  excluirPerfilAdmin,
   editarRegistroAdmin,
   editarUsuarioAdmin,
   emitirReciboValidacoesAr,
@@ -6837,9 +7921,11 @@ Object.assign(window, {
   restaurarCoresPadrao,
   sair,
   salvarConfigAdmin,
+  salvarConfigModulosHome,
   salvarLinkItem,
   salvarPermissoesUsuarioAdmin,
   salvarPerfilAdmin,
+  salvarNovoPerfilComPermissoesAdmin,
   salvarRegistroAdmin,
   salvarSenhaItem,
   salvarUsuarioAdmin,
@@ -6857,5 +7943,6 @@ Object.assign(window, {
   aplicarLoteGlobalPermissoesUsuario,
   aplicarLoteModuloPermissoesUsuario,
   voltarEtapaModalUsuarioAdmin,
+  voltarEtapaModalPerfilAdmin,
   visualizarReciboValidacoesAr
 });

@@ -756,7 +756,8 @@ body.dark .module-card {
     width: 100%;
   }
 
-  .admin-users-search {
+  .admin-users-search,
+  .admin-profiles-search {
     flex: 1 1 240px;
     width: 100%;
   }
@@ -880,6 +881,10 @@ body.dark .module-card {
   margin: 8px 0 0;
 }
 
+.home-modules-modal .admin-user-filters {
+  margin: 8px 0 18px;
+}
+
 .filter-btn {
   background: var(--color-surface-muted);
   border: var(--border-subtle);
@@ -993,13 +998,107 @@ body.dark .module-card {
   padding: 0 6px;
 }
 
-.crud-list:not(.admin-modules-list):not(.admin-users-list) .crud-header span:first-child {
+.crud-list:not(.admin-modules-list):not(.admin-users-list):not(.admin-profiles-list) .crud-header span:first-child {
   grid-column: 2;
 }
 
 .admin-users-list .crud-header,
 .admin-users-list .crud-row {
   grid-template-columns: 88px minmax(240px, 1.6fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
+}
+
+.admin-profiles-list .crud-header,
+.admin-profiles-list .crud-row {
+  grid-template-columns: 88px minmax(240px, 1.6fr) minmax(110px, 0.6fr) minmax(180px, 1fr);
+}
+
+.home-modules-modal-list {
+  box-sizing: border-box;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.home-modules-modal-grid {
+  align-items: center;
+  box-sizing: border-box;
+  column-gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 112px 112px;
+  width: 100%;
+}
+
+.home-modules-modal-header {
+  color: var(--texto-suave);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 0 4px;
+}
+
+.home-modules-modal-header span:first-child,
+.home-modules-modal-row .admin-user-identity {
+  justify-self: start;
+  min-width: 0;
+}
+
+.home-modules-modal-header span:nth-child(2),
+.home-modules-modal-header span:nth-child(3) {
+  justify-self: center;
+  text-align: center;
+}
+
+.home-modules-modal-row {
+  border-bottom: 1px solid var(--borda);
+  min-height: 44px;
+  padding: 6px 0;
+}
+
+.home-modules-modal-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.admin-profile-row {
+  min-height: 56px;
+}
+
+.admin-profile-actions {
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.admin-profile-main,
+.admin-profile-identity {
+  min-width: 0;
+}
+
+.admin-profile-status-badge,
+.admin-profile-permissions-summary {
+  justify-self: start;
+  margin-top: 0;
+}
+
+.admin-profile-status-badge.status-ativo {
+  background: #1f9d55;
+}
+
+.admin-profile-status-badge.status-inativo {
+  background: #dc2626;
+}
+
+.admin-profiles-search {
+  flex: 0 0 252px;
+  min-width: 252px;
+}
+
+.admin-profile-modal.admin-user-modal.is-permissions-stage {
+  max-width: min(1120px, calc(100vw - 32px));
+}
+
+.admin-profile-permissions-panel {
+  border-top: 1px solid var(--borda);
 }
 
 .crud-row {
@@ -1022,6 +1121,16 @@ body.dark .module-card {
 .crud-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.home-modules-modal-action {
+  justify-self: center;
+  justify-content: center;
+}
+
+.home-modules-modal-action .save-btn,
+.home-modules-modal-action .secondary-btn {
+  min-width: 96px;
 }
 
 .admin-user-row {
@@ -1139,6 +1248,7 @@ body.dark .module-card {
   display: grid;
   gap: 10px;
   margin-top: 4px;
+  min-width: 0;
   padding-top: 6px;
 }
 
@@ -1163,9 +1273,11 @@ body.dark .module-card {
 
 .admin-user-access-actions,
 .admin-user-password-actions {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .admin-user-password-box {
@@ -1177,6 +1289,9 @@ body.dark .module-card {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
   display: grid;
   gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 12px;
 }
 
@@ -1194,8 +1309,12 @@ body.dark .module-card {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 10px 12px;
-  word-break: break-all;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .admin-preview-grid,
@@ -1344,7 +1463,14 @@ body.dark .module-card {
 }
 
 .admin-user-modal {
+  box-sizing: border-box;
   min-height: 0;
+}
+
+.admin-user-modal:not(.is-permissions-stage) {
+  max-height: min(720px, calc(100vh - 48px));
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .admin-user-modal.is-permissions-stage {
@@ -1357,6 +1483,35 @@ body.dark .module-card {
   overflow: hidden;
   padding: 10px 12px;
   width: min(860px, calc(100vw - 72px));
+}
+
+.home-modules-modal.admin-user-modal.is-permissions-stage {
+  max-width: 560px;
+  max-height: min(calc(100vh - 24px), 640px);
+  width: min(560px, calc(100vw - 24px));
+}
+
+.home-modules-modal .permission-modal-content {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.home-modules-modal .permission-modal-layout {
+  height: 100%;
+  min-width: 0;
+}
+
+.home-modules-modal-table-wrap {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  width: 100%;
 }
 
 .admin-user-modal-backdrop {
