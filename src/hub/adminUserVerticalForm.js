@@ -31,6 +31,20 @@ function injetarLayoutVerticalUsuario() {
       width: 100% !important;
     }
 
+    .admin-user-direct-header p,
+    .admin-user-direct-section > div > p,
+    .admin-user-direct-note {
+      display: none !important;
+    }
+
+    .admin-user-direct-header {
+      align-items: center !important;
+    }
+
+    .admin-user-direct-section > div {
+      margin-bottom: 2px !important;
+    }
+
     @media (min-width: 981px) {
       .admin-user-direct-fields {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
