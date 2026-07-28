@@ -1,4 +1,5 @@
 const STYLE_ID = 'admin-user-permissions-flow-style';
+const FLOATING_MENU_ID = 'admin-user-permission-floating-menu';
 
 const ACAO_BULK_LABELS = [
   'conceder tudo',
@@ -8,6 +9,9 @@ const ACAO_BULK_LABELS = [
 ];
 
 const APLICACAO_DELAYS = [0, 120, 350, 700, 1200, 1800];
+
+let botoesMenuFlutuanteAtual = new Map();
+let triggerMenuFlutuanteAtual = null;
 
 function normalizarTexto(texto = '') {
   return String(texto || '')
@@ -125,33 +129,33 @@ function injetarEstilosPermissoesUsuario() {
       white-space: nowrap;
     }
 
-    .admin-user-permission-actions-list {
-      position: absolute;
-      top: calc(100% + 8px);
-      right: 0;
-      z-index: 30;
-      min-width: 180px;
+    .admin-user-permission-floating-menu {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 9999;
+      min-width: 190px;
       display: none;
       padding: 6px;
       border-radius: 14px;
       border: 1px solid rgba(148, 163, 184, 0.24);
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
     }
 
-    body.dark .admin-user-permission-actions-list {
-      background: rgba(15, 23, 42, 0.96);
-      border-color: rgba(148, 163, 184, 0.18);
-    }
-
-    .admin-user-permission-actions-menu.is-open .admin-user-permission-actions-list {
+    .admin-user-permission-floating-menu.is-open {
       display: grid;
       gap: 4px;
     }
 
-    .admin-user-permission-actions-list button {
+    body.dark .admin-user-permission-floating-menu {
+      background: rgba(15, 23, 42, 0.98);
+      border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .admin-user-permission-floating-menu button {
       width: 100%;
       border: 0;
       border-radius: 10px;
@@ -161,14 +165,15 @@ function injetarEstilosPermissoesUsuario() {
       text-align: left;
       font: inherit;
       font-size: 0.82rem;
+      white-space: nowrap;
       cursor: pointer;
     }
 
-    body.dark .admin-user-permission-actions-list button {
+    body.dark .admin-user-permission-floating-menu button {
       color: var(--text-strong, #f8fafc);
     }
 
-    .admin-user-permission-actions-list button:hover {
+    .admin-user-permission-floating-menu button:hover {
       background: rgba(41, 72, 149, 0.08);
     }
 
@@ -302,10 +307,89 @@ function executarAcaoBulkPermissoes(botaoOriginal, tipo) {
   window.setTimeout(atualizarBotaoSalvarPermissoes, 0);
 }
 
-function fecharMenusAcoesPermissoes(menuAtual = null) {
-  document.querySelectorAll('.admin-user-permission-actions-menu.is-open').forEach(menu => {
-    if (menu !== menuAtual) menu.classList.remove('is-open');
+function obterMenuFlutuanteAcoes() {
+  let menu = document.getElementById(FLOATING_MENU_ID);
+  if (menu) return menu;
+
+  menu = document.createElement('div');
+  menu.id = FLOATING_MENU_ID;
+  menu.className = 'admin-user-permission-floating-menu';
+  document.body.appendChild(menu);
+  return menu;
+}
+
+function posicionarMenuFlutuante(trigger, menu) {
+  const rect = trigger.getBoundingClientRect();
+  const margem = 12;
+
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  menu.classList.add('is-open');
+
+  const largura = Math.max(menu.offsetWidth || 190, 190);
+  const altura = menu.offsetHeight || 132;
+
+  let left = rect.right - largura;
+  left = Math.max(margem, Math.min(left, window.innerWidth - largura - margem));
+
+  let top = rect.bottom + 8;
+  if (top + altura > window.innerHeight - margem) {
+    top = rect.top - altura - 8;
+  }
+  top = Math.max(margem, top);
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function fecharMenuFlutuanteAcoes() {
+  const menu = document.getElementById(FLOATING_MENU_ID);
+  menu?.classList.remove('is-open');
+
+  if (triggerMenuFlutuanteAtual) {
+    triggerMenuFlutuanteAtual.setAttribute('aria-expanded', 'false');
+  }
+
+  botoesMenuFlutuanteAtual = new Map();
+  triggerMenuFlutuanteAtual = null;
+}
+
+function abrirMenuFlutuanteAcoes(trigger, botoes) {
+  const mesmoTriggerAberto = triggerMenuFlutuanteAtual === trigger
+    && document.getElementById(FLOATING_MENU_ID)?.classList.contains('is-open');
+
+  if (mesmoTriggerAberto) {
+    fecharMenuFlutuanteAcoes();
+    return;
+  }
+
+  const menu = obterMenuFlutuanteAcoes();
+  botoesMenuFlutuanteAtual = botoes;
+  triggerMenuFlutuanteAtual = trigger;
+
+  const itens = [
+    ['conceder', 'Conceder tudo'],
+    ['bloquear', 'Bloquear tudo'],
+    ['restaurar', 'Restaurar padrão']
+  ];
+
+  menu.innerHTML = itens
+    .filter(([tipo]) => botoes.has(tipo))
+    .map(([tipo, label]) => `<button type="button" data-bulk-action="${tipo}">${label}</button>`)
+    .join('');
+
+  menu.querySelectorAll('[data-bulk-action]').forEach(item => {
+    item.addEventListener('click', event => {
+      event.stopPropagation();
+      const tipo = item.dataset.bulkAction;
+      const botaoOriginal = botoesMenuFlutuanteAtual.get(tipo);
+      fecharMenuFlutuanteAcoes();
+      executarAcaoBulkPermissoes(botaoOriginal, tipo);
+    });
   });
+
+  trigger.setAttribute('aria-expanded', 'true');
+  posicionarMenuFlutuante(trigger, menu);
 }
 
 function criarMenuAcoesModulo(botoes) {
@@ -313,29 +397,12 @@ function criarMenuAcoesModulo(botoes) {
   wrapper.className = 'admin-user-permission-actions-menu';
   wrapper.innerHTML = `
     <button class="secondary-btn admin-user-permission-actions-trigger" type="button" aria-expanded="false">Ações</button>
-    <div class="admin-user-permission-actions-list" role="menu">
-      ${botoes.has('conceder') ? '<button type="button" data-bulk-action="conceder">Conceder tudo</button>' : ''}
-      ${botoes.has('bloquear') ? '<button type="button" data-bulk-action="bloquear">Bloquear tudo</button>' : ''}
-      ${botoes.has('restaurar') ? '<button type="button" data-bulk-action="restaurar">Restaurar padrão</button>' : ''}
-    </div>
   `;
 
   const trigger = wrapper.querySelector('.admin-user-permission-actions-trigger');
   trigger?.addEventListener('click', event => {
     event.stopPropagation();
-    const aberto = wrapper.classList.toggle('is-open');
-    trigger.setAttribute('aria-expanded', String(aberto));
-    fecharMenusAcoesPermissoes(wrapper);
-  });
-
-  wrapper.querySelectorAll('[data-bulk-action]').forEach(item => {
-    item.addEventListener('click', event => {
-      event.stopPropagation();
-      const tipo = item.dataset.bulkAction;
-      wrapper.classList.remove('is-open');
-      trigger?.setAttribute('aria-expanded', 'false');
-      executarAcaoBulkPermissoes(botoes.get(tipo), tipo);
-    });
+    abrirMenuFlutuanteAcoes(trigger, botoes);
   });
 
   return wrapper;
@@ -440,11 +507,14 @@ function iniciarFluxoPermissoesUsuario() {
 }
 
 window.addEventListener('click', event => {
-  if (!event.target.closest?.('.admin-user-permission-actions-menu')) {
-    fecharMenusAcoesPermissoes();
+  if (!event.target.closest?.('.admin-user-permission-actions-menu')
+    && !event.target.closest?.(`#${FLOATING_MENU_ID}`)) {
+    fecharMenuFlutuanteAcoes();
   }
   window.setTimeout(aplicarRodapePermissoesUsuario, 0);
 });
+window.addEventListener('scroll', fecharMenuFlutuanteAcoes, true);
+window.addEventListener('resize', fecharMenuFlutuanteAcoes);
 window.addEventListener('change', () => window.setTimeout(aplicarRodapePermissoesUsuario, 0));
 window.addEventListener('beforeunload', protegerFechamentoDaPagina);
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarAplicacaoRodape);
