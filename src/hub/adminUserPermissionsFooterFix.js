@@ -116,6 +116,21 @@ async function savePermissionsAndReturn(userId) {
   }
 }
 
+function bindFooterEvents(footer, userId) {
+  const backButton = footer.querySelector('[data-admin-permissions-back-clean]');
+  const saveButton = footer.querySelector('[data-admin-permissions-save-clean]');
+
+  if (backButton && backButton.dataset.bound !== 'true') {
+    backButton.dataset.bound = 'true';
+    backButton.addEventListener('click', () => goBackToUser(userId));
+  }
+
+  if (saveButton && saveButton.dataset.bound !== 'true') {
+    saveButton.dataset.bound = 'true';
+    saveButton.addEventListener('click', () => savePermissionsAndReturn(userId));
+  }
+}
+
 function ensureCleanFooter() {
   const state = getPermissionState();
   const scope = getPermissionScope();
@@ -125,16 +140,14 @@ function ensureCleanFooter() {
   if (!footer) {
     footer = document.createElement('div');
     footer.className = 'admin-user-permissions-clean-footer';
+    footer.innerHTML = `
+      <button class="secondary-btn" type="button" data-admin-permissions-back-clean>Voltar para usuário</button>
+      <button class="save-btn" type="button" data-admin-permissions-save-clean disabled>Salvar alterações</button>
+    `;
     scope.appendChild(footer);
   }
 
-  footer.innerHTML = `
-    <button class="secondary-btn" type="button" data-admin-permissions-back-clean>Voltar para usuário</button>
-    <button class="save-btn" type="button" data-admin-permissions-save-clean disabled>Salvar alterações</button>
-  `;
-
-  footer.querySelector('[data-admin-permissions-back-clean]')?.addEventListener('click', () => goBackToUser(state.id));
-  footer.querySelector('[data-admin-permissions-save-clean]')?.addEventListener('click', () => savePermissionsAndReturn(state.id));
+  bindFooterEvents(footer, state.id);
   updateFooterSaveState();
 }
 
@@ -180,7 +193,11 @@ window.addEventListener('hubAdminUsuarioTelaAtualizada', scheduleFooterFix);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', scheduleFooterFix);
 window.addEventListener('load', scheduleFooterFix);
 window.addEventListener('change', () => window.setTimeout(applyFooterFix, 0));
-window.addEventListener('click', () => window.setTimeout(applyFooterFix, 0));
+window.addEventListener('click', event => {
+  const target = event.target;
+  if (target?.closest?.('.admin-user-permission-actions-menu') || target?.closest?.('#admin-user-permission-floating-menu')) return;
+  window.setTimeout(applyFooterFix, 0);
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', scheduleFooterFix);
