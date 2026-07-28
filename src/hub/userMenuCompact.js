@@ -3,6 +3,8 @@ let observer = null;
 
 function removerTextosSecundariosMenu() {
   document.querySelectorAll('.hub-user-menu-item small').forEach(elemento => elemento.remove());
+  document.querySelectorAll('.hub-user-menu-copy small').forEach(elemento => elemento.remove());
+  document.querySelectorAll('.hub-user-menu-header small').forEach(elemento => elemento.remove());
 }
 
 function aplicarEstilosCompactos() {
@@ -12,14 +14,34 @@ function aplicarEstilosCompactos() {
   style.id = STYLE_ID;
   style.textContent = `
     .hub-user-menu-dropdown {
-      width: min(260px, calc(100vw - 32px)) !important;
+      width: min(250px, calc(100vw - 32px)) !important;
       padding: 8px !important;
       border-radius: 18px !important;
+    }
+
+    .hub-user-menu-trigger {
+      min-height: 46px !important;
+      padding: 6px 10px 6px 6px !important;
+    }
+
+    .hub-user-menu-copy {
+      justify-content: center !important;
+    }
+
+    .hub-user-menu-copy small,
+    .hub-user-menu-header small,
+    .hub-user-menu-item small {
+      display: none !important;
     }
 
     .hub-user-menu-header {
       padding: 6px 7px 9px !important;
       gap: 8px !important;
+    }
+
+    .hub-user-menu-header em {
+      margin-top: 1px !important;
+      font-size: 0.7rem !important;
     }
 
     .hub-user-menu-avatar.large {
@@ -38,10 +60,6 @@ function aplicarEstilosCompactos() {
     .hub-user-menu-item span {
       font-size: 0.86rem !important;
       line-height: 1.15 !important;
-    }
-
-    .hub-user-menu-item small {
-      display: none !important;
     }
 
     .hub-user-menu-separator {
