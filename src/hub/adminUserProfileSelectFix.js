@@ -97,7 +97,9 @@ async function aplicarPerfisNoSelect() {
 
   await carregarDadosPerfilUsuario();
 
-  const perfilAtual = select.value || select.dataset.perfilAtual || obterPerfilAtualUsuario();
+  const perfilAtual = select.dataset.usuarioAlterouPerfil === 'true'
+    ? select.value
+    : select.value || select.dataset.perfilAtual || obterPerfilAtualUsuario();
   const perfis = perfisCache || [];
 
   if (!perfis.length) return;
@@ -121,13 +123,8 @@ function agendarAplicacaoPerfis() {
   });
 }
 
-function invalidarCacheUsuarios(event) {
-  const id = event?.detail?.id || '';
-  if (!id) {
-    usuariosCache = null;
-  } else if (usuariosCache) {
-    usuariosCache = usuariosCache.filter(item => String(item.id) !== String(id));
-  }
+function invalidarCacheUsuarios() {
+  usuariosCache = null;
   agendarAplicacaoPerfis();
 }
 
@@ -135,6 +132,14 @@ function iniciarObserver() {
   const observer = new MutationObserver(agendarAplicacaoPerfis);
   observer.observe(document.documentElement, { childList: true, subtree: true });
 }
+
+document.addEventListener('change', event => {
+  const select = obterSelectPerfil();
+  if (!select || event.target !== select) return;
+
+  select.dataset.usuarioAlterouPerfil = 'true';
+  select.dataset.perfilAtual = select.value || '';
+}, true);
 
 APPLY_DELAYS.forEach(delay => window.setTimeout(agendarAplicacaoPerfis, delay));
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarAplicacaoPerfis);
