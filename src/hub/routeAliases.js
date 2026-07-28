@@ -24,13 +24,9 @@ function normalizarRotaHub(pathname) {
 }
 
 function aplicarAliasDeRotaHub() {
-  const base = obterBaseHub(window.location.pathname || '/');
-
-  if (!base) {
-    return;
-  }
-
-  const rota = normalizarRotaHub(window.location.pathname || '/');
+  const pathname = window.location.pathname || '/';
+  const base = obterBaseHub(pathname);
+  const rota = normalizarRotaHub(pathname);
   const destino = ROUTE_ALIASES[rota];
 
   if (!destino) {
@@ -38,7 +34,8 @@ function aplicarAliasDeRotaHub() {
   }
 
   const [pathDestino, hashDestino = ''] = destino.split('#');
-  const proximaUrl = `${base}/${pathDestino}${hashDestino ? `#${hashDestino}` : ''}`;
+  const prefixo = base ? `${base}/` : '/';
+  const proximaUrl = `${prefixo}${pathDestino}${hashDestino ? `#${hashDestino}` : ''}`;
 
   window.history.replaceState({}, '', proximaUrl);
 }
