@@ -1,5 +1,21 @@
 const STYLE_ID = 'admin-user-permissions-flow-style';
 
+const ACAO_BULK_LABELS = [
+  'conceder tudo',
+  'bloquear tudo',
+  'restaurar padrao',
+  'restaurar padrão'
+];
+
+function normalizarTexto(texto = '') {
+  return String(texto || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
 function obterEstadoPermissoesUsuario() {
   if (typeof window.hubObterEstadoUsuarioTelaAdmin !== 'function') return null;
   const estado = window.hubObterEstadoUsuarioTelaAdmin();
@@ -47,6 +63,72 @@ function injetarEstilosPermissoesUsuario() {
       opacity: 0.52;
       cursor: not-allowed;
       filter: grayscale(0.3);
+    }
+
+    .admin-user-permission-original-bulk-action {
+      display: none !important;
+    }
+
+    .admin-user-permission-actions-menu {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
+    .admin-user-permission-actions-trigger {
+      min-height: 34px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+    }
+
+    .admin-user-permission-actions-list {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      z-index: 10;
+      min-width: 180px;
+      display: none;
+      padding: 6px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.16);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    body.dark .admin-user-permission-actions-list {
+      background: rgba(15, 23, 42, 0.96);
+      border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .admin-user-permission-actions-menu.is-open .admin-user-permission-actions-list {
+      display: grid;
+      gap: 4px;
+    }
+
+    .admin-user-permission-actions-list button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: transparent;
+      color: var(--text-strong, #0f172a);
+      text-align: left;
+      font: inherit;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+
+    body.dark .admin-user-permission-actions-list button {
+      color: var(--text-strong, #f8fafc);
+    }
+
+    .admin-user-permission-actions-list button:hover {
+      background: rgba(41, 72, 149, 0.08);
     }
 
     @media (max-width: 760px) {
@@ -102,6 +184,111 @@ function instalarMonitoramentoAlteracoes() {
   atualizarBotaoSalvarPermissoes();
 }
 
+function obterBotoesBulkPorGrupo(grupo) {
+  const encontrados = new Map();
+
+  Array.from(grupo.querySelectorAll('button')).forEach(botao => {
+    const textoNormalizado = normalizarTexto(botao.textContent);
+    if (!ACAO_BULK_LABELS.includes(textoNormalizado)) return;
+
+    if (textoNormalizado.includes('conceder')) {
+      encontrados.set('conceder', botao);
+    } else if (textoNormalizado.includes('bloquear')) {
+      encontrados.set('bloquear', botao);
+    } else if (textoNormalizado.includes('restaurar')) {
+      encontrados.set('restaurar', botao);
+    }
+  });
+
+  return encontrados;
+}
+
+function obterContainerAcoesModulo(botao) {
+  return botao.closest('.permission-module-actions, .module-actions, .admin-permission-module-actions, .permission-actions')
+    || botao.parentElement;
+}
+
+function executarAcaoBulkPermissoes(botaoOriginal, tipo) {
+  if (!botaoOriginal) return;
+
+  if (tipo === 'bloquear') {
+    const confirmado = window.confirm('Deseja bloquear todas as permissões deste módulo?');
+    if (!confirmado) return;
+  }
+
+  if (tipo === 'restaurar') {
+    const confirmado = window.confirm('Deseja restaurar o padrão de permissões deste módulo?');
+    if (!confirmado) return;
+  }
+
+  botaoOriginal.click();
+  window.setTimeout(atualizarBotaoSalvarPermissoes, 0);
+}
+
+function fecharMenusAcoesPermissoes(menuAtual = null) {
+  document.querySelectorAll('.admin-user-permission-actions-menu.is-open').forEach(menu => {
+    if (menu !== menuAtual) menu.classList.remove('is-open');
+  });
+}
+
+function criarMenuAcoesModulo(botoes) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'admin-user-permission-actions-menu';
+  wrapper.innerHTML = `
+    <button class="secondary-btn admin-user-permission-actions-trigger" type="button" aria-expanded="false">Ações</button>
+    <div class="admin-user-permission-actions-list" role="menu">
+      <button type="button" data-bulk-action="conceder">Conceder tudo</button>
+      <button type="button" data-bulk-action="bloquear">Bloquear tudo</button>
+      <button type="button" data-bulk-action="restaurar">Restaurar padrão</button>
+    </div>
+  `;
+
+  const trigger = wrapper.querySelector('.admin-user-permission-actions-trigger');
+  trigger?.addEventListener('click', event => {
+    event.stopPropagation();
+    const aberto = wrapper.classList.toggle('is-open');
+    trigger.setAttribute('aria-expanded', String(aberto));
+    fecharMenusAcoesPermissoes(wrapper);
+  });
+
+  wrapper.querySelectorAll('[data-bulk-action]').forEach(item => {
+    item.addEventListener('click', event => {
+      event.stopPropagation();
+      const tipo = item.dataset.bulkAction;
+      wrapper.classList.remove('is-open');
+      trigger?.setAttribute('aria-expanded', 'false');
+      executarAcaoBulkPermissoes(botoes.get(tipo), tipo);
+    });
+  });
+
+  return wrapper;
+}
+
+function aplicarMenusAcoesPorModulo() {
+  const escopo = document.querySelector('.admin-user-direct-permissions');
+  if (!escopo) return;
+
+  const candidatos = Array.from(escopo.querySelectorAll('button'))
+    .filter(botao => ACAO_BULK_LABELS.includes(normalizarTexto(botao.textContent)));
+
+  const containers = Array.from(new Set(candidatos.map(obterContainerAcoesModulo).filter(Boolean)));
+
+  containers.forEach(container => {
+    if (container.querySelector('.admin-user-permission-actions-menu')) return;
+
+    const botoes = obterBotoesBulkPorGrupo(container);
+    if (!botoes.size) return;
+
+    botoes.forEach(botao => {
+      botao.classList.add('admin-user-permission-original-bulk-action');
+      botao.setAttribute('aria-hidden', 'true');
+      botao.tabIndex = -1;
+    });
+
+    container.appendChild(criarMenuAcoesModulo(botoes));
+  });
+}
+
 function aplicarRodapePermissoesUsuario() {
   const estado = obterEstadoPermissoesUsuario();
   const escopo = document.querySelector('.admin-user-direct-permissions');
@@ -118,6 +305,7 @@ function aplicarRodapePermissoesUsuario() {
   }
 
   instalarMonitoramentoAlteracoes();
+  aplicarMenusAcoesPorModulo();
 }
 
 async function salvarAlteracoesPermissoesUsuario(usuarioId) {
@@ -157,6 +345,7 @@ function iniciarFluxoPermissoesUsuario() {
   agendarAplicacaoRodape();
 }
 
+window.addEventListener('click', () => fecharMenusAcoesPermissoes());
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarAplicacaoRodape);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarAplicacaoRodape);
 window.addEventListener('load', agendarAplicacaoRodape);
