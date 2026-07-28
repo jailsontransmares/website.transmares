@@ -30,6 +30,7 @@ function injetarEstilos() {
       margin-top: 18px;
       display: grid;
       gap: 18px;
+      max-width: 1040px;
     }
 
     .admin-user-fixed-header {
@@ -37,11 +38,13 @@ function injetarEstilos() {
       align-items: flex-start;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px;
+      padding: 18px 20px;
       border-radius: 22px;
-      background: rgba(255, 255, 255, 0.78);
+      background: rgba(255, 255, 255, 0.80);
       border: 1px solid rgba(148, 163, 184, 0.24);
       box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
     }
 
     body.dark .admin-user-fixed-header {
@@ -51,8 +54,8 @@ function injetarEstilos() {
 
     .admin-user-fixed-header h3 {
       margin: 0;
-      font-size: 1.2rem;
-      letter-spacing: -0.03em;
+      font-size: 1.22rem;
+      letter-spacing: -0.035em;
       color: var(--text-strong, #0f172a);
     }
 
@@ -60,16 +63,19 @@ function injetarEstilos() {
       margin: 5px 0 0;
       color: var(--text-muted, #64748b);
       font-size: 0.9rem;
+      line-height: 1.45;
     }
 
     .admin-user-fixed-card {
-      border-radius: 24px;
+      border-radius: 26px;
       background: rgba(255, 255, 255, 0.86);
       border: 1px solid rgba(148, 163, 184, 0.24);
-      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.09);
+      box-shadow: 0 22px 70px rgba(15, 23, 42, 0.10);
       padding: 20px;
       display: grid;
-      gap: 15px;
+      gap: 16px;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
     }
 
     body.dark .admin-user-fixed-card {
@@ -77,46 +83,141 @@ function injetarEstilos() {
       border-color: rgba(148, 163, 184, 0.18);
     }
 
-    .admin-user-fixed-card > label,
-    .admin-user-fixed-card .admin-users-phase5-field {
+    .admin-user-fixed-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .admin-user-fixed-section {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+      border-radius: 22px;
+      background: rgba(248, 250, 252, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      padding: 18px;
+    }
+
+    body.dark .admin-user-fixed-section {
+      background: rgba(30, 41, 59, 0.48);
+      border-color: rgba(148, 163, 184, 0.16);
+    }
+
+    .admin-user-fixed-section-header h4 {
+      margin: 0;
+      color: var(--text-strong, #0f172a);
+      font-size: 0.98rem;
+      letter-spacing: -0.02em;
+    }
+
+    .admin-user-fixed-section-header p {
+      margin: 4px 0 0;
+      color: var(--text-muted, #64748b);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .admin-user-fixed-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .admin-user-fixed-fields label,
+    .admin-user-fixed-fields .admin-users-phase5-field,
+    .admin-user-fixed-access label,
+    .admin-user-fixed-access .admin-users-phase5-field {
       display: grid;
       gap: 7px;
       margin: 0;
+      min-width: 0;
     }
 
-    .admin-user-fixed-card > label span,
-    .admin-user-fixed-card .admin-users-phase5-field span {
-      font-size: 0.78rem;
+    .admin-user-fixed-fields label span,
+    .admin-user-fixed-fields .admin-users-phase5-field span,
+    .admin-user-fixed-access label span,
+    .admin-user-fixed-access .admin-users-phase5-field span {
+      font-size: 0.75rem;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.07em;
       color: var(--text-muted, #64748b);
     }
 
-    .admin-user-fixed-card .small-modal-actions {
-      margin-top: 8px;
-      justify-content: flex-end;
+    .admin-user-fixed-fields .config-input,
+    .admin-user-fixed-access .config-input {
+      width: 100%;
+      min-width: 0;
     }
 
-    .admin-user-fixed-card .admin-user-access-panel {
-      margin-top: 2px;
+    .admin-user-fixed-access {
+      display: grid;
+      gap: 13px;
+    }
+
+    .admin-user-fixed-access .admin-users-phase5-password-row {
+      grid-template-columns: 1fr;
+      margin-top: 0;
+    }
+
+    .admin-user-fixed-access .admin-users-phase5-note,
+    .admin-user-fixed-access .admin-users-phase5-status-note {
+      margin: 0;
+    }
+
+    .admin-user-fixed-access .admin-user-access-panel {
+      margin: 0;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(148, 163, 184, 0.20);
+      padding: 14px;
+    }
+
+    body.dark .admin-user-fixed-access .admin-user-access-panel {
+      background: rgba(15, 23, 42, 0.38);
+      border-color: rgba(148, 163, 184, 0.14);
+    }
+
+    .admin-user-fixed-access .admin-user-access-actions,
+    .admin-user-fixed-access .admin-user-password-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .admin-user-fixed-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding-top: 4px;
+    }
+
+    .admin-user-fixed-card .small-modal-actions {
+      margin-top: 0;
+      justify-content: flex-end;
     }
 
     .admin-user-fixed-card.is-permissions-stage {
       padding: 16px;
     }
 
-    .admin-user-fixed-card .permission-modal-layout {
+    .admin-user-fixed-card.is-permissions-stage .admin-user-fixed-layout {
+      display: block;
+    }
+
+    .admin-user-fixed-card.is-permissions-stage .permission-modal-layout {
       max-height: none;
     }
 
-    .admin-user-fixed-card .permission-modal-content {
+    .admin-user-fixed-card.is-permissions-stage .permission-modal-content {
       max-height: min(68vh, 760px);
       overflow: auto;
       padding-right: 4px;
     }
 
-    .admin-user-fixed-card .admin-user-permissions-actions {
+    .admin-user-fixed-card.is-permissions-stage .admin-user-permissions-actions {
       position: sticky;
       bottom: 0;
       background: inherit;
@@ -159,9 +260,19 @@ function injetarEstilos() {
       display: none !important;
     }
 
+    @media (max-width: 980px) {
+      .admin-user-fixed-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
     @media (max-width: 760px) {
       .admin-user-fixed-header {
         flex-direction: column;
+      }
+
+      .admin-user-fixed-fields {
+        grid-template-columns: 1fr;
       }
     }
   `;
@@ -219,6 +330,79 @@ function criarCabecalhoFixo(estado) {
   return header;
 }
 
+function obterTextoLabel(elemento) {
+  return elemento?.querySelector('span')?.textContent?.trim().toLowerCase() || '';
+}
+
+function moverPorLabel(origem, destino, rotulos = []) {
+  rotulos.forEach(rotulo => {
+    const alvo = Array.from(origem.querySelectorAll(':scope > label, :scope > .admin-users-phase5-field'))
+      .find(item => obterTextoLabel(item) === rotulo);
+    if (alvo) destino.appendChild(alvo);
+  });
+}
+
+function organizarFormularioDados(card) {
+  const modal = card.querySelector('.admin-user-modal');
+  if (!modal || modal.dataset.fixedLayoutOrganized === 'true') return;
+  if (modal.querySelector('.permission-modal-layout')) return;
+
+  const layout = document.createElement('div');
+  layout.className = 'admin-user-fixed-layout';
+
+  const dadosSection = document.createElement('section');
+  dadosSection.className = 'admin-user-fixed-section';
+  dadosSection.innerHTML = `
+    <div class="admin-user-fixed-section-header">
+      <h4>Dados cadastrais</h4>
+      <p>Informações básicas de identificação do usuário no Hub.</p>
+    </div>
+    <div class="admin-user-fixed-fields"></div>
+  `;
+
+  const acessoSection = document.createElement('section');
+  acessoSection.className = 'admin-user-fixed-section admin-user-fixed-access';
+  acessoSection.innerHTML = `
+    <div class="admin-user-fixed-section-header">
+      <h4>Acesso e permissões</h4>
+      <p>Controle de perfil, status, senha e permissões adicionais.</p>
+    </div>
+  `;
+
+  const camposDados = dadosSection.querySelector('.admin-user-fixed-fields');
+  moverPorLabel(modal, camposDados, ['nome', 'e-mail', 'cpf', 'telefone']);
+  moverPorLabel(modal, acessoSection, ['perfil', 'status']);
+
+  Array.from(modal.children).forEach(child => {
+    if (child.classList?.contains('admin-users-phase5-status-note')) {
+      acessoSection.appendChild(child);
+    }
+  });
+
+  Array.from(modal.children).forEach(child => {
+    if (child.classList?.contains('admin-users-phase5-password-row')
+      || child.classList?.contains('admin-users-phase5-note')
+      || child.classList?.contains('admin-user-access-panel')) {
+      acessoSection.appendChild(child);
+    }
+  });
+
+  const actions = Array.from(modal.children).find(child => child.classList?.contains('small-modal-actions'));
+  if (actions) {
+    actions.classList.add('admin-user-fixed-actions');
+  }
+
+  layout.appendChild(dadosSection);
+  layout.appendChild(acessoSection);
+  modal.insertBefore(layout, modal.firstChild);
+
+  if (actions) {
+    modal.appendChild(actions);
+  }
+
+  modal.dataset.fixedLayoutOrganized = 'true';
+}
+
 function montarTelaFixa(estado) {
   const painel = obterPainelUsuarios();
   const backdrop = document.querySelector('.admin-user-modal')?.closest('.modal-backdrop');
@@ -241,6 +425,7 @@ function montarTelaFixa(estado) {
   card.appendChild(backdrop);
   shell.appendChild(card);
 
+  organizarFormularioDados(card);
   painel.classList.add('admin-user-fixed-hidden-list');
 
   if (typeof window.hubAdminUsersGerarSenhaPhase5 === 'function') {
