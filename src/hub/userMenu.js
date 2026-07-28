@@ -9,6 +9,7 @@ const ultimoUsuario = {
 
 let observador = null;
 let eventosGlobaisRegistrados = false;
+let menuAbertoAtual = null;
 
 function escapeHtml(texto) {
   return String(texto || '')
@@ -149,20 +150,58 @@ function renderMenu(usuario) {
   `;
 }
 
+function posicionarDropdown(menu) {
+  const trigger = menu?.querySelector('.hub-user-menu-trigger');
+  const dropdown = menu?.querySelector('.hub-user-menu-dropdown');
+
+  if (!trigger || !dropdown || dropdown.hidden) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const margem = 16;
+  const topo = Math.min(rect.bottom + 10, window.innerHeight - margem);
+  const direita = Math.max(margem, window.innerWidth - rect.right);
+  const larguraMaxima = Math.min(360, window.innerWidth - margem * 2);
+  const alturaMaxima = Math.max(180, window.innerHeight - topo - margem);
+
+  dropdown.style.setProperty('--hub-user-menu-top', `${topo}px`);
+  dropdown.style.setProperty('--hub-user-menu-right', `${direita}px`);
+  dropdown.style.setProperty('--hub-user-menu-width', `${larguraMaxima}px`);
+  dropdown.style.setProperty('--hub-user-menu-max-height', `${alturaMaxima}px`);
+}
+
 function alternarMenuUsuario(menu, aberto) {
-  const dropdown = menu.querySelector('.hub-user-menu-dropdown');
-  const trigger = menu.querySelector('.hub-user-menu-trigger');
+  const dropdown = menu?.querySelector('.hub-user-menu-dropdown');
+  const trigger = menu?.querySelector('.hub-user-menu-trigger');
   const deveAbrir = typeof aberto === 'boolean' ? aberto : dropdown?.hidden;
 
   if (!dropdown || !trigger) return;
 
-  dropdown.hidden = !deveAbrir;
-  menu.dataset.menuFechado = deveAbrir ? 'false' : 'true';
-  trigger.setAttribute('aria-expanded', deveAbrir ? 'true' : 'false');
+  if (deveAbrir) {
+    fecharTodosMenusUsuario(menu);
+    dropdown.hidden = false;
+    menu.dataset.menuFechado = 'false';
+    trigger.setAttribute('aria-expanded', 'true');
+    menuAbertoAtual = menu;
+    window.requestAnimationFrame(() => posicionarDropdown(menu));
+    return;
+  }
+
+  dropdown.hidden = true;
+  dropdown.removeAttribute('style');
+  menu.dataset.menuFechado = 'true';
+  trigger.setAttribute('aria-expanded', 'false');
+
+  if (menuAbertoAtual === menu) {
+    menuAbertoAtual = null;
+  }
 }
 
-function fecharTodosMenusUsuario() {
-  document.querySelectorAll(`.${MENU_ROOT_CLASS}`).forEach(menu => alternarMenuUsuario(menu, false));
+function fecharTodosMenusUsuario(excecao = null) {
+  document.querySelectorAll(`.${MENU_ROOT_CLASS}`).forEach(menu => {
+    if (menu !== excecao) {
+      alternarMenuUsuario(menu, false);
+    }
+  });
 }
 
 function executarAcaoMenuUsuario(acao) {
@@ -220,6 +259,14 @@ function registrarEventosGlobais() {
       fecharTodosMenusUsuario();
     }
   });
+
+  window.addEventListener('resize', () => {
+    if (menuAbertoAtual) posicionarDropdown(menuAbertoAtual);
+  });
+
+  window.addEventListener('scroll', () => {
+    if (menuAbertoAtual) posicionarDropdown(menuAbertoAtual);
+  }, true);
 }
 
 function aplicarEstilosMenuUsuario() {
@@ -228,30 +275,53 @@ function aplicarEstilosMenuUsuario() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    .hub-user-menu-host {
+    .topbar {
+      overflow: visible !important;
       position: relative;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      min-width: 240px;
-      text-align: left;
-      overflow: visible;
+      z-index: 20;
+    }
+
+    .user-box.hub-user-menu-host,
+    .hub-user-box.hub-user-menu-host {
+      position: relative !important;
+      display: flex !important;
+      justify-content: flex-end !important;
+      align-items: center !important;
+      width: clamp(248px, 28vw, 340px) !important;
+      min-width: 0 !important;
+      max-width: 340px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      color: inherit !important;
+      font-size: inherit !important;
+      line-height: inherit !important;
+      text-align: left !important;
+      overflow: visible !important;
     }
 
     .hub-user-menu {
       position: relative;
-      z-index: 80;
+      z-index: 9998;
       width: 100%;
-      max-width: 320px;
+      max-width: 340px;
+      overflow: visible;
+      isolation: isolate;
     }
 
     .hub-user-menu-trigger {
       width: 100%;
+      min-height: 50px;
       border: 1px solid rgba(15, 23, 42, 0.12);
-      background: rgba(255, 255, 255, 0.78);
-      box-shadow: 0 14px 35px rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
       border-radius: 999px;
-      padding: 7px 10px 7px 7px;
+      padding: 7px 11px 7px 7px;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 9px;
@@ -260,12 +330,13 @@ function aplicarEstilosMenuUsuario() {
       color: #0f172a;
       font: inherit;
       text-align: left;
-      backdrop-filter: blur(18px);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
 
     .dark .hub-user-menu-trigger {
       border-color: rgba(255, 255, 255, 0.12);
-      background: rgba(15, 23, 42, 0.74);
+      background: rgba(15, 23, 42, 0.86);
       color: #e5e7eb;
     }
 
@@ -286,9 +357,9 @@ function aplicarEstilosMenuUsuario() {
     }
 
     .hub-user-menu-avatar.large {
-      width: 42px;
-      height: 42px;
-      font-size: 0.88rem;
+      width: 44px;
+      height: 44px;
+      font-size: 0.9rem;
     }
 
     .hub-user-menu-copy {
@@ -301,10 +372,12 @@ function aplicarEstilosMenuUsuario() {
 
     .hub-user-menu-copy strong,
     .hub-user-menu-header strong {
+      display: block;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 0.88rem;
+      line-height: 1.18;
     }
 
     .hub-user-menu-copy small,
@@ -317,6 +390,7 @@ function aplicarEstilosMenuUsuario() {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      line-height: 1.22;
     }
 
     .dark .hub-user-menu-copy small,
@@ -332,23 +406,31 @@ function aplicarEstilosMenuUsuario() {
     }
 
     .hub-user-menu-dropdown {
-      position: absolute;
-      top: calc(100% + 10px);
-      right: 0;
-      width: min(320px, 86vw);
+      position: fixed;
+      top: var(--hub-user-menu-top, 84px);
+      right: var(--hub-user-menu-right, 24px);
+      width: min(var(--hub-user-menu-width, 360px), calc(100vw - 32px));
+      max-height: var(--hub-user-menu-max-height, calc(100vh - 100px));
+      overflow: auto;
+      overscroll-behavior: contain;
       border-radius: 22px;
       border: 1px solid rgba(15, 23, 42, 0.12);
-      background: rgba(255, 255, 255, 0.94);
-      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
       backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
       padding: 10px;
-      z-index: 120;
+      z-index: 9999;
+    }
+
+    .hub-user-menu-dropdown[hidden] {
+      display: none !important;
     }
 
     .dark .hub-user-menu-dropdown {
       border-color: rgba(255,255,255,0.12);
-      background: rgba(15, 23, 42, 0.96);
-      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+      background: rgba(15, 23, 42, 0.98);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
     }
 
     .hub-user-menu-header {
@@ -357,6 +439,7 @@ function aplicarEstilosMenuUsuario() {
       gap: 10px;
       align-items: center;
       padding: 8px 8px 12px;
+      min-width: 0;
     }
 
     .hub-user-menu-header > div {
@@ -368,12 +451,14 @@ function aplicarEstilosMenuUsuario() {
 
     .hub-user-menu-item {
       width: 100%;
+      min-height: 54px;
       border: 0;
       background: transparent;
       border-radius: 14px;
       padding: 10px 11px;
       display: flex;
       flex-direction: column;
+      justify-content: center;
       gap: 2px;
       text-align: left;
       color: #0f172a;
@@ -399,6 +484,7 @@ function aplicarEstilosMenuUsuario() {
     .hub-user-menu-item span {
       font-weight: 750;
       font-size: 0.86rem;
+      line-height: 1.22;
     }
 
     .hub-user-menu-item.danger span,
@@ -414,6 +500,18 @@ function aplicarEstilosMenuUsuario() {
 
     .dark .hub-user-menu-separator {
       background: rgba(255, 255, 255, 0.10);
+    }
+
+    @media (max-width: 760px) {
+      .user-box.hub-user-menu-host,
+      .hub-user-box.hub-user-menu-host {
+        width: min(100%, 320px) !important;
+        max-width: 320px !important;
+      }
+
+      .hub-user-menu-copy small {
+        display: none;
+      }
     }
   `;
 
