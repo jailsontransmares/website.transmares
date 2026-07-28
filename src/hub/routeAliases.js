@@ -2,8 +2,7 @@ const ROUTE_ALIASES = {
   'admin/usuarios': 'admin#usuarios',
   'admin/perfis': 'admin#perfis',
   'admin/permissoes': 'admin#permissoes',
-  configuracoes: 'admin#identidade',
-  'configuracoes/corretora': 'admin#logo'
+  configuracoes: 'admin#identidade'
 };
 
 function obterBaseHub(pathname) {
