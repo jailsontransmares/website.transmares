@@ -1,3 +1,0 @@
-# Fallback SPA do Hub.
-# Qualquer rota direta/futura deve carregar o app e deixar o roteador interno resolver.
-/* /index.html 200
