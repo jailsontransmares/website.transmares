@@ -1,6 +1,9 @@
-const USER_PERMISSION_EXPAND_FIX_DELAYS = [0, 60, 140, 300, 700];
-let lastExpandCollapseAction = '';
-let lastExpandCollapseAt = 0;
+const USER_PERMISSION_EXPAND_FIX_DELAYS = [0, 60, 140, 300, 700, 1200];
+const CLICK_SUPPRESSION_MS = 500;
+
+let lastHandledAction = '';
+let lastHandledAt = 0;
+let lastHandledPointerId = '';
 
 function normalizeUserPermissionText(text = '') {
   return String(text || '')
@@ -46,6 +49,16 @@ function getExpandCollapseUserAction(control) {
   return '';
 }
 
+function forceUserPermissionDirectRefresh() {
+  if (typeof window.hubSolicitarRenderizacaoUsuarioTelaAdmin === 'function') {
+    window.hubSolicitarRenderizacaoUsuarioTelaAdmin();
+  }
+
+  if (typeof window.hubAdminAgendarLimpezaModaisLegadosUsuario === 'function') {
+    window.hubAdminAgendarLimpezaModaisLegadosUsuario();
+  }
+}
+
 function getControlledUserPermissionElement(control) {
   const id = control?.getAttribute?.('aria-controls');
   if (!id) return null;
@@ -63,81 +76,20 @@ function setUserPermissionContentVisible(element, expanded) {
   element.style.display = expanded ? '' : 'none';
 }
 
-function setUserPermissionModuleExpanded(container, expanded) {
-  if (!container) return;
-
-  if (container.tagName === 'DETAILS') {
-    container.open = expanded;
-  }
-
-  container.classList.toggle('is-open', expanded);
-  container.classList.toggle('open', expanded);
-  container.classList.toggle('expanded', expanded);
-  container.classList.toggle('is-expanded', expanded);
-  container.classList.toggle('is-collapsed', !expanded);
-  container.classList.toggle('collapsed', !expanded);
-  container.classList.toggle('closed', !expanded);
-
-  if (container.hasAttribute('aria-expanded')) {
-    container.setAttribute('aria-expanded', String(expanded));
-  }
-
-  container.querySelectorAll('[aria-expanded]').forEach(control => {
-    if (isIgnoredUserPermissionControl(control)) return;
-    if (getExpandCollapseUserAction(control)) return;
-
-    control.setAttribute('aria-expanded', String(expanded));
-
-    const controlled = getControlledUserPermissionElement(control);
-    if (controlled && container.contains(controlled)) {
-      setUserPermissionContentVisible(controlled, expanded);
-    }
-  });
-
-  container.querySelectorAll([
-    '.permission-module-body',
-    '.permission-module-content',
-    '.permission-group-body',
-    '.permission-group-content',
-    '.permissions-group-body',
-    '.permissions-group-content',
-    '.permission-items',
-    '.permission-fields',
-    '.permission-content',
-    '.module-permissions',
-    '.permission-module-permissions',
-    '[data-permission-content]',
-    '[data-collapsible-content]'
-  ].join(', ')).forEach(content => setUserPermissionContentVisible(content, expanded));
-}
-
-function getUserPermissionModules(scope) {
-  const selectors = [
-    'details',
-    '.permission-module',
-    '.permission-group',
-    '.permissions-group',
-    '.permissions-module',
-    '.permission-card',
-    '[data-permission-module]',
-    '[data-permission-group]',
-    '[data-collapsible]'
-  ].join(', ');
-
-  return Array.from(scope.querySelectorAll(selectors)).filter(container => {
-    if (container.closest('.admin-user-permission-actions-menu')) return false;
-    if (container.closest('#admin-user-permission-floating-menu')) return false;
-    if (container.closest('.admin-user-permissions-clean-footer')) return false;
-    return true;
-  });
-}
-
-function applyUserPermissionExpandCollapse(expanded) {
+function applyUserPermissionDomFallback(expanded) {
   const scope = getUserPermissionScope();
   if (!scope) return;
 
-  getUserPermissionModules(scope).forEach(container => {
-    setUserPermissionModuleExpanded(container, expanded);
+  scope.querySelectorAll('.permission-module-card').forEach(card => {
+    card.classList.toggle('is-open', expanded);
+    card.classList.toggle('is-collapsed', !expanded);
+    card.querySelector('.permission-module-toggle')?.setAttribute('aria-expanded', String(expanded));
+    const control = card.querySelector('.permission-module-control');
+    if (control) control.textContent = expanded ? '-' : '+';
+
+    card.querySelectorAll('.permission-table-wrap, .permission-module-body, .permission-module-content, [data-permission-content], [data-collapsible-content]').forEach(content => {
+      setUserPermissionContentVisible(content, expanded);
+    });
   });
 
   scope.querySelectorAll('[aria-controls]').forEach(control => {
@@ -150,10 +102,46 @@ function applyUserPermissionExpandCollapse(expanded) {
     control.setAttribute('aria-expanded', String(expanded));
     setUserPermissionContentVisible(controlled, expanded);
   });
+}
 
-  if (typeof window.hubAdminAgendarLimpezaModaisLegadosUsuario === 'function') {
-    window.hubAdminAgendarLimpezaModaisLegadosUsuario();
+function executeUserPermissionExpandCollapse(action) {
+  const expanded = action === 'expand';
+
+  if (typeof window.alternarTodosModulosPermissoesUsuario === 'function') {
+    window.alternarTodosModulosPermissoesUsuario(expanded);
+  } else {
+    applyUserPermissionDomFallback(expanded);
   }
+
+  USER_PERMISSION_EXPAND_FIX_DELAYS.forEach(delay => {
+    window.setTimeout(() => {
+      forceUserPermissionDirectRefresh();
+      applyUserPermissionDomFallback(expanded);
+    }, delay);
+  });
+}
+
+function markHandled(event, action) {
+  lastHandledAction = action;
+  lastHandledAt = Date.now();
+  lastHandledPointerId = event.pointerId ? String(event.pointerId) : '';
+}
+
+function shouldSuppressDuplicateClick(event, action) {
+  if (event.type !== 'click') return false;
+
+  const now = Date.now();
+  if (lastHandledAction !== action || now - lastHandledAt > CLICK_SUPPRESSION_MS) {
+    return false;
+  }
+
+  return !lastHandledPointerId || !event.pointerId || String(event.pointerId) === lastHandledPointerId;
+}
+
+function stopUserPermissionEvent(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
 }
 
 function handleUserPermissionExpandCollapse(event) {
@@ -167,25 +155,16 @@ function handleUserPermissionExpandCollapse(event) {
   const action = getExpandCollapseUserAction(control);
   if (!action) return;
 
-  const now = Date.now();
-  if (event.type === 'click' && lastExpandCollapseAction === action && now - lastExpandCollapseAt < 250) {
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+  if (event.type === 'pointerdown' && event.button !== undefined && event.button !== 0) return;
+
+  if (shouldSuppressDuplicateClick(event, action)) {
+    stopUserPermissionEvent(event);
     return;
   }
 
-  lastExpandCollapseAction = action;
-  lastExpandCollapseAt = now;
-
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
-
-  const expanded = action === 'expand';
-  USER_PERMISSION_EXPAND_FIX_DELAYS.forEach(delay => {
-    window.setTimeout(() => applyUserPermissionExpandCollapse(expanded), delay);
-  });
+  stopUserPermissionEvent(event);
+  markHandled(event, action);
+  executeUserPermissionExpandCollapse(action);
 }
 
 document.addEventListener('pointerdown', handleUserPermissionExpandCollapse, true);
