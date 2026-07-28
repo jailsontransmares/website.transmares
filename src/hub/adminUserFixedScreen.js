@@ -1,9 +1,9 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 
 const STYLE_ID = 'admin-user-direct-screen-style';
-let observerInstalled = false;
 let renderScheduled = false;
 let rendering = false;
+let loadingPermissionsFor = '';
 let originalAbrirModalNovoRegistro = null;
 let originalEditarUsuarioAdmin = null;
 let originalFecharModalNovoRegistro = null;
@@ -444,11 +444,14 @@ function renderTelaPermissoesUsuario(estado) {
 async function sincronizarPermissoesLegadas(estado) {
   if (estado.etapa !== 'permissoes' || !estado.id) return;
   if (obterHtmlPermissoesLegadas()) return;
+  if (loadingPermissionsFor === estado.id) return;
   if (typeof originalAbrirPermissoesUsuarioAdmin !== 'function') return;
 
+  loadingPermissionsFor = estado.id;
   try {
     await originalAbrirPermissoesUsuarioAdmin(estado.id, { manterMensagem: true });
   } finally {
+    loadingPermissionsFor = '';
     agendarRenderizacaoDireta();
   }
 }
@@ -574,32 +577,20 @@ function instalarOverrides() {
   }
 }
 
-function instalarObserver() {
-  if (observerInstalled) return;
-  observerInstalled = true;
-
-  const observer = new MutationObserver(() => {
-    instalarOverrides();
-    agendarRenderizacaoDireta();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
-
 function iniciar() {
   if (!supabase) return;
   instalarOverrides();
   injetarEstilos();
-  instalarObserver();
   agendarRenderizacaoDireta();
 }
 
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarRenderizacaoDireta);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarRenderizacaoDireta);
 window.addEventListener('hubAdminUsuariosAtualizados', event => invalidarCacheUsuario(event?.detail?.id || ''));
+window.addEventListener('load', () => {
+  instalarOverrides();
+  agendarRenderizacaoDireta();
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
