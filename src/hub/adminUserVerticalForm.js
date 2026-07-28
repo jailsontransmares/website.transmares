@@ -81,6 +81,14 @@ function injetarLayoutVerticalUsuario() {
       display: none !important;
     }
 
+    .admin-user-direct-shell:has(.admin-user-direct-permissions) .admin-user-direct-header {
+      justify-content: flex-start !important;
+    }
+
+    .admin-user-direct-shell:has(.admin-user-direct-permissions) .admin-user-direct-header > .secondary-btn {
+      display: none !important;
+    }
+
     .admin-user-direct-header {
       align-items: center !important;
     }
