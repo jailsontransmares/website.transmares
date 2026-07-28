@@ -86,9 +86,10 @@ function obterValorMascarado(prefixo, campo) {
   return input.value.trim();
 }
 
-async function atualizarCpfTelefoneUsuario({ id = '', email = '', cpf = '', telefone = '' }) {
+async function atualizarDadosComplementaresUsuario({ id = '', email = '', perfilId = '', cpf = '', telefone = '' }) {
   const supabase = exigirSupabaseConfigurado();
   const payload = {
+    perfil_id: perfilId || null,
     cpf: cpf || null,
     telefone: telefone || null,
     updated_at: new Date().toISOString()
@@ -116,7 +117,7 @@ async function atualizarCpfTelefoneUsuario({ id = '', email = '', cpf = '', tele
     .eq('id', usuarioId);
 
   if (error) {
-    throw new Error(error.message || 'Não foi possível atualizar CPF/telefone.');
+    throw new Error(error.message || 'Não foi possível atualizar dados complementares do usuário.');
   }
 
   return usuarioId;
@@ -141,15 +142,17 @@ function instalarWrapperSalvar() {
 
     const prefixo = obterPrefixoUsuario(id || estado.id || '');
     const email = obterCampo(prefixo, 'email')?.value || '';
+    const perfilId = obterCampo(prefixo, 'perfil')?.value || '';
     const cpf = obterValorMascarado(prefixo, 'cpf');
     const telefone = obterValorMascarado(prefixo, 'telefone');
 
     const resultado = await original.apply(this, arguments);
 
     try {
-      const usuarioId = await atualizarCpfTelefoneUsuario({
+      const usuarioId = await atualizarDadosComplementaresUsuario({
         id: id || estado.id || '',
         email,
+        perfilId,
         cpf,
         telefone
       });
@@ -160,7 +163,7 @@ function instalarWrapperSalvar() {
         window.abrirTelaEditarUsuarioAdmin(usuarioId || id || estado.id);
       }
     } catch (erro) {
-      console.warn('Usuário salvo, mas CPF/telefone não foram atualizados:', erro);
+      console.warn('Usuário salvo, mas os dados complementares não foram atualizados:', erro);
       dispatchUsuarioAtualizado(id || estado.id || '');
     }
 
