@@ -45,6 +45,14 @@ function getExpandCollapseUserAction(control) {
   return '';
 }
 
+function cleanupLegacyModalAfterDirectRender() {
+  window.setTimeout(() => {
+    if (typeof window.hubAdminLimparModaisLegadosPermissoes === 'function') {
+      window.hubAdminLimparModaisLegadosPermissoes();
+    }
+  }, 160);
+}
+
 function queueDirectUserPermissionRefresh() {
   if (refreshQueued) return;
   refreshQueued = true;
@@ -56,9 +64,7 @@ function queueDirectUserPermissionRefresh() {
       detail: getUserPermissionScreenState()
     }));
 
-    if (typeof window.hubAdminAgendarLimpezaModaisLegadosUsuario === 'function') {
-      window.hubAdminAgendarLimpezaModaisLegadosUsuario();
-    }
+    cleanupLegacyModalAfterDirectRender();
   });
 }
 
