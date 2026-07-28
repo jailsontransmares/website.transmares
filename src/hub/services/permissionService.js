@@ -12,7 +12,8 @@ const MODULE_RESOURCE_MAP = {
   'admin-modulos': 'admin.modulos',
   perfil: 'perfil',
   configuracoes: 'configuracoes',
-  'configuracoes-corretora': 'configuracoes.corretora'
+  'configuracoes-corretora': 'configuracoes.corretora',
+  'configuracoes-identidade-visual': 'configuracoes.identidade_visual'
 };
 
 function normalizarIdentificadorModulo(valor = '') {
@@ -85,7 +86,9 @@ export function montarPermissoesLegadas(usuario) {
     'painel_ar.validacoes',
     'perfil'
   ];
-  const modulos = gestor ? [...modulosBase, 'admin', 'configuracoes', 'configuracoes.corretora'] : modulosBase;
+  const modulos = gestor
+    ? [...modulosBase, 'admin', 'configuracoes', 'configuracoes.corretora', 'configuracoes.identidade_visual']
+    : modulosBase;
   const permissoes = modulos.map(recurso_chave => ({
     recurso_chave,
     acao: 'view',
@@ -102,6 +105,7 @@ export function montarPermissoesLegadas(usuario) {
       { recurso_chave: 'admin.permissoes', acao: 'view', permitido: true, origem: 'legacy' },
       { recurso_chave: 'configuracoes', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'configuracoes.corretora', acao: 'update', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'configuracoes.identidade_visual', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'central_senhas', acao: 'view_secret', permitido: true, origem: 'legacy' }
     );
   }
