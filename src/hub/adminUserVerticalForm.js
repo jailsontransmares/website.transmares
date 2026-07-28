@@ -89,6 +89,49 @@ function injetarLayoutVerticalUsuario() {
       display: none !important;
     }
 
+    .admin-user-direct-shell:has(.admin-user-direct-permissions) .admin-user-direct-card {
+      display: grid !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+      max-height: min(74vh, 780px) !important;
+      overflow: hidden !important;
+    }
+
+    .admin-user-direct-permissions {
+      display: grid !important;
+      grid-template-rows: auto minmax(0, 1fr) auto !important;
+      min-height: 0 !important;
+    }
+
+    .admin-user-direct-permissions .permission-modal-layout {
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .admin-user-direct-permissions .permission-modal-content {
+      max-height: none !important;
+      min-height: 0 !important;
+      overflow: auto !important;
+      padding-right: 6px !important;
+    }
+
+    .admin-user-direct-permissions > .admin-user-direct-actions {
+      position: sticky !important;
+      bottom: 0 !important;
+      z-index: 2 !important;
+      margin-top: 12px !important;
+      padding: 14px 0 0 !important;
+      background: var(--surface, rgba(255, 255, 255, 0.92)) !important;
+      justify-content: flex-start !important;
+    }
+
+    body.dark .admin-user-direct-permissions > .admin-user-direct-actions {
+      background: rgba(15, 23, 42, 0.92) !important;
+    }
+
+    .admin-user-direct-permissions .admin-user-permissions-actions .secondary-btn:first-child {
+      display: none !important;
+    }
+
     .admin-user-direct-header {
       align-items: center !important;
     }
@@ -120,6 +163,10 @@ function injetarLayoutVerticalUsuario() {
       .admin-user-direct-actions .secondary-btn,
       .admin-user-direct-actions .save-btn {
         width: 100% !important;
+      }
+
+      .admin-user-direct-shell:has(.admin-user-direct-permissions) .admin-user-direct-card {
+        max-height: 78vh !important;
       }
     }
   `;
