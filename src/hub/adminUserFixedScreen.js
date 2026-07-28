@@ -2,12 +2,11 @@ import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 
 const STYLE_ID = 'admin-user-direct-screen-style';
 let observerInstalled = false;
+let renderScheduled = false;
 let rendering = false;
-let loadingPermissionsFor = '';
 let originalAbrirModalNovoRegistro = null;
 let originalEditarUsuarioAdmin = null;
 let originalFecharModalNovoRegistro = null;
-let originalVoltarListaUsuariosAdmin = null;
 let originalAbrirPermissoesUsuarioAdmin = null;
 let originalSalvarPermissoesUsuarioAdmin = null;
 let cachePerfis = [];
@@ -55,6 +54,26 @@ function normalizarStatus(status = 'ativo') {
   if (['ativo', 'inativo', 'arquivado'].includes(valor)) return valor;
   if (valor === 'bloqueado' || valor === 'pendente') return 'inativo';
   return 'ativo';
+}
+
+function gerarSenhaSegura() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint8Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(byte => chars[byte % chars.length]).join('');
+}
+
+function obterPrefixoAtual() {
+  const estado = obterEstadoTela();
+  return estado.modo === 'editar' && estado.id ? `usuario_${estado.id}` : 'usuario_novo';
+}
+
+function gerarSenhaTelaDireta() {
+  const input = document.getElementById(`${obterPrefixoAtual()}_senha_admin`);
+  if (!input) return;
+  input.value = gerarSenhaSegura();
+  input.focus();
+  input.select();
 }
 
 function injetarEstilos() {
@@ -258,6 +277,13 @@ function injetarEstilos() {
       border-top: 1px solid rgba(148, 163, 184, 0.18);
     }
 
+    .admin-user-direct-loading {
+      min-height: 140px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+
     @media (max-width: 980px) {
       .admin-user-direct-layout { grid-template-columns: 1fr; }
       .admin-user-direct-shell { max-width: 100%; }
@@ -373,7 +399,7 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
         <p class="admin-user-direct-note">Status padronizado com o Supabase: ativo, inativo ou arquivado. Para bloquear acesso, use inativo.</p>
         <label><span>${editando ? 'Nova senha administrativa' : 'Senha inicial'}</span><input id="${prefixo}_senha_admin" class="config-input" type="text" autocomplete="new-password" placeholder="${editando ? 'Opcional' : 'Gerar ou informar senha'}"></label>
         <div class="admin-user-direct-inline-actions">
-          <button class="secondary-btn" type="button" onclick="hubAdminUsersGerarSenhaPhase5()">Gerar senha</button>
+          <button class="secondary-btn" type="button" onclick="hubAdminDirectGerarSenhaUsuario()">Gerar senha</button>
           ${editando ? `<button class="secondary-btn" type="button" onclick="abrirTelaPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')">Editar permissões</button>` : ''}
         </div>
       </section>
@@ -407,7 +433,7 @@ function renderTelaPermissoesUsuario(estado) {
         <h4>Permissões adicionais</h4>
         <p>Gerencie as permissões específicas deste usuário mantendo as regras atuais de herança do perfil.</p>
       </div>
-      ${htmlPermissoes || '<p class="quick-link-empty">Carregando permissões do usuário...</p>'}
+      ${htmlPermissoes || '<div class="admin-user-direct-loading"><p class="quick-link-empty">Carregando permissões do usuário...</p></div>'}
       <div class="admin-user-direct-actions">
         <button class="secondary-btn" type="button" onclick="abrirTelaEditarUsuarioAdmin('${escapeAttr(estado.id)}')">Voltar para usuário</button>
       </div>
@@ -418,16 +444,23 @@ function renderTelaPermissoesUsuario(estado) {
 async function sincronizarPermissoesLegadas(estado) {
   if (estado.etapa !== 'permissoes' || !estado.id) return;
   if (obterHtmlPermissoesLegadas()) return;
-  if (loadingPermissionsFor === estado.id) return;
   if (typeof originalAbrirPermissoesUsuarioAdmin !== 'function') return;
 
-  loadingPermissionsFor = estado.id;
   try {
     await originalAbrirPermissoesUsuarioAdmin(estado.id, { manterMensagem: true });
   } finally {
-    loadingPermissionsFor = '';
-    window.requestAnimationFrame(renderizarTelaDireta);
+    agendarRenderizacaoDireta();
   }
+}
+
+function agendarRenderizacaoDireta() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+
+  window.requestAnimationFrame(() => {
+    renderScheduled = false;
+    renderizarTelaDireta();
+  });
 }
 
 async function renderizarTelaDireta() {
@@ -491,6 +524,8 @@ async function renderizarTelaDireta() {
 }
 
 function instalarOverrides() {
+  window.hubAdminDirectGerarSenhaUsuario = gerarSenhaTelaDireta;
+
   if (!originalAbrirModalNovoRegistro && typeof window.abrirModalNovoRegistro === 'function') {
     originalAbrirModalNovoRegistro = window.abrirModalNovoRegistro;
     window.abrirModalNovoRegistro = function abrirModalNovoRegistroDireto(entidade) {
@@ -521,16 +556,6 @@ function instalarOverrides() {
     };
   }
 
-  if (!originalVoltarListaUsuariosAdmin && typeof window.voltarListaUsuariosAdmin === 'function') {
-    originalVoltarListaUsuariosAdmin = window.voltarListaUsuariosAdmin;
-    window.voltarListaUsuariosAdmin = function voltarListaUsuariosAdminDireto() {
-      if (typeof originalFecharModalNovoRegistro === 'function') {
-        originalFecharModalNovoRegistro();
-      }
-      return originalVoltarListaUsuariosAdmin.apply(this, arguments);
-    };
-  }
-
   if (!originalAbrirPermissoesUsuarioAdmin && typeof window.abrirPermissoesUsuarioAdmin === 'function') {
     originalAbrirPermissoesUsuarioAdmin = window.abrirPermissoesUsuarioAdmin;
   }
@@ -542,7 +567,7 @@ function instalarOverrides() {
       if (fecharAoSalvar) {
         limparEstadoTelaDireta();
       } else {
-        window.requestAnimationFrame(renderizarTelaDireta);
+        agendarRenderizacaoDireta();
       }
       return resultado;
     };
@@ -554,10 +579,8 @@ function instalarObserver() {
   observerInstalled = true;
 
   const observer = new MutationObserver(() => {
-    window.requestAnimationFrame(() => {
-      instalarOverrides();
-      renderizarTelaDireta();
-    });
+    instalarOverrides();
+    agendarRenderizacaoDireta();
   });
 
   observer.observe(document.body, {
@@ -571,11 +594,11 @@ function iniciar() {
   instalarOverrides();
   injetarEstilos();
   instalarObserver();
-  renderizarTelaDireta();
+  agendarRenderizacaoDireta();
 }
 
-window.addEventListener('hubAdminUsuarioTelaAtualizada', renderizarTelaDireta);
-window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', renderizarTelaDireta);
+window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarRenderizacaoDireta);
+window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarRenderizacaoDireta);
 window.addEventListener('hubAdminUsuariosAtualizados', event => invalidarCacheUsuario(event?.detail?.id || ''));
 
 if (document.readyState === 'loading') {
