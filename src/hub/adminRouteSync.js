@@ -43,22 +43,6 @@ function estaNaAdministracao() {
   return Boolean(document.querySelector('.admin-shell'));
 }
 
-function abaJaRenderizada(aba) {
-  if (aba === 'usuarios') {
-    return Boolean(document.querySelector('.admin-users-list'));
-  }
-
-  if (aba === 'perfis') {
-    return Boolean(document.querySelector('.admin-profiles-list, .admin-perfis-list'));
-  }
-
-  if (aba === 'permissoes') {
-    return Boolean(document.querySelector('.permissions-grid, .admin-permissions-grid, [data-admin-permissions]'));
-  }
-
-  return false;
-}
-
 function sincronizarRotaAdministrativa() {
   if (sincronizacaoPendente) return;
 
@@ -66,7 +50,7 @@ function sincronizarRotaAdministrativa() {
   if (!aba) return;
 
   const chave = `${window.location.pathname}${window.location.hash}:${aba}`;
-  if (ultimaSincronizacao === chave && abaJaRenderizada(aba)) return;
+  if (ultimaSincronizacao === chave) return;
 
   if (!estaNaAdministracao()) return;
 
@@ -76,11 +60,14 @@ function sincronizarRotaAdministrativa() {
   sincronizacaoPendente = true;
 
   Promise.resolve(selecionarAbaAdmin(aba))
+    .then(() => {
+      ultimaSincronizacao = chave;
+    })
     .catch(erro => {
+      ultimaSincronizacao = '';
       console.warn('Não foi possível sincronizar a aba administrativa:', erro);
     })
     .finally(() => {
-      ultimaSincronizacao = chave;
       sincronizacaoPendente = false;
     });
 }
@@ -100,6 +87,7 @@ function instalarInterceptadoresHistorico() {
 
   window.history.pushState = function pushStateAdminRouteSync(...args) {
     const retorno = originalPushState.apply(this, args);
+    ultimaSincronizacao = '';
     agendarSincronizacao();
     return retorno;
   };
@@ -138,5 +126,11 @@ if (document.readyState === 'loading') {
   iniciar();
 }
 
-window.addEventListener('popstate', agendarSincronizacao);
-window.addEventListener('hashchange', agendarSincronizacao);
+window.addEventListener('popstate', () => {
+  ultimaSincronizacao = '';
+  agendarSincronizacao();
+});
+window.addEventListener('hashchange', () => {
+  ultimaSincronizacao = '';
+  agendarSincronizacao();
+});
