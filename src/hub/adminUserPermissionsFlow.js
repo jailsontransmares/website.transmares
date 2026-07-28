@@ -7,6 +7,8 @@ const ACAO_BULK_LABELS = [
   'restaurar padrão'
 ];
 
+const APLICACAO_DELAYS = [0, 120, 350, 700, 1200, 1800];
+
 function normalizarTexto(texto = '') {
   return String(texto || '')
     .trim()
@@ -21,6 +23,10 @@ function obterEstadoPermissoesUsuario() {
   const estado = window.hubObterEstadoUsuarioTelaAdmin();
   if (!estado || estado.etapa !== 'permissoes' || !estado.id) return null;
   return estado;
+}
+
+function obterEscopoPermissoes() {
+  return document.querySelector('.admin-user-direct-permissions');
 }
 
 function injetarEstilosPermissoesUsuario() {
@@ -74,8 +80,8 @@ function injetarEstilosPermissoesUsuario() {
     .admin-user-permissions-clean-footer {
       position: sticky;
       bottom: 0;
-      z-index: 4;
-      display: flex;
+      z-index: 20;
+      display: flex !important;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
@@ -104,10 +110,11 @@ function injetarEstilosPermissoesUsuario() {
 
     .admin-user-permission-actions-menu {
       position: relative;
-      display: inline-flex;
+      display: inline-flex !important;
       align-items: center;
       justify-content: flex-end;
       margin-left: auto;
+      z-index: 12;
     }
 
     .admin-user-permission-actions-trigger {
@@ -115,13 +122,14 @@ function injetarEstilosPermissoesUsuario() {
       padding: 7px 11px;
       border-radius: 999px;
       font-size: 0.78rem;
+      white-space: nowrap;
     }
 
     .admin-user-permission-actions-list {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      z-index: 10;
+      z-index: 30;
       min-width: 180px;
       display: none;
       padding: 6px;
@@ -191,10 +199,6 @@ function injetarEstilosPermissoesUsuario() {
   document.head.appendChild(style);
 }
 
-function obterEscopoPermissoes() {
-  return document.querySelector('.admin-user-direct-permissions');
-}
-
 function existemAlteracoesPermissoes() {
   const escopo = obterEscopoPermissoes();
   if (!escopo) return false;
@@ -238,28 +242,47 @@ function instalarMonitoramentoAlteracoes() {
   atualizarBotaoSalvarPermissoes();
 }
 
+function obterTipoAcaoBulk(botao) {
+  const texto = normalizarTexto(botao?.textContent || '');
+  if (!ACAO_BULK_LABELS.includes(texto)) return '';
+  if (texto.includes('conceder')) return 'conceder';
+  if (texto.includes('bloquear')) return 'bloquear';
+  if (texto.includes('restaurar')) return 'restaurar';
+  return '';
+}
+
 function obterBotoesBulkPorGrupo(grupo) {
   const encontrados = new Map();
 
   Array.from(grupo.querySelectorAll('button')).forEach(botao => {
-    const textoNormalizado = normalizarTexto(botao.textContent);
-    if (!ACAO_BULK_LABELS.includes(textoNormalizado)) return;
-
-    if (textoNormalizado.includes('conceder')) {
-      encontrados.set('conceder', botao);
-    } else if (textoNormalizado.includes('bloquear')) {
-      encontrados.set('bloquear', botao);
-    } else if (textoNormalizado.includes('restaurar')) {
-      encontrados.set('restaurar', botao);
-    }
+    const tipo = obterTipoAcaoBulk(botao);
+    if (!tipo) return;
+    encontrados.set(tipo, botao);
   });
 
   return encontrados;
 }
 
-function obterContainerAcoesModulo(botao) {
-  return botao.closest('.permission-module-actions, .module-actions, .admin-permission-module-actions, .permission-actions')
-    || botao.parentElement;
+function obterContainerAcoesModulo(botao, escopo) {
+  const containerExplicito = botao.closest([
+    '.permission-module-actions',
+    '.module-actions',
+    '.admin-permission-module-actions',
+    '.permission-actions',
+    '.permissions-actions',
+    '.bulk-actions'
+  ].join(', '));
+
+  if (containerExplicito) return containerExplicito;
+
+  let atual = botao.parentElement;
+  while (atual && atual !== escopo) {
+    const botoesNoNivel = obterBotoesBulkPorGrupo(atual);
+    if (botoesNoNivel.size >= 2) return atual;
+    atual = atual.parentElement;
+  }
+
+  return botao.parentElement;
 }
 
 function executarAcaoBulkPermissoes(botaoOriginal, tipo) {
@@ -291,9 +314,9 @@ function criarMenuAcoesModulo(botoes) {
   wrapper.innerHTML = `
     <button class="secondary-btn admin-user-permission-actions-trigger" type="button" aria-expanded="false">Ações</button>
     <div class="admin-user-permission-actions-list" role="menu">
-      <button type="button" data-bulk-action="conceder">Conceder tudo</button>
-      <button type="button" data-bulk-action="bloquear">Bloquear tudo</button>
-      <button type="button" data-bulk-action="restaurar">Restaurar padrão</button>
+      ${botoes.has('conceder') ? '<button type="button" data-bulk-action="conceder">Conceder tudo</button>' : ''}
+      ${botoes.has('bloquear') ? '<button type="button" data-bulk-action="bloquear">Bloquear tudo</button>' : ''}
+      ${botoes.has('restaurar') ? '<button type="button" data-bulk-action="restaurar">Restaurar padrão</button>' : ''}
     </div>
   `;
 
@@ -323,9 +346,9 @@ function aplicarMenusAcoesPorModulo() {
   if (!escopo) return;
 
   const candidatos = Array.from(escopo.querySelectorAll('button'))
-    .filter(botao => ACAO_BULK_LABELS.includes(normalizarTexto(botao.textContent)));
+    .filter(botao => obterTipoAcaoBulk(botao) && !botao.closest('.admin-user-permission-actions-menu'));
 
-  const containers = Array.from(new Set(candidatos.map(obterContainerAcoesModulo).filter(Boolean)));
+  const containers = Array.from(new Set(candidatos.map(botao => obterContainerAcoesModulo(botao, escopo)).filter(Boolean)));
 
   containers.forEach(container => {
     if (container.querySelector('.admin-user-permission-actions-menu')) return;
@@ -406,8 +429,7 @@ function protegerFechamentoDaPagina(event) {
 }
 
 function agendarAplicacaoRodape() {
-  window.setTimeout(aplicarRodapePermissoesUsuario, 0);
-  window.setTimeout(aplicarRodapePermissoesUsuario, 120);
+  APLICACAO_DELAYS.forEach(delay => window.setTimeout(aplicarRodapePermissoesUsuario, delay));
 }
 
 function iniciarFluxoPermissoesUsuario() {
@@ -417,7 +439,13 @@ function iniciarFluxoPermissoesUsuario() {
   agendarAplicacaoRodape();
 }
 
-window.addEventListener('click', () => fecharMenusAcoesPermissoes());
+window.addEventListener('click', event => {
+  if (!event.target.closest?.('.admin-user-permission-actions-menu')) {
+    fecharMenusAcoesPermissoes();
+  }
+  window.setTimeout(aplicarRodapePermissoesUsuario, 0);
+});
+window.addEventListener('change', () => window.setTimeout(aplicarRodapePermissoesUsuario, 0));
 window.addEventListener('beforeunload', protegerFechamentoDaPagina);
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarAplicacaoRodape);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarAplicacaoRodape);
