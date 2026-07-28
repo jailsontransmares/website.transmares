@@ -109,7 +109,7 @@ function ajustarStatusSelect(prefixo) {
   const select = document.getElementById(`${prefixo}_status`);
   if (!select || select.dataset.phase5Status === 'true') return;
 
-  const valorAtual = normalizarStatus(select.value);
+  const valorAtual = prefixo === 'usuario_novo' ? 'ativo' : normalizarStatus(select.value);
   select.innerHTML = `
     <option value="ativo" ${valorAtual === 'ativo' ? 'selected' : ''}>Ativo</option>
     <option value="inativo" ${valorAtual === 'inativo' ? 'selected' : ''}>Inativo</option>
