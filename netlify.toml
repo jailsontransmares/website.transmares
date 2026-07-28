@@ -2,6 +2,14 @@
   command = "npm run build"
   publish = "dist"
 
+# Fallback SPA: permite recarregar rotas diretas do Hub, como /admin,
+# /admin/usuarios, /painel-ar, /central-senhas e rotas futuras.
+# A regra não é forçada, então arquivos reais gerados pelo build continuam sendo servidos normalmente.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]
