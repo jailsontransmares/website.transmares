@@ -262,12 +262,8 @@ function handleExpandCollapseAll(event) {
   const action = getExpandCollapseAction(control);
   if (!action) return;
 
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation?.();
-
-  applyExpandCollapseAll(action === 'expand');
-  scheduleLegacyUserModalCleanup();
+  window.setTimeout(() => applyExpandCollapseAll(action === 'expand'), 0);
+  window.setTimeout(scheduleLegacyUserModalCleanup, 0);
 }
 
 function wrapFunctionForCleanup(name) {
@@ -310,7 +306,7 @@ function runPostRenderCleanup() {
 window.hubAdminLimparModaisLegadosPermissoes = removeLegacyUserModals;
 window.hubAdminAgendarLimpezaModaisLegadosUsuario = scheduleLegacyUserModalCleanup;
 
-document.addEventListener('click', handleExpandCollapseAll, true);
+document.addEventListener('click', handleExpandCollapseAll, false);
 window.addEventListener('hubAdminUsuarioTelaAtualizada', runPostRenderCleanup);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', runPostRenderCleanup);
 window.addEventListener('load', runPostRenderCleanup);
