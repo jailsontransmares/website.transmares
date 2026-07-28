@@ -1,19 +1,7 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 
 const VALID_STATUSES = ['ativo', 'inativo', 'arquivado'];
-let observerInstalled = false;
-let originalGerarSenha = null;
 let originalSalvarUsuario = null;
-const dadosCarregados = new Set();
-
-function escapeHtml(texto) {
-  return String(texto || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
 
 function normalizarStatus(status = 'ativo') {
   const valor = String(status || '').trim().toLowerCase();
@@ -36,7 +24,19 @@ function gerarSenhaSegura() {
   return Array.from(bytes).map(byte => chars[byte % chars.length]).join('');
 }
 
-function obterPrefixoUsuarioModal() {
+function obterPrefixoUsuarioAtual() {
+  const estado = typeof window.hubObterEstadoUsuarioTelaAdmin === 'function'
+    ? window.hubObterEstadoUsuarioTelaAdmin()
+    : { modo: '', id: '' };
+
+  if (estado.modo === 'editar' && estado.id) {
+    return `usuario_${estado.id}`;
+  }
+
+  if (estado.modo === 'novo') {
+    return 'usuario_novo';
+  }
+
   const emailInput = Array.from(document.querySelectorAll('input[id$="_email"]'))
     .find(input => /^usuario_(novo|[a-f0-9-]+)_email$/i.test(input.id));
 
@@ -49,168 +49,6 @@ function obterUsuarioIdPorPrefixo(prefixo = '') {
   }
 
   return prefixo.replace(/^usuario_/, '');
-}
-
-function obterLabelPorInput(input) {
-  return input?.closest('label') || null;
-}
-
-function criarLabel({ id, label, type = 'text', value = '', placeholder = '', autocomplete = 'off' }) {
-  const wrapper = document.createElement('label');
-  wrapper.className = 'admin-users-phase5-field';
-  wrapper.innerHTML = `
-    <span>${escapeHtml(label)}</span>
-    <input id="${escapeHtml(id)}" class="config-input" type="${escapeHtml(type)}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" autocomplete="${escapeHtml(autocomplete)}">
-  `;
-  return wrapper;
-}
-
-function injetarEstilos() {
-  if (document.getElementById('admin-users-phase5-style')) return;
-
-  const style = document.createElement('style');
-  style.id = 'admin-users-phase5-style';
-  style.textContent = `
-    .admin-users-phase5-field input {
-      min-width: 0;
-    }
-
-    .admin-users-phase5-password-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: end;
-      margin-top: 10px;
-    }
-
-    .admin-users-phase5-password-row label {
-      margin: 0;
-    }
-
-    .admin-users-phase5-note {
-      margin: 8px 0 0;
-      font-size: 0.78rem;
-      color: var(--text-muted, #64748b);
-    }
-
-    .admin-users-phase5-status-note {
-      margin: 8px 0 0;
-      padding: 10px 12px;
-      border-radius: 14px;
-      background: rgba(41, 72, 149, 0.08);
-      color: var(--text-muted, #64748b);
-      font-size: 0.8rem;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function ajustarStatusSelect(prefixo) {
-  const select = document.getElementById(`${prefixo}_status`);
-  if (!select || select.dataset.phase5Status === 'true') return;
-
-  const valorAtual = prefixo === 'usuario_novo' ? 'ativo' : normalizarStatus(select.value);
-  select.innerHTML = `
-    <option value="ativo" ${valorAtual === 'ativo' ? 'selected' : ''}>Ativo</option>
-    <option value="inativo" ${valorAtual === 'inativo' ? 'selected' : ''}>Inativo</option>
-    <option value="arquivado" ${valorAtual === 'arquivado' ? 'selected' : ''}>Arquivado</option>
-  `;
-  select.dataset.phase5Status = 'true';
-
-  const nota = document.createElement('p');
-  nota.className = 'admin-users-phase5-status-note';
-  nota.textContent = 'Status padronizado com o Supabase: ativo, inativo ou arquivado. Para bloquear acesso, use inativo.';
-  select.closest('label')?.insertAdjacentElement('afterend', nota);
-}
-
-function injetarCamposComplementares(prefixo) {
-  if (!prefixo || document.getElementById(`${prefixo}_cpf`)) return;
-
-  const emailInput = document.getElementById(`${prefixo}_email`);
-  const emailLabel = obterLabelPorInput(emailInput);
-  if (!emailLabel) return;
-
-  const cpfField = criarLabel({
-    id: `${prefixo}_cpf`,
-    label: 'CPF',
-    placeholder: '000.000.000-00'
-  });
-  const telefoneField = criarLabel({
-    id: `${prefixo}_telefone`,
-    label: 'Telefone',
-    type: 'tel',
-    placeholder: '(00) 00000-0000'
-  });
-
-  emailLabel.insertAdjacentElement('afterend', telefoneField);
-  emailLabel.insertAdjacentElement('afterend', cpfField);
-}
-
-function injetarCampoSenha(prefixo) {
-  if (!prefixo || document.getElementById(`${prefixo}_senha_admin`)) return;
-
-  const statusSelect = document.getElementById(`${prefixo}_status`);
-  const statusLabel = obterLabelPorInput(statusSelect);
-  if (!statusLabel) return;
-
-  const editando = prefixo !== 'usuario_novo';
-  const row = document.createElement('div');
-  row.className = 'admin-users-phase5-password-row';
-  row.innerHTML = `
-    <label>
-      <span>${editando ? 'Nova senha administrativa' : 'Senha inicial'}</span>
-      <input id="${escapeHtml(prefixo)}_senha_admin" class="config-input" type="text" autocomplete="new-password" placeholder="${editando ? 'Opcional' : 'Gerar ou informar senha'}">
-    </label>
-    <button class="secondary-btn" type="button" onclick="hubAdminUsersGerarSenhaPhase5()">Gerar senha</button>
-  `;
-
-  const note = document.createElement('p');
-  note.className = 'admin-users-phase5-note';
-  note.textContent = editando
-    ? 'Preencha apenas se desejar trocar a senha desse usuário no Supabase Auth.'
-    : 'Ao criar o usuário, o acesso também será criado no Supabase Auth.';
-
-  statusLabel.insertAdjacentElement('afterend', note);
-  statusLabel.insertAdjacentElement('afterend', row);
-}
-
-async function preencherCamposEditando(prefixo) {
-  const usuarioId = obterUsuarioIdPorPrefixo(prefixo);
-  if (!usuarioId || dadosCarregados.has(usuarioId)) return;
-
-  dadosCarregados.add(usuarioId);
-
-  try {
-    const client = exigirSupabaseConfigurado();
-    const { data, error } = await client
-      .from('usuarios')
-      .select('cpf, telefone, status')
-      .eq('id', usuarioId)
-      .maybeSingle();
-
-    if (error || !data) return;
-
-    const cpfInput = document.getElementById(`${prefixo}_cpf`);
-    const telefoneInput = document.getElementById(`${prefixo}_telefone`);
-    const statusSelect = document.getElementById(`${prefixo}_status`);
-
-    if (cpfInput) cpfInput.value = data.cpf || '';
-    if (telefoneInput) telefoneInput.value = data.telefone || '';
-    if (statusSelect) statusSelect.value = normalizarStatus(data.status);
-  } catch (_erro) {
-    // Campos complementares são melhoria progressiva. Falha não bloqueia a tela existente.
-  }
-}
-
-function aprimorarModalUsuarios() {
-  const prefixo = obterPrefixoUsuarioModal();
-  if (!prefixo) return;
-
-  injetarEstilos();
-  injetarCamposComplementares(prefixo);
-  ajustarStatusSelect(prefixo);
-  injetarCampoSenha(prefixo);
-  preencherCamposEditando(prefixo);
 }
 
 async function invocarAdminUsers(body) {
@@ -276,6 +114,10 @@ async function salvarUsuarioPhase5(usuarioId = '') {
       }
     });
 
+    window.dispatchEvent(new CustomEvent('hubAdminUsuariosAtualizados', {
+      detail: { id: usuarioId || '' }
+    }));
+
     window.fecharModalNovoRegistro?.();
     await window.selecionarAbaAdmin?.('usuarios');
 
@@ -290,7 +132,7 @@ async function salvarUsuarioPhase5(usuarioId = '') {
 }
 
 function gerarSenhaPhase5() {
-  const prefixo = obterPrefixoUsuarioModal();
+  const prefixo = obterPrefixoUsuarioAtual();
   const senha = gerarSenhaSegura();
   const input = document.getElementById(`${prefixo}_senha_admin`);
 
@@ -306,35 +148,14 @@ function instalarOverrides() {
     originalSalvarUsuario = window.salvarUsuarioAdmin;
   }
 
-  if (!originalGerarSenha && typeof window.gerarSenhaTemporariaUsuarioAdmin === 'function') {
-    originalGerarSenha = window.gerarSenhaTemporariaUsuarioAdmin;
-  }
-
   window.salvarUsuarioAdmin = salvarUsuarioPhase5;
   window.hubAdminUsersGerarSenhaPhase5 = gerarSenhaPhase5;
   window.gerarSenhaTemporariaUsuarioAdmin = gerarSenhaPhase5;
 }
 
-function instalarObserver() {
-  if (observerInstalled) return;
-  observerInstalled = true;
-
-  const observer = new MutationObserver(() => {
-    instalarOverrides();
-    aprimorarModalUsuarios();
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
-
 function iniciar() {
   if (!supabase) return;
   instalarOverrides();
-  instalarObserver();
-  aprimorarModalUsuarios();
 }
 
 if (document.readyState === 'loading') {
@@ -343,4 +164,4 @@ if (document.readyState === 'loading') {
   iniciar();
 }
 
-window.addEventListener('popstate', () => window.setTimeout(aprimorarModalUsuarios, 0));
+window.addEventListener('load', instalarOverrides);
