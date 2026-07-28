@@ -3,9 +3,13 @@ import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 const STYLE_ID = 'admin-user-direct-screen-style';
 let observerInstalled = false;
 let rendering = false;
+let loadingPermissionsFor = '';
 let originalAbrirModalNovoRegistro = null;
 let originalEditarUsuarioAdmin = null;
 let originalFecharModalNovoRegistro = null;
+let originalVoltarListaUsuariosAdmin = null;
+let originalAbrirPermissoesUsuarioAdmin = null;
+let originalSalvarPermissoesUsuarioAdmin = null;
 let cachePerfis = [];
 let cacheUsuarios = new Map();
 
@@ -33,6 +37,10 @@ function definirEstadoTela(estado, options = {}) {
     return window.hubDefinirEstadoUsuarioTelaAdmin(estado, options);
   }
   return estado;
+}
+
+function limparEstadoTelaDireta() {
+  definirEstadoTela({ modo: '', id: '', etapa: 'dados' });
 }
 
 function obterPainelUsuarios() {
@@ -231,6 +239,25 @@ function injetarEstilos() {
       font-size: 0.8rem;
     }
 
+    .admin-user-direct-permissions .permission-modal-layout {
+      max-height: none;
+    }
+
+    .admin-user-direct-permissions .permission-modal-content {
+      max-height: min(68vh, 760px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .admin-user-direct-permissions .admin-user-permissions-actions {
+      position: sticky;
+      bottom: 0;
+      background: inherit;
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
     @media (max-width: 980px) {
       .admin-user-direct-layout { grid-template-columns: 1fr; }
       .admin-user-direct-shell { max-width: 100%; }
@@ -289,6 +316,14 @@ async function carregarUsuario(id) {
   }
 
   return cacheUsuarios.get(id);
+}
+
+function invalidarCacheUsuario(id = '') {
+  if (id) {
+    cacheUsuarios.delete(id);
+  } else {
+    cacheUsuarios = new Map();
+  }
 }
 
 function renderOptionsPerfis(perfis, perfilAtual = '') {
@@ -351,19 +386,48 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
   `;
 }
 
+function obterHtmlPermissoesLegadas() {
+  const modal = document.querySelector('.admin-user-modal.is-permissions-stage');
+  const conteudo = modal?.querySelector('.permission-modal-layout')?.outerHTML || '';
+  const acoes = modal?.querySelector('.admin-user-permissions-actions')?.outerHTML || '';
+
+  if (!conteudo) {
+    return '';
+  }
+
+  return `${conteudo}${acoes}`;
+}
+
 function renderTelaPermissoesUsuario(estado) {
+  const htmlPermissoes = obterHtmlPermissoesLegadas();
+
   return `
-    <section class="admin-user-direct-section">
+    <section class="admin-user-direct-section admin-user-direct-permissions">
       <div>
         <h4>Permissões adicionais</h4>
-        <p>Esta etapa será consolidada na próxima fase para renderizar a matriz de permissões diretamente, sem modal legado.</p>
+        <p>Gerencie as permissões específicas deste usuário mantendo as regras atuais de herança do perfil.</p>
       </div>
-      <div class="admin-user-direct-inline-actions">
+      ${htmlPermissoes || '<p class="quick-link-empty">Carregando permissões do usuário...</p>'}
+      <div class="admin-user-direct-actions">
         <button class="secondary-btn" type="button" onclick="abrirTelaEditarUsuarioAdmin('${escapeAttr(estado.id)}')">Voltar para usuário</button>
-        <button class="secondary-btn" type="button" onclick="abrirPermissoesUsuarioAdmin('${escapeAttr(estado.id)}')">Abrir permissões legadas temporariamente</button>
       </div>
     </section>
   `;
+}
+
+async function sincronizarPermissoesLegadas(estado) {
+  if (estado.etapa !== 'permissoes' || !estado.id) return;
+  if (obterHtmlPermissoesLegadas()) return;
+  if (loadingPermissionsFor === estado.id) return;
+  if (typeof originalAbrirPermissoesUsuarioAdmin !== 'function') return;
+
+  loadingPermissionsFor = estado.id;
+  try {
+    await originalAbrirPermissoesUsuarioAdmin(estado.id, { manterMensagem: true });
+  } finally {
+    loadingPermissionsFor = '';
+    window.requestAnimationFrame(renderizarTelaDireta);
+  }
 }
 
 async function renderizarTelaDireta() {
@@ -422,6 +486,8 @@ async function renderizarTelaDireta() {
   } finally {
     rendering = false;
   }
+
+  sincronizarPermissoesLegadas(estado);
 }
 
 function instalarOverrides() {
@@ -448,10 +514,37 @@ function instalarOverrides() {
     window.fecharModalNovoRegistro = function fecharModalNovoRegistroDireto() {
       const estado = obterEstadoTela();
       if (estado.modo) {
-        definirEstadoTela({ modo: '', id: '', etapa: 'dados' });
+        limparEstadoTelaDireta();
         return;
       }
       return originalFecharModalNovoRegistro.apply(this, arguments);
+    };
+  }
+
+  if (!originalVoltarListaUsuariosAdmin && typeof window.voltarListaUsuariosAdmin === 'function') {
+    originalVoltarListaUsuariosAdmin = window.voltarListaUsuariosAdmin;
+    window.voltarListaUsuariosAdmin = function voltarListaUsuariosAdminDireto() {
+      if (typeof originalFecharModalNovoRegistro === 'function') {
+        originalFecharModalNovoRegistro();
+      }
+      return originalVoltarListaUsuariosAdmin.apply(this, arguments);
+    };
+  }
+
+  if (!originalAbrirPermissoesUsuarioAdmin && typeof window.abrirPermissoesUsuarioAdmin === 'function') {
+    originalAbrirPermissoesUsuarioAdmin = window.abrirPermissoesUsuarioAdmin;
+  }
+
+  if (!originalSalvarPermissoesUsuarioAdmin && typeof window.salvarPermissoesUsuarioAdmin === 'function') {
+    originalSalvarPermissoesUsuarioAdmin = window.salvarPermissoesUsuarioAdmin;
+    window.salvarPermissoesUsuarioAdmin = async function salvarPermissoesUsuarioDireto(usuarioId, fecharAoSalvar = false) {
+      const resultado = await originalSalvarPermissoesUsuarioAdmin.apply(this, arguments);
+      if (fecharAoSalvar) {
+        limparEstadoTelaDireta();
+      } else {
+        window.requestAnimationFrame(renderizarTelaDireta);
+      }
+      return resultado;
     };
   }
 }
@@ -483,6 +576,7 @@ function iniciar() {
 
 window.addEventListener('hubAdminUsuarioTelaAtualizada', renderizarTelaDireta);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', renderizarTelaDireta);
+window.addEventListener('hubAdminUsuariosAtualizados', event => invalidarCacheUsuario(event?.detail?.id || ''));
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
