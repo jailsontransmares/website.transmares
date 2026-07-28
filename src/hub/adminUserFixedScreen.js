@@ -1,14 +1,12 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 
 const STYLE_ID = 'admin-user-direct-screen-style';
+
 let renderScheduled = false;
 let rendering = false;
-let loadingPermissionsFor = '';
 let originalAbrirModalNovoRegistro = null;
 let originalEditarUsuarioAdmin = null;
 let originalFecharModalNovoRegistro = null;
-let originalAbrirPermissoesUsuarioAdmin = null;
-let originalSalvarPermissoesUsuarioAdmin = null;
 let cachePerfis = [];
 let cacheUsuarios = new Map();
 
@@ -141,26 +139,9 @@ function injetarEstilos() {
       pointer-events: none;
     }
 
-    .admin-user-direct-header > * {
-      position: relative;
-      z-index: 1;
-    }
-
-    .admin-user-direct-header h3 {
-      margin: 0;
-      font-size: clamp(1.12rem, 1.6vw, 1.36rem);
-      font-weight: 850;
-      letter-spacing: -0.035em;
-      color: var(--text-strong, #0f172a);
-    }
-
-    .admin-user-direct-header p {
-      margin: 5px 0 0;
-      max-width: 640px;
-      color: var(--text-muted, #64748b);
-      font-size: 0.9rem;
-      line-height: 1.45;
-    }
+    .admin-user-direct-header > * { position: relative; z-index: 1; }
+    .admin-user-direct-header h3 { margin: 0; font-size: clamp(1.12rem, 1.6vw, 1.36rem); font-weight: 850; letter-spacing: -0.035em; color: var(--text-strong, #0f172a); }
+    .admin-user-direct-header p { margin: 5px 0 0; max-width: 640px; color: var(--text-muted, #64748b); font-size: 0.9rem; line-height: 1.45; }
 
     .admin-user-direct-card {
       border-radius: 28px;
@@ -192,20 +173,8 @@ function injetarEstilos() {
       border-color: rgba(148, 163, 184, 0.16);
     }
 
-    .admin-user-direct-section h4 {
-      margin: 0;
-      color: var(--text-strong, #0f172a);
-      font-size: 1.02rem;
-      font-weight: 820;
-      letter-spacing: -0.02em;
-    }
-
-    .admin-user-direct-section p {
-      margin: 4px 0 0;
-      color: var(--text-muted, #64748b);
-      font-size: 0.82rem;
-      line-height: 1.4;
-    }
+    .admin-user-direct-section h4 { margin: 0; color: var(--text-strong, #0f172a); font-size: 1.02rem; font-weight: 820; letter-spacing: -0.02em; }
+    .admin-user-direct-section p { margin: 4px 0 0; color: var(--text-muted, #64748b); font-size: 0.82rem; line-height: 1.4; }
 
     .admin-user-direct-fields {
       display: grid;
@@ -256,25 +225,6 @@ function injetarEstilos() {
       background: rgba(41, 72, 149, 0.08);
       color: var(--text-muted, #64748b);
       font-size: 0.8rem;
-    }
-
-    .admin-user-direct-permissions .permission-modal-layout {
-      max-height: none;
-    }
-
-    .admin-user-direct-permissions .permission-modal-content {
-      max-height: min(68vh, 760px);
-      overflow: auto;
-      padding-right: 4px;
-    }
-
-    .admin-user-direct-permissions .admin-user-permissions-actions {
-      position: sticky;
-      bottom: 0;
-      background: inherit;
-      padding-top: 12px;
-      margin-top: 12px;
-      border-top: 1px solid rgba(148, 163, 184, 0.18);
     }
 
     .admin-user-direct-loading {
@@ -345,11 +295,8 @@ async function carregarUsuario(id) {
 }
 
 function invalidarCacheUsuario(id = '') {
-  if (id) {
-    cacheUsuarios.delete(id);
-  } else {
-    cacheUsuarios = new Map();
-  }
+  if (id) cacheUsuarios.delete(id);
+  else cacheUsuarios = new Map();
 }
 
 function renderOptionsPerfis(perfis, perfilAtual = '') {
@@ -412,48 +359,16 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
   `;
 }
 
-function obterHtmlPermissoesLegadas() {
-  const modal = document.querySelector('.admin-user-modal.is-permissions-stage');
-  const conteudo = modal?.querySelector('.permission-modal-layout')?.outerHTML || '';
-  const acoes = modal?.querySelector('.admin-user-permissions-actions')?.outerHTML || '';
-
-  if (!conteudo) {
-    return '';
-  }
-
-  return `${conteudo}${acoes}`;
-}
-
-function renderTelaPermissoesUsuario(estado) {
-  const htmlPermissoes = obterHtmlPermissoesLegadas();
-
+function renderTelaPermissoesUsuario() {
   return `
-    <section class="admin-user-direct-section admin-user-direct-permissions">
+    <section class="admin-user-direct-section admin-user-direct-permissions-placeholder">
       <div>
         <h4>Permissões adicionais</h4>
-        <p>Gerencie as permissões específicas deste usuário mantendo as regras atuais de herança do perfil.</p>
+        <p>Carregando tela contínua de permissões do usuário...</p>
       </div>
-      ${htmlPermissoes || '<div class="admin-user-direct-loading"><p class="quick-link-empty">Carregando permissões do usuário...</p></div>'}
-      <div class="admin-user-direct-actions">
-        <button class="secondary-btn" type="button" onclick="abrirTelaEditarUsuarioAdmin('${escapeAttr(estado.id)}')">Voltar para usuário</button>
-      </div>
+      <div class="admin-user-direct-loading"><p class="quick-link-empty">Preparando permissões do usuário...</p></div>
     </section>
   `;
-}
-
-async function sincronizarPermissoesLegadas(estado) {
-  if (estado.etapa !== 'permissoes' || !estado.id) return;
-  if (obterHtmlPermissoesLegadas()) return;
-  if (loadingPermissionsFor === estado.id) return;
-  if (typeof originalAbrirPermissoesUsuarioAdmin !== 'function') return;
-
-  loadingPermissionsFor = estado.id;
-  try {
-    await originalAbrirPermissoesUsuarioAdmin(estado.id, { manterMensagem: true });
-  } finally {
-    loadingPermissionsFor = '';
-    agendarRenderizacaoDireta();
-  }
 }
 
 function agendarRenderizacaoDireta() {
@@ -522,8 +437,6 @@ async function renderizarTelaDireta() {
   } finally {
     rendering = false;
   }
-
-  sincronizarPermissoesLegadas(estado);
 }
 
 function instalarOverrides() {
@@ -556,23 +469,6 @@ function instalarOverrides() {
         return;
       }
       return originalFecharModalNovoRegistro.apply(this, arguments);
-    };
-  }
-
-  if (!originalAbrirPermissoesUsuarioAdmin && typeof window.abrirPermissoesUsuarioAdmin === 'function') {
-    originalAbrirPermissoesUsuarioAdmin = window.abrirPermissoesUsuarioAdmin;
-  }
-
-  if (!originalSalvarPermissoesUsuarioAdmin && typeof window.salvarPermissoesUsuarioAdmin === 'function') {
-    originalSalvarPermissoesUsuarioAdmin = window.salvarPermissoesUsuarioAdmin;
-    window.salvarPermissoesUsuarioAdmin = async function salvarPermissoesUsuarioDireto(usuarioId, fecharAoSalvar = false) {
-      const resultado = await originalSalvarPermissoesUsuarioAdmin.apply(this, arguments);
-      if (fecharAoSalvar) {
-        limparEstadoTelaDireta();
-      } else {
-        agendarRenderizacaoDireta();
-      }
-      return resultado;
     };
   }
 }
