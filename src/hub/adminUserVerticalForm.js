@@ -8,6 +8,7 @@ function injetarLayoutVerticalUsuario() {
   style.textContent = `
     .admin-user-direct-card {
       gap: 16px !important;
+      padding-bottom: 18px !important;
     }
 
     .admin-user-direct-layout {
@@ -58,8 +59,20 @@ function injetarLayoutVerticalUsuario() {
     }
 
     .admin-user-direct-actions {
-      margin-top: 2px !important;
-      padding-top: 16px !important;
+      margin-top: 4px !important;
+      padding: 16px 0 0 !important;
+      border-top: 1px solid rgba(148, 163, 184, 0.22) !important;
+      display: flex !important;
+      justify-content: flex-end !important;
+      align-items: center !important;
+      gap: 10px !important;
+      width: 100% !important;
+    }
+
+    .admin-user-direct-actions .secondary-btn,
+    .admin-user-direct-actions .save-btn {
+      min-width: 108px !important;
+      justify-content: center !important;
     }
 
     .admin-user-direct-header p,
@@ -76,6 +89,10 @@ function injetarLayoutVerticalUsuario() {
       margin-bottom: 0 !important;
     }
 
+    .admin-user-direct-section h4 {
+      margin-bottom: 2px !important;
+    }
+
     @media (min-width: 981px) {
       .admin-user-direct-fields {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -85,6 +102,16 @@ function injetarLayoutVerticalUsuario() {
     @media (max-width: 760px) {
       .admin-user-direct-section:nth-of-type(2) {
         grid-template-columns: 1fr !important;
+      }
+
+      .admin-user-direct-actions {
+        flex-direction: column-reverse !important;
+        align-items: stretch !important;
+      }
+
+      .admin-user-direct-actions .secondary-btn,
+      .admin-user-direct-actions .save-btn {
+        width: 100% !important;
       }
     }
   `;
