@@ -4,7 +4,15 @@ const MODULE_RESOURCE_MAP = {
   'links-gestao': 'links_gestao',
   'central-senhas': 'central_senhas',
   'painel-ar': 'painel_ar',
-  administracao: 'admin'
+  administracao: 'admin',
+  admin: 'admin',
+  'admin-usuarios': 'admin.usuarios',
+  'admin-perfis': 'admin.perfis',
+  'admin-permissoes': 'admin.permissoes',
+  'admin-modulos': 'admin.modulos',
+  perfil: 'perfil',
+  configuracoes: 'configuracoes',
+  'configuracoes-corretora': 'configuracoes.corretora'
 };
 
 function normalizarIdentificadorModulo(valor = '') {
@@ -31,8 +39,19 @@ export function montarMapaPermissoes(permissoes = []) {
 }
 
 export function obterRecursoModulo(idModulo) {
-  const chaveNormalizada = normalizarIdentificadorModulo(idModulo);
-  return MODULE_RESOURCE_MAP[idModulo] || MODULE_RESOURCE_MAP[chaveNormalizada] || chaveNormalizada;
+  const chaveOriginal = String(idModulo || '').trim();
+  const slugRota = chaveOriginal
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const chaveNormalizada = normalizarIdentificadorModulo(chaveOriginal);
+
+  return MODULE_RESOURCE_MAP[chaveOriginal]
+    || MODULE_RESOURCE_MAP[slugRota]
+    || MODULE_RESOURCE_MAP[chaveNormalizada]
+    || chaveNormalizada;
 }
 
 export function hasPermission(permissoes, recurso, acao = 'view') {
@@ -63,9 +82,10 @@ export function montarPermissoesLegadas(usuario) {
     'central_senhas',
     'painel_ar',
     'painel_ar.gerar_links',
-    'painel_ar.validacoes'
+    'painel_ar.validacoes',
+    'perfil'
   ];
-  const modulos = gestor ? [...modulosBase, 'admin'] : modulosBase;
+  const modulos = gestor ? [...modulosBase, 'admin', 'configuracoes', 'configuracoes.corretora'] : modulosBase;
   const permissoes = modulos.map(recurso_chave => ({
     recurso_chave,
     acao: 'view',
@@ -73,11 +93,15 @@ export function montarPermissoesLegadas(usuario) {
     origem: 'legacy'
   }));
 
+  permissoes.push({ recurso_chave: 'perfil', acao: 'update', permitido: true, origem: 'legacy' });
+
   if (gestor) {
     permissoes.push(
       { recurso_chave: 'admin.usuarios', acao: 'view', permitido: true, origem: 'legacy' },
       { recurso_chave: 'admin.perfis', acao: 'view', permitido: true, origem: 'legacy' },
       { recurso_chave: 'admin.permissoes', acao: 'view', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'configuracoes', acao: 'update', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'configuracoes.corretora', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'central_senhas', acao: 'view_secret', permitido: true, origem: 'legacy' }
     );
   }
