@@ -1,12 +1,26 @@
-const STYLE_ID = 'admin-user-fixed-screen-style';
+import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 
+const STYLE_ID = 'admin-user-direct-screen-style';
 let observerInstalled = false;
-let applying = false;
+let rendering = false;
 let originalAbrirModalNovoRegistro = null;
 let originalEditarUsuarioAdmin = null;
 let originalFecharModalNovoRegistro = null;
-let originalAbrirPermissoesPeloModalUsuario = null;
-let originalVoltarEtapaModalUsuarioAdmin = null;
+let cachePerfis = [];
+let cacheUsuarios = new Map();
+
+function escapeHtml(texto) {
+  return String(texto || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(texto) {
+  return escapeHtml(texto);
+}
 
 function obterEstadoTela() {
   return typeof window.hubObterEstadoUsuarioTelaAdmin === 'function'
@@ -14,269 +28,11 @@ function obterEstadoTela() {
     : { modo: '', id: '', etapa: 'dados' };
 }
 
-function definirEstadoTela(estado) {
+function definirEstadoTela(estado, options = {}) {
   if (typeof window.hubDefinirEstadoUsuarioTelaAdmin === 'function') {
-    window.hubDefinirEstadoUsuarioTelaAdmin(estado, { render: false });
+    return window.hubDefinirEstadoUsuarioTelaAdmin(estado, options);
   }
-}
-
-function injetarEstilos() {
-  if (document.getElementById(STYLE_ID)) return;
-
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = `
-    .admin-user-fixed-shell {
-      margin-top: 18px;
-      display: grid;
-      gap: 18px;
-      max-width: 1040px;
-    }
-
-    .admin-user-fixed-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 18px 20px;
-      border-radius: 22px;
-      background: rgba(255, 255, 255, 0.80);
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
-
-    body.dark .admin-user-fixed-header {
-      background: rgba(15, 23, 42, 0.70);
-      border-color: rgba(148, 163, 184, 0.18);
-    }
-
-    .admin-user-fixed-header h3 {
-      margin: 0;
-      font-size: 1.22rem;
-      letter-spacing: -0.035em;
-      color: var(--text-strong, #0f172a);
-    }
-
-    .admin-user-fixed-header p {
-      margin: 5px 0 0;
-      color: var(--text-muted, #64748b);
-      font-size: 0.9rem;
-      line-height: 1.45;
-    }
-
-    .admin-user-fixed-card {
-      border-radius: 26px;
-      background: rgba(255, 255, 255, 0.86);
-      border: 1px solid rgba(148, 163, 184, 0.24);
-      box-shadow: 0 22px 70px rgba(15, 23, 42, 0.10);
-      padding: 20px;
-      display: grid;
-      gap: 16px;
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
-
-    body.dark .admin-user-fixed-card {
-      background: rgba(15, 23, 42, 0.76);
-      border-color: rgba(148, 163, 184, 0.18);
-    }
-
-    .admin-user-fixed-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
-      gap: 16px;
-      align-items: start;
-    }
-
-    .admin-user-fixed-section {
-      display: grid;
-      gap: 14px;
-      min-width: 0;
-      border-radius: 22px;
-      background: rgba(248, 250, 252, 0.72);
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      padding: 18px;
-    }
-
-    body.dark .admin-user-fixed-section {
-      background: rgba(30, 41, 59, 0.48);
-      border-color: rgba(148, 163, 184, 0.16);
-    }
-
-    .admin-user-fixed-section-header h4 {
-      margin: 0;
-      color: var(--text-strong, #0f172a);
-      font-size: 0.98rem;
-      letter-spacing: -0.02em;
-    }
-
-    .admin-user-fixed-section-header p {
-      margin: 4px 0 0;
-      color: var(--text-muted, #64748b);
-      font-size: 0.82rem;
-      line-height: 1.4;
-    }
-
-    .admin-user-fixed-fields {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .admin-user-fixed-fields label,
-    .admin-user-fixed-fields .admin-users-phase5-field,
-    .admin-user-fixed-access label,
-    .admin-user-fixed-access .admin-users-phase5-field {
-      display: grid;
-      gap: 7px;
-      margin: 0;
-      min-width: 0;
-    }
-
-    .admin-user-fixed-fields label span,
-    .admin-user-fixed-fields .admin-users-phase5-field span,
-    .admin-user-fixed-access label span,
-    .admin-user-fixed-access .admin-users-phase5-field span {
-      font-size: 0.75rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--text-muted, #64748b);
-    }
-
-    .admin-user-fixed-fields .config-input,
-    .admin-user-fixed-access .config-input {
-      width: 100%;
-      min-width: 0;
-    }
-
-    .admin-user-fixed-access {
-      display: grid;
-      gap: 13px;
-    }
-
-    .admin-user-fixed-access .admin-users-phase5-password-row {
-      grid-template-columns: 1fr;
-      margin-top: 0;
-    }
-
-    .admin-user-fixed-access .admin-users-phase5-note,
-    .admin-user-fixed-access .admin-users-phase5-status-note {
-      margin: 0;
-    }
-
-    .admin-user-fixed-access .admin-user-access-panel {
-      margin: 0;
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.62);
-      border: 1px solid rgba(148, 163, 184, 0.20);
-      padding: 14px;
-    }
-
-    body.dark .admin-user-fixed-access .admin-user-access-panel {
-      background: rgba(15, 23, 42, 0.38);
-      border-color: rgba(148, 163, 184, 0.14);
-    }
-
-    .admin-user-fixed-access .admin-user-access-actions,
-    .admin-user-fixed-access .admin-user-password-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .admin-user-fixed-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      padding-top: 4px;
-    }
-
-    .admin-user-fixed-card .small-modal-actions {
-      margin-top: 0;
-      justify-content: flex-end;
-    }
-
-    .admin-user-fixed-card.is-permissions-stage {
-      padding: 16px;
-    }
-
-    .admin-user-fixed-card.is-permissions-stage .admin-user-fixed-layout {
-      display: block;
-    }
-
-    .admin-user-fixed-card.is-permissions-stage .permission-modal-layout {
-      max-height: none;
-    }
-
-    .admin-user-fixed-card.is-permissions-stage .permission-modal-content {
-      max-height: min(68vh, 760px);
-      overflow: auto;
-      padding-right: 4px;
-    }
-
-    .admin-user-fixed-card.is-permissions-stage .admin-user-permissions-actions {
-      position: sticky;
-      bottom: 0;
-      background: inherit;
-      padding-top: 12px;
-      margin-top: 12px;
-    }
-
-    .admin-user-fixed-hidden-list > .admin-panel-header,
-    .admin-user-fixed-hidden-list > .admin-message,
-    .admin-user-fixed-hidden-list > .quick-link-empty,
-    .admin-user-fixed-hidden-list > .crud-list,
-    .admin-user-fixed-hidden-list > .admin-users-pagination {
-      display: none !important;
-    }
-
-    .admin-user-fixed-hidden-list > .modal-backdrop {
-      display: none !important;
-    }
-
-    .admin-user-fixed-shell .modal-backdrop,
-    .admin-user-fixed-shell .small-modal,
-    .admin-user-fixed-shell .admin-user-modal {
-      position: static !important;
-      inset: auto !important;
-      width: auto !important;
-      max-width: none !important;
-      min-width: 0 !important;
-      height: auto !important;
-      max-height: none !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      border: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-      transform: none !important;
-      display: contents !important;
-    }
-
-    .admin-user-fixed-shell .small-modal-header {
-      display: none !important;
-    }
-
-    @media (max-width: 980px) {
-      .admin-user-fixed-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 760px) {
-      .admin-user-fixed-header {
-        flex-direction: column;
-      }
-
-      .admin-user-fixed-fields {
-        grid-template-columns: 1fr;
-      }
-    }
-  `;
-  document.head.appendChild(style);
+  return estado;
 }
 
 function obterPainelUsuarios() {
@@ -286,177 +42,394 @@ function obterPainelUsuarios() {
   }) || null;
 }
 
-function prepararModalLegado(estado) {
-  if (applying) return;
-  if (!estado.modo) return;
+function normalizarStatus(status = 'ativo') {
+  const valor = String(status || '').trim().toLowerCase();
+  if (['ativo', 'inativo', 'arquivado'].includes(valor)) return valor;
+  if (valor === 'bloqueado' || valor === 'pendente') return 'inativo';
+  return 'ativo';
+}
 
-  const temModal = document.querySelector('.admin-user-modal');
-  if (temModal) return;
+function injetarEstilos() {
+  if (document.getElementById(STYLE_ID)) return;
 
-  applying = true;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `
+    .admin-user-direct-hidden > .admin-panel-header,
+    .admin-user-direct-hidden > .admin-message,
+    .admin-user-direct-hidden > .quick-link-empty,
+    .admin-user-direct-hidden > .crud-list,
+    .admin-user-direct-hidden > .admin-users-pagination,
+    .admin-user-direct-hidden > .modal-backdrop {
+      display: none !important;
+    }
+
+    .admin-user-direct-shell {
+      width: 100%;
+      max-width: 1120px;
+      margin: 18px auto 0;
+      display: grid;
+      gap: 18px;
+      animation: adminUserDirectEnter 160ms ease-out;
+    }
+
+    @keyframes adminUserDirectEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .admin-user-direct-header,
+    .admin-user-direct-card {
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 22px 70px rgba(15, 23, 42, 0.10);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    body.dark .admin-user-direct-header,
+    body.dark .admin-user-direct-card {
+      background: rgba(15, 23, 42, 0.76);
+      border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .admin-user-direct-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 22px;
+      border-radius: 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .admin-user-direct-header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at top left, rgba(41, 72, 149, 0.16), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.12), transparent 32%);
+      pointer-events: none;
+    }
+
+    .admin-user-direct-header > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .admin-user-direct-header h3 {
+      margin: 0;
+      font-size: clamp(1.12rem, 1.6vw, 1.36rem);
+      font-weight: 850;
+      letter-spacing: -0.035em;
+      color: var(--text-strong, #0f172a);
+    }
+
+    .admin-user-direct-header p {
+      margin: 5px 0 0;
+      max-width: 640px;
+      color: var(--text-muted, #64748b);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .admin-user-direct-card {
+      border-radius: 28px;
+      padding: 22px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .admin-user-direct-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .admin-user-direct-section {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+      border-radius: 24px;
+      background: rgba(248, 250, 252, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      padding: 20px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+    }
+
+    body.dark .admin-user-direct-section {
+      background: rgba(30, 41, 59, 0.48);
+      border-color: rgba(148, 163, 184, 0.16);
+    }
+
+    .admin-user-direct-section h4 {
+      margin: 0;
+      color: var(--text-strong, #0f172a);
+      font-size: 1.02rem;
+      font-weight: 820;
+      letter-spacing: -0.02em;
+    }
+
+    .admin-user-direct-section p {
+      margin: 4px 0 0;
+      color: var(--text-muted, #64748b);
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .admin-user-direct-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .admin-user-direct-section label {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      min-width: 0;
+      align-content: start;
+    }
+
+    .admin-user-direct-section label span {
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted, #64748b);
+    }
+
+    .admin-user-direct-section .config-input {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      border-radius: 14px;
+    }
+
+    .admin-user-direct-actions,
+    .admin-user-direct-inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .admin-user-direct-actions {
+      justify-content: flex-end;
+      border-top: 1px solid rgba(148, 163, 184, 0.18);
+      padding-top: 16px;
+    }
+
+    .admin-user-direct-note {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(41, 72, 149, 0.08);
+      color: var(--text-muted, #64748b);
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 980px) {
+      .admin-user-direct-layout { grid-template-columns: 1fr; }
+      .admin-user-direct-shell { max-width: 100%; }
+    }
+
+    @media (max-width: 760px) {
+      .admin-user-direct-header { flex-direction: column; border-radius: 20px; }
+      .admin-user-direct-header .secondary-btn { width: 100%; }
+      .admin-user-direct-card { padding: 14px; border-radius: 20px; }
+      .admin-user-direct-section { padding: 15px; border-radius: 20px; }
+      .admin-user-direct-fields { grid-template-columns: 1fr; }
+      .admin-user-direct-actions { flex-direction: column-reverse; align-items: stretch; }
+      .admin-user-direct-actions .save-btn,
+      .admin-user-direct-actions .secondary-btn { width: 100%; }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+async function carregarPerfis() {
+  if (cachePerfis.length) return cachePerfis;
+
   try {
-    if (estado.etapa === 'permissoes' && estado.id && typeof originalAbrirPermissoesPeloModalUsuario === 'function') {
-      originalAbrirPermissoesPeloModalUsuario(estado.id);
-      return;
-    }
+    const client = exigirSupabaseConfigurado();
+    const { data, error } = await client
+      .from('perfis_acesso')
+      .select('id, nome, slug, status')
+      .order('nome', { ascending: true });
 
-    if (typeof window.abrirModalUsuarioAdmin === 'function') {
-      window.abrirModalUsuarioAdmin(estado.modo === 'editar' ? estado.id : '');
-    }
-  } finally {
-    applying = false;
+    if (error) throw error;
+    cachePerfis = data || [];
+  } catch (_erro) {
+    cachePerfis = [];
   }
+
+  return cachePerfis;
 }
 
-function criarCabecalhoFixo(estado) {
-  const titulo = estado.etapa === 'permissoes'
-    ? 'Permissões do usuário'
-    : estado.modo === 'editar'
-      ? 'Editar usuário'
-      : 'Adicionar usuário';
-  const descricao = estado.etapa === 'permissoes'
-    ? 'Gerencie as permissões adicionais deste usuário.'
-    : 'Preencha os dados cadastrais e de acesso do usuário.';
+async function carregarUsuario(id) {
+  if (!id) return {};
+  if (cacheUsuarios.has(id)) return cacheUsuarios.get(id);
 
-  const header = document.createElement('div');
-  header.className = 'admin-user-fixed-header';
-  header.innerHTML = `
-    <div>
-      <h3>${titulo}</h3>
-      <p>${descricao}</p>
+  try {
+    const client = exigirSupabaseConfigurado();
+    const { data, error } = await client
+      .from('usuarios')
+      .select('id, nome, email, perfil_id, status, cpf, telefone')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    cacheUsuarios.set(id, data || {});
+  } catch (_erro) {
+    cacheUsuarios.set(id, {});
+  }
+
+  return cacheUsuarios.get(id);
+}
+
+function renderOptionsPerfis(perfis, perfilAtual = '') {
+  const options = ['<option value="">Selecione</option>'];
+  perfis
+    .filter(perfil => perfil.status !== 'inativo' || perfil.id === perfilAtual)
+    .forEach(perfil => {
+      options.push(`<option value="${escapeAttr(perfil.id)}" ${perfil.id === perfilAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || 'Perfil')}</option>`);
+    });
+  return options.join('');
+}
+
+function renderOptionsStatus(statusAtual = 'ativo') {
+  const atual = normalizarStatus(statusAtual);
+  return ['ativo', 'inativo', 'arquivado'].map(status => `
+    <option value="${status}" ${status === atual ? 'selected' : ''}>${status.charAt(0).toUpperCase()}${status.slice(1)}</option>
+  `).join('');
+}
+
+function renderTelaDadosUsuario(estado, usuario, perfis) {
+  const editando = estado.modo === 'editar';
+  const usuarioId = editando ? estado.id : '';
+  const prefixo = editando ? `usuario_${usuarioId}` : 'usuario_novo';
+
+  return `
+    <div class="admin-user-direct-layout">
+      <section class="admin-user-direct-section">
+        <div>
+          <h4>Dados cadastrais</h4>
+          <p>Informações básicas de identificação do usuário no Hub.</p>
+        </div>
+        <div class="admin-user-direct-fields">
+          <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
+          <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
+          <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" value="${escapeAttr(usuario.cpf || '')}" placeholder="000.000.000-00"></label>
+          <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" value="${escapeAttr(usuario.telefone || '')}" placeholder="(00) 00000-0000"></label>
+        </div>
+      </section>
+
+      <section class="admin-user-direct-section">
+        <div>
+          <h4>Acesso e permissões</h4>
+          <p>Controle de perfil, status, senha e permissões adicionais.</p>
+        </div>
+        <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfis(perfis, usuario.perfil_id || '')}</select></label>
+        <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatus(usuario.status || 'ativo')}</select></label>
+        <p class="admin-user-direct-note">Status padronizado com o Supabase: ativo, inativo ou arquivado. Para bloquear acesso, use inativo.</p>
+        <label><span>${editando ? 'Nova senha administrativa' : 'Senha inicial'}</span><input id="${prefixo}_senha_admin" class="config-input" type="text" autocomplete="new-password" placeholder="${editando ? 'Opcional' : 'Gerar ou informar senha'}"></label>
+        <div class="admin-user-direct-inline-actions">
+          <button class="secondary-btn" type="button" onclick="hubAdminUsersGerarSenhaPhase5()">Gerar senha</button>
+          ${editando ? `<button class="secondary-btn" type="button" onclick="abrirTelaPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')">Editar permissões</button>` : ''}
+        </div>
+      </section>
     </div>
-    <button class="secondary-btn" type="button" onclick="voltarListaUsuariosAdmin()">Voltar para usuários</button>
-  `;
-  return header;
-}
 
-function obterTextoLabel(elemento) {
-  return elemento?.querySelector('span')?.textContent?.trim().toLowerCase() || '';
-}
-
-function moverPorLabel(origem, destino, rotulos = []) {
-  rotulos.forEach(rotulo => {
-    const alvo = Array.from(origem.querySelectorAll(':scope > label, :scope > .admin-users-phase5-field'))
-      .find(item => obterTextoLabel(item) === rotulo);
-    if (alvo) destino.appendChild(alvo);
-  });
-}
-
-function organizarFormularioDados(card) {
-  const modal = card.querySelector('.admin-user-modal');
-  if (!modal || modal.dataset.fixedLayoutOrganized === 'true') return;
-  if (modal.querySelector('.permission-modal-layout')) return;
-
-  const layout = document.createElement('div');
-  layout.className = 'admin-user-fixed-layout';
-
-  const dadosSection = document.createElement('section');
-  dadosSection.className = 'admin-user-fixed-section';
-  dadosSection.innerHTML = `
-    <div class="admin-user-fixed-section-header">
-      <h4>Dados cadastrais</h4>
-      <p>Informações básicas de identificação do usuário no Hub.</p>
-    </div>
-    <div class="admin-user-fixed-fields"></div>
-  `;
-
-  const acessoSection = document.createElement('section');
-  acessoSection.className = 'admin-user-fixed-section admin-user-fixed-access';
-  acessoSection.innerHTML = `
-    <div class="admin-user-fixed-section-header">
-      <h4>Acesso e permissões</h4>
-      <p>Controle de perfil, status, senha e permissões adicionais.</p>
+    <div class="admin-user-direct-actions">
+      <button class="secondary-btn" type="button" onclick="voltarListaUsuariosAdmin()">Voltar</button>
+      <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${escapeAttr(usuarioId)}')">Salvar</button>
     </div>
   `;
-
-  const camposDados = dadosSection.querySelector('.admin-user-fixed-fields');
-  moverPorLabel(modal, camposDados, ['nome', 'e-mail', 'cpf', 'telefone']);
-  moverPorLabel(modal, acessoSection, ['perfil', 'status']);
-
-  Array.from(modal.children).forEach(child => {
-    if (child.classList?.contains('admin-users-phase5-status-note')) {
-      acessoSection.appendChild(child);
-    }
-  });
-
-  Array.from(modal.children).forEach(child => {
-    if (child.classList?.contains('admin-users-phase5-password-row')
-      || child.classList?.contains('admin-users-phase5-note')
-      || child.classList?.contains('admin-user-access-panel')) {
-      acessoSection.appendChild(child);
-    }
-  });
-
-  const actions = Array.from(modal.children).find(child => child.classList?.contains('small-modal-actions'));
-  if (actions) {
-    actions.classList.add('admin-user-fixed-actions');
-  }
-
-  layout.appendChild(dadosSection);
-  layout.appendChild(acessoSection);
-  modal.insertBefore(layout, modal.firstChild);
-
-  if (actions) {
-    modal.appendChild(actions);
-  }
-
-  modal.dataset.fixedLayoutOrganized = 'true';
 }
 
-function montarTelaFixa(estado) {
-  const painel = obterPainelUsuarios();
-  const backdrop = document.querySelector('.admin-user-modal')?.closest('.modal-backdrop');
-  const modal = document.querySelector('.admin-user-modal');
-
-  if (!painel || !backdrop || !modal) return;
-
-  let shell = painel.querySelector('.admin-user-fixed-shell');
-  if (!shell) {
-    shell = document.createElement('div');
-    shell.className = 'admin-user-fixed-shell';
-    painel.appendChild(shell);
-  }
-
-  shell.innerHTML = '';
-  shell.appendChild(criarCabecalhoFixo(estado));
-
-  const card = document.createElement('section');
-  card.className = `admin-user-fixed-card ${estado.etapa === 'permissoes' ? 'is-permissions-stage' : ''}`.trim();
-  card.appendChild(backdrop);
-  shell.appendChild(card);
-
-  organizarFormularioDados(card);
-  painel.classList.add('admin-user-fixed-hidden-list');
-
-  if (typeof window.hubAdminUsersGerarSenhaPhase5 === 'function') {
-    window.setTimeout(() => window.dispatchEvent(new Event('hubAdminUsuarioTelaRenderSolicitado')), 0);
-  }
+function renderTelaPermissoesUsuario(estado) {
+  return `
+    <section class="admin-user-direct-section">
+      <div>
+        <h4>Permissões adicionais</h4>
+        <p>Esta etapa será consolidada na próxima fase para renderizar a matriz de permissões diretamente, sem modal legado.</p>
+      </div>
+      <div class="admin-user-direct-inline-actions">
+        <button class="secondary-btn" type="button" onclick="abrirTelaEditarUsuarioAdmin('${escapeAttr(estado.id)}')">Voltar para usuário</button>
+        <button class="secondary-btn" type="button" onclick="abrirPermissoesUsuarioAdmin('${escapeAttr(estado.id)}')">Abrir permissões legadas temporariamente</button>
+      </div>
+    </section>
+  `;
 }
 
-function limparTelaFixaSeNecessario(estado) {
-  if (estado.modo) return;
-
-  document.querySelectorAll('.admin-user-fixed-shell').forEach(item => item.remove());
-  document.querySelectorAll('.admin-user-fixed-hidden-list').forEach(item => item.classList.remove('admin-user-fixed-hidden-list'));
-}
-
-function aplicarTelaFixaUsuario() {
+async function renderizarTelaDireta() {
+  if (rendering) return;
   const estado = obterEstadoTela();
+  const painel = obterPainelUsuarios();
+
   injetarEstilos();
-  limparTelaFixaSeNecessario(estado);
 
-  if (!estado.modo) return;
+  if (!painel) return;
 
-  prepararModalLegado(estado);
-  window.requestAnimationFrame(() => montarTelaFixa(estado));
+  if (!estado.modo) {
+    painel.classList.remove('admin-user-direct-hidden');
+    painel.querySelector('.admin-user-direct-shell')?.remove();
+    return;
+  }
+
+  rendering = true;
+
+  try {
+    painel.classList.add('admin-user-direct-hidden');
+    painel.querySelector('.admin-user-direct-shell')?.remove();
+
+    const [perfis, usuario] = await Promise.all([
+      carregarPerfis(),
+      carregarUsuario(estado.id)
+    ]);
+
+    const titulo = estado.etapa === 'permissoes'
+      ? 'Permissões do usuário'
+      : estado.modo === 'editar'
+        ? 'Editar usuário'
+        : 'Adicionar usuário';
+    const descricao = estado.etapa === 'permissoes'
+      ? 'Gerencie as permissões adicionais deste usuário.'
+      : 'Preencha os dados cadastrais e de acesso do usuário.';
+
+    const shell = document.createElement('div');
+    shell.className = 'admin-user-direct-shell';
+    shell.innerHTML = `
+      <div class="admin-user-direct-header">
+        <div>
+          <h3>${escapeHtml(titulo)}</h3>
+          <p>${escapeHtml(descricao)}</p>
+        </div>
+        <button class="secondary-btn" type="button" onclick="voltarListaUsuariosAdmin()">Voltar para lista</button>
+      </div>
+      <section class="admin-user-direct-card">
+        ${estado.etapa === 'permissoes'
+          ? renderTelaPermissoesUsuario(estado)
+          : renderTelaDadosUsuario(estado, usuario || {}, perfis)}
+      </section>
+    `;
+
+    painel.appendChild(shell);
+  } finally {
+    rendering = false;
+  }
 }
 
 function instalarOverrides() {
   if (!originalAbrirModalNovoRegistro && typeof window.abrirModalNovoRegistro === 'function') {
     originalAbrirModalNovoRegistro = window.abrirModalNovoRegistro;
-    window.abrirModalNovoRegistro = function abrirModalNovoRegistroFixo(entidade) {
-      if (entidade === 'usuarios' && typeof window.abrirTelaNovoUsuarioAdmin === 'function') {
-        window.abrirTelaNovoUsuarioAdmin();
+    window.abrirModalNovoRegistro = function abrirModalNovoRegistroDireto(entidade) {
+      if (entidade === 'usuarios') {
+        window.abrirTelaNovoUsuarioAdmin?.();
         return;
       }
       return originalAbrirModalNovoRegistro.apply(this, arguments);
@@ -465,48 +438,20 @@ function instalarOverrides() {
 
   if (!originalEditarUsuarioAdmin && typeof window.editarUsuarioAdmin === 'function') {
     originalEditarUsuarioAdmin = window.editarUsuarioAdmin;
-    window.editarUsuarioAdmin = function editarUsuarioAdminFixo(id) {
-      if (typeof window.abrirTelaEditarUsuarioAdmin === 'function') {
-        window.abrirTelaEditarUsuarioAdmin(id);
-        return;
-      }
-      return originalEditarUsuarioAdmin.apply(this, arguments);
+    window.editarUsuarioAdmin = function editarUsuarioAdminDireto(id) {
+      window.abrirTelaEditarUsuarioAdmin?.(id);
     };
   }
 
   if (!originalFecharModalNovoRegistro && typeof window.fecharModalNovoRegistro === 'function') {
     originalFecharModalNovoRegistro = window.fecharModalNovoRegistro;
-    window.fecharModalNovoRegistro = function fecharModalNovoRegistroFixo() {
+    window.fecharModalNovoRegistro = function fecharModalNovoRegistroDireto() {
       const estado = obterEstadoTela();
-      if (estado.modo && typeof window.voltarListaUsuariosAdmin === 'function') {
-        originalFecharModalNovoRegistro.apply(this, arguments);
-        window.voltarListaUsuariosAdmin();
+      if (estado.modo) {
+        definirEstadoTela({ modo: '', id: '', etapa: 'dados' });
         return;
       }
       return originalFecharModalNovoRegistro.apply(this, arguments);
-    };
-  }
-
-  if (!originalAbrirPermissoesPeloModalUsuario && typeof window.abrirPermissoesPeloModalUsuario === 'function') {
-    originalAbrirPermissoesPeloModalUsuario = window.abrirPermissoesPeloModalUsuario;
-    window.abrirPermissoesPeloModalUsuario = function abrirPermissoesUsuarioFixo(id) {
-      if (typeof window.abrirTelaPermissoesUsuarioAdmin === 'function') {
-        window.abrirTelaPermissoesUsuarioAdmin(id);
-        return;
-      }
-      return originalAbrirPermissoesPeloModalUsuario.apply(this, arguments);
-    };
-  }
-
-  if (!originalVoltarEtapaModalUsuarioAdmin && typeof window.voltarEtapaModalUsuarioAdmin === 'function') {
-    originalVoltarEtapaModalUsuarioAdmin = window.voltarEtapaModalUsuarioAdmin;
-    window.voltarEtapaModalUsuarioAdmin = function voltarEtapaUsuarioFixo() {
-      const estado = obterEstadoTela();
-      if (estado.modo && typeof window.abrirTelaEditarUsuarioAdmin === 'function') {
-        window.abrirTelaEditarUsuarioAdmin(estado.id);
-        return;
-      }
-      return originalVoltarEtapaModalUsuarioAdmin.apply(this, arguments);
     };
   }
 }
@@ -518,7 +463,7 @@ function instalarObserver() {
   const observer = new MutationObserver(() => {
     window.requestAnimationFrame(() => {
       instalarOverrides();
-      aplicarTelaFixaUsuario();
+      renderizarTelaDireta();
     });
   });
 
@@ -529,14 +474,15 @@ function instalarObserver() {
 }
 
 function iniciar() {
+  if (!supabase) return;
   instalarOverrides();
   injetarEstilos();
   instalarObserver();
-  aplicarTelaFixaUsuario();
+  renderizarTelaDireta();
 }
 
-window.addEventListener('hubAdminUsuarioTelaAtualizada', aplicarTelaFixaUsuario);
-window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', aplicarTelaFixaUsuario);
+window.addEventListener('hubAdminUsuarioTelaAtualizada', renderizarTelaDireta);
+window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', renderizarTelaDireta);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
