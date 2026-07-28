@@ -1,4 +1,4 @@
-const USER_PERMISSION_EXPAND_FIX_DELAYS = [0, 60, 140, 300, 700, 1200];
+const USER_PERMISSION_EXPAND_FIX_DELAYS = [0, 80, 180, 360, 700];
 const CLICK_SUPPRESSION_MS = 500;
 
 let lastHandledAction = '';
@@ -59,65 +59,13 @@ function forceUserPermissionDirectRefresh() {
   }
 }
 
-function getControlledUserPermissionElement(control) {
-  const id = control?.getAttribute?.('aria-controls');
-  if (!id) return null;
-
-  try {
-    return document.getElementById(id) || document.querySelector(`#${CSS.escape(id)}`);
-  } catch (_error) {
-    return document.getElementById(id);
-  }
-}
-
-function setUserPermissionContentVisible(element, expanded) {
-  if (!element) return;
-  element.hidden = !expanded;
-  element.style.display = expanded ? '' : 'none';
-}
-
-function applyUserPermissionDomFallback(expanded) {
-  const scope = getUserPermissionScope();
-  if (!scope) return;
-
-  scope.querySelectorAll('.permission-module-card').forEach(card => {
-    card.classList.toggle('is-open', expanded);
-    card.classList.toggle('is-collapsed', !expanded);
-    card.querySelector('.permission-module-toggle')?.setAttribute('aria-expanded', String(expanded));
-    const control = card.querySelector('.permission-module-control');
-    if (control) control.textContent = expanded ? '-' : '+';
-
-    card.querySelectorAll('.permission-table-wrap, .permission-module-body, .permission-module-content, [data-permission-content], [data-collapsible-content]').forEach(content => {
-      setUserPermissionContentVisible(content, expanded);
-    });
-  });
-
-  scope.querySelectorAll('[aria-controls]').forEach(control => {
-    if (isIgnoredUserPermissionControl(control)) return;
-    if (getExpandCollapseUserAction(control)) return;
-
-    const controlled = getControlledUserPermissionElement(control);
-    if (!controlled || !scope.contains(controlled)) return;
-
-    control.setAttribute('aria-expanded', String(expanded));
-    setUserPermissionContentVisible(controlled, expanded);
-  });
-}
-
 function executeUserPermissionExpandCollapse(action) {
-  const expanded = action === 'expand';
+  if (typeof window.alternarTodosModulosPermissoesUsuario !== 'function') return;
 
-  if (typeof window.alternarTodosModulosPermissoesUsuario === 'function') {
-    window.alternarTodosModulosPermissoesUsuario(expanded);
-  } else {
-    applyUserPermissionDomFallback(expanded);
-  }
+  window.alternarTodosModulosPermissoesUsuario(action === 'expand');
 
   USER_PERMISSION_EXPAND_FIX_DELAYS.forEach(delay => {
-    window.setTimeout(() => {
-      forceUserPermissionDirectRefresh();
-      applyUserPermissionDomFallback(expanded);
-    }, delay);
+    window.setTimeout(forceUserPermissionDirectRefresh, delay);
   });
 }
 
