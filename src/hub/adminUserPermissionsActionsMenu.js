@@ -7,16 +7,53 @@ function injectActionsMenuStyle() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
+    .admin-user-permissions-v2,
+    .admin-user-permissions-v2-toolbar,
+    .admin-user-permissions-v2-toolbar-group,
+    .admin-user-permissions-v2-body,
+    .admin-user-permissions-v2-card,
+    .admin-user-permissions-v2-module-head,
+    .admin-user-permissions-v2-module-actions {
+      overflow: visible !important;
+    }
+
+    .admin-user-permissions-v2-card {
+      isolation: isolate;
+    }
+
+    .admin-user-permissions-v2-module-head {
+      position: relative !important;
+      z-index: 20;
+    }
+
+    .admin-user-permissions-v2-card:has(.admin-user-permissions-v2-actions-menu.is-open),
+    .admin-user-permissions-v2-toolbar:has(.admin-user-permissions-v2-actions-menu.is-open) {
+      z-index: 90;
+    }
+
     .admin-user-permissions-v2-actions-menu {
       position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: flex-end;
+      overflow: visible !important;
+      z-index: 100;
     }
 
-    .admin-user-permissions-v2-actions-trigger {
+    .admin-user-permissions-v2-actions-trigger,
+    .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn {
       min-width: 92px;
       justify-content: center;
+      background: #ffffff !important;
+      color: var(--text-strong, #0f172a) !important;
+      border-color: rgba(15, 23, 42, 0.22) !important;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+    }
+
+    .admin-user-permissions-v2-actions-trigger:hover,
+    .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn:hover {
+      background: #ffffff !important;
+      border-color: rgba(15, 23, 42, 0.34) !important;
     }
 
     .admin-user-permissions-v2-actions-trigger::after {
@@ -30,22 +67,31 @@ function injectActionsMenuStyle() {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      z-index: 80;
+      z-index: 999;
       min-width: 184px;
       display: grid;
       gap: 4px;
       padding: 8px;
       border-radius: 16px;
       border: 1px solid rgba(148, 163, 184, 0.22);
-      background: rgba(255, 255, 255, 0.96);
+      background: #ffffff;
       box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16);
       backdrop-filter: blur(18px);
       -webkit-backdrop-filter: blur(18px);
+      overflow: visible !important;
+    }
+
+    body.dark .admin-user-permissions-v2-actions-trigger,
+    body.dark .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn {
+      background: #ffffff !important;
+      color: #0f172a !important;
+      border-color: rgba(15, 23, 42, 0.28) !important;
     }
 
     body.dark .admin-user-permissions-v2-actions-panel {
-      background: rgba(15, 23, 42, 0.96);
-      border-color: rgba(148, 163, 184, 0.18);
+      background: #ffffff;
+      color: #0f172a;
+      border-color: rgba(148, 163, 184, 0.22);
       box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
     }
 
@@ -60,6 +106,7 @@ function injectActionsMenuStyle() {
       background: transparent;
       border-color: transparent;
       text-align: left;
+      color: inherit;
     }
 
     .admin-user-permissions-v2-actions-panel .filter-btn:hover {
@@ -161,6 +208,7 @@ function closeAllMenus(exceptMenu = null) {
 
     const trigger = menu.querySelector('[data-user-actions-trigger]');
     const panel = menu.querySelector('.admin-user-permissions-v2-actions-panel');
+    menu.classList.remove('is-open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
     if (panel) panel.hidden = true;
   });
@@ -207,26 +255,27 @@ function handleActionsMenuClick(event) {
   const willOpen = panel.hidden;
   closeAllMenus(menu);
   panel.hidden = !willOpen;
+  menu.classList.toggle('is-open', willOpen);
   trigger.setAttribute('aria-expanded', String(willOpen));
 }
 
-function startActionsMenuObserver() {
-  const observer = new MutationObserver(scheduleApplyActionsMenus);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-}
-
+startActionsMenuObserver();
 APPLY_DELAYS.forEach(delay => window.setTimeout(scheduleApplyActionsMenus, delay));
 document.addEventListener('click', handleActionsMenuClick, true);
 window.addEventListener('hubAdminUsuarioTelaAtualizada', scheduleApplyActionsMenus);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', scheduleApplyActionsMenus);
 window.addEventListener('load', scheduleApplyActionsMenus);
 
+function startActionsMenuObserver() {
+  if (window.__hubAdminUserPermissionsActionsMenuObserver) return;
+
+  const observer = new MutationObserver(scheduleApplyActionsMenus);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  window.__hubAdminUserPermissionsActionsMenuObserver = observer;
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    startActionsMenuObserver();
-    scheduleApplyActionsMenus();
-  });
+  document.addEventListener('DOMContentLoaded', scheduleApplyActionsMenus);
 } else {
-  startActionsMenuObserver();
   scheduleApplyActionsMenus();
 }
