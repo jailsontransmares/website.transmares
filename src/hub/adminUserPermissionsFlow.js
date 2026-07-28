@@ -159,12 +159,18 @@ function existemAlteracoesPermissoes() {
   });
 }
 
+function confirmarSaidaComAlteracoesPermissoes() {
+  if (!existemAlteracoesPermissoes()) return true;
+  return window.confirm('Existem alterações de permissões não salvas. Deseja sair sem salvar?');
+}
+
 function marcarEstadoInicialPermissoes() {
   const escopo = document.querySelector('.admin-user-direct-permissions');
   if (!escopo) return;
 
   escopo.querySelectorAll('input[type="checkbox"]').forEach(input => {
     input.dataset.originalChecked = String(input.checked);
+    input.defaultChecked = input.checked;
   });
 }
 
@@ -289,6 +295,14 @@ function aplicarMenusAcoesPorModulo() {
   });
 }
 
+function voltarParaUsuarioComConfirmacao(usuarioId) {
+  if (!confirmarSaidaComAlteracoesPermissoes()) return;
+
+  if (typeof window.abrirTelaEditarUsuarioAdmin === 'function') {
+    window.abrirTelaEditarUsuarioAdmin(usuarioId);
+  }
+}
+
 function aplicarRodapePermissoesUsuario() {
   const estado = obterEstadoPermissoesUsuario();
   const escopo = document.querySelector('.admin-user-direct-permissions');
@@ -298,7 +312,7 @@ function aplicarRodapePermissoesUsuario() {
     const footer = document.createElement('div');
     footer.className = 'admin-user-permissions-clean-footer';
     footer.innerHTML = `
-      <button class="secondary-btn" type="button" onclick="abrirTelaEditarUsuarioAdmin('${estado.id}')">Voltar para usuário</button>
+      <button class="secondary-btn" type="button" onclick="hubAdminPermissoesVoltarParaUsuario('${estado.id}')">Voltar para usuário</button>
       <button class="save-btn" type="button" data-admin-permissions-save-clean onclick="hubAdminPermissoesSalvarAlteracoes('${estado.id}')" disabled>Salvar alterações</button>
     `;
     escopo.appendChild(footer);
@@ -322,6 +336,8 @@ async function salvarAlteracoesPermissoesUsuario(usuarioId) {
       await window.salvarPermissoesUsuarioAdmin(usuarioId, false);
     }
 
+    marcarEstadoInicialPermissoes();
+
     if (typeof window.abrirTelaEditarUsuarioAdmin === 'function') {
       window.abrirTelaEditarUsuarioAdmin(usuarioId);
     }
@@ -334,6 +350,13 @@ async function salvarAlteracoesPermissoesUsuario(usuarioId) {
   }
 }
 
+function protegerFechamentoDaPagina(event) {
+  if (!obterEstadoPermissoesUsuario() || !existemAlteracoesPermissoes()) return;
+
+  event.preventDefault();
+  event.returnValue = '';
+}
+
 function agendarAplicacaoRodape() {
   window.setTimeout(aplicarRodapePermissoesUsuario, 0);
   window.setTimeout(aplicarRodapePermissoesUsuario, 120);
@@ -342,10 +365,12 @@ function agendarAplicacaoRodape() {
 function iniciarFluxoPermissoesUsuario() {
   injetarEstilosPermissoesUsuario();
   window.hubAdminPermissoesSalvarAlteracoes = salvarAlteracoesPermissoesUsuario;
+  window.hubAdminPermissoesVoltarParaUsuario = voltarParaUsuarioComConfirmacao;
   agendarAplicacaoRodape();
 }
 
 window.addEventListener('click', () => fecharMenusAcoesPermissoes());
+window.addEventListener('beforeunload', protegerFechamentoDaPagina);
 window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarAplicacaoRodape);
 window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarAplicacaoRodape);
 window.addEventListener('load', agendarAplicacaoRodape);
