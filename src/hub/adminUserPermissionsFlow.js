@@ -38,6 +38,39 @@ function injetarEstilosPermissoesUsuario() {
       display: none !important;
     }
 
+    .admin-user-direct-shell:has(.admin-user-direct-permissions) {
+      max-height: calc(100vh - 120px);
+    }
+
+    .admin-user-direct-shell:has(.admin-user-direct-permissions) .admin-user-direct-card {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .admin-user-direct-permissions {
+      min-height: 0;
+      display: flex !important;
+      flex-direction: column;
+      gap: 12px !important;
+    }
+
+    .admin-user-direct-permissions .permission-modal-layout {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .admin-user-direct-permissions .permission-modal-content,
+    .admin-user-direct-permissions .permissions-list,
+    .admin-user-direct-permissions .permission-list,
+    .admin-user-direct-permissions .admin-user-permissions-list {
+      min-height: 0;
+      max-height: calc(100vh - 330px) !important;
+      overflow: auto !important;
+      padding-right: 6px;
+    }
+
     .admin-user-permissions-clean-footer {
       position: sticky;
       bottom: 0;
@@ -132,6 +165,17 @@ function injetarEstilosPermissoesUsuario() {
     }
 
     @media (max-width: 760px) {
+      .admin-user-direct-shell:has(.admin-user-direct-permissions) {
+        max-height: none;
+      }
+
+      .admin-user-direct-permissions .permission-modal-content,
+      .admin-user-direct-permissions .permissions-list,
+      .admin-user-direct-permissions .permission-list,
+      .admin-user-direct-permissions .admin-user-permissions-list {
+        max-height: 62vh !important;
+      }
+
       .admin-user-permissions-clean-footer {
         flex-direction: column-reverse;
         align-items: stretch;
@@ -147,8 +191,12 @@ function injetarEstilosPermissoesUsuario() {
   document.head.appendChild(style);
 }
 
+function obterEscopoPermissoes() {
+  return document.querySelector('.admin-user-direct-permissions');
+}
+
 function existemAlteracoesPermissoes() {
-  const escopo = document.querySelector('.admin-user-direct-permissions');
+  const escopo = obterEscopoPermissoes();
   if (!escopo) return false;
 
   return Array.from(escopo.querySelectorAll('input[type="checkbox"]')).some(input => {
@@ -165,7 +213,7 @@ function confirmarSaidaComAlteracoesPermissoes() {
 }
 
 function marcarEstadoInicialPermissoes() {
-  const escopo = document.querySelector('.admin-user-direct-permissions');
+  const escopo = obterEscopoPermissoes();
   if (!escopo) return;
 
   escopo.querySelectorAll('input[type="checkbox"]').forEach(input => {
@@ -181,7 +229,7 @@ function atualizarBotaoSalvarPermissoes() {
 }
 
 function instalarMonitoramentoAlteracoes() {
-  const escopo = document.querySelector('.admin-user-direct-permissions');
+  const escopo = obterEscopoPermissoes();
   if (!escopo || escopo.dataset.cleanFooterTracking === 'true') return;
 
   escopo.dataset.cleanFooterTracking = 'true';
@@ -271,7 +319,7 @@ function criarMenuAcoesModulo(botoes) {
 }
 
 function aplicarMenusAcoesPorModulo() {
-  const escopo = document.querySelector('.admin-user-direct-permissions');
+  const escopo = obterEscopoPermissoes();
   if (!escopo) return;
 
   const candidatos = Array.from(escopo.querySelectorAll('button'))
@@ -305,7 +353,7 @@ function voltarParaUsuarioComConfirmacao(usuarioId) {
 
 function aplicarRodapePermissoesUsuario() {
   const estado = obterEstadoPermissoesUsuario();
-  const escopo = document.querySelector('.admin-user-direct-permissions');
+  const escopo = obterEscopoPermissoes();
   if (!estado || !escopo) return;
 
   if (!escopo.querySelector('.admin-user-permissions-clean-footer')) {
