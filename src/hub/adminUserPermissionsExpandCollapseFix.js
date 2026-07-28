@@ -1,9 +1,5 @@
-const USER_PERMISSION_EXPAND_FIX_DELAYS = [0, 80, 180, 360, 700];
-const CLICK_SUPPRESSION_MS = 500;
-
-let lastHandledAction = '';
-let lastHandledAt = 0;
-let lastHandledPointerId = '';
+let refreshQueued = false;
+let handling = false;
 
 function normalizeUserPermissionText(text = '') {
   return String(text || '')
@@ -49,41 +45,33 @@ function getExpandCollapseUserAction(control) {
   return '';
 }
 
-function forceUserPermissionDirectRefresh() {
-  if (typeof window.hubSolicitarRenderizacaoUsuarioTelaAdmin === 'function') {
-    window.hubSolicitarRenderizacaoUsuarioTelaAdmin();
-  }
+function queueDirectUserPermissionRefresh() {
+  if (refreshQueued) return;
+  refreshQueued = true;
 
-  if (typeof window.hubAdminAgendarLimpezaModaisLegadosUsuario === 'function') {
-    window.hubAdminAgendarLimpezaModaisLegadosUsuario();
-  }
+  window.requestAnimationFrame(() => {
+    refreshQueued = false;
+
+    window.dispatchEvent(new CustomEvent('hubAdminUsuarioTelaRenderSolicitado', {
+      detail: getUserPermissionScreenState()
+    }));
+
+    if (typeof window.hubAdminAgendarLimpezaModaisLegadosUsuario === 'function') {
+      window.hubAdminAgendarLimpezaModaisLegadosUsuario();
+    }
+  });
 }
 
 function executeUserPermissionExpandCollapse(action) {
   if (typeof window.alternarTodosModulosPermissoesUsuario !== 'function') return;
 
-  window.alternarTodosModulosPermissoesUsuario(action === 'expand');
-
-  USER_PERMISSION_EXPAND_FIX_DELAYS.forEach(delay => {
-    window.setTimeout(forceUserPermissionDirectRefresh, delay);
-  });
-}
-
-function markHandled(event, action) {
-  lastHandledAction = action;
-  lastHandledAt = Date.now();
-  lastHandledPointerId = event.pointerId ? String(event.pointerId) : '';
-}
-
-function shouldSuppressDuplicateClick(event, action) {
-  if (event.type !== 'click') return false;
-
-  const now = Date.now();
-  if (lastHandledAction !== action || now - lastHandledAt > CLICK_SUPPRESSION_MS) {
-    return false;
+  handling = true;
+  try {
+    window.alternarTodosModulosPermissoesUsuario(action === 'expand');
+  } finally {
+    handling = false;
+    queueDirectUserPermissionRefresh();
   }
-
-  return !lastHandledPointerId || !event.pointerId || String(event.pointerId) === lastHandledPointerId;
 }
 
 function stopUserPermissionEvent(event) {
@@ -93,7 +81,7 @@ function stopUserPermissionEvent(event) {
 }
 
 function handleUserPermissionExpandCollapse(event) {
-  if (!isUserPermissionScreenActive()) return;
+  if (handling || !isUserPermissionScreenActive()) return;
 
   const scope = getUserPermissionScope();
   const control = event.target?.closest?.('button, a, [role="button"]');
@@ -103,17 +91,8 @@ function handleUserPermissionExpandCollapse(event) {
   const action = getExpandCollapseUserAction(control);
   if (!action) return;
 
-  if (event.type === 'pointerdown' && event.button !== undefined && event.button !== 0) return;
-
-  if (shouldSuppressDuplicateClick(event, action)) {
-    stopUserPermissionEvent(event);
-    return;
-  }
-
   stopUserPermissionEvent(event);
-  markHandled(event, action);
   executeUserPermissionExpandCollapse(action);
 }
 
-document.addEventListener('pointerdown', handleUserPermissionExpandCollapse, true);
 document.addEventListener('click', handleUserPermissionExpandCollapse, true);
