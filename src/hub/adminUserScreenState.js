@@ -8,6 +8,8 @@ const estadoUsuarioTela = {
   ...ESTADO_PADRAO_USUARIO_TELA
 };
 
+let renderizacaoSolicitada = false;
+
 function normalizarEtapa(etapa = '') {
   return etapa === 'permissoes' ? 'permissoes' : 'dados';
 }
@@ -20,7 +22,23 @@ function obterEstadoUsuarioTelaAdmin() {
   return { ...estadoUsuarioTela };
 }
 
-function definirEstadoUsuarioTelaAdmin(proximoEstado = {}) {
+function solicitarRenderizacaoUsuarioTelaAdmin() {
+  if (renderizacaoSolicitada) return;
+  renderizacaoSolicitada = true;
+
+  window.requestAnimationFrame(() => {
+    renderizacaoSolicitada = false;
+    window.dispatchEvent(new CustomEvent('hubAdminUsuarioTelaRenderSolicitado', {
+      detail: obterEstadoUsuarioTelaAdmin()
+    }));
+
+    if (typeof window.renderAdministracao === 'function') {
+      window.renderAdministracao();
+    }
+  });
+}
+
+function definirEstadoUsuarioTelaAdmin(proximoEstado = {}, options = {}) {
   const modo = normalizarModo(proximoEstado.modo || '');
 
   estadoUsuarioTela.modo = modo;
@@ -30,6 +48,10 @@ function definirEstadoUsuarioTelaAdmin(proximoEstado = {}) {
   window.dispatchEvent(new CustomEvent('hubAdminUsuarioTelaAtualizada', {
     detail: obterEstadoUsuarioTelaAdmin()
   }));
+
+  if (options.render !== false) {
+    solicitarRenderizacaoUsuarioTelaAdmin();
+  }
 
   return obterEstadoUsuarioTelaAdmin();
 }
@@ -64,9 +86,20 @@ function voltarListaUsuariosAdmin() {
   });
 }
 
+function usuarioTelaEstaAbertaAdmin() {
+  return Boolean(estadoUsuarioTela.modo);
+}
+
+function usuarioTelaEstaEmPermissoesAdmin() {
+  return estadoUsuarioTela.modo === 'editar' && estadoUsuarioTela.etapa === 'permissoes';
+}
+
 Object.assign(window, {
   hubObterEstadoUsuarioTelaAdmin: obterEstadoUsuarioTelaAdmin,
   hubDefinirEstadoUsuarioTelaAdmin: definirEstadoUsuarioTelaAdmin,
+  hubSolicitarRenderizacaoUsuarioTelaAdmin: solicitarRenderizacaoUsuarioTelaAdmin,
+  usuarioTelaEstaAbertaAdmin,
+  usuarioTelaEstaEmPermissoesAdmin,
   abrirTelaNovoUsuarioAdmin,
   abrirTelaEditarUsuarioAdmin,
   abrirTelaPermissoesUsuarioAdmin,
