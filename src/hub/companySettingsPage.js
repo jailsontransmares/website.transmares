@@ -1,5 +1,6 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
 import { hasPermission, normalizarPermissoes } from './services/permissionService.js';
+import { obterContextoAcessoHub } from './services/hubAccessContext.js';
 
 const COMPANY_ROUTE = 'configuracoes/corretora';
 let renderizadoPara = '';
@@ -207,6 +208,16 @@ async function carregarPermissoes() {
 }
 
 async function garantirAcesso() {
+  const contextoHub = obterContextoAcessoHub();
+
+  if (contextoHub.carregado && contextoHub.usuario && contextoHub.permissions) {
+    if (!hasPermission(contextoHub.permissions, 'configuracoes.corretora', 'view')) {
+      throw new Error('Seu usuário não possui acesso aos dados da corretora.');
+    }
+
+    return contextoHub.usuario;
+  }
+
   const { data: authData, error: authError } = await exigirSupabaseConfigurado().auth.getUser();
 
   if (authError || !authData?.user) {
