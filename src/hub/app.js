@@ -2,7 +2,11 @@ import './style.css';
 import { chamarApi } from './api.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
-import { atualizarContextoAcessoHub, limparContextoAcessoHub } from './services/hubAccessContext.js';
+import {
+  atualizarContextoInicialHub,
+  invalidarContextoAcessoHub,
+  limparContextoAcessoHub
+} from './services/hubAccessContext.js';
 
 const state = {
   usuario: null,
@@ -198,8 +202,123 @@ const state = {
   temaAtual: 'claro'
 };
 
+function sincronizarContextoInicialHub() {
+  atualizarContextoInicialHub({
+    usuario: state.usuario,
+    perfil: state.usuario?.perfil,
+    permissions: state.permissions,
+    modulos: state.cards,
+    config: state.config,
+    meta: state.meta
+  });
+}
+
+let atualizacaoContextoAcessoEmAndamento = null;
+let atualizacaoContextoAcessoPendente = false;
+let revalidarRotaAposAtualizacao = false;
+let timerAtualizacaoContextoAcesso = null;
+const motivosAtualizacaoContextoAcesso = new Set();
+
+function obterAssinaturaAcessoAtual() {
+  const mapaPermissoes = state.permissions?.map || {};
+
+  return JSON.stringify({
+    usuario: {
+      id: state.usuario?.id || '',
+      nome: state.usuario?.nome || '',
+      email: state.usuario?.email || '',
+      perfil: state.usuario?.perfil || ''
+    },
+    permissoes: Object.keys(mapaPermissoes)
+      .filter(chave => Boolean(mapaPermissoes[chave]))
+      .sort(),
+    modulos: (state.cards || []).map(item => item?.id || '').filter(Boolean).sort()
+  });
+}
+
+async function atualizarContextoAcessoHub(motivo = '', revalidarRota = true) {
+  if (motivo) {
+    motivosAtualizacaoContextoAcesso.add(motivo);
+  }
+  revalidarRotaAposAtualizacao = revalidarRotaAposAtualizacao || revalidarRota;
+
+  if (!state.usuario) {
+    motivosAtualizacaoContextoAcesso.clear();
+    revalidarRotaAposAtualizacao = false;
+    return false;
+  }
+
+  if (atualizacaoContextoAcessoEmAndamento) {
+    atualizacaoContextoAcessoPendente = true;
+    return atualizacaoContextoAcessoEmAndamento;
+  }
+
+  atualizacaoContextoAcessoEmAndamento = (async () => {
+    let atualizado = false;
+
+    do {
+      atualizacaoContextoAcessoPendente = false;
+      const assinaturaAnterior = obterAssinaturaAcessoAtual();
+      const motivos = Array.from(motivosAtualizacaoContextoAcesso);
+      motivosAtualizacaoContextoAcesso.clear();
+      const deveRevalidarRota = revalidarRotaAposAtualizacao;
+      revalidarRotaAposAtualizacao = false;
+      const usuarioEsperadoId = state.usuario?.id || '';
+      invalidarContextoAcessoHub(motivos.join(','));
+
+      const resultado = await carregarDadosIniciaisSilencioso({ usuarioEsperadoId });
+      if (!resultado.ok) {
+        const falhaDeAcesso = /sess[aã]o inv[aá]lida|n[aã]o est[aá] cadastrado|usu[aá]rio est[aá] inativo/i
+          .test(resultado.message || '');
+
+        if (falhaDeAcesso) {
+          limparDadosSessao();
+          renderErro(resultado.message);
+          return atualizado;
+        }
+
+        sincronizarContextoInicialHub();
+        return atualizado;
+      }
+
+      atualizado = true;
+      if (deveRevalidarRota && assinaturaAnterior !== obterAssinaturaAcessoAtual()) {
+        await renderizarRotaAtual();
+      }
+    } while (atualizacaoContextoAcessoPendente && state.usuario);
+
+    return atualizado;
+  })();
+
+  try {
+    return await atualizacaoContextoAcessoEmAndamento;
+  } finally {
+    atualizacaoContextoAcessoEmAndamento = null;
+  }
+}
+
+function agendarAtualizacaoContextoAcessoHub(motivo = '') {
+  if (motivo) {
+    motivosAtualizacaoContextoAcesso.add(motivo);
+  }
+  revalidarRotaAposAtualizacao = true;
+
+  if (timerAtualizacaoContextoAcesso) return;
+
+  timerAtualizacaoContextoAcesso = window.setTimeout(() => {
+    timerAtualizacaoContextoAcesso = null;
+    atualizarContextoAcessoHub();
+  }, 0);
+}
+
 document.addEventListener('DOMContentLoaded', iniciarApp);
 document.addEventListener('click', fecharFiltrosListaAoClicarForaAr);
+window.addEventListener('hubAccessContextRefreshRequested', event => {
+  agendarAtualizacaoContextoAcessoHub(event?.detail?.motivo || 'alteracao-acesso');
+});
+window.addEventListener('hubAdminUsuariosAtualizados', () => {
+  agendarAtualizacaoContextoAcessoHub('usuario-atualizado');
+});
 window.addEventListener('popstate', () => {
   if (state.usuario) {
     renderizarRotaAtual();
@@ -237,7 +356,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.favoritos = response.data.favoritos || [];
     state.meta = response.data.meta || null;
     state.permissions = response.data.permissions || normalizarPermissoes([]);
-    atualizarContextoAcessoHub(state.usuario, state.permissions);
+    sincronizarContextoInicialHub();
 
     aplicarConfigVisual();
     definirTemaInicial();
@@ -4481,11 +4600,22 @@ function contarFavoritosLinks() {
   return state.links.items.filter(item => item.favorito).length;
 }
 
-async function carregarDadosIniciaisSilencioso() {
+async function carregarDadosIniciaisSilencioso({ usuarioEsperadoId = '' } = {}) {
   const response = await chamarApi('getInitialData');
 
   if (!response.ok) {
-    return;
+    return {
+      ok: false,
+      message: obterMensagemApi(response, 'Não foi possível atualizar seus acessos.')
+    };
+  }
+
+  if (usuarioEsperadoId && state.usuario?.id !== usuarioEsperadoId) {
+    return {
+      ok: false,
+      cancelado: true,
+      message: ''
+    };
   }
 
   state.usuario = response.data.usuario;
@@ -4496,7 +4626,8 @@ async function carregarDadosIniciaisSilencioso() {
   state.favoritos = response.data.favoritos || [];
   state.meta = response.data.meta || null;
   state.permissions = response.data.permissions || normalizarPermissoes([]);
-  atualizarContextoAcessoHub(state.usuario, state.permissions);
+  sincronizarContextoInicialHub();
+  return { ok: true };
 }
 
 function atualizarBotaoSalvarLink(texto, disabled, classe) {
@@ -8367,6 +8498,7 @@ function obterMensagemApi(response, fallback) {
 // Funções usadas por handlers inline gerados pelo template do painel.
 Object.assign(window, {
   hubRenderizarTopbarPadrao: renderHubTopbar,
+  hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,
