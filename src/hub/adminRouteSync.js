@@ -1,4 +1,12 @@
-const ADMIN_ABAS_COM_DADOS = new Set(['usuarios', 'perfis', 'permissoes']);
+const ADMIN_ABAS_ROTEAVEIS = new Set([
+  'identidade',
+  'limites',
+  'categorias',
+  'grupos',
+  'usuarios',
+  'perfis',
+  'permissoes'
+]);
 
 let ultimaSincronizacao = '';
 let sincronizacaoPendente = false;
@@ -27,13 +35,14 @@ function obterAbaAdministrativaAlvo() {
   const rota = obterRotaSemBase();
   const hash = normalizarParte(window.location.hash || '');
 
-  if (rota === 'admin' && ADMIN_ABAS_COM_DADOS.has(hash)) {
+  if (rota === 'admin' && ADMIN_ABAS_ROTEAVEIS.has(hash)) {
     return hash;
   }
 
   if (rota.startsWith('admin/')) {
-    const aba = normalizarParte(rota.replace(/^admin\//, ''));
-    return ADMIN_ABAS_COM_DADOS.has(aba) ? aba : '';
+    const partes = rota.split('/').filter(Boolean);
+    const ultimaParte = normalizarParte(partes[partes.length - 1] || '');
+    return ADMIN_ABAS_ROTEAVEIS.has(ultimaParte) ? ultimaParte : '';
   }
 
   return '';
