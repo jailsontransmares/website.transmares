@@ -13,6 +13,7 @@ const DEFAULT_OPEN_GROUPS = {
 };
 
 let expandedGroups = carregarEstadoExpansao();
+let manuallyCollapsedGroups = new Set();
 let observer = null;
 let renderAgendado = false;
 let contextoMenu = {
@@ -148,6 +149,7 @@ function grupoTemItemAtivo(item = {}) {
 }
 
 function grupoEstaAberto(item = {}) {
+  if (manuallyCollapsedGroups.has(item.id)) return false;
   if (grupoTemItemAtivo(item)) return true;
   return expandedGroups[item.id] === true;
 }
@@ -170,7 +172,9 @@ function abrirPaisDaRotaAtiva(items = HUB_MENU_TREE, parents = []) {
 
     if (item.type === 'route' && itemEstaAtivo(item)) {
       parents.forEach(parent => {
-        expandedGroups[parent.id] = true;
+        if (!manuallyCollapsedGroups.has(parent.id)) {
+          expandedGroups[parent.id] = true;
+        }
       });
       encontrou = true;
       continue;
@@ -340,6 +344,11 @@ function tratarCliqueSidebar(event) {
       ...expandedGroups,
       [id]: !estaAberto
     };
+    if (estaAberto) {
+      manuallyCollapsedGroups.add(id);
+    } else {
+      manuallyCollapsedGroups.delete(id);
+    }
     salvarEstadoExpansao();
     renderizarSidebars();
     return;
