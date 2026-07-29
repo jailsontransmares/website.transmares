@@ -136,6 +136,14 @@ textarea {
   max-width: 420px;
   margin-top: 8vh;
 }
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}
+
 .login-loading-screen {
   min-height: calc(100vh - 48px);
   display: flex;
