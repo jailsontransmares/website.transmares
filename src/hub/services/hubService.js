@@ -65,6 +65,23 @@ async function selecionarTabelaOpcional(nomeTabela, consulta) {
   return data || [];
 }
 
+async function selecionarTabelaObrigatoria(nomeTabela, consulta) {
+  const supabase = exigirSupabaseConfigurado();
+  let query = supabase.from(nomeTabela).select('*');
+
+  if (consulta) {
+    query = consulta(query);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || `Não foi possível carregar a tabela ${nomeTabela}.`);
+  }
+
+  return data || [];
+}
+
 function normalizarConfiguracoes(registros) {
   if (!Array.isArray(registros) || !registros.length) {
     return { ...DEFAULT_CONFIG };
@@ -97,12 +114,17 @@ function normalizarPerfil(usuarioEncontrado, perfis) {
 
 function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
   const emailAuth = authUser?.email || '';
+  const authUserId = authUser?.id || '';
 
   if (!authUser || !emailAuth) {
     throw new Error('Sessão inválida. Entre novamente.');
   }
 
   const usuarioEncontrado = registros.find(item => {
+    if (authUserId && item.auth_user_id === authUserId) {
+      return true;
+    }
+
     const email = item.email || item.e_mail || item.login || '';
     return emailAuth && String(email).toLowerCase() === emailAuth.toLowerCase();
   });
@@ -257,11 +279,11 @@ async function carregarPermissoesEfetivas(supabase, usuario) {
   if (error) {
     const rpcNaoExiste = error.code === 'PGRST202' || /app_permissoes_efetivas/i.test(error.message || '');
 
-    if (!rpcNaoExiste) {
-      console.warn('Permissões efetivas não carregadas:', error);
+    if (rpcNaoExiste) {
+      return normalizarPermissoes(montarPermissoesLegadas(usuario));
     }
 
-    return normalizarPermissoes(montarPermissoesLegadas(usuario));
+    throw new Error(error.message || 'Não foi possível carregar suas permissões.');
   }
 
   return normalizarPermissoes(data || []);
@@ -272,7 +294,7 @@ export async function carregarDadosIniciaisSupabase() {
   const { data: authData } = await supabase.auth.getUser();
 
   const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios] = await Promise.all([
-    selecionarTabelaOpcional('usuarios'),
+    selecionarTabelaObrigatoria('usuarios'),
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
