@@ -1,6 +1,8 @@
 const INSTALL_DELAYS = [0, 80, 180, 360, 700, 1200];
 const MASK_FIELDS = ['cc_cnpj', 'cc_telefone', 'cc_whatsapp', 'cc_endereco_cep'];
 const WRAPPED_FLAG = '__hubCompanySettingsMasksWrapped';
+const CEP_MESSAGE_ID = 'company-settings-cep-message';
+const CEP_STYLE_ID = 'company-settings-cep-status-style';
 
 let ultimoCepConsultado = '';
 let cepEmConsulta = '';
@@ -85,15 +87,104 @@ function obterInput(id) {
   return document.getElementById(id);
 }
 
+function injetarEstilosCep() {
+  if (document.getElementById(CEP_STYLE_ID)) return;
+
+  const style = document.createElement('style');
+  style.id = CEP_STYLE_ID;
+  style.textContent = `
+    .company-settings-cep-message {
+      grid-column: 1 / -1;
+      margin: -6px 0 2px !important;
+      padding: 8px 10px;
+      border-radius: 12px;
+      font-size: 0.78rem !important;
+      font-weight: 700;
+      line-height: 1.35;
+      background: rgba(41, 72, 149, 0.08);
+      color: var(--cor-principal, #294895) !important;
+    }
+
+    .company-settings-cep-message.is-hidden {
+      display: none !important;
+    }
+
+    .company-settings-cep-message.is-error,
+    .company-settings-cep-message.is-warning {
+      background: rgba(220, 38, 38, 0.09);
+      color: #b91c1c !important;
+    }
+
+    .company-settings-cep-message.is-success {
+      background: rgba(22, 163, 74, 0.1);
+      color: #15803d !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function obterMensagemCep() {
+  const cepInput = obterInput('cc_endereco_cep');
+  const cepLabel = cepInput?.closest('label');
+  const grid = cepLabel?.parentElement;
+
+  if (!cepLabel || !grid) return null;
+
+  let mensagem = document.getElementById(CEP_MESSAGE_ID);
+
+  if (!mensagem) {
+    mensagem = document.createElement('p');
+    mensagem.id = CEP_MESSAGE_ID;
+    mensagem.className = 'company-settings-cep-message is-hidden';
+    mensagem.setAttribute('aria-live', 'polite');
+    cepLabel.insertAdjacentElement('afterend', mensagem);
+  }
+
+  return mensagem;
+}
+
+function definirMensagemCep(texto = '', tipo = 'info') {
+  injetarEstilosCep();
+
+  const mensagem = obterMensagemCep();
+  if (!mensagem) return;
+
+  if (!texto) {
+    mensagem.textContent = '';
+    mensagem.className = 'company-settings-cep-message is-hidden';
+    return;
+  }
+
+  mensagem.textContent = texto;
+  mensagem.className = `company-settings-cep-message is-${tipo}`;
+}
+
+function atualizarMensagemCepParcial() {
+  const cep = apenasDigitos(obterInput('cc_endereco_cep')?.value || '');
+
+  if (!cep) {
+    definirMensagemCep('');
+    return;
+  }
+
+  if (cep.length < 8) {
+    definirMensagemCep('Informe um CEP com 8 dígitos.', 'warning');
+  }
+}
+
 function moverCepParaInicioEndereco() {
   const cepInput = obterInput('cc_endereco_cep');
   const cepLabel = cepInput?.closest('label');
   const grid = cepLabel?.parentElement;
 
-  if (!cepLabel || !grid || cepLabel.dataset.cepReposicionado === 'true') return;
+  if (!cepLabel || !grid) return;
 
-  grid.insertBefore(cepLabel, grid.firstElementChild);
-  cepLabel.dataset.cepReposicionado = 'true';
+  if (cepLabel.dataset.cepReposicionado !== 'true') {
+    grid.insertBefore(cepLabel, grid.firstElementChild);
+    cepLabel.dataset.cepReposicionado = 'true';
+  }
+
+  obterMensagemCep();
 }
 
 function preencherCampo(id, valor = '') {
@@ -119,10 +210,21 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
   const cepInput = obterInput('cc_endereco_cep');
   const cep = apenasDigitos(cepInput?.value || '');
 
-  if (cep.length !== 8) return;
-  if (!forcar && (cep === ultimoCepConsultado || cep === cepEmConsulta)) return;
+  if (!cep) {
+    definirMensagemCep('');
+    return;
+  }
+
+  if (cep.length !== 8) {
+    atualizarMensagemCepParcial();
+    return;
+  }
+
+  if (cep === cepEmConsulta) return;
+  if (!forcar && cep === ultimoCepConsultado) return;
 
   cepEmConsulta = cep;
+  definirMensagemCep('Buscando CEP...', 'info');
 
   try {
     const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -131,10 +233,15 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
     const dados = await response.json();
     ultimoCepConsultado = cep;
 
-    if (!dados?.erro) {
-      aplicarEnderecoViaCep(dados);
+    if (dados?.erro) {
+      definirMensagemCep('CEP não encontrado. Preencha o endereço manualmente.', 'warning');
+      return;
     }
+
+    aplicarEnderecoViaCep(dados);
+    definirMensagemCep('Endereço preenchido automaticamente. Você pode editar os campos manualmente.', 'success');
   } catch (erro) {
+    definirMensagemCep('Não foi possível consultar o CEP agora. Preencha manualmente.', 'error');
     console.warn('Não foi possível consultar o CEP informado:', erro);
   } finally {
     cepEmConsulta = '';
