@@ -7802,126 +7802,6 @@ function abrirLink(url) {
   window.open(url, '_blank', 'noopener');
 }
 
-const hubSidebarUi = {
-  gruposAbertos: {},
-  subgruposAbertos: {}
-};
-
-function obterItensNavegacaoHub() {
-  const cardsPorId = new Map((state.cards || []).map(card => [card.id, card]));
-  const itens = [
-    {
-      grupo: 'Visao geral',
-      links: [
-        { id: 'inicio', label: 'Inicio', descricao: 'Resumo operacional', rota: '', visivel: true }
-      ]
-    },
-    {
-      grupo: 'Operacao',
-      links: [
-        {
-          id: 'painel-ar',
-          label: cardsPorId.get('painel-ar')?.titulo || 'Painel AR',
-          descricao: 'Links, produtos e validacoes',
-          rota: 'painel-ar',
-          visivel: moduloEstaAtivo('painel-ar')
-        },
-        {
-          id: 'central-senhas',
-          label: cardsPorId.get('central-senhas')?.titulo || 'Central de Senhas',
-          descricao: 'Acessos e historico',
-          rota: 'central-senhas',
-          visivel: moduloEstaAtivo('central-senhas')
-        }
-      ]
-    },
-    {
-      grupo: 'Links uteis',
-      links: [
-        {
-          id: 'links-corretora',
-          label: cardsPorId.get('links-corretora')?.titulo || 'Links Corretora',
-          descricao: 'Base comercial',
-          rota: 'links-corretora',
-          visivel: moduloEstaAtivo('links-corretora')
-        },
-        {
-          id: 'links-ar',
-          label: cardsPorId.get('links-ar')?.titulo || 'Links AR',
-          descricao: 'Certificacao e apoio',
-          rota: 'links-ar',
-          visivel: moduloEstaAtivo('links-ar')
-        },
-        {
-          id: 'links-gestao',
-          label: cardsPorId.get('links-gestao')?.titulo || 'Links Gestao',
-          descricao: 'Rotinas internas',
-          rota: 'links-gestao',
-          visivel: moduloEstaAtivo('links-gestao')
-        }
-      ]
-    },
-    {
-      grupo: 'Administracao',
-      links: [
-        {
-          id: 'administracao',
-          label: 'Administracao',
-          rota: 'admin',
-          visivel: pode('admin', 'view'),
-          subgrupos: obterSubgruposMenuAdministracao(),
-          destaque: true
-        }
-      ]
-    }
-  ];
-
-  return itens
-    .map(grupo => ({
-      ...grupo,
-      links: grupo.links.filter(link => link.visivel)
-    }))
-    .filter(grupo => grupo.links.length);
-}
-
-function obterSubgruposMenuAdministracao() {
-  if (!pode('admin', 'view')) {
-    return [];
-  }
-
-  return [
-    {
-      titulo: 'Painel',
-      itens: [
-        { id: 'admin-identidade', label: 'Identidade', hash: 'identidade', visivel: true },
-        { id: 'admin-aparencia', label: 'Aparencia', hash: 'aparencia', visivel: true },
-        { id: 'admin-logo', label: 'Marca', hash: 'logo', visivel: true },
-        { id: 'admin-limites', label: 'Limites', hash: 'limites', visivel: true }
-      ]
-    },
-    {
-      titulo: 'Cadastros',
-      itens: [
-        { id: 'admin-categorias', label: 'Categorias', hash: 'categorias', visivel: true },
-        { id: 'admin-grupos', label: 'Grupos', hash: 'grupos', visivel: true },
-        { id: 'admin-home-exibicao', label: 'Home', hash: 'home-exibicao', visivel: true }
-      ]
-    },
-    {
-      titulo: 'Acessos',
-      itens: [
-        { id: 'admin-usuarios', label: 'Usuarios', hash: 'usuarios', visivel: pode('admin.usuarios', 'view') },
-        { id: 'admin-perfis', label: 'Perfis', hash: 'perfis', visivel: pode('admin.perfis', 'view') }
-      ]
-    }
-  ]
-    .map(grupo => ({
-      ...grupo,
-      itens: grupo.itens.filter(item => item.visivel)
-    }))
-    .filter(grupo => grupo.itens.length);
-}
-
 function obterHashHubAtual() {
   return String(window.location.hash || '').replace(/^#/, '').trim();
 }
@@ -8001,182 +7881,6 @@ function sincronizarContextoHubPelaRota() {
   sincronizarContextoArPelaRota();
 }
 
-function obterChaveGrupoHub(nomeGrupo = '') {
-  return `hub-grupo-${normalizarSlugModulo(nomeGrupo)}`;
-}
-
-function obterChaveSubgrupoHub(nomeGrupo = '', nomeSubgrupo = '') {
-  return `hub-subgrupo-${normalizarSlugModulo(nomeGrupo)}-${normalizarSlugModulo(nomeSubgrupo)}`;
-}
-
-function grupoHubDeveIniciarAberto(grupo, rotaAtual) {
-  return (grupo.links || []).some(link => link.id === rotaAtual);
-}
-
-function grupoHubEstaAberto(grupo, rotaAtual) {
-  const chave = obterChaveGrupoHub(grupo.grupo);
-
-  if (Object.prototype.hasOwnProperty.call(hubSidebarUi.gruposAbertos, chave)) {
-    return hubSidebarUi.gruposAbertos[chave];
-  }
-
-  return grupoHubDeveIniciarAberto(grupo, rotaAtual);
-}
-
-function alternarGrupoHub(nomeGrupo) {
-  const chave = obterChaveGrupoHub(nomeGrupo);
-  const grupos = obterItensNavegacaoHub();
-  const grupo = grupos.find(item => item.grupo === nomeGrupo);
-  const rotaAtual = (obterContextoRotaHub().modulo || 'inicio');
-  const atual = grupo ? grupoHubEstaAberto(grupo, rotaAtual) : Boolean(hubSidebarUi.gruposAbertos[chave]);
-
-  hubSidebarUi.gruposAbertos[chave] = !atual;
-  renderizarRotaAtual();
-}
-
-function subgrupoHubDeveIniciarAberto(grupo, subgrupo, contexto) {
-  if (contexto.modulo !== 'administracao') {
-    return false;
-  }
-
-  return (subgrupo.itens || []).some(item => item.hash === contexto.principal);
-}
-
-function subgrupoHubEstaAberto(grupo, subgrupo, contexto) {
-  const chave = obterChaveSubgrupoHub(grupo.grupo, subgrupo.titulo);
-
-  if (Object.prototype.hasOwnProperty.call(hubSidebarUi.subgruposAbertos, chave)) {
-    return hubSidebarUi.subgruposAbertos[chave];
-  }
-
-  return subgrupoHubDeveIniciarAberto(grupo, subgrupo, contexto);
-}
-
-function alternarSubgrupoHub(nomeGrupo, nomeSubgrupo) {
-  const grupos = obterItensNavegacaoHub();
-  const grupo = grupos.find(item => item.grupo === nomeGrupo);
-  const link = grupo?.links?.[0];
-  const subgrupo = (link?.subgrupos || []).find(item => item.titulo === nomeSubgrupo);
-  const contexto = obterContextoRotaHub();
-  const chave = obterChaveSubgrupoHub(nomeGrupo, nomeSubgrupo);
-  const atual = (grupo && subgrupo)
-    ? subgrupoHubEstaAberto(grupo, subgrupo, contexto)
-    : Boolean(hubSidebarUi.subgruposAbertos[chave]);
-
-  hubSidebarUi.subgruposAbertos[chave] = !atual;
-  renderizarRotaAtual();
-}
-
-function renderSidebarHub() {
-  const contexto = obterContextoRotaHub();
-  const rotaAtual = contexto.modulo || 'inicio';
-  const grupos = obterItensNavegacaoHub();
-  const grupoInicio = grupos.find(grupo => grupo.grupo === 'Visao geral');
-  const linkInicio = grupoInicio?.links?.find(link => link.id === 'inicio') || null;
-  const grupoAdministracao = grupos.find(grupo => grupo.grupo === 'Administracao');
-  const linkAdministracao = grupoAdministracao?.links?.find(link => link.id === 'administracao') || null;
-  const gruposRestantes = grupos.filter(grupo => grupo.grupo !== 'Visao geral' && grupo.grupo !== 'Administracao');
-
-  return `
-    <aside class="hub-sidebar" aria-label="Navegacao principal do Hub">
-      <nav class="hub-sidebar-nav">
-        ${linkInicio ? `
-          <button
-            class="hub-sidebar-link ${rotaAtual === linkInicio.id ? 'active' : ''}"
-            type="button"
-            onclick="navegarHome()"
-            aria-current="${rotaAtual === linkInicio.id ? 'page' : 'false'}"
-          >
-            <strong>${escapeHtml(linkInicio.label)}</strong>
-          </button>
-        ` : ''}
-
-        ${gruposRestantes.map(grupo => {
-          const grupoAberto = grupoHubEstaAberto(grupo, rotaAtual);
-
-          return `
-          <section class="hub-sidebar-group">
-            <button
-              class="hub-sidebar-group-toggle ${grupoAberto ? 'active' : ''}"
-              type="button"
-              onclick="alternarGrupoHub('${escapeAttr(grupo.grupo)}')"
-              aria-expanded="${grupoAberto ? 'true' : 'false'}"
-            >
-              <span class="hub-sidebar-group-label">${escapeHtml(grupo.grupo)}</span>
-              <span class="hub-sidebar-group-caret" aria-hidden="true">${grupoAberto ? '▾' : '▸'}</span>
-            </button>
-
-            <div class="hub-sidebar-links ${grupoAberto ? '' : 'is-collapsed'}">
-              ${grupo.links.map(link => `
-                ${(() => {
-                  const ativo = rotaAtual === link.id;
-                  return `
-                <button
-                  class="hub-sidebar-link ${ativo ? 'active' : ''}"
-                  type="button"
-                  onclick="${link.rota ? `navegarParaModulo('${escapeAttr(link.rota)}')` : 'navegarHome()'}"
-                  aria-current="${ativo ? 'page' : 'false'}"
-                >
-                  <strong>${escapeHtml(link.label)}</strong>
-                </button>
-              `;
-                })()}
-              `).join('')}
-            </div>
-          </section>
-        `;
-        }).join('')}
-
-        ${linkAdministracao ? `
-          <section class="hub-sidebar-group hub-sidebar-group-standalone">
-            <button
-              class="hub-sidebar-link ${rotaAtual === linkAdministracao.id ? 'active' : ''}"
-              type="button"
-              onclick="navegarParaModulo('admin')"
-              aria-current="${rotaAtual === linkAdministracao.id ? 'page' : 'false'}"
-            >
-              <strong>${escapeHtml(linkAdministracao.label)}</strong>
-            </button>
-            ${rotaAtual === linkAdministracao.id ? `
-              <div class="hub-sidebar-submenu" aria-label="Submenu de ${escapeAttr(linkAdministracao.label)}">
-                ${linkAdministracao.subgrupos.map(subgrupo => {
-                  const subgrupoAberto = subgrupoHubEstaAberto(grupoAdministracao, subgrupo, contexto);
-
-                  return `
-                    <section class="hub-sidebar-subgroup">
-                      <button
-                        class="hub-sidebar-subgroup-toggle ${subgrupoAberto ? 'active' : ''}"
-                        type="button"
-                        onclick="alternarSubgrupoHub('Administracao', '${escapeAttr(subgrupo.titulo)}')"
-                        aria-expanded="${subgrupoAberto ? 'true' : 'false'}"
-                      >
-                        <span class="hub-sidebar-subgroup-label">${escapeHtml(subgrupo.titulo)}</span>
-                        <span class="hub-sidebar-group-caret" aria-hidden="true">${subgrupoAberto ? '▾' : '▸'}</span>
-                      </button>
-                      <div class="hub-sidebar-subitems ${subgrupoAberto ? '' : 'is-collapsed'}">
-                        ${subgrupo.itens.map(subitem => `
-                          <button
-                            class="hub-sidebar-subitem ${contexto.principal === subitem.hash ? 'active' : ''}"
-                            type="button"
-                            onclick="navegarParaModulo('admin', '${escapeAttr(subitem.hash)}')"
-                            aria-current="${contexto.principal === subitem.hash ? 'page' : 'false'}"
-                          >
-                            ${escapeHtml(subitem.label)}
-                          </button>
-                        `).join('')}
-                      </div>
-                    </section>
-                  `;
-                }).join('')}
-              </div>
-            ` : ''}
-          </section>
-        ` : ''}
-      </nav>
-    </aside>
-  `;
-}
-
 function renderHubUserBox() {
   return `
     <div class="user-box hub-user-box">
@@ -8210,18 +7914,14 @@ function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteud
         ${renderHubUserBox()}
       </header>
 
-      <section class="hub-shell">
-        ${renderSidebarHub()}
+      <section class="hub-page-content ${escapeAttr(classeConteudo)}">
+        <section class="hub-page-intro">
+          <span class="hub-page-kicker">Hub operacional</span>
+          <h2>${escapeHtml(tituloPagina)}</h2>
+          <p>${escapeHtml(descricaoPagina)}</p>
+        </section>
 
-        <div class="hub-content ${escapeAttr(classeConteudo)}">
-          <section class="hub-page-intro">
-            <span class="hub-page-kicker">Hub operacional</span>
-            <h2>${escapeHtml(tituloPagina)}</h2>
-            <p>${escapeHtml(descricaoPagina)}</p>
-          </section>
-
-          ${conteudo}
-        </div>
+        ${conteudo}
       </section>
     </main>
   `;
@@ -8667,8 +8367,6 @@ Object.assign(window, {
   alterarFiltroValidacoesAr,
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
-  alternarGrupoHub,
-  alternarSubgrupoHub,
   alternarFiltrosListaProdutosAr,
   alternarFavoritoLink,
   alternarStatusModuloAdmin,
