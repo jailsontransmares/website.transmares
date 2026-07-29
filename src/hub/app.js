@@ -7902,22 +7902,27 @@ function renderHubUserBox() {
   `;
 }
 
-function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteudo = '' }) {
+function renderHubTopbar() {
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
   return `
+    <header class="topbar">
+      ${renderHeaderLogo()}
+      <div class="brand">
+        <h1>${escapeHtml(nomeSistema)}</h1>
+        <p>${escapeHtml(subtitulo)}</p>
+      </div>
+
+      ${renderHubUserBox()}
+    </header>
+  `;
+}
+
+function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteudo = '' }) {
+  return `
     <main class="dashboard hub-layout">
-      <header class="topbar">
-        ${renderHeaderLogo()}
-        <div class="brand">
-          <h1>${escapeHtml(nomeSistema)}</h1>
-          <p>${escapeHtml(subtitulo)}</p>
-        </div>
-
-        ${renderHubUserBox()}
-      </header>
-
+      ${renderHubTopbar()}
       <section class="hub-page-content ${escapeAttr(classeConteudo)}">
         <section class="hub-page-intro">
           <span class="hub-page-kicker">Hub operacional</span>
@@ -8361,6 +8366,7 @@ function obterMensagemApi(response, fallback) {
 
 // Funções usadas por handlers inline gerados pelo template do painel.
 Object.assign(window, {
+  hubRenderizarTopbarPadrao: renderHubTopbar,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,
