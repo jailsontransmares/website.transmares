@@ -11,7 +11,8 @@ const ROUTE_ALIASES = {
   'admin/cadastros/categorias': 'admin#categorias',
   'admin/cadastros/grupos': 'admin#grupos',
   'admin/cadastros/usuarios': 'admin#usuarios',
-  'admin/cadastros/perfis': 'admin#perfis'
+  'admin/cadastros/perfis': 'admin#perfis',
+  'admin/cadastros/parceiros-indicacao': 'admin#parceiros-indicacao'
 };
 
 function obterBaseHub(pathname) {

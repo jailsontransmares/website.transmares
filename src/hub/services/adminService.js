@@ -15,6 +15,20 @@ function normalizarStatus(status) {
   return String(status || 'ativo').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo';
 }
 
+function normalizarStatusParceiro(status) {
+  const normalizado = String(status || 'ativo').trim().toLowerCase();
+  return ['ativo', 'inativo', 'arquivado'].includes(normalizado) ? normalizado : 'ativo';
+}
+
+function limparTexto(valor) {
+  const texto = String(valor ?? '').trim();
+  return texto || null;
+}
+
+function normalizarBooleano(valor) {
+  return valor === true || String(valor || '').trim().toLowerCase() === 'sim';
+}
+
 function normalizarSlugModulo(valor = '') {
   return String(valor || '')
     .trim()
@@ -115,6 +129,172 @@ export async function listarRegistrosAdmin({ entidade }) {
   }
 
   return { records: data || [] };
+}
+
+export async function listarParceirosIndicacaoAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select(`
+      id,
+      nome,
+      nome_completo,
+      codigo_revendedor,
+      ac,
+      status,
+      remunerado,
+      nome_empresa,
+      vinculo_empresa,
+      whatsapp_comercial,
+      whatsapp_pessoal,
+      telefone,
+      email,
+      email_comercial,
+      email_cadastro_certificado,
+      created_at,
+      updated_at
+    `)
+    .order('nome', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar parceiros.');
+  }
+
+  return { records: data || [] };
+}
+
+export async function obterParceiroIndicacaoAdmin({ id, incluir_sensiveis = false } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!id) {
+    throw new Error('Parceiro não identificado.');
+  }
+
+  const colunas = incluir_sensiveis
+    ? '*'
+    : `
+      id,
+      legacy_id,
+      nome,
+      documento,
+      email,
+      telefone,
+      ac,
+      status,
+      observacoes,
+      created_at,
+      updated_at,
+      remunerado,
+      codigo_revendedor,
+      nome_completo,
+      data_aniversario,
+      whatsapp_pessoal,
+      whatsapp_comercial,
+      email_pessoal,
+      email_cadastro_certificado,
+      email_comercial,
+      vinculo_empresa,
+      nome_empresa,
+      telefone_empresa
+    `;
+
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select(colunas)
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar o parceiro.');
+  }
+
+  return { record: data || null };
+}
+
+export async function salvarParceiroIndicacaoAdmin(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const id = limparTexto(payload.id);
+  const podeSalvarSensiveis = normalizarBooleano(payload.permite_dados_sensiveis);
+  const nomeCompleto = limparTexto(payload.nome_completo || payload.nome);
+
+  if (!nomeCompleto) {
+    throw new Error('Informe o nome completo do parceiro.');
+  }
+
+  const emailPrincipal =
+    limparTexto(payload.email_cadastro_certificado)
+    || limparTexto(payload.email_comercial)
+    || limparTexto(payload.email_pessoal);
+  const telefonePrincipal =
+    limparTexto(payload.whatsapp_comercial)
+    || limparTexto(payload.whatsapp_pessoal)
+    || limparTexto(payload.telefone_empresa);
+  const documentoPrincipal = podeSalvarSensiveis
+    ? (
+      limparTexto(payload.cpf)
+      || limparTexto(payload.cnpj_empresa)
+    )
+    : undefined;
+
+  const record = {
+    nome: nomeCompleto,
+    nome_completo: nomeCompleto,
+    email: emailPrincipal,
+    telefone: telefonePrincipal,
+    ac: limparTexto(payload.ac),
+    status: normalizarStatusParceiro(payload.status),
+    observacoes: limparTexto(payload.observacoes),
+    remunerado: normalizarBooleano(payload.remunerado),
+    codigo_revendedor: limparTexto(payload.codigo_revendedor),
+    data_aniversario: limparTexto(payload.data_aniversario),
+    whatsapp_pessoal: limparTexto(payload.whatsapp_pessoal),
+    whatsapp_comercial: limparTexto(payload.whatsapp_comercial),
+    email_pessoal: limparTexto(payload.email_pessoal),
+    email_cadastro_certificado: limparTexto(payload.email_cadastro_certificado),
+    email_comercial: limparTexto(payload.email_comercial),
+    vinculo_empresa: limparTexto(payload.vinculo_empresa),
+    nome_empresa: limparTexto(payload.nome_empresa),
+    telefone_empresa: limparTexto(payload.telefone_empresa)
+  };
+
+  if (podeSalvarSensiveis) {
+    record.documento = documentoPrincipal;
+    record.cpf = limparTexto(payload.cpf);
+    record.cnpj_empresa = limparTexto(payload.cnpj_empresa);
+    record.chave_pix = limparTexto(payload.chave_pix);
+    record.nome_chave_pix = limparTexto(payload.nome_chave_pix);
+  }
+
+  const query = id
+    ? supabase.from('parceiros').update(record).eq('id', id)
+    : supabase.from('parceiros').insert(record);
+
+  const { error } = await query;
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar o parceiro.');
+  }
+
+  return { ok: true };
+}
+
+export async function arquivarParceiroIndicacaoAdmin({ id } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!id) {
+    throw new Error('Parceiro não identificado.');
+  }
+
+  const { error } = await supabase
+    .from('parceiros')
+    .update({ status: 'arquivado' })
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível arquivar o parceiro.');
+  }
+
+  return { ok: true };
 }
 
 export async function listarModulosAdmin() {

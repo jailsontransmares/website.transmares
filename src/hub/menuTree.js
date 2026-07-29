@@ -157,6 +157,15 @@ export const HUB_MENU_TREE = [
             legacyRoute: '/admin/perfis',
             permission: { resource: 'admin.perfis', action: 'view' },
             status: 'alias-required'
+          },
+          {
+            id: 'administracao-cadastros-parceiros-indicacao',
+            label: 'Parceiros de Indicação',
+            type: 'route',
+            route: '/admin/cadastros/parceiros-indicacao',
+            legacyRoute: '/admin#parceiros-indicacao',
+            permission: { resource: 'admin.parceiros_indicacao', action: 'view' },
+            status: 'alias-required'
           }
         ]
       }
