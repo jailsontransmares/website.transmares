@@ -1080,10 +1080,27 @@ function obterModuloDaRotaAtual() {
   const base = obterBaseHub();
   const pathname = window.location.pathname || '/';
   const rota = base ? pathname.slice(base.length) : pathname;
+  const [modulo = ''] = rota
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/^index\.html$/i, '')
+    .split('/')
+    .filter(Boolean);
+
+  return modulo
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/^index\.html$/i, '');
+}
+
+function obterPartesDaRotaAtual() {
+  const base = obterBaseHub();
+  const pathname = window.location.pathname || '/';
+  const rota = base ? pathname.slice(base.length) : pathname;
 
   return rota
     .replace(/^\/+|\/+$/g, '')
-    .replace(/^index\.html$/i, '');
+    .replace(/^index\.html$/i, '')
+    .split('/')
+    .filter(Boolean);
 }
 
 function montarCaminhoHub(idModulo = '') {
@@ -9183,15 +9200,45 @@ function atualizarHashHub(hash = '', { replace = false } = {}) {
   }
 }
 
+function atualizarRotaAdminHub(aba = '', { replace = false } = {}) {
+  const rotasPorAba = {
+    categorias: 'cadastros/categorias',
+    grupos: 'cadastros/grupos',
+    usuarios: 'cadastros/usuarios',
+    perfis: 'cadastros/perfis',
+    'parceiros-indicacao': 'cadastros/parceiros-indicacao',
+    limites: 'parametros/limites',
+    identidade: 'identidade',
+    aparencia: 'aparencia',
+    logo: 'logo',
+    'home-exibicao': 'home-exibicao'
+  };
+  const rotaAba = rotasPorAba[aba] || aba;
+  const baseAdmin = montarCaminhoHub('administracao').replace(/\/+$/g, '');
+  const url = new URL(window.location.href);
+  url.pathname = rotaAba ? `${baseAdmin}/${rotaAba}` : baseAdmin;
+  url.hash = '';
+
+  if (replace) {
+    window.history.replaceState({}, '', url);
+  } else if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== `${url.pathname}${url.search}${url.hash}`) {
+    window.history.pushState({}, '', url);
+  }
+}
+
 function obterContextoRotaHub() {
-  const modulo = normalizarIdModuloRota(obterModuloDaRotaAtual()) || 'inicio';
+  const partesRota = obterPartesDaRotaAtual();
+  const modulo = normalizarIdModuloRota(partesRota[0] || '') || 'inicio';
   const hash = normalizarHashHub(obterHashHubAtual());
-  const partes = hash ? hash.split('/') : [];
+  const partes = hash ? hash.split('/') : partesRota.slice(1);
+  const principal = partes.length > 1 && ['cadastros', 'parametros', 'sistema'].includes(partes[0])
+    ? partes[partes.length - 1]
+    : partes[0];
 
   return {
     modulo,
     hash,
-    principal: partes[0] || '',
+    principal: principal || '',
     secundaria: partes[1] || ''
   };
 }
@@ -9559,7 +9606,7 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
     return;
   }
 
-  atualizarHashHub(aba, { replace: true });
+  atualizarRotaAdminHub(aba, { replace: true });
   resetarFluxoModalUsuarioAdmin(false);
   state.admin.aba = aba;
   state.admin.message = '';
