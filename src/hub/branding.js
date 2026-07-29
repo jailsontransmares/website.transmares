@@ -19,7 +19,7 @@ function normalizarUrlLogo(logoUrl = '') {
 }
 
 function obterLogoPadrao() {
-  const base = obterBaseHub() || '/hub';
+  const base = obterBaseHub();
   return `${base}/assets/logo-transmares.png`;
 }
 
@@ -61,7 +61,11 @@ function aplicarBrandingNoDom() {
   });
 
   document.querySelectorAll('.login-card > h1').forEach(titulo => {
-    if (branding.nome_sistema && !titulo.dataset.brandingTitleLocked) {
+    if (
+      branding.nome_sistema
+      && !titulo.dataset.brandingTitleLocked
+      && titulo.textContent !== branding.nome_sistema
+    ) {
       titulo.textContent = branding.nome_sistema;
     }
   });
