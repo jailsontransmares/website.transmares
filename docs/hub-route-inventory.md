@@ -32,6 +32,12 @@ Rotas especiais como `/perfil` e `/configuracoes/corretora` não são módulos d
 | `/perfil` | Meu perfil | Página especial | Não é módulo do roteador principal |
 | `/configuracoes/corretora` | Configurações/Dados da Corretora | Página especial | Deve virar `Administração > Sistema > Configurações da Corretora` |
 
+## Rota reservada futura
+
+| Rota | Tela atual | Tipo | Observação |
+|---|---|---|---|
+| `/operacoes/corretora` | Placeholder seguro | Página reservada | Futuro módulo operacional da corretora; não substitui `Administração > Sistema > Configurações da Corretora` |
+
 ## Aliases administrativos atuais
 
 | Rota limpa | Destino legado atual | Status |
@@ -65,6 +71,7 @@ Estas rotas ainda não devem substituir as atuais sem alias/fallback.
 | Nova rota desejada | Deve apontar inicialmente para | Novo menu |
 |---|---|---|
 | `/operacoes/ar-transmares` | `/painel-ar` | Operações > AR Transmares |
+| `/operacoes/corretora` | Placeholder seguro | Operações > Corretora |
 | `/admin/sistema/corretora` | `/configuracoes/corretora` | Administração > Sistema > Configurações da Corretora |
 | `/admin/parametros/limites` | `/admin#limites` | Administração > Parâmetros > Limites |
 | `/admin/cadastros/categorias` | `/admin#categorias` | Administração > Cadastros > Categorias |
