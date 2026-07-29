@@ -2,7 +2,16 @@ const ROUTE_ALIASES = {
   'admin/usuarios': 'admin#usuarios',
   'admin/perfis': 'admin#perfis',
   'admin/permissoes': 'admin#permissoes',
-  configuracoes: 'admin#identidade'
+  configuracoes: 'admin#identidade',
+
+  // Nova organização planejada do menu — aliases seguros para rotas legadas/existentes.
+  'operacoes/ar-transmares': 'painel-ar',
+  'admin/sistema/corretora': 'configuracoes/corretora',
+  'admin/parametros/limites': 'admin#limites',
+  'admin/cadastros/categorias': 'admin#categorias',
+  'admin/cadastros/grupos': 'admin#grupos',
+  'admin/cadastros/usuarios': 'admin#usuarios',
+  'admin/cadastros/perfis': 'admin#perfis'
 };
 
 function obterBaseHub(pathname) {
