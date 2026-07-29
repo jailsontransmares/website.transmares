@@ -384,8 +384,10 @@ async function renderizarPagina({ force = false } = {}) {
 
   const chave = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const app = document.getElementById('app');
+  const paginaAtualRenderizada = app?.dataset?.companySettingsPage === 'true'
+    && Boolean(app.querySelector(':scope > main.company-settings-page'));
 
-  if (!force && renderizadoPara === chave && app?.dataset?.companySettingsPage === 'true') {
+  if (!force && renderizadoPara === chave && paginaAtualRenderizada) {
     return;
   }
 
@@ -540,31 +542,14 @@ async function salvarCorretora() {
   }
 }
 
-function instalarInterceptadores() {
-  const originalPushState = window.history.pushState;
-  const originalReplaceState = window.history.replaceState;
-
-  window.history.pushState = function pushStateCorretora(...args) {
-    const retorno = originalPushState.apply(this, args);
-    window.setTimeout(() => renderizarPagina(), 0);
-    return retorno;
-  };
-
-  window.history.replaceState = function replaceStateCorretora(...args) {
-    const retorno = originalReplaceState.apply(this, args);
-    window.setTimeout(() => renderizarPagina(), 0);
-    return retorno;
-  };
-}
-
 function iniciar() {
   if (!supabase) return;
-  instalarInterceptadores();
   renderizarPagina();
 }
 
 window.hubCorretoraSalvar = salvarCorretora;
 window.hubCorretoraVoltarConfiguracoes = navegarParaConfiguracoes;
+window.hubRenderizarPaginaCorretora = renderizarPagina;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
@@ -572,4 +557,3 @@ if (document.readyState === 'loading') {
   iniciar();
 }
 
-window.addEventListener('popstate', () => window.setTimeout(() => renderizarPagina(), 0));
