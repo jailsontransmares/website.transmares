@@ -1,4 +1,8 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
+import {
+  aguardarContextoAcessoHub,
+  obterContextoAcessoHub
+} from './services/hubAccessContext.js';
 
 const PERFIL_PATH = 'perfil';
 let perfilCarregando = false;
@@ -259,17 +263,36 @@ function injetarEstilosPerfil() {
 
 async function carregarPerfilAtual() {
   const client = exigirSupabaseConfigurado();
-  const { data: authData, error: authError } = await client.auth.getUser();
+  const contextoAtual = obterContextoAcessoHub();
+  const contextoHub = contextoAtual.carregado
+    ? contextoAtual
+    : await aguardarContextoAcessoHub({ timeoutMs: 2500 });
+  const usuarioContexto = contextoHub?.usuario || null;
+  let authUser = null;
 
-  if (authError || !authData?.user?.email) {
-    throw new Error(authError?.message || 'Sessão inválida. Entre novamente.');
+  if (!usuarioContexto?.id && !usuarioContexto?.email) {
+    const { data: authData, error: authError } = await client.auth.getUser();
+
+    if (authError || !authData?.user?.email) {
+      throw new Error(authError?.message || 'Sessão inválida. Entre novamente.');
+    }
+
+    authUser = authData.user;
   }
 
   let query = client
     .from('usuarios')
-    .select('id, auth_user_id, nome, email, cpf, telefone, avatar_url, perfil_id, status, updated_at')
-    .eq('auth_user_id', authData.user.id)
-    .maybeSingle();
+    .select('id, auth_user_id, nome, email, cpf, telefone, avatar_url, perfil_id, status, updated_at');
+
+  if (usuarioContexto?.id) {
+    query = query.eq('id', usuarioContexto.id);
+  } else if (authUser?.id) {
+    query = query.eq('auth_user_id', authUser.id);
+  } else {
+    query = query.ilike('email', usuarioContexto.email);
+  }
+
+  query = query.maybeSingle();
 
   let { data: usuario, error } = await query;
 
@@ -278,10 +301,11 @@ async function carregarPerfilAtual() {
   }
 
   if (!usuario) {
+    const emailUsuario = usuarioContexto?.email || authUser?.email || '';
     const fallback = await client
       .from('usuarios')
       .select('id, auth_user_id, nome, email, cpf, telefone, avatar_url, perfil_id, status, updated_at')
-      .ilike('email', authData.user.email)
+      .ilike('email', emailUsuario)
       .maybeSingle();
 
     if (fallback.error) {
@@ -309,7 +333,6 @@ async function carregarPerfilAtual() {
   }
 
   return {
-    authUser: authData.user,
     usuario: {
       ...usuario,
       perfil_nome: perfilNome
@@ -514,6 +537,7 @@ async function salvarPerfil(event) {
     perfilMensagem = 'Perfil atualizado com sucesso.';
     perfilMensagemTipo = 'success';
     perfilRenderizadoPara = '';
+    await window.hubAtualizarContextoAcesso?.('meu-perfil-atualizado', false);
     await renderizarRotaPerfil({ force: true });
   } catch (erro) {
     perfilMensagem = erro.message || 'Erro ao salvar perfil.';
