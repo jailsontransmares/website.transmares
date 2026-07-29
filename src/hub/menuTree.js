@@ -53,8 +53,8 @@ export const HUB_MENU_TREE = [
         label: 'Corretora',
         type: 'route',
         route: '/operacoes/corretora',
-        status: 'planned',
-        note: 'Tela operacional futura da corretora. Não confundir com Configurações da Corretora.'
+        status: 'reserved',
+        note: 'Rota reservada com placeholder seguro para a futura tela operacional da corretora. Não confundir com Configurações da Corretora.'
       }
     ]
   },
