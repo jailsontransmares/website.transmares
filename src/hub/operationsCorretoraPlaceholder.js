@@ -40,8 +40,8 @@ function obterCaminhoAssetHub(caminhoAsset) {
 }
 
 function navegarHomeOperacoesCorretora() {
-  const base = obterBaseHub() || '/hub';
-  window.history.pushState({}, '', `${base}/`);
+  const base = obterBaseHub();
+  window.history.pushState({}, '', base ? `${base}/` : '/');
   window.dispatchEvent(new Event('popstate'));
 }
 
