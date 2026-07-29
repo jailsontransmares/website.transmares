@@ -1,16 +1,18 @@
-import { HUB_MENU_TREE } from './menuTree.js';
+import { HUB_MENU_TREE, HUB_MENU_TREE_VERSION } from './menuTree.js';
 
 const STYLE_ID = 'hub-side-menu-phase5-style';
+const STORAGE_KEY = `hub-side-menu-expanded:${HUB_MENU_TREE_VERSION}`;
 const DEFAULT_OPEN_GROUPS = {
-  operacoes: true,
-  administracao: true,
-  'administracao-sistema': true,
-  'administracao-parametros': true,
-  'administracao-cadastros': true
+  operacoes: false,
+  administracao: false,
+  'administracao-sistema': false,
+  'administracao-parametros': false,
+  'administracao-cadastros': false
 };
 
-let expandedGroups = { ...DEFAULT_OPEN_GROUPS };
+let expandedGroups = carregarEstadoExpansao();
 let observer = null;
+let renderAgendado = false;
 
 function escapeHtml(texto) {
   return String(texto || '')
@@ -23,6 +25,35 @@ function escapeHtml(texto) {
 
 function escapeAttr(texto) {
   return escapeHtml(texto).replace(/`/g, '&#096;');
+}
+
+function carregarEstadoExpansao() {
+  try {
+    const salvo = window.localStorage?.getItem(STORAGE_KEY);
+    if (!salvo) return { ...DEFAULT_OPEN_GROUPS };
+
+    const parseado = JSON.parse(salvo);
+    if (!parseado || typeof parseado !== 'object' || Array.isArray(parseado)) {
+      return { ...DEFAULT_OPEN_GROUPS };
+    }
+
+    return {
+      ...DEFAULT_OPEN_GROUPS,
+      ...Object.fromEntries(
+        Object.entries(parseado).map(([id, aberto]) => [id, Boolean(aberto)])
+      )
+    };
+  } catch (_erro) {
+    return { ...DEFAULT_OPEN_GROUPS };
+  }
+}
+
+function salvarEstadoExpansao() {
+  try {
+    window.localStorage?.setItem(STORAGE_KEY, JSON.stringify(expandedGroups));
+  } catch (_erro) {
+    // Não bloqueia o menu se o navegador impedir persistência local.
+  }
 }
 
 function obterBaseHub(pathname = window.location.pathname || '/') {
@@ -79,7 +110,8 @@ function grupoTemItemAtivo(item = {}) {
 }
 
 function grupoEstaAberto(item = {}) {
-  return expandedGroups[item.id] !== false || grupoTemItemAtivo(item);
+  if (grupoTemItemAtivo(item)) return true;
+  return expandedGroups[item.id] === true;
 }
 
 function itemDeveAparecer(item = {}) {
@@ -88,6 +120,29 @@ function itemDeveAparecer(item = {}) {
   }
 
   return item.type === 'route';
+}
+
+function abrirPaisDaRotaAtiva(items = HUB_MENU_TREE, parents = []) {
+  let encontrou = false;
+
+  for (const item of items) {
+    if (!itemDeveAparecer(item)) continue;
+
+    if (item.type === 'route' && itemEstaAtivo(item)) {
+      parents.forEach(parent => {
+        expandedGroups[parent.id] = true;
+      });
+      encontrou = true;
+      continue;
+    }
+
+    if (item.type === 'group' && Array.isArray(item.children)) {
+      const encontrouNoGrupo = abrirPaisDaRotaAtiva(item.children, [...parents, item]);
+      encontrou = encontrou || encontrouNoGrupo;
+    }
+  }
+
+  return encontrou;
 }
 
 function renderRouteItem(item, level) {
@@ -122,6 +177,7 @@ function renderGroupItem(item, level) {
 
   const aberto = grupoEstaAberto(item);
   const ativo = grupoTemItemAtivo(item);
+  const submenuId = `hub-menu-submenu-${item.id}`;
   const classes = [
     'hub-sidebar-group-toggle',
     'hub-side-menu-group-toggle',
@@ -136,11 +192,12 @@ function renderGroupItem(item, level) {
         type="button"
         data-hub-menu-toggle="${escapeAttr(item.id)}"
         aria-expanded="${aberto ? 'true' : 'false'}"
+        aria-controls="${escapeAttr(submenuId)}"
       >
         <span class="hub-sidebar-group-label">${escapeHtml(item.label)}</span>
         <span class="hub-sidebar-group-caret" aria-hidden="true">${aberto ? '⌄' : '›'}</span>
       </button>
-      <div class="hub-sidebar-submenu ${aberto ? '' : 'is-collapsed'}">
+      <div id="${escapeAttr(submenuId)}" class="hub-sidebar-submenu ${aberto ? '' : 'is-collapsed'}">
         ${filhos.map(child => renderMenuItem(child, level + 1)).join('')}
       </div>
     </div>
@@ -154,6 +211,9 @@ function renderMenuItem(item, level = 0) {
 }
 
 function renderSidebarContent() {
+  abrirPaisDaRotaAtiva();
+  salvarEstadoExpansao();
+
   return `
     <div>
       <span class="hub-sidebar-eyebrow">Menu</span>
@@ -170,6 +230,16 @@ function renderizarSidebars() {
   });
 }
 
+function agendarRenderizacaoSidebars() {
+  if (renderAgendado) return;
+
+  renderAgendado = true;
+  window.requestAnimationFrame(() => {
+    renderAgendado = false;
+    renderizarSidebars();
+  });
+}
+
 function navegarPeloMenu(route = '/') {
   if (!route) return;
 
@@ -180,18 +250,24 @@ function navegarPeloMenu(route = '/') {
     window.history.pushState({}, '', destino);
   }
 
+  abrirPaisDaRotaAtiva();
+  salvarEstadoExpansao();
   window.dispatchEvent(new Event('popstate'));
-  window.requestAnimationFrame(renderizarSidebars);
+  agendarRenderizacaoSidebars();
 }
 
 function tratarCliqueSidebar(event) {
   const toggle = event.target.closest('[data-hub-menu-toggle]');
   if (toggle) {
     const id = toggle.dataset.hubMenuToggle;
+    const grupo = document.querySelector(`[data-hub-menu-group="${CSS.escape(id)}"]`);
+    const estaAberto = grupo?.querySelector('[aria-expanded]')?.getAttribute('aria-expanded') === 'true';
+
     expandedGroups = {
       ...expandedGroups,
-      [id]: !grupoEstaAberto({ id })
+      [id]: !estaAberto
     };
+    salvarEstadoExpansao();
     renderizarSidebars();
     return;
   }
@@ -303,6 +379,7 @@ function integrarMenuNoMain(main) {
 
 function aplicarMenu() {
   injetarEstilos();
+  abrirPaisDaRotaAtiva();
   const app = document.getElementById('app');
   const main = app?.querySelector(':scope > main.dashboard');
 
@@ -333,8 +410,8 @@ function iniciar() {
   observarApp();
 }
 
-window.addEventListener('popstate', () => window.requestAnimationFrame(renderizarSidebars));
-window.addEventListener('hashchange', () => window.requestAnimationFrame(renderizarSidebars));
+window.addEventListener('popstate', agendarRenderizacaoSidebars);
+window.addEventListener('hashchange', agendarRenderizacaoSidebars);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
