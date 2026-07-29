@@ -98,12 +98,22 @@ function normalizarRotaParaComparacao(route = '') {
   return `${pathNormalizado || '/'}${hashNormalizado ? `#${hashNormalizado}` : ''}`;
 }
 
+function aplicarAliasMenuHub(route = '/') {
+  const montarUrlAlias = window.montarUrlAliasRotaHub;
+
+  if (typeof montarUrlAlias !== 'function') {
+    return route;
+  }
+
+  return montarUrlAlias(route) || route;
+}
+
 function obterRotaAtualNormalizada() {
   return normalizarRotaParaComparacao(`${window.location.pathname || '/'}${window.location.hash || ''}`);
 }
 
 function obterRotaEfetiva(item = {}) {
-  return item.legacyRoute || item.route || '';
+  return item.route || item.legacyRoute || '';
 }
 
 function itemEstaPlanejado(item = {}) {
@@ -318,7 +328,7 @@ function sincronizarContextoMenu(contextoHub = obterContextoAcessoHub()) {
 function navegarPeloMenu(route = '/') {
   if (!route) return;
 
-  const destino = aplicarBaseHub(route);
+  const destino = aplicarAliasMenuHub(aplicarBaseHub(route));
   const atual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
   if (atual !== destino) {
