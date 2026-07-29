@@ -1085,6 +1085,15 @@ body.dark .module-card {
     width: 100%;
   }
 
+  .admin-partners-controls-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-partners-main-actions {
+    width: 100%;
+  }
+
   .admin-users-search,
   .admin-profiles-search {
     flex: 1 1 240px;
@@ -1345,6 +1354,47 @@ body.dark .module-card {
   overflow-x: auto;
 }
 
+.admin-partners-controls-row {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.admin-partners-status-filters {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.admin-partners-main-actions {
+  flex: 0 1 auto;
+}
+
+.admin-partners-table-toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-width: max-content;
+  padding: 0 0 8px;
+}
+
+.admin-partners-columns-icon-btn {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0;
+  width: 34px;
+}
+
 .admin-partner-row {
   min-height: 58px;
 }
@@ -1377,10 +1427,6 @@ body.dark .module-card {
 .admin-partner-row .badge.status-inativo,
 .admin-partner-row .badge.status-arquivado {
   background: #dc2626;
-}
-
-.admin-partners-columns-btn {
-  min-width: 96px;
 }
 
 .admin-partners-column-picker {
