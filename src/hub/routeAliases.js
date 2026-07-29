@@ -1,18 +1,12 @@
 const ROUTE_ALIASES = {
-  'admin/usuarios': 'admin#usuarios',
-  'admin/perfis': 'admin#perfis',
-  'admin/permissoes': 'admin#permissoes',
+  'admin/usuarios': 'admin/cadastros/usuarios',
+  'admin/perfis': 'admin/cadastros/perfis',
+  'admin/permissoes': 'admin/permissoes',
   configuracoes: 'admin#identidade',
 
   // Nova organização planejada do menu — aliases seguros para rotas legadas/existentes.
   'operacoes/ar-transmares': 'painel-ar',
-  'admin/sistema/corretora': 'configuracoes/corretora',
-  'admin/parametros/limites': 'admin#limites',
-  'admin/cadastros/categorias': 'admin#categorias',
-  'admin/cadastros/grupos': 'admin#grupos',
-  'admin/cadastros/usuarios': 'admin#usuarios',
-  'admin/cadastros/perfis': 'admin#perfis',
-  'admin/cadastros/parceiros-indicacao': 'admin#parceiros-indicacao'
+  'admin/sistema/corretora': 'configuracoes/corretora'
 };
 
 function obterBaseHub(pathname) {
@@ -33,21 +27,32 @@ function normalizarRotaHub(pathname) {
     .toLowerCase();
 }
 
-function aplicarAliasDeRotaHub() {
-  const pathname = window.location.pathname || '/';
-  const base = obterBaseHub(pathname);
-  const rota = normalizarRotaHub(pathname);
+function montarUrlAliasRotaHub(pathname = window.location.pathname || '/') {
+  const [caminho = ''] = String(pathname || '/').split('#');
+  const base = obterBaseHub(caminho);
+  const rota = normalizarRotaHub(caminho);
   const destino = ROUTE_ALIASES[rota];
 
   if (!destino) {
-    return;
+    return '';
   }
 
   const [pathDestino, hashDestino = ''] = destino.split('#');
   const prefixo = base ? `${base}/` : '/';
-  const proximaUrl = `${prefixo}${pathDestino}${hashDestino ? `#${hashDestino}` : ''}`;
+
+  return `${prefixo}${pathDestino}${hashDestino ? `#${hashDestino}` : ''}`;
+}
+
+function aplicarAliasDeRotaHub() {
+  const proximaUrl = montarUrlAliasRotaHub();
+
+  if (!proximaUrl) {
+    return;
+  }
 
   window.history.replaceState({}, '', proximaUrl);
 }
+
+window.montarUrlAliasRotaHub = montarUrlAliasRotaHub;
 
 aplicarAliasDeRotaHub();
