@@ -1,4 +1,6 @@
+import { chamarApi } from './api.js';
 import { HUB_MENU_TREE, HUB_MENU_TREE_VERSION } from './menuTree.js';
+import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
 
 const STYLE_ID = 'hub-side-menu-phase5-style';
 const STORAGE_KEY = `hub-side-menu-expanded:${HUB_MENU_TREE_VERSION}`;
@@ -13,6 +15,14 @@ const DEFAULT_OPEN_GROUPS = {
 let expandedGroups = carregarEstadoExpansao();
 let observer = null;
 let renderAgendado = false;
+let contextoMenu = {
+  loaded: false,
+  loading: false,
+  failed: false,
+  permissions: normalizarPermissoes([]),
+  cards: [],
+  usuario: null
+};
 
 function escapeHtml(texto) {
   return String(texto || '')
@@ -94,6 +104,34 @@ function itemEstaPlanejado(item = {}) {
   return item.status === 'planned';
 }
 
+function itemExigePermissao(item = {}) {
+  return Boolean(item.permission || item.moduleId);
+}
+
+function obterPermissoesMenu() {
+  return contextoMenu.permissions || normalizarPermissoes([]);
+}
+
+function itemTemPermissao(item = {}) {
+  if (!itemExigePermissao(item)) return true;
+  if (!contextoMenu.loaded) return false;
+
+  const permissoes = obterPermissoesMenu();
+
+  if (item.permission?.resource) {
+    const acao = item.permission.action || 'view';
+    if (!hasPermission(permissoes, item.permission.resource, acao)) {
+      return false;
+    }
+  }
+
+  if (item.moduleId && !canAccessModule(permissoes, item.moduleId)) {
+    return false;
+  }
+
+  return true;
+}
+
 function itemEstaAtivo(item = {}) {
   if (item.type !== 'route') return false;
 
@@ -116,10 +154,12 @@ function grupoEstaAberto(item = {}) {
 
 function itemDeveAparecer(item = {}) {
   if (item.type === 'group') {
+    if (!itemTemPermissao(item)) return false;
     return Array.isArray(item.children) && item.children.some(itemDeveAparecer);
   }
 
-  return item.type === 'route';
+  if (item.type !== 'route') return false;
+  return itemTemPermissao(item);
 }
 
 function abrirPaisDaRotaAtiva(items = HUB_MENU_TREE, parents = []) {
@@ -214,12 +254,14 @@ function renderSidebarContent() {
   abrirPaisDaRotaAtiva();
   salvarEstadoExpansao();
 
+  const conteudo = HUB_MENU_TREE.map(item => renderMenuItem(item, 0)).join('');
+
   return `
     <div>
       <span class="hub-sidebar-eyebrow">Menu</span>
     </div>
     <nav class="hub-sidebar-nav" aria-label="Menu principal do Hub">
-      ${HUB_MENU_TREE.map(item => renderMenuItem(item, 0)).join('')}
+      ${conteudo || '<p class="hub-side-menu-empty">Nenhuma área disponível para seu usuário.</p>'}
     </nav>
   `;
 }
@@ -238,6 +280,37 @@ function agendarRenderizacaoSidebars() {
     renderAgendado = false;
     renderizarSidebars();
   });
+}
+
+async function carregarContextoMenu() {
+  if (contextoMenu.loaded || contextoMenu.loading) return;
+
+  try {
+    contextoMenu.loading = true;
+    const response = await chamarApi('getInitialData');
+
+    if (!response.ok) {
+      throw new Error('Não foi possível carregar permissões do menu.');
+    }
+
+    contextoMenu = {
+      loaded: true,
+      loading: false,
+      failed: false,
+      permissions: response.data?.permissions || normalizarPermissoes([]),
+      cards: response.data?.cards || [],
+      usuario: response.data?.usuario || null
+    };
+  } catch (_erro) {
+    contextoMenu = {
+      ...contextoMenu,
+      loaded: true,
+      loading: false,
+      failed: true
+    };
+  }
+
+  aplicarMenu();
 }
 
 function navegarPeloMenu(route = '/') {
@@ -317,6 +390,14 @@ function injetarEstilos() {
       white-space: nowrap;
     }
 
+    .hub-side-menu-empty {
+      color: var(--texto-suave);
+      font-size: 13px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 10px 2px;
+    }
+
     .hub-side-menu-level-1.hub-side-menu-route {
       padding-left: 14px;
     }
@@ -328,6 +409,14 @@ function injetarEstilos() {
     .hub-side-menu-level-1.hub-side-menu-group-toggle,
     .hub-side-menu-level-2.hub-side-menu-group-toggle {
       padding: 9px 10px;
+    }
+
+    .hub-layout .admin-shell {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hub-layout .admin-tabs {
+      display: none !important;
     }
 
     @media (max-width: 980px) {
@@ -408,10 +497,15 @@ function observarApp() {
 function iniciar() {
   aplicarMenu();
   observarApp();
+  carregarContextoMenu();
 }
 
 window.addEventListener('popstate', agendarRenderizacaoSidebars);
 window.addEventListener('hashchange', agendarRenderizacaoSidebars);
+window.addEventListener('hubAdminUsuariosAtualizados', () => {
+  contextoMenu.loaded = false;
+  carregarContextoMenu();
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);
