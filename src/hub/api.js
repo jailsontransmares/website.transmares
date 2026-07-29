@@ -43,6 +43,27 @@ import {
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
 
+const ACOES_QUE_INVALIDAM_ACESSO = new Set([
+  'saveAdminUser',
+  'saveAdminProfile',
+  'deleteAdminProfile',
+  'saveAdminProfilePermission',
+  'saveAdminProfilePermissionsBatch',
+  'saveAdminUserPermission',
+  'saveAdminUserPermissionsBatch'
+]);
+
+function solicitarAtualizacaoContextoAcesso(action, payload) {
+  if (!ACOES_QUE_INVALIDAM_ACESSO.has(action) || typeof window === 'undefined') return;
+
+  window.dispatchEvent(new CustomEvent('hubAccessContextRefreshRequested', {
+    detail: {
+      motivo: action,
+      alvoId: payload?.usuario_id || payload?.perfil_id || payload?.id || ''
+    }
+  }));
+}
+
 async function testarConexaoSupabase() {
   try {
     const dados = await carregarDadosAR();
@@ -145,6 +166,7 @@ export async function chamarApi(action, payload = {}) {
     }
 
     const dados = await acoes[action]();
+    solicitarAtualizacaoContextoAcesso(action, payload);
     return { ok: true, data: dados };
   } catch (erro) {
     console.error(`Erro ao executar ação ${action}:`, erro);
