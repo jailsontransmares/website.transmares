@@ -1780,9 +1780,16 @@ function renderParceirosIndicacaoAdmin() {
             <h2>Parceiros de Indicação</h2>
             <p>Base central dos parceiros usados no Painel AR. ${resumo.total} registros · ${resumo.ativo || 0} ativos · ${(resumo.inativo || 0) + (resumo.arquivado || 0)} inativos/arquivados.</p>
           </div>
-          <div class="action-toolbar admin-users-toolbar">
-            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Adicionar parceiro</button>' : ''}
-            <button class="secondary-btn action-toolbar-btn admin-partners-columns-btn" type="button" onclick="alternarSeletorColunasParceirosIndicacaoAdmin()" aria-expanded="${state.admin.seletorColunasParceirosAberto ? 'true' : 'false'}">Colunas</button>
+        </div>
+
+        <div class="admin-partners-controls-row">
+          <div class="crud-filters admin-user-filters admin-partners-status-filters" role="group" aria-label="Filtro de status dos parceiros">
+            ${renderFiltroParceirosIndicacaoAdmin('todos', 'Todos', resumo.total)}
+            ${renderFiltroParceirosIndicacaoAdmin('ativo', 'Ativos', resumo.ativo || 0)}
+            ${renderFiltroParceirosIndicacaoAdmin('inativos_arquivados', 'Inativos/Arquivados', (resumo.inativo || 0) + (resumo.arquivado || 0))}
+          </div>
+
+          <div class="action-toolbar admin-users-toolbar admin-partners-main-actions">
             <label class="action-toolbar-field admin-users-search" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
               <input
                 id="admin_parceiro_indicacao_busca"
@@ -1793,13 +1800,8 @@ function renderParceirosIndicacaoAdmin() {
                 oninput="alterarBuscaParceirosIndicacaoAdmin(this.value)"
               >
             </label>
+            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Adicionar parceiro</button>' : ''}
           </div>
-        </div>
-
-        <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos parceiros">
-          ${renderFiltroParceirosIndicacaoAdmin('todos', 'Todos', resumo.total)}
-          ${renderFiltroParceirosIndicacaoAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-          ${renderFiltroParceirosIndicacaoAdmin('inativos_arquivados', 'Inativos/Arquivados', (resumo.inativo || 0) + (resumo.arquivado || 0))}
         </div>
       </div>
 
@@ -1913,6 +1915,16 @@ function renderListaParceirosIndicacaoAdmin(records) {
 
   return `
     <div class="crud-list admin-partners-list">
+      <div class="admin-partners-table-toolbar">
+        <button
+          class="secondary-btn admin-partners-columns-icon-btn"
+          type="button"
+          onclick="alternarSeletorColunasParceirosIndicacaoAdmin()"
+          aria-label="Configurar colunas"
+          title="Configurar colunas"
+          aria-expanded="${state.admin.seletorColunasParceirosAberto ? 'true' : 'false'}"
+        >✎</button>
+      </div>
       <div class="crud-header" style="${escapeAttr(style)}">
         ${colunas.map(coluna => `<span>${escapeHtml(coluna.label)}</span>`).join('')}
       </div>
