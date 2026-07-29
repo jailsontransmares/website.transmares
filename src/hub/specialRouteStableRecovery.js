@@ -1,7 +1,5 @@
 const SPECIAL_ROUTES = new Map([
-  ['perfil', 'hubProfilePage'],
-  ['configuracoes/corretora', 'companySettingsPage'],
-  ['configuracoes-corretora', 'companySettingsPage']
+  ['perfil', 'hubProfilePage']
 ]);
 
 let observador = null;
