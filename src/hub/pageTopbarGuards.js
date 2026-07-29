@@ -9,17 +9,6 @@ function voltarHomePerfil() {
   window.dispatchEvent(new Event('popstate'));
 }
 
-function voltarConfiguracoesCorretora() {
-  if (typeof window.hubCorretoraVoltarConfiguracoes === 'function') {
-    window.hubCorretoraVoltarConfiguracoes();
-    return;
-  }
-
-  const base = obterBaseHub() || '/hub';
-  window.history.pushState({}, '', `${base}/admin#identidade`);
-  window.dispatchEvent(new Event('popstate'));
-}
-
 function injetarEstilosGuardaTopbar() {
   if (document.getElementById('hub-page-topbar-guards-style')) return;
 
@@ -57,10 +46,6 @@ function aplicarGuardasTopbar() {
     '<button class="secondary-btn" type="button" onclick="hubPerfilTopbarVoltar()">Voltar</button>'
   );
 
-  aplicarAcaoTopo(
-    '.company-settings-page',
-    '<button class="secondary-btn" type="button" onclick="hubCorretoraTopbarVoltar()">Voltar</button>'
-  );
 }
 
 function iniciarGuardasTopbar() {
@@ -77,7 +62,6 @@ function iniciarGuardasTopbar() {
 }
 
 window.hubPerfilTopbarVoltar = voltarHomePerfil;
-window.hubCorretoraTopbarVoltar = voltarConfiguracoesCorretora;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciarGuardasTopbar);
