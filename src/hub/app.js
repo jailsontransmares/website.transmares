@@ -7998,6 +7998,33 @@ const renderizarRotaAtualHubPhase2 = async function() {
     return;
   }
 
+  if (idModulo === 'configuracoes-corretora') {
+    const app = document.getElementById('app');
+    const paginaCorretoraRenderizada = app.dataset.companySettingsPage === 'true'
+      && Boolean(app.querySelector(':scope > main.company-settings-page'));
+
+    if (!paginaCorretoraRenderizada) {
+      app.dataset.companySettingsPage = 'loading';
+      app.innerHTML = renderHubShell({
+        tituloPagina: 'Configurações da Corretora',
+        descricaoPagina: 'Carregando dados e validando seu acesso.',
+        conteudo: `
+          <section class="admin-panel" aria-busy="true" aria-live="polite">
+            <div class="admin-panel-header">
+              <div>
+                <h2>Carregando configurações</h2>
+                <p>Aguarde enquanto os dados da corretora são carregados.</p>
+              </div>
+            </div>
+          </section>
+        `
+      });
+    }
+
+    await window.hubRenderizarPaginaCorretora?.();
+    return;
+  }
+
   await abrirModuloDireto(idModulo);
 };
 
