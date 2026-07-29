@@ -214,23 +214,18 @@ async function iniciarApp(exibirLoadingInicial = true) {
     const sessao = await obterSessaoAtual();
 
     if (!sessao?.user?.email) {
-      state.usuario = null;
-      state.config = null;
-      state.cards = [];
-      state.avisos = [];
-      state.aniversariantes = [];
-      state.favoritos = [];
-      state.meta = null;
-      state.permissions = normalizarPermissoes([]);
+      limparDadosSessao();
+      state.auth.loading = false;
       renderLogin();
-      return;
+      return false;
     }
 
     const response = await chamarApi('getInitialData');
 
     if (!response.ok) {
-      renderErro(obterMensagemApi(response, 'Acesso não autorizado.'));
-      return;
+      state.auth.loading = false;
+      renderErro(obterMensagemApi(response, 'Não foi possível carregar os dados do Hub.'));
+      return false;
     }
 
     state.usuario = response.data.usuario;
@@ -244,11 +239,27 @@ async function iniciarApp(exibirLoadingInicial = true) {
 
     aplicarConfigVisual();
     definirTemaInicial();
+    state.auth.loading = false;
+    state.auth.message = '';
     await renderizarRotaAtual();
+    return true;
 
   } catch (erro) {
-    renderLogin();
+    state.auth.loading = false;
+    renderErro(erro.message || 'Não foi possível carregar o Hub.');
+    return false;
   }
+}
+
+function limparDadosSessao() {
+  state.usuario = null;
+  state.config = null;
+  state.cards = [];
+  state.avisos = [];
+  state.aniversariantes = [];
+  state.favoritos = [];
+  state.meta = null;
+  state.permissions = normalizarPermissoes([]);
 }
 
 function renderLogin() {
@@ -310,7 +321,11 @@ async function entrarNoHub(event) {
       throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
     }
 
-    await iniciarApp(false);
+    const carregou = await iniciarApp(false);
+
+    if (!carregou) {
+      state.auth.loading = false;
+    }
   } catch (erro) {
     state.auth.loading = false;
     state.auth.message = erro.message || 'Não foi possível entrar. Confira e-mail e senha.';
@@ -325,14 +340,8 @@ async function sair() {
     console.warn('Não foi possível encerrar a sessão:', erro);
   }
 
-  state.usuario = null;
-  state.config = null;
-  state.cards = [];
-  state.avisos = [];
-  state.aniversariantes = [];
-  state.favoritos = [];
-  state.meta = null;
-  state.permissions = normalizarPermissoes([]);
+  limparDadosSessao();
+  state.auth.loading = false;
   renderLogin();
 }
 
@@ -348,8 +357,12 @@ function renderLoading() {
 function renderErro(mensagem) {
   document.getElementById('app').innerHTML = `
     <section class="error-card">
-      <h1>Acesso não autorizado</h1>
+      <h1>Não foi possível carregar o Hub</h1>
       <p>${escapeHtml(mensagem)}</p>
+      <div class="error-actions">
+        <button class="save-btn" type="button" onclick="iniciarApp()">Tentar novamente</button>
+        <button class="secondary-btn" type="button" onclick="sair()">Sair</button>
+      </div>
     </section>
   `;
 }
@@ -8617,6 +8630,7 @@ function obterMensagemApi(response, fallback) {
 
 // Funções usadas por handlers inline gerados pelo template do painel.
 Object.assign(window, {
+  iniciarApp,
   abrirLink,
   abrirModalNovoLink,
   abrirModalNovoRegistro,
