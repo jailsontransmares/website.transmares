@@ -62,20 +62,18 @@ function injetarEstilos() {
   const style = document.createElement('style');
   style.id = 'company-settings-style';
   style.textContent = `
-    .company-settings-page .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 3;
-    }
-
     .company-settings-shell {
-      width: min(1180px, calc(100vw - 48px));
-      margin: 26px auto 56px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0;
       display: grid;
       gap: 18px;
+      box-sizing: border-box;
     }
 
     .company-settings-card {
+      min-width: 0;
       border: 1px solid rgba(148, 163, 184, 0.22);
       background: rgba(255, 255, 255, 0.84);
       backdrop-filter: blur(18px);
@@ -103,6 +101,7 @@ function injetarEstilos() {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+      align-items: start;
     }
 
     .company-settings-grid label {
@@ -125,13 +124,19 @@ function injetarEstilos() {
 
     .company-settings-logo-row {
       display: grid;
-      grid-template-columns: 180px 1fr;
+      grid-template-columns: minmax(140px, 160px) minmax(0, 1fr);
       gap: 18px;
       align-items: center;
     }
 
+    .company-settings-logo-row > div,
+    .company-settings-logo-row label {
+      min-width: 0;
+    }
+
     .company-settings-logo-preview {
-      width: 160px;
+      width: 100%;
+      max-width: 160px;
       height: 112px;
       border-radius: 22px;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -183,10 +188,6 @@ function injetarEstilos() {
     }
 
     @media (max-width: 760px) {
-      .company-settings-shell {
-        width: min(100vw - 28px, 1180px);
-      }
-
       .company-settings-grid,
       .company-settings-logo-row {
         grid-template-columns: 1fr;
@@ -251,22 +252,7 @@ async function carregarRegistroCorretora() {
 }
 
 function renderTopo() {
-  const logo = registroAtual?.logo_url || brandingUploadUrl || `${obterBaseHub() || '/hub'}/assets/logo-transmares.png`;
-
-  return `
-    <header class="topbar">
-      <div class="brand-logo-slot" aria-label="Transmares Corretora de Seguros">
-        <img src="${escapeAttr(logo)}" alt="Transmares Corretora de Seguros">
-      </div>
-      <div class="brand">
-        <h1>Hub Transmares</h1>
-        <p>Dados da corretora</p>
-      </div>
-      <div class="user-box">
-        <button class="secondary-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Voltar</button>
-      </div>
-    </header>
-  `;
+  return window.hubRenderizarTopbarPadrao?.() || '';
 }
 
 function campo(id, rotulo, valor = '', attrs = '') {
@@ -296,9 +282,9 @@ function renderFormulario() {
   const r = registroAtual || {};
 
   return `
-    <main class="dashboard company-settings-page">
+    <main class="dashboard hub-layout company-settings-page">
       ${renderTopo()}
-      <section class="company-settings-shell">
+      <section class="hub-page-content company-settings-shell">
         <section class="hub-page-intro">
           <span class="hub-page-kicker">Configurações</span>
           <h2>Dados da corretora</h2>
@@ -377,11 +363,14 @@ function renderErro(mensagemErro) {
   const app = document.getElementById('app');
   app.dataset.companySettingsPage = 'true';
   app.innerHTML = `
-    <main class="dashboard company-settings-page">
-      <section class="error-card">
-        <h1>Dados da corretora indisponíveis</h1>
-        <p>${escapeHtml(mensagemErro || 'Não foi possível carregar esta área.')}</p>
-        <button class="save-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Voltar</button>
+    <main class="dashboard hub-layout company-settings-page">
+      ${renderTopo()}
+      <section class="hub-page-content company-settings-shell">
+        <section class="error-card">
+          <h1>Dados da corretora indisponíveis</h1>
+          <p>${escapeHtml(mensagemErro || 'Não foi possível carregar esta área.')}</p>
+          <button class="save-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Voltar</button>
+        </section>
       </section>
     </main>
   `;
