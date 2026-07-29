@@ -146,7 +146,7 @@ const state = {
   historico: [],
   busca: '',
   buscaTimer: null,
-  listaGrupo: '',
+  listaGrupos: [],
   listaAc: '',
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
@@ -6057,14 +6057,28 @@ function renderResumoProdutoMvpAr(produto) {
 }
 
 function renderListaProdutosAr() {
+  const totalFiltrosAtivos = contarFiltrosListaProdutosAr();
+  const rotuloBotaoFiltros = totalFiltrosAtivos
+    ? `Filtros: ${totalFiltrosAtivos} ativo${totalFiltrosAtivos === 1 ? '' : 's'}`
+    : 'Filtros';
+
   return `
     <section>
       <div class="ar-toolbar">
         <input class="config-input" type="search" value="${escapeAttr(state.ar.busca)}" placeholder="Buscar por descrição, AC, modelo, validade" oninput="alterarBuscaAr(this.value)">
         <div class="ar-products-toolbar-actions">
           <div class="ar-products-filter-menu">
-            <button class="secondary-btn ar-products-filter-btn" type="button" onclick="alternarFiltrosListaProdutosAr()">
-              Filtros${contarFiltrosListaProdutosAr() ? ` (${contarFiltrosListaProdutosAr()})` : ''}
+            <button
+              class="secondary-btn ar-products-filter-btn ${totalFiltrosAtivos ? 'has-active-filters' : ''}"
+              type="button"
+              onclick="alternarFiltrosListaProdutosAr()"
+              aria-label="${escapeAttr(rotuloBotaoFiltros)}"
+              aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
+              title="${escapeAttr(rotuloBotaoFiltros)}"
+            >
+              <svg class="ar-products-filter-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z"></path>
+              </svg>
             </button>
             ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
           </div>
@@ -6083,7 +6097,9 @@ function renderListaProdutosAr() {
 function produtosFiltradosAr() {
   if (state.ar.aba === 'produtos') {
     const termos = normalizarBuscaAr(state.ar.busca).split(' ').filter(Boolean);
-    const grupoFiltro = normalizarBuscaAr(state.ar.listaGrupo);
+    const gruposFiltro = new Set(
+      (state.ar.listaGrupos || []).map(grupo => normalizarBuscaAr(grupo))
+    );
     const acFiltro = normalizarBuscaAr(state.ar.listaAc);
 
     return state.ar.produtos.filter(produto => {
@@ -6105,7 +6121,7 @@ function produtosFiltradosAr() {
       const acProduto = normalizarBuscaAr(produto.ac);
 
       return termos.every(termo => texto.indexOf(termo) >= 0)
-        && (!grupoFiltro || grupoProduto === grupoFiltro)
+        && (!gruposFiltro.size || gruposFiltro.has(grupoProduto))
         && (!acFiltro || acProduto === acFiltro);
     });
   }
@@ -6554,7 +6570,7 @@ async function salvarEdicaoGrupoProdutosAr() {
         : produto;
     });
     state.ar.edicaoProdutosGrupo = criarEstadoVazioEdicaoGrupoProdutosAr();
-    state.ar.mensagemProdutosLista = `${atualizados.length} produto${atualizados.length === 1 ? '' : 's'} atualizado${atualizados.length === 1 ? '' : 's'} com sucesso.`;
+    state.ar.mensagemProdutosLista = 'Produto(s) atualizado(s) com sucesso.';
     state.ar.tipoMensagemProdutosLista = 'sucesso';
     atualizarListaProdutosDomAr();
   } catch (erro) {
@@ -6571,13 +6587,27 @@ function renderDropdownFiltrosListaProdutosAr() {
 
   return `
     <div class="ar-products-filter-dropdown">
-      <label>
-        <span>Grupo do produto</span>
-        <select onchange="alterarFiltroListaProdutosAr('grupo', this.value)">
-          <option value="">Todos</option>
-          ${grupos.map(grupo => `<option value="${escapeAttr(grupo)}" ${state.ar.listaGrupo === grupo ? 'selected' : ''}>${escapeHtml(grupo)}</option>`).join('')}
-        </select>
-      </label>
+      <fieldset class="ar-products-filter-group">
+        <legend>Grupo do produto</legend>
+        <small>Sem seleção, todos os grupos são exibidos.</small>
+        <div class="ar-products-filter-group-options">
+          ${grupos.map(grupo => {
+            const selecionado = (state.ar.listaGrupos || []).includes(grupo);
+
+            return `
+              <label class="ar-products-filter-group-option">
+                <input
+                  type="checkbox"
+                  value="${escapeAttr(grupo)}"
+                  ${selecionado ? 'checked' : ''}
+                  onchange="alternarFiltroGrupoListaProdutosAr(this.value, this.checked)"
+                >
+                <span>${escapeHtml(grupo)}</span>
+              </label>
+            `;
+          }).join('')}
+        </div>
+      </fieldset>
 
       <label>
         <span>AC</span>
@@ -6659,7 +6689,22 @@ function obterOpcoesFiltroListaProdutosAr(tipo) {
 }
 
 function contarFiltrosListaProdutosAr() {
-  return [state.ar.listaGrupo, state.ar.listaAc].filter(Boolean).length;
+  return (state.ar.listaGrupos || []).length + (state.ar.listaAc ? 1 : 0);
+}
+
+function atualizarIndicadorFiltrosListaProdutosAr() {
+  const botao = document.querySelector('.ar-products-filter-btn');
+
+  if (!botao) return;
+
+  const totalFiltrosAtivos = contarFiltrosListaProdutosAr();
+  const rotulo = totalFiltrosAtivos
+    ? `Filtros: ${totalFiltrosAtivos} ativo${totalFiltrosAtivos === 1 ? '' : 's'}`
+    : 'Filtros';
+
+  botao.classList.toggle('has-active-filters', totalFiltrosAtivos > 0);
+  botao.setAttribute('aria-label', rotulo);
+  botao.setAttribute('title', rotulo);
 }
 
 function obterGrupoProdutoListaAr(produto) {
@@ -7180,17 +7225,29 @@ function alternarFiltrosListaProdutosAr() {
 }
 
 function alterarFiltroListaProdutosAr(tipo, valor) {
-  if (tipo === 'grupo') {
-    state.ar.listaGrupo = valor;
-  } else if (tipo === 'ac') {
+  if (tipo === 'ac') {
     state.ar.listaAc = valor;
   }
 
   renderPainelAr();
 }
 
+function alternarFiltroGrupoListaProdutosAr(grupo, selecionado) {
+  const gruposSelecionados = new Set(state.ar.listaGrupos || []);
+
+  if (selecionado) {
+    gruposSelecionados.add(grupo);
+  } else {
+    gruposSelecionados.delete(grupo);
+  }
+
+  state.ar.listaGrupos = Array.from(gruposSelecionados);
+  atualizarListaProdutosDomAr();
+  atualizarIndicadorFiltrosListaProdutosAr();
+}
+
 function limparFiltrosListaProdutosAr() {
-  state.ar.listaGrupo = '';
+  state.ar.listaGrupos = [];
   state.ar.listaAc = '';
   renderPainelAr();
 }
@@ -8950,6 +9007,7 @@ Object.assign(window, {
   aplicarLoteGlobalPermissoesPerfil,
   salvarPermissoesPerfilAdmin,
   alterarFiltroListaProdutosAr,
+  alternarFiltroGrupoListaProdutosAr,
   alterarRascunhoProdutoGrupoAr,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,

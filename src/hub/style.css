@@ -2270,6 +2270,30 @@ body.dark .password-row h3 {
   min-height: 32px;
 }
 
+.ar-products-filter-btn {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+  width: 36px;
+}
+
+.ar-products-filter-icon {
+  fill: none;
+  height: 21px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 21px;
+}
+
+.ar-products-filter-btn.has-active-filters {
+  background: color-mix(in srgb, var(--cor-principal) 10%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-principal) 45%, var(--borda));
+  color: var(--cor-principal);
+}
+
 .ar-products-filter-dropdown {
   background: var(--card);
   border: 1px solid var(--borda);
@@ -2296,6 +2320,71 @@ body.dark .password-row h3 {
   font-weight: 900;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.ar-products-filter-group {
+  border: 0;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.ar-products-filter-group legend {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  padding: 0;
+  text-transform: uppercase;
+}
+
+.ar-products-filter-group > small {
+  color: var(--texto-suave);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ar-products-filter-group-options {
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  display: grid;
+  gap: 2px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.ar-products-filter-dropdown .ar-products-filter-group-option {
+  align-items: center;
+  border-radius: 7px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  padding: 6px 7px;
+}
+
+.ar-products-filter-dropdown .ar-products-filter-group-option:hover {
+  background: var(--color-surface-muted);
+}
+
+.ar-products-filter-group-option input {
+  accent-color: var(--cor-principal);
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
+.ar-products-filter-dropdown .ar-products-filter-group-option span {
+  color: var(--texto);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: normal;
+  min-width: 0;
+  text-transform: none;
 }
 
 .ar-products-filter-dropdown select {
@@ -3788,9 +3877,12 @@ body.dark .ar-products-edit-feedback.is-error {
   }
 
   .ar-products-filter-menu,
-  .ar-products-filter-btn,
   .ar-products-toggle-btn {
     width: 100%;
+  }
+
+  .ar-products-filter-btn {
+    width: 36px;
   }
 
   .ar-products-filter-dropdown {
