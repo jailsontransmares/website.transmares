@@ -2,6 +2,7 @@ import './style.css';
 import { chamarApi } from './api.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
+import { atualizarContextoAcessoHub, limparContextoAcessoHub } from './services/hubAccessContext.js';
 
 const state = {
   usuario: null,
@@ -236,6 +237,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.favoritos = response.data.favoritos || [];
     state.meta = response.data.meta || null;
     state.permissions = response.data.permissions || normalizarPermissoes([]);
+    atualizarContextoAcessoHub(state.usuario, state.permissions);
 
     aplicarConfigVisual();
     definirTemaInicial();
@@ -260,6 +262,7 @@ function limparDadosSessao() {
   state.favoritos = [];
   state.meta = null;
   state.permissions = normalizarPermissoes([]);
+  limparContextoAcessoHub();
 }
 
 function renderLogin() {
@@ -4493,6 +4496,7 @@ async function carregarDadosIniciaisSilencioso() {
   state.favoritos = response.data.favoritos || [];
   state.meta = response.data.meta || null;
   state.permissions = response.data.permissions || normalizarPermissoes([]);
+  atualizarContextoAcessoHub(state.usuario, state.permissions);
 }
 
 function atualizarBotaoSalvarLink(texto, disabled, classe) {
