@@ -1,6 +1,6 @@
 // Estrutura declarativa oficial do menu lateral do Hub.
-// Fase 2: apenas inventário/configuração. Este arquivo ainda não é importado pelo app.
-// Rotas novas planejadas devem ser resolvidas por aliases antes de virar navegação ativa.
+// Fase 5: o menu passa a ser renderizado como navegação em árvore.
+// Itens planejados podem aparecer desabilitados até que tenham tela/rota própria.
 
 export const HUB_MENU_TREE_VERSION = '2026-07-menu-v1';
 
@@ -91,7 +91,7 @@ export const HUB_MENU_TREE = [
             id: 'administracao-sistema-configuracoes-corretora',
             label: 'Configurações da Corretora',
             type: 'route',
-            route: '/admin/sistema/configuracoes-corretora',
+            route: '/admin/sistema/corretora',
             legacyRoute: '/configuracoes/corretora',
             permission: { resource: 'configuracoes.corretora', action: 'view' },
             status: 'alias-required',
