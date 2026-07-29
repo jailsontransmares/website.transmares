@@ -1,11 +1,20 @@
 const INSTALL_DELAYS = [0, 80, 180, 360, 700, 1200];
 const MASK_FIELDS = ['cc_cnpj', 'cc_telefone', 'cc_whatsapp', 'cc_endereco_cep'];
+const ADDRESS_FIELDS_VIACEP = {
+  cc_endereco_logradouro: 'logradouro',
+  cc_endereco_bairro: 'bairro',
+  cc_endereco_cidade: 'localidade',
+  cc_endereco_uf: 'uf'
+};
+const ADDRESS_FIELD_IDS = Object.keys(ADDRESS_FIELDS_VIACEP);
 const WRAPPED_FLAG = '__hubCompanySettingsMasksWrapped';
 const CEP_MESSAGE_ID = 'company-settings-cep-message';
 const CEP_STYLE_ID = 'company-settings-cep-status-style';
 
 let ultimoCepConsultado = '';
 let cepEmConsulta = '';
+let ultimoCepInformado = '';
+let aplicandoEnderecoAutomatico = false;
 
 function apenasDigitos(valor = '') {
   return String(valor || '').replace(/\D+/g, '');
@@ -87,6 +96,10 @@ function obterInput(id) {
   return document.getElementById(id);
 }
 
+function obterCepAtual() {
+  return apenasDigitos(obterInput('cc_endereco_cep')?.value || '');
+}
+
 function injetarEstilosCep() {
   if (document.getElementById(CEP_STYLE_ID)) return;
 
@@ -160,7 +173,7 @@ function definirMensagemCep(texto = '', tipo = 'info') {
 }
 
 function atualizarMensagemCepParcial() {
-  const cep = apenasDigitos(obterInput('cc_endereco_cep')?.value || '');
+  const cep = obterCepAtual();
 
   if (!cep) {
     definirMensagemCep('');
@@ -187,21 +200,69 @@ function moverCepParaInicioEndereco() {
   obterMensagemCep();
 }
 
-function preencherCampo(id, valor = '') {
-  const input = obterInput(id);
-  if (!input || !valor) return;
+function marcarEdicaoManualEndereco(input) {
+  if (!input || !ADDRESS_FIELD_IDS.includes(input.id) || aplicandoEnderecoAutomatico) return;
 
-  input.value = valor;
-  input.dispatchEvent(new Event('change', { bubbles: true }));
+  input.dataset.cepEditadoManualmente = obterCepAtual() || 'manual';
+  input.dataset.cepAutoPreenchido = 'false';
 }
 
-function aplicarEnderecoViaCep(dados) {
-  if (!dados || dados.erro) return;
+function devePreencherEndereco(input, cep, cepMudou) {
+  if (!input) return false;
 
-  preencherCampo('cc_endereco_logradouro', dados.logradouro || '');
-  preencherCampo('cc_endereco_bairro', dados.bairro || '');
-  preencherCampo('cc_endereco_cidade', dados.localidade || '');
-  preencherCampo('cc_endereco_uf', dados.uf || '');
+  const valorAtual = String(input.value || '').trim();
+  const foiEditadoManualmenteNesteCep = input.dataset.cepEditadoManualmente === cep;
+  const foiPreenchidoAutomaticamente = input.dataset.cepAutoPreenchido === 'true';
+  const origemCep = input.dataset.cepOrigem || '';
+
+  if (foiEditadoManualmenteNesteCep) {
+    return false;
+  }
+
+  if (!valorAtual) {
+    return true;
+  }
+
+  if (foiPreenchidoAutomaticamente) {
+    return true;
+  }
+
+  if (cepMudou && (!origemCep || origemCep !== cep)) {
+    return true;
+  }
+
+  return false;
+}
+
+function preencherCampoEndereco(id, valor = '', cep = '', options = {}) {
+  const input = obterInput(id);
+  const valorLimpo = String(valor || '').trim();
+
+  if (!input || !valorLimpo || !devePreencherEndereco(input, cep, Boolean(options.cepMudou))) {
+    return false;
+  }
+
+  input.value = valorLimpo;
+  input.dataset.cepAutoPreenchido = 'true';
+  input.dataset.cepOrigem = cep;
+  delete input.dataset.cepEditadoManualmente;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+function aplicarEnderecoViaCep(dados, cep, options = {}) {
+  if (!dados || dados.erro) return 0;
+
+  aplicandoEnderecoAutomatico = true;
+
+  try {
+    return ADDRESS_FIELD_IDS.reduce((total, id) => {
+      const campoViaCep = ADDRESS_FIELDS_VIACEP[id];
+      return total + (preencherCampoEndereco(id, dados[campoViaCep] || '', cep, options) ? 1 : 0);
+    }, 0);
+  } finally {
+    aplicandoEnderecoAutomatico = false;
+  }
 }
 
 async function consultarCepSeCompleto({ forcar = false } = {}) {
@@ -211,6 +272,7 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
   const cep = apenasDigitos(cepInput?.value || '');
 
   if (!cep) {
+    ultimoCepInformado = '';
     definirMensagemCep('');
     return;
   }
@@ -219,6 +281,9 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
     atualizarMensagemCepParcial();
     return;
   }
+
+  const cepMudou = Boolean(ultimoCepInformado && ultimoCepInformado !== cep);
+  ultimoCepInformado = cep;
 
   if (cep === cepEmConsulta) return;
   if (!forcar && cep === ultimoCepConsultado) return;
@@ -238,8 +303,13 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
       return;
     }
 
-    aplicarEnderecoViaCep(dados);
-    definirMensagemCep('Endereço preenchido automaticamente. Você pode editar os campos manualmente.', 'success');
+    const camposPreenchidos = aplicarEnderecoViaCep(dados, cep, { cepMudou });
+
+    if (camposPreenchidos > 0) {
+      definirMensagemCep('Endereço preenchido automaticamente. Você pode editar os campos manualmente.', 'success');
+    } else {
+      definirMensagemCep('CEP encontrado. Mantive os campos já preenchidos ou editados manualmente.', 'success');
+    }
   } catch (erro) {
     definirMensagemCep('Não foi possível consultar o CEP agora. Preencha manualmente.', 'error');
     console.warn('Não foi possível consultar o CEP informado:', erro);
@@ -280,6 +350,12 @@ INSTALL_DELAYS.forEach(delay => window.setTimeout(agendarAplicacao, delay));
 
 window.addEventListener('input', event => {
   const id = event.target?.id || '';
+
+  if (ADDRESS_FIELD_IDS.includes(id)) {
+    marcarEdicaoManualEndereco(event.target);
+    return;
+  }
+
   if (!MASK_FIELDS.includes(id)) return;
 
   aplicarMascara(event.target);
