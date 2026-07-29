@@ -1,6 +1,10 @@
-import { chamarApi } from './api.js';
 import { HUB_MENU_TREE, HUB_MENU_TREE_VERSION } from './menuTree.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
+import {
+  aguardarContextoAcessoHub,
+  obterContextoAcessoHub,
+  observarContextoAcessoHub
+} from './services/hubAccessContext.js';
 
 const STYLE_ID = 'hub-side-menu-phase5-style';
 const STORAGE_KEY = `hub-side-menu-expanded:${HUB_MENU_TREE_VERSION}`;
@@ -16,6 +20,7 @@ let expandedGroups = carregarEstadoExpansao();
 let manuallyCollapsedGroups = new Set();
 let observer = null;
 let renderAgendado = false;
+let cancelarObservacaoContexto = null;
 let contextoMenu = {
   loaded: false,
   loading: false,
@@ -289,30 +294,23 @@ function agendarRenderizacaoSidebars() {
 async function carregarContextoMenu() {
   if (contextoMenu.loaded || contextoMenu.loading) return;
 
-  try {
-    contextoMenu.loading = true;
-    const response = await chamarApi('getInitialData');
+  contextoMenu.loading = true;
+  const contextoHub = obterContextoAcessoHub().carregado
+    ? obterContextoAcessoHub()
+    : await aguardarContextoAcessoHub();
 
-    if (!response.ok) {
-      throw new Error('Não foi possível carregar permissões do menu.');
-    }
+  sincronizarContextoMenu(contextoHub);
+}
 
-    contextoMenu = {
-      loaded: true,
-      loading: false,
-      failed: false,
-      permissions: response.data?.permissions || normalizarPermissoes([]),
-      cards: response.data?.cards || [],
-      usuario: response.data?.usuario || null
-    };
-  } catch (_erro) {
-    contextoMenu = {
-      ...contextoMenu,
-      loaded: true,
-      loading: false,
-      failed: true
-    };
-  }
+function sincronizarContextoMenu(contextoHub = obterContextoAcessoHub()) {
+  contextoMenu = {
+    loaded: Boolean(contextoHub?.carregado),
+    loading: false,
+    failed: false,
+    permissions: contextoHub?.permissions || normalizarPermissoes([]),
+    cards: contextoHub?.modulos || contextoHub?.cards || [],
+    usuario: contextoHub?.usuario || null
+  };
 
   aplicarMenu();
 }
@@ -506,14 +504,16 @@ function observarApp() {
 function iniciar() {
   aplicarMenu();
   observarApp();
+  if (!cancelarObservacaoContexto) {
+    cancelarObservacaoContexto = observarContextoAcessoHub(sincronizarContextoMenu);
+  }
   carregarContextoMenu();
 }
 
 window.addEventListener('popstate', agendarRenderizacaoSidebars);
 window.addEventListener('hashchange', agendarRenderizacaoSidebars);
 window.addEventListener('hubAdminUsuariosAtualizados', () => {
-  contextoMenu.loaded = false;
-  carregarContextoMenu();
+  sincronizarContextoMenu();
 });
 
 if (document.readyState === 'loading') {
