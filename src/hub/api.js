@@ -1,4 +1,4 @@
-import { carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
 import {
   cancelarReciboAR,
   carregarDadosValidacoesAR,
@@ -91,6 +91,11 @@ export async function chamarApi(action, payload = {}) {
 
     if (action === 'generateArLinks') {
       const resultado = await gerarLinksAR(payload);
+      return { ok: true, data: resultado };
+    }
+
+    if (action === 'updateArProductsGroup') {
+      const resultado = await atualizarProdutosGrupoAR(payload);
       return { ok: true, data: resultado };
     }
 

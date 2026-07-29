@@ -2375,6 +2375,40 @@ body.dark .password-row h3 {
   padding-bottom: 4px;
 }
 
+.ar-products-edit-feedback {
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  padding: 9px 11px;
+}
+
+.ar-products-edit-feedback.is-success {
+  background: color-mix(in srgb, #16a34a 10%, var(--card));
+  border-color: color-mix(in srgb, #16a34a 32%, var(--borda));
+  color: #15803d;
+}
+
+.ar-products-edit-feedback.is-error {
+  background: color-mix(in srgb, #dc2626 8%, var(--card));
+  border-color: color-mix(in srgb, #dc2626 28%, var(--borda));
+  color: #b91c1c;
+}
+
+body.dark .ar-products-edit-feedback.is-success {
+  color: #86efac;
+}
+
+body.dark .ar-products-edit-feedback.is-error {
+  color: #fca5a5;
+}
+
+.ar-products-group-shell {
+  min-width: 760px;
+  position: relative;
+}
+
 .ar-products-group {
   background: color-mix(in srgb, var(--card) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
@@ -2426,6 +2460,47 @@ body.dark .password-row h3 {
 
 .ar-products-group summary span {
   min-width: 0;
+}
+
+.ar-products-group-actions {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+  position: absolute;
+  right: 52px;
+  top: 5px;
+  z-index: 2;
+}
+
+.ar-products-group-action-btn {
+  background: color-mix(in srgb, #ffffff 14%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 42%, transparent);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  min-height: 26px;
+  padding: 4px 10px;
+}
+
+.ar-products-group-action-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #ffffff 24%, transparent);
+}
+
+.ar-products-group-action-btn:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.ar-products-group-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.ar-products-group-actions.has-changes .ar-products-group-save-btn {
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ffffff 22%, transparent);
 }
 
 .ar-products-table {
@@ -2502,6 +2577,34 @@ body.dark .password-row h3 {
   cursor: pointer;
   height: 16px;
   width: 16px;
+}
+
+.ar-products-edit-cell {
+  padding: 5px 7px !important;
+}
+
+.ar-products-edit-input {
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 30%, var(--borda));
+  border-radius: 7px;
+  color: var(--texto);
+  font: inherit;
+  font-size: 12px;
+  min-height: 30px;
+  min-width: 0;
+  padding: 5px 7px;
+  width: 100%;
+}
+
+.ar-products-edit-input:focus {
+  border-color: var(--cor-principal);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cor-principal) 14%, transparent);
+  outline: none;
+}
+
+.ar-products-edit-input:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .ar-products-group-oab .ar-products-row:not(.ar-products-head) span:nth-child(5) {

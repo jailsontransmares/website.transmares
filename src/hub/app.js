@@ -151,6 +151,15 @@ const state = {
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
   modalVisualizacaoProdutos: false,
+  mensagemProdutosLista: '',
+  tipoMensagemProdutosLista: '',
+  edicaoProdutosGrupo: {
+    nome: '',
+    original: {},
+    rascunho: {},
+    alterado: false,
+    salvando: false
+  },
   validacoes: {
     aba: 'emitir',
     filtros: {
@@ -6116,44 +6125,444 @@ function renderTabelaProdutosAr() {
   const produtos = produtosFiltradosAr();
 
   if (!produtos.length) {
-    return '<p class="quick-link-empty">Nenhum produto encontrado.</p>';
+    return `
+      ${renderMensagemListaProdutosAr()}
+      <p class="quick-link-empty">Nenhum produto encontrado.</p>
+    `;
   }
 
   const grupos = agruparProdutosListaAr(produtos);
+  const podeEditarProdutos = pode('painel_ar.produtos', 'update');
 
   return `
+    ${renderMensagemListaProdutosAr()}
     <div class="ar-products-table-wrap">
-      ${grupos.map(grupo => `
-        <details class="ar-products-group ${obterClasseGrupoProdutosAr(grupo.nome)}" open>
-          <summary><span>${escapeHtml(grupo.nome)}</span></summary>
-          <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}">
-            <div class="ar-products-row ar-products-head" role="row">
-              <span></span>
-              <span>Descrição do produto</span>
-              <span>$ Com Desconto</span>
-              <span>$ Padrão</span>
-              <span>SKU</span>
+      ${grupos.map(grupo => {
+        const emEdicao = state.ar.edicaoProdutosGrupo?.nome === grupo.nome;
+
+        return `
+        <div class="ar-products-group-shell">
+          <details
+            class="ar-products-group ${obterClasseGrupoProdutosAr(grupo.nome)}"
+            data-group="${escapeAttr(grupo.nome)}"
+            open
+          >
+            <summary><span>${escapeHtml(grupo.nome)}</span></summary>
+            <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}">
+              <div class="ar-products-row ar-products-head" role="row">
+                <span></span>
+                <span>Descrição do produto</span>
+                <span>$ Com Desconto</span>
+                <span>$ Padrão</span>
+                <span>SKU</span>
+              </div>
+              ${grupo.produtos.map(produto => {
+                const temPrecoComDesconto = parseMoedaAr(produto.preco_com_desconto) != null;
+                const selecionado = state.ar.produtosListaSelecionados.includes(produto.id);
+                const rascunho = state.ar.edicaoProdutosGrupo?.rascunho?.[produto.id];
+                return `
+                  <article class="ar-products-row ${emEdicao ? 'is-editing' : ''}" role="row">
+                    <span class="ar-products-select-cell">
+                      <input type="checkbox" aria-label="Selecionar ${escapeAttr(produto.descricao_comercial || produto.produto || 'Produto')}" ${selecionado ? 'checked' : ''} onchange="alternarProdutoListaSelecionadoAr('${escapeAttr(produto.id)}')">
+                    </span>
+                    ${emEdicao && rascunho ? `
+                      <span class="ar-products-edit-cell">
+                        ${renderCampoEdicaoProdutoGrupoAr(produto.id, 'descricao_comercial', rascunho.descricao_comercial, 'Descrição do produto')}
+                      </span>
+                      <span class="ar-products-edit-cell">
+                        ${renderCampoEdicaoProdutoGrupoAr(produto.id, 'preco_com_desconto', rascunho.preco_com_desconto, 'Valor com desconto', 'decimal')}
+                      </span>
+                      <span class="ar-products-edit-cell">
+                        ${renderCampoEdicaoProdutoGrupoAr(produto.id, 'preco_sem_desconto', rascunho.preco_sem_desconto, 'Valor padrão', 'decimal')}
+                      </span>
+                      <span class="ar-products-edit-cell">
+                        ${renderCampoEdicaoProdutoGrupoAr(produto.id, 'product_id', rascunho.product_id, 'SKU')}
+                      </span>
+                    ` : `
+                      <span>${escapeHtml(produto.descricao_comercial || produto.produto || 'Produto')}</span>
+                      <span>${escapeHtml(temPrecoComDesconto ? formatarMoedaProdutoAr(produto.preco_com_desconto) : '--')}</span>
+                      <span>${escapeHtml(formatarMoedaProdutoAr(produto.preco_sem_desconto))}</span>
+                      <span>${escapeHtml(produto.product_id || '-')}</span>
+                    `}
+                  </article>
+                `;
+              }).join('')}
             </div>
-            ${grupo.produtos.map(produto => {
-              const temPrecoComDesconto = parseMoedaAr(produto.preco_com_desconto) != null;
-              const selecionado = state.ar.produtosListaSelecionados.includes(produto.id);
-              return `
-                <article class="ar-products-row" role="row">
-                  <span class="ar-products-select-cell">
-                    <input type="checkbox" aria-label="Selecionar ${escapeAttr(produto.descricao_comercial || produto.produto || 'Produto')}" ${selecionado ? 'checked' : ''} onchange="alternarProdutoListaSelecionadoAr('${escapeAttr(produto.id)}')">
-                  </span>
-                  <span>${escapeHtml(produto.descricao_comercial || produto.produto || 'Produto')}</span>
-                  <span>${escapeHtml(temPrecoComDesconto ? formatarMoedaProdutoAr(produto.preco_com_desconto) : '--')}</span>
-                  <span>${escapeHtml(formatarMoedaProdutoAr(produto.preco_sem_desconto))}</span>
-                  <span>${escapeHtml(produto.product_id || '-')}</span>
-                </article>
-              `;
-            }).join('')}
+          </details>
+          <div class="ar-products-group-actions" data-group="${escapeAttr(grupo.nome)}">
+            ${emEdicao ? `
+              <button
+                class="ar-products-group-action-btn ar-products-group-cancel-btn"
+                type="button"
+                onclick="cancelarEdicaoGrupoProdutosAr()"
+                ${state.ar.edicaoProdutosGrupo.salvando ? 'disabled' : ''}
+              >Cancelar</button>
+              <button
+                class="ar-products-group-action-btn ar-products-group-save-btn"
+                type="button"
+                onclick="salvarEdicaoGrupoProdutosAr()"
+                ${!state.ar.edicaoProdutosGrupo.alterado || state.ar.edicaoProdutosGrupo.salvando ? 'disabled' : ''}
+              >${state.ar.edicaoProdutosGrupo.salvando ? 'Salvando...' : 'Salvar'}</button>
+            ` : podeEditarProdutos ? `
+              <button
+                class="ar-products-group-action-btn ar-products-group-edit-btn"
+                type="button"
+                data-group="${escapeAttr(grupo.nome)}"
+                aria-label="Editar produtos do grupo ${escapeAttr(grupo.nome)}"
+                onclick="iniciarEdicaoGrupoProdutosAr(this.dataset.group)"
+              >Editar</button>
+            ` : ''}
           </div>
-        </details>
-      `).join('')}
+        </div>
+      `;
+      }).join('')}
     </div>
   `;
+}
+
+function renderMensagemListaProdutosAr() {
+  if (!state.ar.mensagemProdutosLista) return '';
+
+  const tipo = state.ar.tipoMensagemProdutosLista === 'sucesso' ? 'is-success' : 'is-error';
+
+  return `
+    <p class="ar-products-edit-feedback ${tipo}" role="${tipo === 'is-error' ? 'alert' : 'status'}">
+      ${escapeHtml(state.ar.mensagemProdutosLista)}
+    </p>
+  `;
+}
+
+function renderCampoEdicaoProdutoGrupoAr(produtoId, campo, valor, rotulo, inputMode = 'text') {
+  return `
+    <input
+      class="ar-products-edit-input"
+      type="text"
+      inputmode="${escapeAttr(inputMode)}"
+      value="${escapeAttr(valor)}"
+      aria-label="${escapeAttr(rotulo)}"
+      data-product-id="${escapeAttr(produtoId)}"
+      data-field="${escapeAttr(campo)}"
+      oninput="alterarRascunhoProdutoGrupoAr(this.dataset.productId, this.dataset.field, this.value)"
+      ${state.ar.edicaoProdutosGrupo?.salvando ? 'disabled' : ''}
+      autocomplete="off"
+    >
+  `;
+}
+
+function criarRascunhoProdutoGrupoAr(produto) {
+  const formatarValor = valor => {
+    const numero = parseMoedaAr(valor);
+
+    if (numero == null) return '';
+
+    return numero.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  return {
+    descricao_comercial: String(produto.descricao_comercial || ''),
+    preco_com_desconto: formatarValor(produto.preco_com_desconto),
+    preco_sem_desconto: formatarValor(produto.preco_sem_desconto),
+    product_id: String(produto.product_id || '')
+  };
+}
+
+function criarEstadoVazioEdicaoGrupoProdutosAr() {
+  return {
+    nome: '',
+    original: {},
+    rascunho: {},
+    alterado: false,
+    salvando: false
+  };
+}
+
+function iniciarEdicaoGrupoProdutosAr(nomeGrupo) {
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para editar produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    return;
+  }
+
+  const edicaoAtual = state.ar.edicaoProdutosGrupo || criarEstadoVazioEdicaoGrupoProdutosAr();
+
+  if (edicaoAtual.nome === nomeGrupo) return;
+
+  if (edicaoAtual.nome && edicaoAtual.alterado) {
+    const descartar = window.confirm('Existem alterações não salvas. Deseja descartá-las e editar outro grupo?');
+
+    if (!descartar) return;
+  }
+
+  const produtosGrupo = state.ar.produtos.filter(produto => obterGrupoProdutoListaAr(produto) === nomeGrupo);
+  const rascunho = {};
+
+  produtosGrupo.forEach(produto => {
+    rascunho[produto.id] = criarRascunhoProdutoGrupoAr(produto);
+  });
+
+  state.ar.edicaoProdutosGrupo = {
+    nome: nomeGrupo,
+    original: Object.fromEntries(
+      Object.entries(rascunho).map(([id, valores]) => [id, { ...valores }])
+    ),
+    rascunho,
+    alterado: false,
+    salvando: false
+  };
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+
+  atualizarListaProdutosDomAr();
+
+  window.requestAnimationFrame(() => {
+    const acoesGrupo = Array.from(document.querySelectorAll('.ar-products-group-actions'))
+      .find(elemento => elemento.dataset.group === nomeGrupo);
+    const primeiroCampo = acoesGrupo
+      ?.closest('.ar-products-group-shell')
+      ?.querySelector('.ar-products-edit-input');
+
+    primeiroCampo?.focus();
+  });
+}
+
+function alterarRascunhoProdutoGrupoAr(produtoId, campo, valor) {
+  const edicao = state.ar.edicaoProdutosGrupo;
+  const camposPermitidos = ['descricao_comercial', 'preco_com_desconto', 'preco_sem_desconto', 'product_id'];
+
+  if (
+    !edicao?.nome
+    || edicao.salvando
+    || !edicao.rascunho?.[produtoId]
+    || !camposPermitidos.includes(campo)
+  ) return;
+
+  edicao.rascunho[produtoId][campo] = valor;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  edicao.alterado = Object.keys(edicao.rascunho).some(id => {
+    return camposPermitidos.some(chave => {
+      return edicao.rascunho[id]?.[chave] !== edicao.original[id]?.[chave];
+    });
+  });
+
+  const acoes = Array.from(document.querySelectorAll('.ar-products-group-actions'))
+    .find(elemento => elemento.dataset.group === edicao.nome);
+  const botaoSalvar = acoes?.querySelector('.ar-products-group-save-btn');
+
+  acoes?.classList.toggle('has-changes', edicao.alterado);
+
+  if (botaoSalvar) {
+    botaoSalvar.disabled = !edicao.alterado;
+  }
+}
+
+function cancelarEdicaoGrupoProdutosAr() {
+  const edicao = state.ar.edicaoProdutosGrupo;
+
+  if (edicao?.alterado) {
+    const descartar = window.confirm('Deseja cancelar e descartar as alterações deste grupo?');
+
+    if (!descartar) return;
+  }
+
+  state.ar.edicaoProdutosGrupo = criarEstadoVazioEdicaoGrupoProdutosAr();
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+}
+
+function parseValorEdicaoProdutoGrupoAr(valor) {
+  const original = String(valor ?? '').trim();
+
+  if (!original) return null;
+
+  let texto = original
+    .replace(/\s/g, '')
+    .replace(/R\$/gi, '')
+    .replace(/[^\d,.-]/g, '');
+
+  if (!texto || !/\d/.test(texto)) return Number.NaN;
+
+  const negativo = texto.startsWith('-');
+  texto = texto.replace(/-/g, '');
+
+  const ultimaVirgula = texto.lastIndexOf(',');
+  const ultimoPonto = texto.lastIndexOf('.');
+
+  if (ultimaVirgula >= 0 && ultimoPonto >= 0) {
+    texto = ultimaVirgula > ultimoPonto
+      ? texto.replace(/\./g, '').replace(',', '.')
+      : texto.replace(/,/g, '');
+  } else if (ultimaVirgula >= 0) {
+    texto = texto.replace(/\./g, '').replace(',', '.');
+  } else if (ultimoPonto >= 0) {
+    const partes = texto.split('.');
+    const casasFinais = partes.at(-1)?.length || 0;
+
+    if (partes.length > 2) {
+      texto = casasFinais <= 2
+        ? `${partes.slice(0, -1).join('')}.${partes.at(-1)}`
+        : partes.join('');
+    } else if (casasFinais === 3 && partes[0].length <= 3) {
+      texto = partes.join('');
+    }
+  }
+
+  const numero = Number(texto);
+
+  if (!Number.isFinite(numero)) return Number.NaN;
+
+  return negativo ? -numero : numero;
+}
+
+function validarEdicaoGrupoProdutosAr() {
+  const edicao = state.ar.edicaoProdutosGrupo;
+  const payload = [];
+  const erros = [];
+  const skus = new Map();
+
+  Object.entries(edicao?.rascunho || {}).forEach(([id, produto]) => {
+    const descricao = String(produto.descricao_comercial || '').trim();
+    const sku = String(produto.product_id || '').trim();
+    const precoComDesconto = parseValorEdicaoProdutoGrupoAr(produto.preco_com_desconto);
+    const precoSemDesconto = parseValorEdicaoProdutoGrupoAr(produto.preco_sem_desconto);
+
+    if (!descricao) {
+      erros.push('Todos os produtos precisam ter uma descrição.');
+    } else if (descricao.length > 300) {
+      erros.push(`A descrição do SKU ${sku || '-'} ultrapassa 300 caracteres.`);
+    }
+
+    if (!sku) {
+      erros.push('Todos os produtos precisam ter um SKU.');
+    } else if (sku.length > 100) {
+      erros.push(`O SKU ${sku} ultrapassa 100 caracteres.`);
+    }
+
+    if (Number.isNaN(precoComDesconto) || Number.isNaN(precoSemDesconto)) {
+      erros.push(`Há valor inválido no produto ${sku || descricao || '-'}.`);
+    } else {
+      if (precoComDesconto !== null && precoComDesconto < 0) {
+        erros.push(`O valor com desconto de ${sku || descricao} não pode ser negativo.`);
+      }
+
+      if (precoSemDesconto !== null && precoSemDesconto < 0) {
+        erros.push(`O valor padrão de ${sku || descricao} não pode ser negativo.`);
+      }
+
+      if (
+        precoComDesconto !== null
+        && precoSemDesconto !== null
+        && precoComDesconto > precoSemDesconto
+      ) {
+        erros.push(`O valor com desconto de ${sku || descricao} não pode superar o valor padrão.`);
+      }
+    }
+
+    const skuNormalizado = sku.toLocaleLowerCase('pt-BR');
+
+    if (skuNormalizado && skus.has(skuNormalizado)) {
+      erros.push(`O SKU ${sku} está repetido no grupo.`);
+    } else if (skuNormalizado) {
+      skus.set(skuNormalizado, id);
+    }
+
+    payload.push({
+      id,
+      descricao_comercial: descricao,
+      preco_com_desconto: Number.isNaN(precoComDesconto) ? null : precoComDesconto,
+      preco_sem_desconto: Number.isNaN(precoSemDesconto) ? null : precoSemDesconto,
+      product_id: sku
+    });
+  });
+
+  const idsGrupo = new Set(payload.map(produto => produto.id));
+
+  state.ar.produtos.forEach(produto => {
+    if (idsGrupo.has(produto.id)) return;
+
+    const skuExistente = String(produto.product_id || '').trim().toLocaleLowerCase('pt-BR');
+
+    if (skuExistente && skus.has(skuExistente)) {
+      erros.push(`O SKU ${produto.product_id} já está vinculado a outro produto.`);
+    }
+  });
+
+  return {
+    payload,
+    erros: Array.from(new Set(erros))
+  };
+}
+
+async function salvarEdicaoGrupoProdutosAr() {
+  const edicao = state.ar.edicaoProdutosGrupo;
+
+  if (!edicao?.nome || !edicao.alterado || edicao.salvando) return;
+
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para editar produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    return;
+  }
+
+  const { payload, erros } = validarEdicaoGrupoProdutosAr();
+
+  if (erros.length) {
+    state.ar.mensagemProdutosLista = erros[0];
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    return;
+  }
+
+  const alterouSku = payload.some(produto => {
+    return produto.product_id !== edicao.original?.[produto.id]?.product_id;
+  });
+
+  if (
+    alterouSku
+    && !window.confirm('A alteração de SKU será usada nos próximos links gerados. Deseja continuar?')
+  ) {
+    return;
+  }
+
+  edicao.salvando = true;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+
+  try {
+    const response = await chamarApi('updateArProductsGroup', {
+      grupo: edicao.nome,
+      produtos: payload
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível atualizar os produtos.'));
+    }
+
+    const atualizados = Array.isArray(response.data?.produtos) ? response.data.produtos : [];
+    const atualizadosPorId = new Map(atualizados.map(produto => [produto.id, produto]));
+
+    state.ar.produtos = state.ar.produtos.map(produto => {
+      return atualizadosPorId.has(produto.id)
+        ? { ...produto, ...atualizadosPorId.get(produto.id) }
+        : produto;
+    });
+    state.ar.edicaoProdutosGrupo = criarEstadoVazioEdicaoGrupoProdutosAr();
+    state.ar.mensagemProdutosLista = `${atualizados.length} produto${atualizados.length === 1 ? '' : 's'} atualizado${atualizados.length === 1 ? '' : 's'} com sucesso.`;
+    state.ar.tipoMensagemProdutosLista = 'sucesso';
+    atualizarListaProdutosDomAr();
+  } catch (erro) {
+    state.ar.edicaoProdutosGrupo.salvando = false;
+    state.ar.mensagemProdutosLista = erro.message || 'Erro ao atualizar os produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+  }
 }
 
 function renderDropdownFiltrosListaProdutosAr() {
@@ -6743,7 +7152,18 @@ function atualizarListaProdutosDomAr() {
     return;
   }
 
+  const expansaoGrupos = new Map(
+    Array.from(resultado.querySelectorAll('.ar-products-group[data-group]'))
+      .map(grupo => [grupo.dataset.group, grupo.open])
+  );
+
   resultado.innerHTML = renderTabelaProdutosAr();
+
+  resultado.querySelectorAll('.ar-products-group[data-group]').forEach(grupo => {
+    if (expansaoGrupos.has(grupo.dataset.group)) {
+      grupo.open = expansaoGrupos.get(grupo.dataset.group);
+    }
+  });
 }
 
 function fecharFiltrosListaAoClicarForaAr(event) {
@@ -8530,6 +8950,7 @@ Object.assign(window, {
   aplicarLoteGlobalPermissoesPerfil,
   salvarPermissoesPerfilAdmin,
   alterarFiltroListaProdutosAr,
+  alterarRascunhoProdutoGrupoAr,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
   alterarFiltroLinks,
@@ -8572,6 +8993,7 @@ Object.assign(window, {
   fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
+  iniciarEdicaoGrupoProdutosAr,
   gerarSenhaTemporariaUsuarioAdmin,
   gerarLinksAr,
   importarRepasseValidacoesAr,
@@ -8579,6 +9001,7 @@ Object.assign(window, {
   limparFiltrosListaProdutosAr,
   limparSelecaoValidacoesAr,
   limparProdutosListaSelecionadosAr,
+  cancelarEdicaoGrupoProdutosAr,
   navegarHome,
   navegarParaModulo,
   processarArquivoRepasseAr,
@@ -8590,6 +9013,7 @@ Object.assign(window, {
   salvarLinkItem,
   salvarPermissoesUsuarioAdmin,
   salvarPerfilAdmin,
+  salvarEdicaoGrupoProdutosAr,
   salvarNovoPerfilComPermissoesAdmin,
   salvarRegistroAdmin,
   salvarSenhaItem,
