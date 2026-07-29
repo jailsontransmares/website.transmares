@@ -317,23 +317,8 @@ async function carregarPerfilAtual() {
   };
 }
 
-function renderizarTopoPerfil(usuario) {
-  return `
-    <header class="topbar">
-      <div class="brand-logo-slot" aria-label="Transmares Corretora de Seguros">
-        <img src="${escapeAttr(`${obterBaseHub() || ''}/assets/logo-transmares.png`)}" alt="Transmares Corretora de Seguros">
-      </div>
-      <div class="brand">
-        <h1>Hub Transmares</h1>
-        <p>Perfil do usuário</p>
-      </div>
-      <div class="user-box">
-        <strong>${escapeHtml(usuario.nome || '')}</strong><br>
-        ${escapeHtml(usuario.email || '')}<br>
-        <button class="secondary-btn" type="button" onclick="hubPerfilVoltarHome()">Voltar</button>
-      </div>
-    </header>
-  `;
+function renderizarTopoPerfil() {
+  return window.hubRenderizarTopbarPadrao?.() || '';
 }
 
 function renderizarModalSenha(usuario) {
@@ -454,6 +439,7 @@ function renderizarPerfil({ usuario }) {
               ${perfilMensagem ? `<p class="hub-profile-message ${escapeAttr(perfilMensagemTipo)}">${escapeHtml(perfilMensagem)}</p>` : ''}
 
               <div class="hub-profile-actions">
+                <button class="secondary-btn" type="button" onclick="hubPerfilVoltarHome()">Voltar</button>
                 <button class="secondary-btn" type="button" onclick="hubPerfilAbrirSenha()">Alterar senha</button>
                 <button class="save-btn" type="submit">Salvar alterações</button>
               </div>
