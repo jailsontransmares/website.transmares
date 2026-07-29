@@ -7,6 +7,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 let ultimoAvatarUrl = '';
 let carregandoAvatar = false;
 let avatarObserver = null;
+let aplicacaoAvatarAgendada = false;
 
 function escapeHtml(texto) {
   return String(texto || '')
@@ -206,34 +207,57 @@ async function carregarUsuarioAtual() {
   return { authUser: authData.user, usuario: data };
 }
 
+function obterIniciaisAvatar(avatar) {
+  if (!avatar) return 'US';
+  if (!avatar.dataset.iniciais) {
+    avatar.dataset.iniciais = avatar.textContent?.trim()?.slice(0, 2) || 'US';
+  }
+  return avatar.dataset.iniciais;
+}
+
 function atualizarAvatarPerfil(url = '') {
   const avatar = document.querySelector('.hub-profile-avatar');
   if (!avatar) return;
 
-  const nome = document.querySelector('.hub-profile-card h2')?.textContent || 'usuário';
-  const iniciais = avatar.textContent?.trim()?.slice(0, 2) || 'US';
+  const proximaUrl = url || '';
+  if (avatar.dataset.avatarUrl === proximaUrl) return;
 
-  avatar.innerHTML = url
-    ? `<img src="${escapeAttr(url)}" alt="Foto de ${escapeAttr(nome)}">`
+  const nome = document.querySelector('.hub-profile-card h2')?.textContent || 'usuário';
+  const iniciais = obterIniciaisAvatar(avatar);
+
+  avatar.dataset.avatarUrl = proximaUrl;
+  avatar.innerHTML = proximaUrl
+    ? `<img src="${escapeAttr(proximaUrl)}" alt="Foto de ${escapeAttr(nome)}">`
     : escapeHtml(iniciais);
 }
 
 function atualizarAvataresMenu(url = '') {
+  const proximaUrl = url || '';
   document.querySelectorAll('.hub-user-menu-avatar').forEach(avatar => {
-    const iniciais = avatar.textContent?.trim()?.slice(0, 2) || 'US';
-    avatar.innerHTML = url
-      ? `<img src="${escapeAttr(url)}" alt="Foto do usuário">`
+    if (avatar.dataset.avatarUrl === proximaUrl) return;
+
+    const iniciais = obterIniciaisAvatar(avatar);
+    avatar.dataset.avatarUrl = proximaUrl;
+    avatar.innerHTML = proximaUrl
+      ? `<img src="${escapeAttr(proximaUrl)}" alt="Foto do usuário">`
       : escapeHtml(iniciais);
   });
 }
 
 function emitirAtualizacaoAvatar(url = '') {
-  ultimoAvatarUrl = url || '';
+  const proximaUrl = url || '';
+  const mudou = proximaUrl !== ultimoAvatarUrl;
+
+  ultimoAvatarUrl = proximaUrl;
   atualizarAvatarPerfil(ultimoAvatarUrl);
   atualizarAvataresMenu(ultimoAvatarUrl);
-  window.dispatchEvent(new CustomEvent('hubAvatarAtualizado', {
-    detail: { avatar_url: ultimoAvatarUrl }
-  }));
+  trocarTextoEtapaFutura();
+
+  if (mudou) {
+    window.dispatchEvent(new CustomEvent('hubAvatarAtualizado', {
+      detail: { avatar_url: ultimoAvatarUrl }
+    }));
+  }
 }
 
 async function uploadAvatar(event) {
@@ -342,14 +366,19 @@ function instalarControlesPerfil() {
   trocarTextoEtapaFutura();
 }
 
-async function sincronizarAvatarAtual() {
-  if (carregandoAvatar) return;
+async function sincronizarAvatarAtual({ force = false } = {}) {
+  if (!estaNaRotaPerfil() || carregandoAvatar) return;
+
+  const avatar = document.querySelector('.hub-profile-avatar');
+  const controlesInstalados = Boolean(document.querySelector('.hub-profile-avatar-actions'));
+  if (!force && controlesInstalados && avatar?.dataset?.avatarUrl === ultimoAvatarUrl) {
+    return;
+  }
 
   try {
     carregandoAvatar = true;
     const { usuario } = await carregarUsuarioAtual();
     emitirAtualizacaoAvatar(usuario.avatar_url || '');
-    trocarTextoEtapaFutura();
   } catch (_erro) {
     // Não bloqueia a tela caso o avatar não possa ser carregado.
   } finally {
@@ -357,17 +386,36 @@ async function sincronizarAvatarAtual() {
   }
 }
 
-function aplicarAvatar() {
+function aplicarAvatar({ sync = false } = {}) {
+  if (!estaNaRotaPerfil()) return;
+
   injetarEstilosAvatar();
   instalarControlesPerfil();
-  sincronizarAvatarAtual();
+  atualizarAvatarPerfil(ultimoAvatarUrl);
+  atualizarAvataresMenu(ultimoAvatarUrl);
+  trocarTextoEtapaFutura();
+
+  if (sync) {
+    sincronizarAvatarAtual({ force: true });
+  }
+}
+
+function agendarAplicacaoAvatar({ sync = false } = {}) {
+  if (aplicacaoAvatarAgendada) return;
+
+  aplicacaoAvatarAgendada = true;
+  window.requestAnimationFrame(() => {
+    aplicacaoAvatarAgendada = false;
+    aplicarAvatar({ sync });
+  });
 }
 
 function observarRenderizacoesAvatar() {
   if (avatarObserver) return;
 
   avatarObserver = new MutationObserver(() => {
-    window.requestAnimationFrame(aplicarAvatar);
+    if (!estaNaRotaPerfil()) return;
+    agendarAplicacaoAvatar();
   });
 
   avatarObserver.observe(document.body, {
@@ -377,7 +425,7 @@ function observarRenderizacoesAvatar() {
 }
 
 function iniciarAvatarUpload() {
-  aplicarAvatar();
+  aplicarAvatar({ sync: true });
   observarRenderizacoesAvatar();
 }
 
@@ -386,9 +434,11 @@ Object.assign(window, {
 });
 
 window.addEventListener('hubAvatarAtualizado', event => {
-  ultimoAvatarUrl = event.detail?.avatar_url || '';
-  atualizarAvatarPerfil(ultimoAvatarUrl);
-  atualizarAvataresMenu(ultimoAvatarUrl);
+  const url = event.detail?.avatar_url || '';
+  ultimoAvatarUrl = url;
+  atualizarAvatarPerfil(url);
+  atualizarAvataresMenu(url);
+  trocarTextoEtapaFutura();
 });
 
 if (document.readyState === 'loading') {
