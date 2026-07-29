@@ -9226,6 +9226,126 @@ function atualizarRotaAdminHub(aba = '', { replace = false } = {}) {
   }
 }
 
+const HUB_BREADCRUMB_LABELS = {
+  inicio: 'Hub',
+  administracao: 'Administração',
+  'central-senhas': 'Central de Senhas',
+  'painel-ar': 'Painel AR',
+  'links-corretora': 'Links Corretora',
+  'links-ar': 'Links AR',
+  'links-gestao': 'Links Gestão',
+  categorias: 'Categorias',
+  grupos: 'Grupos',
+  usuarios: 'Usuários',
+  perfis: 'Perfis',
+  'parceiros-indicacao': 'Parceiros de Indicação',
+  limites: 'Limites',
+  identidade: 'Identidade',
+  aparencia: 'Aparência',
+  logo: 'Logo',
+  'home-exibicao': 'Home e Exibição',
+  acessos: 'Acessos',
+  historico: 'Histórico',
+  inicio: 'Início',
+  gerar: 'Gerar Links',
+  produtos: 'Lista Produtos',
+  validacoes: 'Validações',
+  emitir: 'Emitir Recibo',
+  consultar: 'Consultar Recibos',
+  importacao: 'Importação'
+};
+
+const HUB_BREADCRUMB_ADMIN_ROUTES = {
+  categorias: 'cadastros/categorias',
+  grupos: 'cadastros/grupos',
+  usuarios: 'cadastros/usuarios',
+  perfis: 'cadastros/perfis',
+  'parceiros-indicacao': 'cadastros/parceiros-indicacao',
+  limites: 'parametros/limites',
+  identidade: 'identidade',
+  aparencia: 'aparencia',
+  logo: 'logo',
+  'home-exibicao': 'home-exibicao'
+};
+
+function obterLabelBreadcrumbHub(chave = '') {
+  return HUB_BREADCRUMB_LABELS[chave] || String(chave || '')
+    .split('-')
+    .filter(Boolean)
+    .map(parte => parte.charAt(0).toUpperCase() + parte.slice(1))
+    .join(' ');
+}
+
+function obterBreadcrumbHub() {
+  const contexto = obterContextoRotaHub();
+  const itens = [
+    {
+      label: 'Hub',
+      path: montarCaminhoHub()
+    }
+  ];
+
+  if (!contexto.modulo || contexto.modulo === 'inicio') {
+    return itens;
+  }
+
+  const pathModulo = montarCaminhoHub(contexto.modulo);
+  itens.push({
+    label: obterLabelBreadcrumbHub(contexto.modulo),
+    path: pathModulo
+  });
+
+  if (contexto.modulo === 'administracao' && contexto.principal) {
+    const rotaAdmin = HUB_BREADCRUMB_ADMIN_ROUTES[contexto.principal] || contexto.principal;
+    itens.push({
+      label: obterLabelBreadcrumbHub(contexto.principal),
+      path: `${pathModulo.replace(/\/+$/g, '')}/${rotaAdmin}`
+    });
+  } else if (contexto.principal) {
+    itens.push({
+      label: obterLabelBreadcrumbHub(contexto.principal),
+      path: `${pathModulo.replace(/\/+$/g, '')}/${contexto.principal}`
+    });
+  }
+
+  if (contexto.secundaria && contexto.secundaria !== contexto.principal) {
+    const ultimoPath = itens[itens.length - 1]?.path || pathModulo;
+    itens.push({
+      label: obterLabelBreadcrumbHub(contexto.secundaria),
+      path: `${ultimoPath.replace(/\/+$/g, '')}/${contexto.secundaria}`
+    });
+  }
+
+  return itens;
+}
+
+function renderHubBreadcrumbItem(item, index, itens) {
+  const ultimo = index === itens.length - 1;
+
+  if (ultimo) {
+    return `<span class="hub-breadcrumb-current" aria-current="page">${escapeHtml(item.label)}</span>`;
+  }
+
+  return `
+    <a href="${escapeAttr(item.path)}" onclick="event.preventDefault(); navegarParaRota('${escapeAttr(item.path)}')">
+      ${escapeHtml(item.label)}
+    </a>
+  `;
+}
+
+function renderHubBreadcrumb() {
+  const itens = obterBreadcrumbHub();
+
+  return `
+    <nav class="hub-breadcrumb" aria-label="Caminho da página">
+      ${itens.map((item, index) => `
+        ${index > 0 ? '<span class="hub-breadcrumb-separator" aria-hidden="true">&gt;</span>' : ''}
+        ${renderHubBreadcrumbItem(item, index, itens)}
+      `).join('')}
+    </nav>
+  `;
+}
+
 function obterContextoRotaHub() {
   const partesRota = obterPartesDaRotaAtual();
   const modulo = normalizarIdModuloRota(partesRota[0] || '') || 'inicio';
@@ -9324,11 +9444,7 @@ function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteud
     <main class="dashboard hub-layout">
       ${renderHubTopbar()}
       <section class="hub-page-content ${escapeAttr(classeConteudo)}">
-        <section class="hub-page-intro">
-          <span class="hub-page-kicker">Hub operacional</span>
-          <h2>${escapeHtml(tituloPagina)}</h2>
-          <p>${escapeHtml(descricaoPagina)}</p>
-        </section>
+        ${renderHubBreadcrumb()}
 
         ${conteudo}
       </section>
