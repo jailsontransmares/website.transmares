@@ -514,8 +514,44 @@ body.dark .brand h1 {
 
 .hub-page-content {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
+}
+
+.hub-breadcrumb {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 7px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.hub-breadcrumb a {
+  border-radius: 999px;
+  color: var(--texto-suave);
+  padding: 3px 0;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.hub-breadcrumb a:hover,
+.hub-breadcrumb a:focus-visible {
+  color: var(--cor-principal);
+  outline: 0;
+}
+
+.hub-breadcrumb-current {
+  color: var(--texto);
+  font-weight: 900;
+}
+
+.hub-breadcrumb-separator {
+  color: color-mix(in srgb, var(--texto-suave) 72%, transparent);
+  font-size: 12px;
 }
 
 .hub-page-content > .hub-page-intro {
@@ -3892,6 +3928,19 @@ body.dark .ar-products-edit-feedback.is-error {
 
   .hub-sidebar-links {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hub-breadcrumb {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .hub-breadcrumb a,
+  .hub-breadcrumb-current {
+    max-width: min(100%, 220px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .hub-page-intro {
