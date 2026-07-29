@@ -102,7 +102,12 @@ const state = {
     paginaParceirosIndicacao: 1,
     limiteParceirosIndicacao: 15,
     colunasParceirosIndicacao: [],
+    colunasParceirosIndicacaoRascunho: [],
     seletorColunasParceirosAberto: false,
+    acoesParceirosAberto: false,
+    loteParceirosModo: null,
+    loteParceirosSelecionados: [],
+    loteParceirosProcessando: false,
     editando: {
       categorias: '',
       grupos: '',
@@ -231,6 +236,7 @@ const state = {
 };
 
 const ADMIN_PARTNER_COLUMNS_STORAGE_KEY = 'hub-admin-partners-visible-columns-v1';
+const ADMIN_PARTNER_SEARCH_DEBOUNCE_MS = 650;
 const ADMIN_PARTNER_COLUMNS = [
   { id: 'acoes', label: 'Ações', locked: true, min: '112px', size: '0.55fr' },
   { id: 'parceiro', label: 'Parceiro', locked: true, min: '220px', size: '1.5fr' },
@@ -1790,6 +1796,7 @@ function renderParceirosIndicacaoAdmin() {
           </div>
 
           <div class="action-toolbar admin-users-toolbar admin-partners-main-actions">
+            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Incluir</button>' : ''}
             <label class="action-toolbar-field admin-users-search" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
               <input
                 id="admin_parceiro_indicacao_busca"
@@ -1798,15 +1805,26 @@ function renderParceirosIndicacaoAdmin() {
                 value="${escapeAttr(state.admin.buscaParceirosIndicacaoDigitada || '')}"
                 placeholder="Filtrar parceiros"
                 oninput="alterarBuscaParceirosIndicacaoAdmin(this.value)"
+                onkeydown="if (event.key === 'Enter') aplicarBuscaParceirosIndicacaoAdmin()"
+                onblur="aplicarBuscaParceirosIndicacaoAdmin()"
               >
             </label>
-            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Adicionar parceiro</button>' : ''}
+            <button
+              class="secondary-btn action-toolbar-btn admin-partners-actions-btn"
+              type="button"
+              onclick="alternarMenuAcoesParceirosIndicacaoAdmin()"
+              onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)"
+              aria-haspopup="menu"
+              aria-expanded="${state.admin.acoesParceirosAberto ? 'true' : 'false'}"
+            >Ações ▾</button>
+            ${renderMenuAcoesParceirosIndicacaoAdmin()}
           </div>
         </div>
       </div>
 
       ${state.admin.seletorColunasParceirosAberto ? renderSeletorColunasParceirosIndicacaoAdmin() : ''}
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      ${renderBarraLoteParceirosIndicacaoAdmin()}
       ${state.admin.loading ? '<p class="quick-link-empty">Carregando parceiros...</p>' : renderListaParceirosIndicacaoAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual)}
       ${renderModalParceiroIndicacaoAdmin()}
@@ -1838,15 +1856,25 @@ function garantirColunasParceirosIndicacaoAdmin() {
 }
 
 function garantirColunasObrigatoriasParceirosIndicacao(colunas = []) {
-  const set = new Set(colunas);
-  ADMIN_PARTNER_COLUMNS.filter(coluna => coluna.locked).forEach(coluna => set.add(coluna.id));
-  return ADMIN_PARTNER_COLUMNS.filter(coluna => set.has(coluna.id)).map(coluna => coluna.id);
+  const validas = new Set(ADMIN_PARTNER_COLUMNS.map(coluna => coluna.id));
+  const obrigatorias = ADMIN_PARTNER_COLUMNS.filter(coluna => coluna.locked).map(coluna => coluna.id);
+  const ordenadas = [];
+
+  [...obrigatorias, ...colunas].forEach(colunaId => {
+    if (validas.has(colunaId) && !ordenadas.includes(colunaId)) {
+      ordenadas.push(colunaId);
+    }
+  });
+
+  return ordenadas;
 }
 
 function obterColunasVisiveisParceirosIndicacaoAdmin() {
   garantirColunasParceirosIndicacaoAdmin();
-  const visiveis = new Set(state.admin.colunasParceirosIndicacao || []);
-  return ADMIN_PARTNER_COLUMNS.filter(coluna => visiveis.has(coluna.id));
+  const porId = new Map(ADMIN_PARTNER_COLUMNS.map(coluna => [coluna.id, coluna]));
+  return (state.admin.colunasParceirosIndicacao || [])
+    .map(colunaId => porId.get(colunaId))
+    .filter(Boolean);
 }
 
 function salvarColunasParceirosIndicacaoAdmin() {
@@ -1861,29 +1889,46 @@ function salvarColunasParceirosIndicacaoAdmin() {
 }
 
 function renderSeletorColunasParceirosIndicacaoAdmin() {
-  const visiveis = new Set(state.admin.colunasParceirosIndicacao || []);
+  const rascunho = garantirColunasObrigatoriasParceirosIndicacao(
+    state.admin.colunasParceirosIndicacaoRascunho?.length
+      ? state.admin.colunasParceirosIndicacaoRascunho
+      : state.admin.colunasParceirosIndicacao
+  );
+  const visiveis = new Set(rascunho);
+  const ordenadas = [
+    ...rascunho.map(colunaId => ADMIN_PARTNER_COLUMNS.find(coluna => coluna.id === colunaId)).filter(Boolean),
+    ...ADMIN_PARTNER_COLUMNS.filter(coluna => !visiveis.has(coluna.id))
+  ];
 
   return `
     <section class="admin-partners-column-picker" aria-label="Selecionar colunas da tabela de parceiros">
       <div>
-        <strong>Colunas exibidas</strong>
-        <p>Escolha os campos visíveis. A tabela ajusta o enquadramento automaticamente.</p>
+        <strong>Editar colunas</strong>
+        <p>Escolha os campos visíveis e ajuste a ordem. Salve para aplicar ou cancele para descartar.</p>
       </div>
       <div class="admin-partners-column-options">
-        ${ADMIN_PARTNER_COLUMNS.map(coluna => `
-          <label class="${coluna.locked ? 'is-locked' : ''}">
-            <input
-              type="checkbox"
-              ${visiveis.has(coluna.id) ? 'checked' : ''}
-              ${coluna.locked ? 'disabled' : ''}
-              onchange="alternarColunaParceirosIndicacaoAdmin('${escapeAttr(coluna.id)}', this.checked)"
-            >
-            <span>${escapeHtml(coluna.label)}</span>
-          </label>
+        ${ordenadas.map((coluna, index) => `
+          <div class="admin-partners-column-option ${coluna.locked ? 'is-locked' : ''}">
+            <label>
+              <input
+                type="checkbox"
+                ${visiveis.has(coluna.id) ? 'checked' : ''}
+                ${coluna.locked ? 'disabled' : ''}
+                onchange="alternarColunaParceirosIndicacaoAdmin('${escapeAttr(coluna.id)}', this.checked)"
+              >
+              <span>${escapeHtml(coluna.label)}</span>
+            </label>
+            <div class="admin-partners-column-order">
+              <button class="secondary-btn" type="button" onclick="moverColunaParceirosIndicacaoAdmin('${escapeAttr(coluna.id)}', -1)" ${index === 0 ? 'disabled' : ''} aria-label="Mover ${escapeAttr(coluna.label)} para cima">↑</button>
+              <button class="secondary-btn" type="button" onclick="moverColunaParceirosIndicacaoAdmin('${escapeAttr(coluna.id)}', 1)" ${index === ordenadas.length - 1 ? 'disabled' : ''} aria-label="Mover ${escapeAttr(coluna.label)} para baixo">↓</button>
+            </div>
+          </div>
         `).join('')}
       </div>
       <div class="admin-partners-column-actions">
         <button class="secondary-btn" type="button" onclick="restaurarColunasParceirosIndicacaoAdmin()">Restaurar padrão</button>
+        <button class="secondary-btn" type="button" onclick="cancelarColunasParceirosIndicacaoAdmin()">Cancelar</button>
+        <button class="save-btn" type="button" onclick="salvarRascunhoColunasParceirosIndicacaoAdmin()">Salvar colunas</button>
       </div>
     </section>
   `;
@@ -1911,46 +1956,61 @@ function renderListaParceirosIndicacaoAdmin(records) {
   }
 
   const colunas = obterColunasVisiveisParceirosIndicacaoAdmin();
-  const style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas);
+  const modoLote = Boolean(state.admin.loteParceirosModo);
+  const style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao: modoLote });
+  const idsVisiveis = records.map(parceiro => parceiro.id).filter(Boolean);
+  const selecionados = new Set(state.admin.loteParceirosSelecionados || []);
+  const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
 
   return `
     <div class="crud-list admin-partners-list">
-      <div class="admin-partners-table-toolbar">
-        <button
-          class="secondary-btn admin-partners-columns-icon-btn"
-          type="button"
-          onclick="alternarSeletorColunasParceirosIndicacaoAdmin()"
-          aria-label="Configurar colunas"
-          title="Configurar colunas"
-          aria-expanded="${state.admin.seletorColunasParceirosAberto ? 'true' : 'false'}"
-        >✎</button>
-      </div>
       <div class="crud-header" style="${escapeAttr(style)}">
+        ${modoLote ? `
+          <label class="admin-partner-select-cell" aria-label="Selecionar todos os parceiros visíveis">
+            <input
+              type="checkbox"
+              ${todosVisiveisSelecionados ? 'checked' : ''}
+              onchange="alternarTodosParceirosIndicacaoAdmin(this.checked)"
+            >
+          </label>
+        ` : ''}
         ${colunas.map(coluna => `<span>${escapeHtml(coluna.label)}</span>`).join('')}
       </div>
-      ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, style)).join('')}
+      ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, style, { selecao: modoLote })).join('')}
     </div>
   `;
 }
 
-function obterGridTemplateColunasParceirosIndicacaoAdmin(colunas) {
+function obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao = false } = {}) {
   const template = colunas
     .map(coluna => `minmax(${coluna.min}, ${coluna.size})`)
     .join(' ');
   const minWidth = colunas.reduce((total, coluna) => total + (parseInt(coluna.min, 10) || 120), 0);
+  const colunaSelecao = selecao ? '44px ' : '';
+  const larguraSelecao = selecao ? 44 : 0;
 
-  return `grid-template-columns: ${template}; min-width: ${Math.max(minWidth + 48, 520)}px;`;
+  return `grid-template-columns: ${colunaSelecao}${template}; min-width: ${Math.max(minWidth + larguraSelecao + 48, 520)}px;`;
 }
 
-function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas)) {
+function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas), { selecao = false } = {}) {
   const nome = parceiro.nome_completo || parceiro.nome || 'Sem nome';
   const empresa = parceiro.nome_empresa || parceiro.vinculo_empresa || '';
   const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.email_cadastro_certificado || parceiro.email || '-';
   const status = parceiro.status || 'ativo';
   const remunerado = parceiro.remunerado === true ? ' · Remunerado' : '';
+  const selecionado = (state.admin.loteParceirosSelecionados || []).includes(parceiro.id);
 
   return `
     <article class="crud-row admin-partner-row" style="${escapeAttr(style)}">
+      ${selecao ? `
+        <label class="admin-partner-select-cell" aria-label="Selecionar ${escapeAttr(nome)}">
+          <input
+            type="checkbox"
+            ${selecionado ? 'checked' : ''}
+            onchange="alternarParceiroIndicacaoSelecionadoAdmin('${escapeAttr(parceiro.id || '')}', this.checked)"
+          >
+        </label>
+      ` : ''}
       ${colunas.map(coluna => renderCelulaParceiroIndicacaoAdmin(coluna.id, parceiro, { nome, empresa, contato, status, remunerado })).join('')}
     </article>
   `;
@@ -1959,14 +2019,12 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
 function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   const { nome, empresa, contato, status, remunerado } = contexto;
   const podeEditar = pode('admin.parceiros_indicacao', 'update');
-  const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
 
   if (colunaId === 'acoes') {
     return `
       <div class="crud-actions admin-partner-actions">
         <button class="icon-btn" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Visualizar parceiro" aria-label="Visualizar ${escapeAttr(nome)}">🔍</button>
         ${podeEditar ? `<button class="icon-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Editar parceiro" aria-label="Editar ${escapeAttr(nome)}">✎</button>` : ''}
-        ${podeArquivar ? `<button class="icon-btn" type="button" onclick="arquivarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Arquivar parceiro" aria-label="Arquivar ${escapeAttr(nome)}" ${status === 'arquivado' ? 'disabled' : ''}>↧</button>` : ''}
       </div>
     `;
   }
@@ -2038,11 +2096,379 @@ function obterParceirosIndicacaoFiltradosAdmin(records) {
 function selecionarFiltroParceirosIndicacaoAdmin(filtro) {
   state.admin.filtros.parceirosIndicacao = filtro;
   state.admin.paginaParceirosIndicacao = 1;
+  state.admin.loteParceirosSelecionados = [];
   renderAdministracao();
 }
 
+function obterIdsParceirosIndicacaoVisiveisAdmin() {
+  const records = obterParceirosIndicacaoFiltradosAdmin(state.admin.parceirosIndicacao || []);
+  const limite = Math.max(1, Number(state.admin.limiteParceirosIndicacao) || 15);
+  const totalPaginas = Math.max(1, Math.ceil(records.length / limite));
+  const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaParceirosIndicacao) || 1), totalPaginas);
+  const inicio = (paginaAtual - 1) * limite;
+
+  return records.slice(inicio, inicio + limite).map(parceiro => parceiro.id).filter(Boolean);
+}
+
+function renderBarraLoteParceirosIndicacaoAdmin() {
+  const modo = state.admin.loteParceirosModo;
+  if (!modo) return '';
+
+  const totalSelecionados = (state.admin.loteParceirosSelecionados || []).length;
+  const processando = Boolean(state.admin.loteParceirosProcessando);
+  const desabilitado = totalSelecionados <= 0 || processando ? 'disabled' : '';
+  const titulo = modo === 'archive' ? 'Arquivamento em lote' : 'Ativar/Inativar em lote';
+
+  return `
+    <section class="admin-partners-bulk-bar" aria-live="polite">
+      <div>
+        <strong>${escapeHtml(titulo)}</strong>
+        <span>${processando ? 'Processando...' : `${escapeHtml(String(totalSelecionados))} parceiro${totalSelecionados === 1 ? '' : 's'} selecionado${totalSelecionados === 1 ? '' : 's'}`}</span>
+      </div>
+      <div class="admin-partners-bulk-actions">
+        ${modo === 'status' ? `
+          <button class="save-btn" type="button" onclick="executarLoteStatusParceirosIndicacaoAdmin('ativo')" ${desabilitado}>Ativar</button>
+          <button class="secondary-btn" type="button" onclick="executarLoteStatusParceirosIndicacaoAdmin('inativo')" ${desabilitado}>Inativar</button>
+        ` : `
+          <button class="secondary-btn danger" type="button" onclick="executarLoteArquivarParceirosIndicacaoAdmin()" ${desabilitado}>Arquivar</button>
+        `}
+        <button class="secondary-btn" type="button" onclick="cancelarLoteParceirosIndicacaoAdmin()">Cancelar</button>
+      </div>
+    </section>
+  `;
+}
+
+function iniciarLoteParceirosIndicacaoAdmin(modo) {
+  if (!['status', 'archive'].includes(modo)) return;
+
+  state.admin.loteParceirosModo = modo;
+  state.admin.loteParceirosSelecionados = [];
+  state.admin.loteParceirosProcessando = false;
+  state.admin.acoesParceirosAberto = false;
+  state.admin.seletorColunasParceirosAberto = false;
+  state.admin.message = '';
+  renderAdministracao();
+}
+
+function cancelarLoteParceirosIndicacaoAdmin() {
+  if (state.admin.loteParceirosProcessando) return;
+
+  state.admin.loteParceirosModo = null;
+  state.admin.loteParceirosSelecionados = [];
+  state.admin.loteParceirosProcessando = false;
+  renderAdministracao();
+}
+
+function alternarParceiroIndicacaoSelecionadoAdmin(id, selecionado) {
+  if (!id || !state.admin.loteParceirosModo || state.admin.loteParceirosProcessando) return;
+
+  const atuais = new Set(state.admin.loteParceirosSelecionados || []);
+  if (selecionado) {
+    atuais.add(id);
+  } else {
+    atuais.delete(id);
+  }
+
+  state.admin.loteParceirosSelecionados = Array.from(atuais);
+  renderAdministracao();
+}
+
+function alternarTodosParceirosIndicacaoAdmin(selecionado) {
+  if (!state.admin.loteParceirosModo || state.admin.loteParceirosProcessando) return;
+
+  const visiveis = obterIdsParceirosIndicacaoVisiveisAdmin();
+  const atuais = new Set(state.admin.loteParceirosSelecionados || []);
+
+  visiveis.forEach(id => {
+    if (selecionado) {
+      atuais.add(id);
+    } else {
+      atuais.delete(id);
+    }
+  });
+
+  state.admin.loteParceirosSelecionados = Array.from(atuais);
+  renderAdministracao();
+}
+
+async function executarLoteStatusParceirosIndicacaoAdmin(status) {
+  const statusNormalizado = String(status || '').trim().toLowerCase();
+  const selecionados = [...new Set(state.admin.loteParceirosSelecionados || [])].filter(Boolean);
+
+  if (!pode('admin.parceiros_indicacao', 'update')) {
+    state.admin.message = 'Seu usuário não possui permissão para ativar/inativar parceiros.';
+    renderAdministracao();
+    return;
+  }
+
+  if (!['ativo', 'inativo'].includes(statusNormalizado)) {
+    state.admin.message = 'Status inválido para atualização em lote.';
+    renderAdministracao();
+    return;
+  }
+
+  if (!selecionados.length) {
+    state.admin.message = 'Selecione pelo menos um parceiro.';
+    renderAdministracao();
+    return;
+  }
+
+  const acao = statusNormalizado === 'ativo' ? 'ativar' : 'inativar';
+  if (!window.confirm(`Deseja ${acao} os parceiros selecionados?`)) {
+    return;
+  }
+
+  try {
+    state.admin.loteParceirosProcessando = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('updateAdminPartnersStatusBatch', {
+      ids: selecionados,
+      status: statusNormalizado
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível atualizar os parceiros.'));
+    }
+
+    state.admin.loteParceirosModo = null;
+    state.admin.loteParceirosSelecionados = [];
+    state.admin.loteParceirosProcessando = false;
+    state.admin.message = 'Parceiro(s) atualizado(s) com sucesso.';
+    await carregarParceirosIndicacaoAdmin(true);
+  } catch (erro) {
+    state.admin.loteParceirosProcessando = false;
+    state.admin.message = erro.message || 'Erro ao atualizar parceiros.';
+    renderAdministracao();
+  }
+}
+
+async function executarLoteArquivarParceirosIndicacaoAdmin() {
+  const selecionados = [...new Set(state.admin.loteParceirosSelecionados || [])].filter(Boolean);
+
+  if (!pode('admin.parceiros_indicacao', 'archive')) {
+    state.admin.message = 'Seu usuário não possui permissão para arquivar parceiros.';
+    renderAdministracao();
+    return;
+  }
+
+  if (!selecionados.length) {
+    state.admin.message = 'Selecione pelo menos um parceiro.';
+    renderAdministracao();
+    return;
+  }
+
+  const confirmado = window.confirm(
+    'Deseja arquivar os parceiros selecionados?\n\nOs registros deixarão de aparecer entre os parceiros ativos, mas permanecerão disponíveis no filtro de arquivados.'
+  );
+
+  if (!confirmado) {
+    return;
+  }
+
+  try {
+    state.admin.loteParceirosProcessando = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('archiveAdminPartnersBatch', {
+      ids: selecionados
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível arquivar os parceiros.'));
+    }
+
+    state.admin.loteParceirosModo = null;
+    state.admin.loteParceirosSelecionados = [];
+    state.admin.loteParceirosProcessando = false;
+    state.admin.message = 'Parceiro(s) arquivado(s) com sucesso.';
+    await carregarParceirosIndicacaoAdmin(true);
+  } catch (erro) {
+    state.admin.loteParceirosProcessando = false;
+    state.admin.message = erro.message || 'Erro ao arquivar parceiros.';
+    renderAdministracao();
+  }
+}
+
+function obterValorExportacaoParceiroIndicacaoAdmin(colunaId, parceiro) {
+  const nome = parceiro.nome_completo || parceiro.nome || '';
+  const empresa = parceiro.nome_empresa || parceiro.vinculo_empresa || '';
+  const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.email_cadastro_certificado || parceiro.email || '';
+
+  const valores = {
+    parceiro: nome,
+    codigo_revendedor: parceiro.codigo_revendedor || '',
+    ac: parceiro.ac || '',
+    contato,
+    empresa,
+    status: parceiro.status || 'ativo',
+    remunerado: parceiro.remunerado === true ? 'Sim' : 'Não',
+    atualizado: formatarDataCurtaAr(parceiro.updated_at || parceiro.created_at)
+  };
+
+  return valores[colunaId] ?? '';
+}
+
+function obterNomeArquivoParceirosIndicacaoAdmin() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+
+  return `parceiros-indicacao-${ano}-${mes}-${dia}.xlsx`;
+}
+
+async function exportarParceirosIndicacaoAdmin() {
+  try {
+    state.admin.message = '';
+    renderAdministracao();
+
+    const xlsx = await carregarXlsxAr();
+    const colunas = obterColunasVisiveisParceirosIndicacaoAdmin()
+      .filter(coluna => coluna.id !== 'acoes');
+    const registros = obterParceirosIndicacaoFiltradosAdmin(state.admin.parceirosIndicacao || []);
+
+    if (!colunas.length) {
+      state.admin.message = 'Selecione pelo menos uma coluna para exportar.';
+      renderAdministracao();
+      return;
+    }
+
+    if (!registros.length) {
+      state.admin.message = 'Nenhum parceiro encontrado para exportar.';
+      renderAdministracao();
+      return;
+    }
+
+    const linhas = registros.map(parceiro => colunas.reduce((acc, coluna) => {
+      acc[coluna.label] = obterValorExportacaoParceiroIndicacaoAdmin(coluna.id, parceiro);
+      return acc;
+    }, {}));
+
+    const worksheet = xlsx.utils.json_to_sheet(linhas);
+    worksheet['!cols'] = colunas.map(coluna => ({
+      wch: Math.max(14, Math.min(36, Number.parseInt(coluna.min, 10) / 8 || 16))
+    }));
+
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Parceiros');
+    xlsx.writeFile(workbook, obterNomeArquivoParceirosIndicacaoAdmin());
+
+    state.admin.message = 'Exportação gerada com sucesso.';
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.message = erro.message || 'Erro ao exportar parceiros.';
+    renderAdministracao();
+  }
+}
+
+function renderMenuAcoesParceirosIndicacaoAdmin() {
+  if (!state.admin.acoesParceirosAberto) {
+    return '';
+  }
+
+  const podeAtualizar = pode('admin.parceiros_indicacao', 'update');
+  const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
+
+  return `
+    <div class="admin-partners-actions-menu" role="menu" aria-label="Ações de parceiros" onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)">
+      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('colunas')">Editar colunas</button>
+      ${podeAtualizar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'status\')">Ativar/Inativar em lote</button>' : ''}
+      ${podeArquivar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'arquivar\')">Arquivar em lote</button>' : ''}
+      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('exportar')">Exportar para Excel</button>
+    </div>
+  `;
+}
+
+function alternarMenuAcoesParceirosIndicacaoAdmin() {
+  state.admin.acoesParceirosAberto = !state.admin.acoesParceirosAberto;
+  renderAdministracao();
+
+  if (state.admin.acoesParceirosAberto) {
+    window.setTimeout(() => {
+      document.querySelector('.admin-partners-actions-menu [role="menuitem"]')?.focus();
+    }, 0);
+  }
+}
+
+function fecharMenuAcoesParceirosIndicacaoAdmin({ renderizar = true } = {}) {
+  if (!state.admin.acoesParceirosAberto) return;
+
+  state.admin.acoesParceirosAberto = false;
+
+  if (renderizar) {
+    renderAdministracao();
+  }
+}
+
+function executarAcaoParceirosIndicacaoAdmin(acao) {
+  state.admin.acoesParceirosAberto = false;
+
+  if (acao === 'colunas') {
+    abrirSeletorColunasParceirosIndicacaoAdmin();
+    renderAdministracao();
+    return;
+  }
+
+  if (acao === 'status') {
+    iniciarLoteParceirosIndicacaoAdmin('status');
+    return;
+  }
+
+  if (acao === 'arquivar') {
+    iniciarLoteParceirosIndicacaoAdmin('archive');
+    return;
+  }
+
+  if (acao === 'exportar') {
+    exportarParceirosIndicacaoAdmin();
+    return;
+  }
+
+  state.admin.message = '';
+  renderAdministracao();
+}
+
+function navegarMenuAcoesParceirosIndicacaoAdmin(event) {
+  const teclas = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'];
+  if (!teclas.includes(event.key)) return;
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    fecharMenuAcoesParceirosIndicacaoAdmin();
+    return;
+  }
+
+  const itens = Array.from(document.querySelectorAll('.admin-partners-actions-menu [role="menuitem"]'));
+  if (!itens.length) return;
+
+  event.preventDefault();
+  const atual = itens.indexOf(document.activeElement);
+  let proximo = atual;
+
+  if (event.key === 'ArrowDown') proximo = atual < 0 ? 0 : (atual + 1) % itens.length;
+  if (event.key === 'ArrowUp') proximo = atual < 0 ? itens.length - 1 : (atual - 1 + itens.length) % itens.length;
+  if (event.key === 'Home') proximo = 0;
+  if (event.key === 'End') proximo = itens.length - 1;
+
+  itens[proximo]?.focus();
+}
+
+function abrirSeletorColunasParceirosIndicacaoAdmin() {
+  garantirColunasParceirosIndicacaoAdmin();
+  state.admin.colunasParceirosIndicacaoRascunho = [...(state.admin.colunasParceirosIndicacao || ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS)];
+  state.admin.seletorColunasParceirosAberto = true;
+}
+
 function alternarSeletorColunasParceirosIndicacaoAdmin() {
-  state.admin.seletorColunasParceirosAberto = !state.admin.seletorColunasParceirosAberto;
+  if (state.admin.seletorColunasParceirosAberto) {
+    cancelarColunasParceirosIndicacaoAdmin();
+    return;
+  }
+
+  abrirSeletorColunasParceirosIndicacaoAdmin();
   renderAdministracao();
 }
 
@@ -2050,7 +2476,11 @@ function alternarColunaParceirosIndicacaoAdmin(colunaId, visivel) {
   const coluna = ADMIN_PARTNER_COLUMNS.find(item => item.id === colunaId);
   if (!coluna || coluna.locked) return;
 
-  const atuais = new Set(state.admin.colunasParceirosIndicacao || ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS);
+  const atuais = new Set(
+    state.admin.colunasParceirosIndicacaoRascunho?.length
+      ? state.admin.colunasParceirosIndicacaoRascunho
+      : state.admin.colunasParceirosIndicacao || ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS
+  );
 
   if (visivel) {
     atuais.add(colunaId);
@@ -2058,14 +2488,47 @@ function alternarColunaParceirosIndicacaoAdmin(colunaId, visivel) {
     atuais.delete(colunaId);
   }
 
-  state.admin.colunasParceirosIndicacao = garantirColunasObrigatoriasParceirosIndicacao(Array.from(atuais));
-  salvarColunasParceirosIndicacaoAdmin();
+  state.admin.colunasParceirosIndicacaoRascunho = garantirColunasObrigatoriasParceirosIndicacao(Array.from(atuais));
+  renderAdministracao();
+}
+
+function moverColunaParceirosIndicacaoAdmin(colunaId, direcao) {
+  const rascunho = garantirColunasObrigatoriasParceirosIndicacao(
+    state.admin.colunasParceirosIndicacaoRascunho?.length
+      ? state.admin.colunasParceirosIndicacaoRascunho
+      : state.admin.colunasParceirosIndicacao || ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS
+  );
+  const indice = rascunho.indexOf(colunaId);
+  const proximoIndice = indice + Number(direcao || 0);
+
+  if (indice < 0 || proximoIndice < 0 || proximoIndice >= rascunho.length) return;
+
+  const [item] = rascunho.splice(indice, 1);
+  rascunho.splice(proximoIndice, 0, item);
+  state.admin.colunasParceirosIndicacaoRascunho = rascunho;
   renderAdministracao();
 }
 
 function restaurarColunasParceirosIndicacaoAdmin() {
-  state.admin.colunasParceirosIndicacao = [...ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS];
+  state.admin.colunasParceirosIndicacaoRascunho = [...ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS];
+  renderAdministracao();
+}
+
+function salvarRascunhoColunasParceirosIndicacaoAdmin() {
+  state.admin.colunasParceirosIndicacao = garantirColunasObrigatoriasParceirosIndicacao(
+    state.admin.colunasParceirosIndicacaoRascunho?.length
+      ? state.admin.colunasParceirosIndicacaoRascunho
+      : ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS
+  );
+  state.admin.colunasParceirosIndicacaoRascunho = [];
+  state.admin.seletorColunasParceirosAberto = false;
   salvarColunasParceirosIndicacaoAdmin();
+  renderAdministracao();
+}
+
+function cancelarColunasParceirosIndicacaoAdmin() {
+  state.admin.colunasParceirosIndicacaoRascunho = [];
+  state.admin.seletorColunasParceirosAberto = false;
   renderAdministracao();
 }
 
@@ -2073,14 +2536,20 @@ function alterarBuscaParceirosIndicacaoAdmin(valor) {
   state.admin.buscaParceirosIndicacaoDigitada = valor;
   window.clearTimeout(state.admin.buscaParceirosIndicacaoTimer);
   state.admin.buscaParceirosIndicacaoTimer = window.setTimeout(() => {
-    if ((state.admin.buscaParceirosIndicacaoAplicada || '') === (state.admin.buscaParceirosIndicacaoDigitada || '')) {
-      return;
-    }
+    aplicarBuscaParceirosIndicacaoAdmin();
+  }, ADMIN_PARTNER_SEARCH_DEBOUNCE_MS);
+}
 
-    state.admin.buscaParceirosIndicacaoAplicada = state.admin.buscaParceirosIndicacaoDigitada;
-    state.admin.paginaParceirosIndicacao = 1;
-    renderAdministracao();
-  }, 320);
+function aplicarBuscaParceirosIndicacaoAdmin() {
+  window.clearTimeout(state.admin.buscaParceirosIndicacaoTimer);
+
+  if ((state.admin.buscaParceirosIndicacaoAplicada || '') === (state.admin.buscaParceirosIndicacaoDigitada || '')) {
+    return;
+  }
+
+  state.admin.buscaParceirosIndicacaoAplicada = state.admin.buscaParceirosIndicacaoDigitada;
+  state.admin.paginaParceirosIndicacao = 1;
+  renderAdministracao();
 }
 
 function selecionarPaginaParceirosIndicacaoAdmin(pagina) {
@@ -2134,7 +2603,7 @@ function renderModalParceiroIndicacaoAdmin() {
     : (state.admin.parceiroModal.salvando ? 'Salvando...' : 'Salvar parceiro');
 
   return `
-    <div class="modal-backdrop admin-user-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
+    <div class="modal-backdrop admin-user-modal-backdrop partner-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
       <section class="small-modal admin-user-modal partner-modal">
         <div class="small-modal-header">
           <h3>${escapeHtml(titulo)}</h3>
@@ -4270,9 +4739,11 @@ async function carregarRegistrosAdmin(entidade) {
   }
 }
 
-async function carregarParceirosIndicacaoAdmin() {
+async function carregarParceirosIndicacaoAdmin(preservarMensagem = false) {
   state.admin.loading = true;
-  state.admin.message = '';
+  if (!preservarMensagem) {
+    state.admin.message = '';
+  }
   renderAdministracao();
 
   try {
@@ -9929,10 +10400,15 @@ Object.assign(window, {
   alterarBuscaUsuariosAdmin,
   alterarBuscaPerfisAdmin,
   alterarBuscaParceirosIndicacaoAdmin,
+  alternarMenuAcoesParceirosIndicacaoAdmin,
+  alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
   alterarVisibilidadeModuloHome,
   alternarColunaParceirosIndicacaoAdmin,
   alternarSeletorColunasParceirosIndicacaoAdmin,
+  alternarTodosParceirosIndicacaoAdmin,
+  cancelarColunasParceirosIndicacaoAdmin,
+  cancelarLoteParceirosIndicacaoAdmin,
   selecionarFiltroPerfisAdmin,
   selecionarFiltroParceirosIndicacaoAdmin,
   selecionarFiltroModulosHome,
@@ -9944,6 +10420,7 @@ Object.assign(window, {
   alterarFiltroListaProdutosAr,
   alternarFiltroGrupoListaProdutosAr,
   alterarRascunhoProdutoGrupoAr,
+  executarAcaoParceirosIndicacaoAdmin,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
   alterarFiltroLinks,
@@ -9951,6 +10428,8 @@ Object.assign(window, {
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
   alternarFiltrosListaProdutosAr,
+  aplicarBuscaParceirosIndicacaoAdmin,
+  navegarMenuAcoesParceirosIndicacaoAdmin,
   alternarFavoritoLink,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
@@ -9998,17 +10477,21 @@ Object.assign(window, {
   limparSelecaoValidacoesAr,
   limparProdutosListaSelecionadosAr,
   cancelarEdicaoGrupoProdutosAr,
+  executarLoteArquivarParceirosIndicacaoAdmin,
+  executarLoteStatusParceirosIndicacaoAdmin,
   navegarHome,
   navegarParaModulo,
   processarArquivoRepasseAr,
   renderDashboard,
   restaurarCoresPadrao,
   restaurarColunasParceirosIndicacaoAdmin,
+  moverColunaParceirosIndicacaoAdmin,
   sair,
   salvarConfigAdmin,
   salvarConfigModulosHome,
   salvarLinkItem,
   salvarParceiroIndicacaoAdmin,
+  salvarRascunhoColunasParceirosIndicacaoAdmin,
   salvarPermissoesUsuarioAdmin,
   salvarPerfilAdmin,
   salvarEdicaoGrupoProdutosAr,
@@ -10033,4 +10516,18 @@ Object.assign(window, {
   voltarEtapaModalUsuarioAdmin,
   voltarEtapaModalPerfilAdmin,
   visualizarReciboValidacoesAr
+});
+
+document.addEventListener('click', event => {
+  if (!state.admin.acoesParceirosAberto) return;
+  if (event.target?.closest?.('.admin-partners-main-actions')) return;
+
+  fecharMenuAcoesParceirosIndicacaoAdmin();
+}, true);
+
+document.addEventListener('keydown', event => {
+  if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;
+
+  event.preventDefault();
+  fecharMenuAcoesParceirosIndicacaoAdmin();
 });

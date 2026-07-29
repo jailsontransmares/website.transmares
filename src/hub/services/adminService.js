@@ -297,6 +297,51 @@ export async function arquivarParceiroIndicacaoAdmin({ id } = {}) {
   return { ok: true };
 }
 
+export async function atualizarStatusParceirosIndicacaoAdmin({ ids = [], status } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const registros = Array.isArray(ids) ? ids.filter(Boolean) : [];
+  const statusNormalizado = normalizarStatusParceiro(status);
+
+  if (!registros.length) {
+    throw new Error('Selecione pelo menos um parceiro.');
+  }
+
+  if (!['ativo', 'inativo'].includes(statusNormalizado)) {
+    throw new Error('Status inválido para atualização em lote.');
+  }
+
+  const { error } = await supabase
+    .from('parceiros')
+    .update({ status: statusNormalizado })
+    .in('id', registros);
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível atualizar os parceiros.');
+  }
+
+  return { ok: true };
+}
+
+export async function arquivarParceirosIndicacaoAdminLote({ ids = [] } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const registros = Array.isArray(ids) ? ids.filter(Boolean) : [];
+
+  if (!registros.length) {
+    throw new Error('Selecione pelo menos um parceiro.');
+  }
+
+  const { error } = await supabase
+    .from('parceiros')
+    .update({ status: 'arquivado' })
+    .in('id', registros);
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível arquivar os parceiros.');
+  }
+
+  return { ok: true };
+}
+
 export async function listarModulosAdmin() {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
