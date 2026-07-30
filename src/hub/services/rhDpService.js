@@ -80,6 +80,29 @@ const COLUNAS_VINCULO = `
   updated_at
 `;
 
+const COLUNAS_ARQUIVO = `
+  id,
+  colaborador_id,
+  categoria,
+  tipo_documento,
+  nome_arquivo,
+  descricao,
+  origem,
+  google_drive_file_id,
+  google_drive_web_url,
+  google_drive_preview_url,
+  google_drive_folder_id,
+  mime_type,
+  tamanho_bytes,
+  data_referencia,
+  data_validade,
+  retencao_ate,
+  status,
+  observacoes,
+  created_at,
+  updated_at
+`;
+
 function limparTexto(valor) {
   const texto = String(valor ?? '').trim();
   return texto || null;
@@ -204,6 +227,32 @@ function normalizarDependentes(dependentes = []) {
     .filter(item => item.id || item.nome_completo || item.data_nascimento || item.parentesco);
 }
 
+function normalizarUrl(valor) {
+  const texto = limparTexto(valor);
+  if (!texto) return null;
+  return /^https?:\/\//i.test(texto) ? texto : null;
+}
+
+function normalizarArquivo(payload = {}) {
+  return {
+    colaborador_id: limparTexto(payload.colaborador_id),
+    categoria: limparTexto(payload.categoria)?.toLowerCase() || null,
+    tipo_documento: limparTexto(payload.tipo_documento),
+    nome_arquivo: limparTexto(payload.nome_arquivo),
+    descricao: limparTexto(payload.descricao),
+    origem: limparTexto(payload.origem)?.toLowerCase() || 'google_drive',
+    google_drive_file_id: limparTexto(payload.google_drive_file_id),
+    google_drive_web_url: normalizarUrl(payload.google_drive_web_url),
+    google_drive_preview_url: normalizarUrl(payload.google_drive_preview_url),
+    google_drive_folder_id: limparTexto(payload.google_drive_folder_id),
+    mime_type: limparTexto(payload.mime_type),
+    tamanho_bytes: normalizarDecimal(payload.tamanho_bytes),
+    data_referencia: limparTexto(payload.data_referencia),
+    data_validade: limparTexto(payload.data_validade),
+    observacoes: limparTexto(payload.observacoes)
+  };
+}
+
 function mensagemErroRh(error, fallback) {
   const texto = String(error?.message || '');
 
@@ -255,6 +304,22 @@ function mensagemErroRh(error, fallback) {
     return 'Revise as informações do vínculo profissional.';
   }
 
+  if (/rh_arquivos_link_check/i.test(texto)) {
+    return 'Informe o link do Google Drive ou o ID do arquivo.';
+  }
+
+  if (/rh_arquivos_categoria_check|rh_arquivos_origem_check|rh_arquivos_status_check/i.test(texto)) {
+    return 'Revise as informações do arquivo.';
+  }
+
+  if (/rh_arquivos_url_check/i.test(texto)) {
+    return 'Informe links válidos iniciando com http ou https.';
+  }
+
+  if (/rh_arquivos_tamanho_check/i.test(texto)) {
+    return 'Informe um tamanho de arquivo válido.';
+  }
+
   if (/RH_CREATE_DENIED|RH_UPDATE_DENIED|row-level security/i.test(texto)) {
     return 'Seu perfil não possui permissão para realizar esta alteração.';
   }
@@ -279,6 +344,25 @@ export async function listarColaboradoresRhDp() {
 
   if (error) {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar os colaboradores.'));
+  }
+
+  return data || [];
+}
+
+export async function listarArquivosColaboradorRhDp({ colaboradorId } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!colaboradorId) return [];
+
+  const { data, error } = await supabase
+    .from('rh_arquivos_colaboradores')
+    .select(COLUNAS_ARQUIVO)
+    .eq('colaborador_id', colaboradorId)
+    .neq('status', 'excluido')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(mensagemErroRh(error, 'Não foi possível carregar os arquivos do colaborador.'));
   }
 
   return data || [];
@@ -382,4 +466,118 @@ export async function alterarStatusColaboradorRhDp({ id, status } = {}) {
   }
 
   return { ok: true };
+}
+
+export async function salvarArquivoColaboradorRhDp({ id = null, arquivo = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarArquivo(arquivo);
+
+  if (!payload.colaborador_id) {
+    throw new Error('Colaborador não identificado.');
+  }
+
+  const operacao = id
+    ? supabase
+      .from('rh_arquivos_colaboradores')
+      .update(payload)
+      .eq('id', id)
+      .select('id')
+      .single()
+    : supabase
+      .from('rh_arquivos_colaboradores')
+      .insert(payload)
+      .select('id')
+      .single();
+
+  const { data, error } = await operacao;
+
+  if (error) {
+    throw new Error(mensagemErroRh(error, 'Não foi possível salvar o arquivo.'));
+  }
+
+  return { id: data?.id || id };
+}
+
+export async function excluirArquivoColaboradorRhDp({ id } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+
+  if (!id) {
+    throw new Error('Arquivo não identificado.');
+  }
+
+  const { error } = await supabase
+    .from('rh_arquivos_colaboradores')
+    .update({ status: 'excluido' })
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(mensagemErroRh(error, 'Não foi possível excluir o arquivo.'));
+  }
+
+  return { ok: true };
+}
+
+function normalizarMesCompetencia(valor) {
+  const texto = String(valor || '').trim();
+  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(texto)) return null;
+  return `${texto.slice(0, 7)}-01`;
+}
+
+function normalizarControle(payload = {}) {
+  return Object.fromEntries(Object.entries(payload).map(([chave, valor]) => {
+    if (['competencia', 'prazo', 'data_referencia'].includes(chave)) {
+      return [chave, chave === 'competencia' ? normalizarMesCompetencia(valor) : limparTexto(valor)];
+    }
+    if (['titulo', 'descricao', 'retorno_resumo', 'divergencia_descricao', 'google_drive_file_id'].includes(chave)) {
+      return [chave, limparTexto(valor)];
+    }
+    if (['tipo', 'prioridade', 'status'].includes(chave)) {
+      return [chave, limparTexto(valor)?.toLowerCase() || null];
+    }
+    if (chave === 'google_drive_web_url') {
+      return [chave, normalizarUrl(valor)];
+    }
+    return [chave, valor ?? null];
+  }));
+}
+
+export async function listarDemandasContabilidadeRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('rh_demandas_contabilidade')
+    .select('id, colaborador_id, competencia, tipo, titulo, descricao, prioridade, prazo, status, enviado_em, retorno_em, retorno_resumo, divergencia_descricao, google_drive_web_url, google_drive_file_id, concluido_em, created_at, updated_at, rh_colaboradores(nome_completo)')
+    .order('prazo', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar as demandas à contabilidade.'));
+  return data || [];
+}
+
+export async function listarCompetenciasRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('rh_competencias')
+    .select('id, competencia, status, prazo_envio, enviado_em, retorno_em, retorno_resumo, divergencia_descricao, google_drive_web_url, google_drive_file_id, fechado_em, created_at, updated_at, rh_eventos_competencia(id, status)')
+    .order('competencia', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar os fechamentos mensais.'));
+  return data || [];
+}
+
+export async function salvarDemandaContabilidadeRhDp({ id = null, demanda = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarControle(demanda);
+  const { data, error } = id
+    ? await supabase.from('rh_demandas_contabilidade').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_demandas_contabilidade').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar a demanda.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarCompetenciaRhDp({ id = null, competencia = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarControle(competencia);
+  const { data, error } = id
+    ? await supabase.from('rh_competencias').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_competencias').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o fechamento mensal.'));
+  return { id: data?.id || id };
 }

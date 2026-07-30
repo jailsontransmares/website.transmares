@@ -5131,6 +5131,15 @@ body.dark .ar-products-edit-feedback.is-error {
   grid-template-columns: minmax(260px, 1fr) minmax(150px, 220px);
 }
 
+.rh-section-tabs { display: flex; gap: 8px; margin: 0 0 16px; flex-wrap: wrap; }
+.rh-section-tabs .is-active { background: var(--primary, #1769e0); color: #fff; border-color: var(--primary, #1769e0); }
+.rh-control-form { margin: 16px 0; padding: 14px; border: 1px solid var(--border, #dce3ee); border-radius: 12px; background: #fff; }
+.rh-control-form summary { cursor: pointer; font-weight: 700; margin-bottom: 14px; }
+.rh-control-list { display: grid; gap: 8px; }
+.rh-control-list article { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 12px 14px; border: 1px solid var(--border, #dce3ee); border-radius: 10px; background: #fff; }
+.rh-control-list strong, .rh-control-list span { display: block; }
+.rh-control-list div > span { margin-top: 3px; color: var(--muted, #64748b); font-size: .86rem; }
+
 .rh-toolbar label,
 .rh-form-grid label,
 .rh-dependent-row label {
@@ -5406,6 +5415,63 @@ body.dark .ar-products-edit-feedback.is-error {
   padding: 6px 11px;
 }
 
+.rh-files-title > div {
+  display: grid;
+  gap: 3px;
+}
+
+.rh-files-list {
+  display: grid;
+  gap: 10px;
+}
+
+.rh-file-row {
+  align-items: center;
+  background: color-mix(in srgb, var(--cor-principal) 3%, var(--card));
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.rh-file-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rh-file-main strong,
+.rh-file-main span,
+.rh-file-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-file-main span,
+.rh-file-main small {
+  color: var(--texto-suave);
+  font-size: 11px;
+}
+
+.rh-file-actions,
+.rh-file-form-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rh-file-form {
+  border-top: 1px solid var(--borda);
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
 .rh-dependents-list {
   display: grid;
   gap: 10px;
@@ -5468,6 +5534,7 @@ body.dark .ar-products-edit-feedback.is-error {
 
   .rh-panel-header,
   .rh-form-section-title,
+  .rh-file-row,
   .rh-pagination {
     align-items: stretch;
     display: grid;

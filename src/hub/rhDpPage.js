@@ -1,7 +1,14 @@
 import {
   alterarStatusColaboradorRhDp,
+  excluirArquivoColaboradorRhDp,
+  listarArquivosColaboradorRhDp,
+  listarCompetenciasRhDp,
+  listarDemandasContabilidadeRhDp,
   listarColaboradoresRhDp,
   obterCadastroPessoalRhDp,
+  salvarArquivoColaboradorRhDp,
+  salvarCompetenciaRhDp,
+  salvarDemandaContabilidadeRhDp,
   salvarCadastroPessoalRhDp
 } from './services/rhDpService.js';
 
@@ -83,6 +90,40 @@ function novoVinculo() {
   };
 }
 
+function novoArquivo(colaboradorId = '') {
+  return {
+    id: '',
+    colaborador_id: colaboradorId,
+    categoria: 'documento_pessoal',
+    tipo_documento: '',
+    nome_arquivo: '',
+    descricao: '',
+    origem: 'google_drive',
+    google_drive_file_id: '',
+    google_drive_web_url: '',
+    google_drive_preview_url: '',
+    google_drive_folder_id: '',
+    mime_type: '',
+    tamanho_bytes: '',
+    data_referencia: '',
+    data_validade: '',
+    observacoes: ''
+  };
+}
+
+const CATEGORIAS_ARQUIVO = [
+  ['admissao', 'Admissão'],
+  ['documento_pessoal', 'Documento pessoal'],
+  ['contrato', 'Contrato'],
+  ['beneficios', 'Benefícios'],
+  ['ferias', 'Férias'],
+  ['afastamento', 'Afastamento'],
+  ['saude_ocupacional', 'Saúde ocupacional'],
+  ['ocorrencia', 'Ocorrência'],
+  ['desligamento', 'Desligamento'],
+  ['outros', 'Outros']
+];
+
 function digitos(valor = '') {
   return String(valor || '').replace(/\D/g, '');
 }
@@ -157,6 +198,10 @@ function formatarDataHora(valor = '') {
     : data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+function formatarCategoriaArquivo(valor = '') {
+  return CATEGORIAS_ARQUIVO.find(([chave]) => chave === valor)?.[1] || 'Outros';
+}
+
 function calcularIdade(valor = '') {
   if (!valor) return null;
   const nascimento = new Date(`${valor}T12:00:00`);
@@ -193,6 +238,10 @@ export function criarRhDpController({
     loading: false,
     message: '',
     messageType: '',
+    secao: 'colaboradores',
+    demandas: [],
+    competencias: [],
+    controleLoading: false,
     busca: '',
     filtroStatus: 'todos',
     pagina: 1,
@@ -206,6 +255,13 @@ export function criarRhDpController({
       documentos: novosDocumentos(),
       vinculo: novoVinculo(),
       dependentes: [],
+      arquivos: [],
+      arquivoForm: novoArquivo(),
+      arquivoEditandoId: '',
+      arquivosLoading: false,
+      arquivoSaving: false,
+      arquivoMessage: '',
+      arquivoMessageType: '',
       erros: {}
     }
   };
@@ -228,6 +284,51 @@ export function criarRhDpController({
 
   function podeInativar() {
     return podeEditar() && pode('rh_dp.colaboradores', 'archive');
+  }
+
+  function podeVerArquivos() {
+    return pode('rh_dp.documentos', 'view');
+  }
+
+  function podeCriarArquivos() {
+    return pode('rh_dp.documentos', 'create');
+  }
+
+  function podeEditarArquivos() {
+    return pode('rh_dp.documentos', 'update');
+  }
+
+  function podeExcluirArquivos() {
+    return pode('rh_dp.documentos', 'delete');
+  }
+
+  function podeBaixarArquivos() {
+    return pode('rh_dp.documentos', 'download');
+  }
+
+  function podeVerDemandas() { return pode('rh_dp.demandas_contabilidade', 'view'); }
+  function podeCriarDemandas() { return pode('rh_dp.demandas_contabilidade', 'create'); }
+  function podeVerFechamentos() { return pode('rh_dp.fechamentos', 'view'); }
+  function podeCriarFechamentos() { return pode('rh_dp.fechamentos', 'create'); }
+
+  function renderNavegacaoInterna() {
+    const itens = [
+      ['colaboradores', 'Colaboradores', podeVer()],
+      ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
+      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
+    ].filter(([, , permitido]) => permitido);
+    return `<div class="rh-section-tabs">${itens.map(([id, nome]) => `<button type="button" class="secondary-btn ${state.secao === id ? 'is-active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}</div>`;
+  }
+
+  function renderDemandas() {
+    if (!podeVerDemandas()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso às demandas à contabilidade.</p></div>';
+    const abertas = state.demandas.filter(item => !['concluido', 'cancelado'].includes(item.status));
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Demandas à contabilidade</h2><p>Controle de solicitações, prazos, retornos e divergências.</p></div></div><p class="admin-message rh-internal-notice">Esta área não transmite eventos oficiais; ela organiza a comunicação e a conferência interna.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Em aberto</span><strong>${abertas.length}</strong></article><article class="rh-summary-card"><span>Com prazo vencido</span><strong>${abertas.filter(item => item.prazo && item.prazo < new Date().toISOString().slice(0, 10)).length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.demandas.filter(item => item.divergencia_descricao).length}</strong></article></div>${podeCriarDemandas() ? `<details class="rh-control-form"><summary>Nova demanda</summary><div class="rh-form-grid"><label><span>Tipo *</span><select id="rh_demanda_tipo" class="config-input"><option value="alteracao_cadastral">Alteração cadastral</option><option value="ferias">Férias</option><option value="afastamento">Afastamento</option><option value="beneficio">Benefício</option><option value="remuneracao">Remuneração</option><option value="outro">Outro</option></select></label><label><span>Prioridade</span><select id="rh_demanda_prioridade" class="config-input"><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option><option value="baixa">Baixa</option></select></label><label class="rh-span-2"><span>Título *</span><input id="rh_demanda_titulo" class="config-input" type="text" placeholder="Ex.: Alteração de jornada"></label><label><span>Competência</span><input id="rh_demanda_competencia" class="config-input" type="month"></label><label><span>Prazo</span><input id="rh_demanda_prazo" class="config-input" type="date"></label><label class="rh-span-2"><span>Descrição</span><textarea id="rh_demanda_descricao" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarDemanda()">Registrar demanda</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando demandas...</p>' : `<div class="rh-control-list">${state.demandas.length ? state.demandas.map(item => `<article><div><strong>${escapeHtml(item.titulo)}</strong><span>${escapeHtml(item.rh_colaboradores?.nome_completo || formatarCategoriaArquivo(item.tipo))}${item.prazo ? ` · prazo ${formatarData(item.prazo)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma demanda registrada.</p>'}</div>`}</section>`;
+  }
+
+  function renderFechamentos() {
+    if (!podeVerFechamentos()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso ao fechamento mensal.</p></div>';
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Fechamento mensal</h2><p>Competências, eventos enviados, retorno e conferência com a contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não há cálculo de folha, impostos ou transmissão ao eSocial neste módulo.</p>${podeCriarFechamentos() ? `<details class="rh-control-form"><summary>Nova competência</summary><div class="rh-form-grid"><label><span>Competência *</span><input id="rh_competencia_mes" class="config-input" type="month" required></label><label><span>Prazo de envio</span><input id="rh_competencia_prazo" class="config-input" type="date"></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarCompetencia()">Abrir competência</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando competências...</p>' : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${(item.rh_eventos_competencia || []).length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}</section>`;
   }
 
   function colaboradoresFiltrados() {
@@ -381,6 +482,8 @@ export function criarRhDpController({
         </section>
       `
       : `
+        ${renderNavegacaoInterna()}
+        ${state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : `
         <section class="admin-panel rh-panel">
           <div class="admin-panel-header rh-panel-header">
             <div>
@@ -399,7 +502,7 @@ export function criarRhDpController({
           ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
           ${state.loading ? '<p class="quick-link-empty">Carregando colaboradores...</p>' : renderTabela()}
         </section>
-        ${renderModal()}
+        ${renderModal()}`}
       `;
 
     document.getElementById('app').innerHTML = renderShell({
@@ -444,6 +547,20 @@ export function criarRhDpController({
           <option value="">Selecione</option>
           ${opcoes.map(opcao => `
             <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(opcao)}</option>
+          `).join('')}
+        </select>
+      </label>
+    `;
+  }
+
+  function campoSelectPares(id, label, valor, opcoes, { required = false, readonly = false } = {}) {
+    return `
+      <label>
+        <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
+        <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
+          <option value="">Selecione</option>
+          ${opcoes.map(([chave, nome]) => `
+            <option value="${escapeAttr(chave)}" ${String(valor || '') === chave ? 'selected' : ''}>${escapeHtml(nome)}</option>
           `).join('')}
         </select>
       </label>
@@ -563,7 +680,7 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Documentos cadastrais</strong>
-          <span>Os arquivos serão incluídos na fase do Google Drive.</span>
+          <span>Dados sensíveis do cadastro. Arquivos ficam na seção de anexos.</span>
         </div>
         <div class="rh-form-grid">
           ${campo('cpf', 'CPF', formatarCpf(item.cpf), { required: true, readonly, mask: 'cpf', placeholder: '000.000.000-00' })}
@@ -660,6 +777,107 @@ export function criarRhDpController({
     `;
   }
 
+  function renderSecaoArquivos(readonly) {
+    if (!podeVerArquivos()) {
+      return `
+        <section class="rh-form-section rh-restricted-section">
+          <strong>Arquivos protegidos</strong>
+          <p>Seu perfil não possui permissão para visualizar arquivos de RH&DP.</p>
+        </section>
+      `;
+    }
+
+    const colaboradorSalvo = Boolean(state.modal.id);
+    const podeManterArquivos = colaboradorSalvo && !readonly && (podeCriarArquivos() || podeEditarArquivos());
+
+    return `
+      <section class="rh-form-section">
+        <div class="rh-form-section-title rh-files-title">
+          <div>
+            <strong>Arquivos e Google Drive</strong>
+            <span>Controle de links e metadados. O upload automático fica para a integração do Drive.</span>
+          </div>
+          ${podeManterArquivos && state.modal.arquivoEditandoId ? `
+            <button class="secondary-btn" type="button" onclick="hubRhDpCancelarArquivo()">Novo arquivo</button>
+          ` : ''}
+        </div>
+
+        ${state.modal.arquivoMessage ? `
+          <p class="admin-message ${state.modal.arquivoMessageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.modal.arquivoMessage)}</p>
+        ` : ''}
+
+        ${renderListaArquivos(readonly)}
+
+        ${!colaboradorSalvo ? `
+          <p class="quick-link-empty">Salve o cadastro do colaborador antes de vincular arquivos.</p>
+        ` : ''}
+
+        ${podeManterArquivos ? renderFormularioArquivo() : ''}
+      </section>
+    `;
+  }
+
+  function renderListaArquivos(readonly) {
+    if (state.modal.arquivosLoading) {
+      return '<p class="quick-link-empty">Carregando arquivos...</p>';
+    }
+
+    if (!state.modal.arquivos.length) {
+      return '<p class="quick-link-empty">Nenhum arquivo vinculado.</p>';
+    }
+
+    return `
+      <div class="rh-files-list">
+        ${state.modal.arquivos.map(item => {
+          const link = item.google_drive_preview_url || item.google_drive_web_url || '';
+          const podeAbrir = link && podeBaixarArquivos();
+          return `
+            <article class="rh-file-row">
+              <div class="rh-file-main">
+                <strong>${escapeHtml(item.nome_arquivo || item.tipo_documento || 'Arquivo sem nome')}</strong>
+                <span>${escapeHtml(formatarCategoriaArquivo(item.categoria))}${item.data_validade ? ` • válido até ${escapeHtml(formatarData(item.data_validade))}` : ''}</span>
+                ${item.descricao ? `<small>${escapeHtml(item.descricao)}</small>` : ''}
+              </div>
+              <div class="rh-file-actions">
+                ${podeAbrir ? `<button class="icon-action-btn" type="button" onclick="hubRhDpAbrirArquivo('${escapeAttr(link)}')">Visualizar</button>` : ''}
+                ${!readonly && podeEditarArquivos() ? `<button class="icon-action-btn" type="button" onclick="hubRhDpEditarArquivo('${escapeAttr(item.id)}')">Editar</button>` : ''}
+                ${!readonly && podeExcluirArquivos() ? `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpExcluirArquivo('${escapeAttr(item.id)}')">Excluir</button>` : ''}
+              </div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderFormularioArquivo() {
+    const item = state.modal.arquivoForm;
+    const editando = Boolean(state.modal.arquivoEditandoId);
+    return `
+      <div class="rh-file-form">
+        <div class="rh-form-grid">
+          ${campoSelectPares('arquivo_categoria', 'Categoria', item.categoria, CATEGORIAS_ARQUIVO, { required: true })}
+          ${campo('arquivo_tipo_documento', 'Tipo de documento', item.tipo_documento, { placeholder: 'Ex.: RG, contrato, ASO' })}
+          ${campo('arquivo_nome_arquivo', 'Nome do arquivo', item.nome_arquivo, { required: true })}
+          ${campo('arquivo_google_drive_web_url', 'Link do Google Drive', item.google_drive_web_url, { placeholder: 'https://drive.google.com/...' })}
+          ${campo('arquivo_google_drive_file_id', 'ID do arquivo no Drive', item.google_drive_file_id)}
+          ${campo('arquivo_google_drive_preview_url', 'Link de pré-visualização', item.google_drive_preview_url)}
+          ${campo('arquivo_data_referencia', 'Data de referência', item.data_referencia, { type: 'date' })}
+          ${campo('arquivo_data_validade', 'Validade', item.data_validade, { type: 'date' })}
+          ${campo('arquivo_google_drive_folder_id', 'ID da pasta no Drive', item.google_drive_folder_id)}
+          ${campoTextarea('arquivo_descricao', 'Descrição', item.descricao, { rows: 2 })}
+          ${campoTextarea('arquivo_observacoes', 'Observações', item.observacoes, { rows: 2 })}
+        </div>
+        <div class="rh-file-form-actions">
+          <button class="save-btn" type="button" onclick="hubRhDpSalvarArquivo()" ${state.modal.arquivoSaving ? 'disabled' : ''}>
+            ${state.modal.arquivoSaving ? 'Salvando...' : editando ? 'Atualizar arquivo' : 'Vincular arquivo'}
+          </button>
+          ${editando ? '<button class="secondary-btn" type="button" onclick="hubRhDpCancelarArquivo()">Cancelar edição</button>' : ''}
+        </div>
+      </div>
+    `;
+  }
+
   function campoDependente(indice, campoNome, label, valor, type, readonly) {
     return `
       <label>
@@ -714,6 +932,7 @@ export function criarRhDpController({
               ${renderSecaoDocumentos(readonly)}
               ${renderSecaoDependentes(readonly)}
               ${renderSecaoVinculo(readonly)}
+              ${renderSecaoArquivos(readonly)}
               ${renderSecaoObservacoes(readonly)}
             `}
           </div>
@@ -847,6 +1066,53 @@ export function criarRhDpController({
     }
   }
 
+  async function abrirSecao(secao) {
+    if (!['colaboradores', 'demandas', 'fechamentos'].includes(secao)) return;
+    state.secao = secao;
+    if (secao === 'colaboradores') { render(); return; }
+    state.controleLoading = true;
+    state.message = '';
+    render();
+    try {
+      if (secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
+      if (secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
+    } catch (error) {
+      state.message = error.message || 'Não foi possível carregar os controles.';
+      state.messageType = 'error';
+    } finally {
+      state.controleLoading = false;
+      render();
+    }
+  }
+
+  async function salvarDemanda() {
+    const titulo = document.getElementById('rh_demanda_titulo')?.value.trim();
+    if (!titulo) { state.message = 'Informe o título da demanda.'; state.messageType = 'error'; render(); return; }
+    try {
+      await salvarDemandaContabilidadeRhDp({ demanda: {
+        titulo,
+        tipo: document.getElementById('rh_demanda_tipo')?.value,
+        prioridade: document.getElementById('rh_demanda_prioridade')?.value,
+        competencia: document.getElementById('rh_demanda_competencia')?.value,
+        prazo: document.getElementById('rh_demanda_prazo')?.value,
+        descricao: document.getElementById('rh_demanda_descricao')?.value,
+        status: 'rascunho'
+      }});
+      state.message = 'Demanda registrada como rascunho.'; state.messageType = 'success';
+      await abrirSecao('demandas');
+    } catch (error) { state.message = error.message || 'Não foi possível registrar a demanda.'; state.messageType = 'error'; render(); }
+  }
+
+  async function salvarCompetencia() {
+    const competencia = document.getElementById('rh_competencia_mes')?.value;
+    if (!competencia) { state.message = 'Informe a competência.'; state.messageType = 'error'; render(); return; }
+    try {
+      await salvarCompetenciaRhDp({ competencia: { competencia, prazo_envio: document.getElementById('rh_competencia_prazo')?.value, status: 'em_preparacao' }});
+      state.message = 'Competência aberta para preparação.'; state.messageType = 'success';
+      await abrirSecao('fechamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível abrir a competência.'; state.messageType = 'error'; render(); }
+  }
+
   async function abrirCadastro(id = '', modo = 'view') {
     if (modo === 'create' && !podeCriar()) return;
     if (modo === 'edit' && !podeEditar()) return;
@@ -861,6 +1127,13 @@ export function criarRhDpController({
       documentos: novosDocumentos(),
       vinculo: novoVinculo(),
       dependentes: [],
+      arquivos: [],
+      arquivoForm: novoArquivo(id),
+      arquivoEditandoId: '',
+      arquivosLoading: Boolean(id) && podeVerArquivos(),
+      arquivoSaving: false,
+      arquivoMessage: '',
+      arquivoMessageType: '',
       erros: {}
     };
     render();
@@ -876,10 +1149,15 @@ export function criarRhDpController({
       state.modal.documentos = { ...novosDocumentos(), ...(dados.documentos || {}) };
       state.modal.vinculo = { ...novoVinculo(), ...(dados.vinculo || {}) };
       state.modal.dependentes = dados.dependentes || [];
+      state.modal.arquivos = podeVerArquivos()
+        ? await listarArquivosColaboradorRhDp({ colaboradorId: id })
+        : [];
       state.modal.loading = false;
+      state.modal.arquivosLoading = false;
       render();
     } catch (error) {
       state.modal.loading = false;
+      state.modal.arquivosLoading = false;
       state.modal.erros.carregamento = error.message || 'Não foi possível carregar o cadastro.';
       render();
     }
@@ -906,6 +1184,129 @@ export function criarRhDpController({
     capturarFormulario();
     state.modal.dependentes.splice(indice, 1);
     render();
+  }
+
+  function capturarFormularioArquivo() {
+    if (!state.modal.aberto || state.modal.modo === 'view') return;
+    state.modal.arquivoForm = {
+      id: state.modal.arquivoEditandoId,
+      colaborador_id: state.modal.id,
+      categoria: obterValor('arquivo_categoria'),
+      tipo_documento: obterValor('arquivo_tipo_documento'),
+      nome_arquivo: obterValor('arquivo_nome_arquivo'),
+      descricao: obterValor('arquivo_descricao'),
+      origem: 'google_drive',
+      google_drive_file_id: obterValor('arquivo_google_drive_file_id'),
+      google_drive_web_url: obterValor('arquivo_google_drive_web_url'),
+      google_drive_preview_url: obterValor('arquivo_google_drive_preview_url'),
+      google_drive_folder_id: obterValor('arquivo_google_drive_folder_id'),
+      data_referencia: obterValor('arquivo_data_referencia'),
+      data_validade: obterValor('arquivo_data_validade'),
+      observacoes: obterValor('arquivo_observacoes')
+    };
+  }
+
+  function validarArquivo() {
+    const arquivo = state.modal.arquivoForm;
+    if (!state.modal.id) return 'Salve o cadastro antes de vincular arquivos.';
+    if (!arquivo.categoria) return 'Informe a categoria do arquivo.';
+    if (String(arquivo.nome_arquivo || '').trim().length < 2) return 'Informe o nome do arquivo.';
+    if (!arquivo.google_drive_web_url && !arquivo.google_drive_file_id) {
+      return 'Informe o link do Google Drive ou o ID do arquivo.';
+    }
+    if (arquivo.google_drive_web_url && !/^https?:\/\//i.test(arquivo.google_drive_web_url)) {
+      return 'Informe um link válido do Google Drive.';
+    }
+    if (arquivo.google_drive_preview_url && !/^https?:\/\//i.test(arquivo.google_drive_preview_url)) {
+      return 'Informe um link de pré-visualização válido.';
+    }
+    return '';
+  }
+
+  async function recarregarArquivos() {
+    if (!state.modal.id || !podeVerArquivos()) return;
+    state.modal.arquivos = await listarArquivosColaboradorRhDp({ colaboradorId: state.modal.id });
+  }
+
+  function editarArquivo(id) {
+    if (!podeEditarArquivos()) return;
+    const arquivo = state.modal.arquivos.find(item => item.id === id);
+    if (!arquivo) return;
+    state.modal.arquivoForm = { ...novoArquivo(state.modal.id), ...arquivo };
+    state.modal.arquivoEditandoId = id;
+    state.modal.arquivoMessage = '';
+    render();
+  }
+
+  function cancelarArquivo() {
+    state.modal.arquivoForm = novoArquivo(state.modal.id);
+    state.modal.arquivoEditandoId = '';
+    state.modal.arquivoMessage = '';
+    render();
+  }
+
+  async function salvarArquivo() {
+    capturarFormularioArquivo();
+    const erro = validarArquivo();
+    if (erro) {
+      state.modal.arquivoMessage = erro;
+      state.modal.arquivoMessageType = 'error';
+      render();
+      return;
+    }
+
+    state.modal.arquivoSaving = true;
+    state.modal.arquivoMessage = '';
+    render();
+
+    try {
+      await salvarArquivoColaboradorRhDp({
+        id: state.modal.arquivoEditandoId || null,
+        arquivo: state.modal.arquivoForm
+      });
+      await recarregarArquivos();
+      state.modal.arquivoForm = novoArquivo(state.modal.id);
+      state.modal.arquivoEditandoId = '';
+      state.modal.arquivoSaving = false;
+      state.modal.arquivoMessage = 'Arquivo vinculado com sucesso.';
+      state.modal.arquivoMessageType = 'success';
+      render();
+    } catch (error) {
+      state.modal.arquivoSaving = false;
+      state.modal.arquivoMessage = error.message || 'Não foi possível salvar o arquivo.';
+      state.modal.arquivoMessageType = 'error';
+      render();
+    }
+  }
+
+  async function excluirArquivo(id) {
+    if (!podeExcluirArquivos()) return;
+    const arquivo = state.modal.arquivos.find(item => item.id === id);
+    if (!arquivo || !window.confirm(`Deseja excluir o vínculo do arquivo "${arquivo.nome_arquivo || arquivo.tipo_documento || 'sem nome'}"?`)) return;
+
+    state.modal.arquivoMessage = '';
+    render();
+
+    try {
+      await excluirArquivoColaboradorRhDp({ id });
+      await recarregarArquivos();
+      if (state.modal.arquivoEditandoId === id) {
+        state.modal.arquivoForm = novoArquivo(state.modal.id);
+        state.modal.arquivoEditandoId = '';
+      }
+      state.modal.arquivoMessage = 'Arquivo excluído da lista com sucesso.';
+      state.modal.arquivoMessageType = 'success';
+      render();
+    } catch (error) {
+      state.modal.arquivoMessage = error.message || 'Não foi possível excluir o arquivo.';
+      state.modal.arquivoMessageType = 'error';
+      render();
+    }
+  }
+
+  function abrirArquivo(url) {
+    if (!url || !podeBaixarArquivos()) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   async function salvarCadastro() {
@@ -1058,11 +1459,19 @@ export function criarRhDpController({
     hubRhDpRemoverDependente: removerDependente,
     hubRhDpSalvarCadastro: salvarCadastro,
     hubRhDpAlterarStatus: alterarStatus,
+    hubRhDpEditarArquivo: editarArquivo,
+    hubRhDpCancelarArquivo: cancelarArquivo,
+    hubRhDpSalvarArquivo: salvarArquivo,
+    hubRhDpExcluirArquivo: excluirArquivo,
+    hubRhDpAbrirArquivo: abrirArquivo,
     hubRhDpFiltrarBusca: filtrarBusca,
     hubRhDpFiltrarStatus: filtrarStatus,
     hubRhDpSelecionarPagina: selecionarPagina,
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
+    ,hubRhDpAbrirSecao: abrirSecao
+    ,hubRhDpSalvarDemanda: salvarDemanda
+    ,hubRhDpSalvarCompetencia: salvarCompetencia
   });
 
   return {
