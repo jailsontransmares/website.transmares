@@ -240,18 +240,24 @@ function calcularDiasAteAniversario(dataNascimento) {
   return Math.round((aniversario - hojeInicio) / 86400000);
 }
 
-function normalizarAniversariantes(registros, limite) {
+function normalizarAniversariantes(registros, { limite, janelaDias } = {}) {
   const limiteNumerico = Number(limite) || DEFAULT_CONFIG.limite_aniversariantes;
+  const janelaNumerica = Number(janelaDias) || DEFAULT_CONFIG.janela_aniversarios_dias;
 
   return registros
-    .filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo')
-    .map(item => ({
-      id: item.id,
-      nome: item.nome || '',
-      data: item.data_nascimento || '',
-      dias_ate: calcularDiasAteAniversario(item.data_nascimento)
-    }))
-    .filter(item => item.nome && item.dias_ate !== null && item.dias_ate <= limiteNumerico)
+    .filter(item => !['inativo', 'arquivado'].includes(normalizarStatus(item.status || 'ativo')))
+    .map(item => {
+      const dataAniversario = item.data_aniversario || item.data_nascimento || '';
+
+      return {
+        id: item.id,
+        nome: item.nome_completo || item.nome || '',
+        data: dataAniversario,
+        dias_ate: calcularDiasAteAniversario(dataAniversario),
+        origem: item.origem_cadastro || (item.data_aniversario ? 'parceiros_indicacao' : 'aniversarios')
+      };
+    })
+    .filter(item => item.nome && item.dias_ate !== null && item.dias_ate <= janelaNumerica)
     .sort((a, b) => a.dias_ate - b.dias_ate)
     .slice(0, limiteNumerico);
 }
@@ -293,14 +299,16 @@ export async function carregarDadosIniciaisSupabase() {
   const supabase = exigirSupabaseConfigurado();
   const { data: authData } = await supabase.auth.getUser();
 
-  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios] = await Promise.all([
+  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
     selecionarTabelaObrigatoria('usuarios'),
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
     selecionarTabelaOpcional('itens'),
     selecionarTabelaOpcional('avisos_internos'),
-    selecionarTabelaOpcional('aniversarios')
+    selecionarTabelaOpcional('aniversarios'),
+    selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
+    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status'))
   ]);
 
   const config = normalizarConfiguracoes(configuracoes);
@@ -315,6 +323,10 @@ export async function carregarDadosIniciaisSupabase() {
     const favoritos = Array.isArray(dados.favoritos) ? dados.favoritos : [];
     return ['link', 'links'].includes(obterTipoItem(item)) && favoritos.includes(usuario.id);
   });
+  const aniversariantesCadastros = [
+    ...parceirosIndicacao.map(item => ({ ...item, origem_cadastro: 'parceiros_indicacao' })),
+    ...colaboradoresRhDp.map(item => ({ ...item, origem_cadastro: 'rh_colaboradores' }))
+  ];
 
   return {
     usuario,
@@ -322,7 +334,13 @@ export async function carregarDadosIniciaisSupabase() {
     permissions,
     cards: normalizarCards(moduloItens, usuario, permissions),
     avisos: normalizarAvisos(avisosInternos, config.limite_avisos),
-    aniversariantes: normalizarAniversariantes(aniversarios, config.limite_aniversariantes),
+    aniversariantes: normalizarAniversariantes(
+      aniversariantesCadastros.length ? aniversariantesCadastros : aniversarios,
+      {
+        limite: config.limite_aniversariantes,
+        janelaDias: config.janela_aniversarios_dias
+      }
+    ),
     favoritos: normalizarFavoritos(linkItens, config.limite_favoritos),
     meta: {
       modo_visual_efetivo: usuario.preferencia_modo_visual || config.modo_visual_padrao || 'claro',

@@ -262,14 +262,53 @@ export function criarRhDpController({
     afastamentos: [],
     ocorrencias: [],
     controleLoading: false,
+    feriasModal: {
+      aberto: false,
+      saving: false
+    },
+    afastamentoModal: {
+      aberto: false,
+      saving: false
+    },
+    ocorrenciaModal: {
+      aberto: false,
+      saving: false
+    },
+    demandaModal: {
+      aberto: false,
+      saving: false
+    },
+    competenciaModal: {
+      aberto: false,
+      saving: false
+    },
+    eventoModal: {
+      aberto: false,
+      saving: false,
+      competenciaId: ''
+    },
+    desligamentoModal: {
+      aberto: false,
+      saving: false
+    },
     busca: '',
     filtroStatus: 'todos',
     pagina: 1,
-    modal: {
-      aberto: false,
-      modo: 'view',
-      id: '',
-      loading: false,
+    modal: criarEstadoModal()
+  };
+
+  function criarEstadoModal({
+    aberto = false,
+    modo = 'view',
+    id = '',
+    loading = false,
+    arquivosLoading = false
+  } = {}) {
+    return {
+      aberto,
+      modo,
+      id,
+      loading,
       saving: false,
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
@@ -280,15 +319,15 @@ export function criarRhDpController({
       movimentacoes: [],
       checklist: [],
       arquivos: [],
-      arquivoForm: novoArquivo(),
+      arquivoForm: novoArquivo(id),
       arquivoEditandoId: '',
-      arquivosLoading: false,
+      arquivosLoading,
       arquivoSaving: false,
       arquivoMessage: '',
       arquivoMessageType: '',
       erros: {}
-    }
-  };
+    };
+  }
 
   function podeVer() {
     return pode('rh_dp.colaboradores', 'view');
@@ -368,32 +407,390 @@ export function criarRhDpController({
   function renderFerias() {
     if (!podeVerFerias()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso às férias.</p></div>';
     const abertas = state.ferias.filter(item => !['confirmado_contabilidade', 'cancelado'].includes(item.status));
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Férias</h2><p>Planejamento, comunicação e confirmação pela contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não calcula direito, abono ou pagamento de férias. A contabilidade é a fonte oficial.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Registros em aberto</span><strong>${abertas.length}</strong></article><article class="rh-summary-card"><span>Em divergência</span><strong>${state.ferias.filter(item => item.status === 'divergente').length}</strong></article><article class="rh-summary-card"><span>Confirmados</span><strong>${state.ferias.filter(item => item.status === 'confirmado_contabilidade').length}</strong></article></div>${podeCriarFerias() ? `<details class="rh-control-form"><summary>Planejar férias</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_ferias_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Início do período aquisitivo *</span><input id="rh_ferias_aquisitivo_inicio" class="config-input" type="date"></label><label><span>Fim do período aquisitivo *</span><input id="rh_ferias_aquisitivo_fim" class="config-input" type="date"></label><label><span>Início do gozo *</span><input id="rh_ferias_inicio" class="config-input" type="date"></label><label><span>Fim do gozo *</span><input id="rh_ferias_fim" class="config-input" type="date"></label><label><span>Dias planejados *</span><input id="rh_ferias_dias" class="config-input" type="number" min="1" max="30"></label><label class="rh-checkbox"><input id="rh_ferias_abono" type="checkbox"> <span>Abono pecuniário solicitado</span></label><label class="rh-span-2"><span>Observações</span><textarea id="rh_ferias_observacoes" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarFerias()">Registrar planejamento</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando férias...</p>' : `<div class="rh-control-list">${state.ferias.length ? state.ferias.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)} · ${item.dias_gozo} dia(s)</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum planejamento de férias registrado.</p>'}</div>`}</section>`;
+    return `
+      <section class="admin-panel rh-panel">
+        <div class="admin-panel-header rh-panel-header">
+          <div>
+            <h2>Férias</h2>
+            <p>Planejamento, comunicação e confirmação pela contabilidade.</p>
+          </div>
+          ${podeCriarFerias() ? '<button class="save-btn" type="button" data-rh-action="open-ferias-modal">Planejar férias</button>' : ''}
+        </div>
+        <p class="admin-message rh-internal-notice">Não calcula direito, abono ou pagamento de férias. A contabilidade é a fonte oficial.</p>
+        ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+        <div class="rh-summary-grid">
+          <article class="rh-summary-card"><span>Registros em aberto</span><strong>${abertas.length}</strong></article>
+          <article class="rh-summary-card"><span>Em divergência</span><strong>${state.ferias.filter(item => item.status === 'divergente').length}</strong></article>
+          <article class="rh-summary-card"><span>Confirmados</span><strong>${state.ferias.filter(item => item.status === 'confirmado_contabilidade').length}</strong></article>
+        </div>
+        ${state.controleLoading
+          ? '<p class="quick-link-empty">Carregando férias...</p>'
+          : `<div class="rh-control-list">${state.ferias.length ? state.ferias.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)} · ${item.dias_gozo} dia(s)</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum planejamento de férias registrado.</p>'}</div>`}
+      </section>
+      ${renderModalFerias()}
+    `;
+  }
+
+  function renderFormularioFerias() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Colaborador *</span><select id="rh_ferias_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Início do período aquisitivo *</span><input id="rh_ferias_aquisitivo_inicio" class="config-input" type="date"></label>
+        <label><span>Fim do período aquisitivo *</span><input id="rh_ferias_aquisitivo_fim" class="config-input" type="date"></label>
+        <label><span>Início do gozo *</span><input id="rh_ferias_inicio" class="config-input" type="date"></label>
+        <label><span>Fim do gozo *</span><input id="rh_ferias_fim" class="config-input" type="date"></label>
+        <label><span>Dias planejados *</span><input id="rh_ferias_dias" class="config-input" type="number" min="1" max="30"></label>
+        <label class="rh-checkbox"><input id="rh_ferias_abono" type="checkbox"> <span>Abono pecuniário solicitado</span></label>
+        <label class="rh-span-2"><span>Observações</span><textarea id="rh_ferias_observacoes" class="config-input rh-textarea" rows="2"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderModalFerias() {
+    if (!state.feriasModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Planejar férias">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div>
+              <h3>Planejar férias</h3>
+              <p>Registro interno para conferência e retorno da contabilidade.</p>
+            </div>
+            <button class="secondary-btn" type="button" data-rh-action="close-ferias-modal" ${state.feriasModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioFerias()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-ferias-modal" ${state.feriasModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-ferias-modal" ${state.feriasModal.saving ? 'disabled' : ''}>${state.feriasModal.saving ? 'Salvando...' : 'Registrar planejamento'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderAfastamentosOcorrencias() {
     if (!podeVerOcorrencias()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso a afastamentos e ocorrências.</p></div>';
     const emAberto = state.afastamentos.filter(item => !['retorno_confirmado', 'cancelado'].includes(item.status));
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Afastamentos e ocorrências</h2><p>Registro, acompanhamento de retorno e providências internas.</p></div></div><p class="admin-message rh-internal-notice">Acidentes e doenças ocupacionais são acompanhados aqui, mas medicina ocupacional e obrigações oficiais ficam fora do Hub.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Afastamentos em acompanhamento</span><strong>${emAberto.length}</strong></article><article class="rh-summary-card"><span>Ocorrências abertas</span><strong>${state.ocorrencias.filter(item => !item.encerrada_em).length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.afastamentos.filter(item => item.status === 'divergente').length}</strong></article></div>${podeCriarOcorrencias() ? `<details class="rh-control-form"><summary>Novo afastamento</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_afast_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Tipo *</span><select id="rh_afast_tipo" class="config-input"><option value="">Selecione</option><option value="atestado_medico">Atestado médico</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="licenca_maternidade">Licença-maternidade</option><option value="licenca_paternidade">Licença-paternidade</option><option value="outro">Outro</option></select></label><label><span>Início *</span><input id="rh_afast_inicio" class="config-input" type="date"></label><label><span>Previsão de retorno</span><input id="rh_afast_previsao" class="config-input" type="date"></label><label><span>Referência CID (opcional)</span><input id="rh_afast_cid" class="config-input" type="text"></label><label class="rh-checkbox"><input id="rh_afast_comunicacao" type="checkbox"> <span>Comunicação emitida</span></label><label class="rh-span-2"><span>Motivo / resumo *</span><textarea id="rh_afast_motivo" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarAfastamento()">Registrar afastamento</button></details><details class="rh-control-form"><summary>Nova ocorrência</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_ocorrencia_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Categoria *</span><select id="rh_ocorrencia_categoria" class="config-input"><option value="">Selecione</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="disciplinar">Disciplinar</option><option value="seguranca">Segurança</option><option value="administrativa">Administrativa</option><option value="outro">Outro</option></select></label><label><span>Data *</span><input id="rh_ocorrencia_data" class="config-input" type="date"></label><label class="rh-span-2"><span>Título *</span><input id="rh_ocorrencia_titulo" class="config-input" type="text"></label><label class="rh-span-2"><span>Descrição *</span><textarea id="rh_ocorrencia_descricao" class="config-input rh-textarea" rows="2"></textarea></label><label class="rh-span-2"><span>Providências</span><textarea id="rh_ocorrencia_providencias" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarOcorrencia()">Registrar ocorrência</button></details>` : ''}<div class="rh-control-list">${state.afastamentos.length ? state.afastamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</strong><span>Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno previsto ${formatarData(item.previsao_retorno_em)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum afastamento registrado.</p>'}${state.ocorrencias.length ? state.ocorrencias.map(item => `<article><div><strong>${escapeHtml(item.titulo)} · ${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.data_ocorrencia)} · ${escapeHtml(item.categoria.replaceAll('_',' '))}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma ocorrência registrada.</p>'}</div></section>`;
+    return `
+      <section class="admin-panel rh-panel">
+        <div class="admin-panel-header rh-panel-header">
+          <div>
+            <h2>Afastamentos e ocorrências</h2>
+            <p>Registro, acompanhamento de retorno e providências internas.</p>
+          </div>
+          ${podeCriarOcorrencias() ? '<div class="rh-row-actions"><button class="save-btn" type="button" data-rh-action="open-afastamento-modal">Novo afastamento</button><button class="secondary-btn" type="button" data-rh-action="open-ocorrencia-modal">Nova ocorrência</button></div>' : ''}
+        </div>
+        <p class="admin-message rh-internal-notice">Acidentes e doenças ocupacionais são acompanhados aqui, mas medicina ocupacional e obrigações oficiais ficam fora do Hub.</p>
+        ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+        <div class="rh-summary-grid">
+          <article class="rh-summary-card"><span>Afastamentos em acompanhamento</span><strong>${emAberto.length}</strong></article>
+          <article class="rh-summary-card"><span>Ocorrências abertas</span><strong>${state.ocorrencias.filter(item => !item.encerrada_em).length}</strong></article>
+          <article class="rh-summary-card"><span>Com divergência</span><strong>${state.afastamentos.filter(item => item.status === 'divergente').length}</strong></article>
+        </div>
+        <div class="rh-control-list">
+          ${state.afastamentos.length ? state.afastamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</strong><span>Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno previsto ${formatarData(item.previsao_retorno_em)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum afastamento registrado.</p>'}
+          ${state.ocorrencias.length ? state.ocorrencias.map(item => `<article><div><strong>${escapeHtml(item.titulo)} · ${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.data_ocorrencia)} · ${escapeHtml(item.categoria.replaceAll('_',' '))}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma ocorrência registrada.</p>'}
+        </div>
+      </section>
+      ${renderModalAfastamento()}
+      ${renderModalOcorrencia()}
+    `;
+  }
+
+  function renderFormularioAfastamento() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Colaborador *</span><select id="rh_afast_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Tipo *</span><select id="rh_afast_tipo" class="config-input"><option value="">Selecione</option><option value="atestado_medico">Atestado médico</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="licenca_maternidade">Licença-maternidade</option><option value="licenca_paternidade">Licença-paternidade</option><option value="outro">Outro</option></select></label>
+        <label><span>Início *</span><input id="rh_afast_inicio" class="config-input" type="date"></label>
+        <label><span>Previsão de retorno</span><input id="rh_afast_previsao" class="config-input" type="date"></label>
+        <label><span>Referência CID (opcional)</span><input id="rh_afast_cid" class="config-input" type="text"></label>
+        <label class="rh-checkbox"><input id="rh_afast_comunicacao" type="checkbox"> <span>Comunicação emitida</span></label>
+        <label class="rh-span-2"><span>Motivo / resumo *</span><textarea id="rh_afast_motivo" class="config-input rh-textarea" rows="2"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderFormularioOcorrencia() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Colaborador *</span><select id="rh_ocorrencia_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Categoria *</span><select id="rh_ocorrencia_categoria" class="config-input"><option value="">Selecione</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="disciplinar">Disciplinar</option><option value="seguranca">Segurança</option><option value="administrativa">Administrativa</option><option value="outro">Outro</option></select></label>
+        <label><span>Data *</span><input id="rh_ocorrencia_data" class="config-input" type="date"></label>
+        <label class="rh-span-2"><span>Título *</span><input id="rh_ocorrencia_titulo" class="config-input" type="text"></label>
+        <label class="rh-span-2"><span>Descrição *</span><textarea id="rh_ocorrencia_descricao" class="config-input rh-textarea" rows="2"></textarea></label>
+        <label class="rh-span-2"><span>Providências</span><textarea id="rh_ocorrencia_providencias" class="config-input rh-textarea" rows="2"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderModalAfastamento() {
+    if (!state.afastamentoModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Novo afastamento">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Novo afastamento</h3><p>Registro interno para acompanhamento e conferência.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-afastamento-modal" ${state.afastamentoModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioAfastamento()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-afastamento-modal" ${state.afastamentoModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-afastamento-modal" ${state.afastamentoModal.saving ? 'disabled' : ''}>${state.afastamentoModal.saving ? 'Salvando...' : 'Registrar afastamento'}</button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderModalOcorrencia() {
+    if (!state.ocorrenciaModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Nova ocorrência">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Nova ocorrência</h3><p>Registro interno de ocorrência e providências.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-ocorrencia-modal" ${state.ocorrenciaModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioOcorrencia()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-ocorrencia-modal" ${state.ocorrenciaModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-ocorrencia-modal" ${state.ocorrenciaModal.saving ? 'disabled' : ''}>${state.ocorrenciaModal.saving ? 'Salvando...' : 'Registrar ocorrência'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderDemandas() {
     if (!podeVerDemandas()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso às demandas à contabilidade.</p></div>';
     const abertas = state.demandas.filter(item => !['concluido', 'cancelado'].includes(item.status));
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Demandas à contabilidade</h2><p>Controle de solicitações, prazos, retornos e divergências.</p></div></div><p class="admin-message rh-internal-notice">Esta área não transmite eventos oficiais; ela organiza a comunicação e a conferência interna.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Em aberto</span><strong>${abertas.length}</strong></article><article class="rh-summary-card"><span>Com prazo vencido</span><strong>${abertas.filter(item => item.prazo && item.prazo < new Date().toISOString().slice(0, 10)).length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.demandas.filter(item => item.divergencia_descricao).length}</strong></article></div>${podeCriarDemandas() ? `<details class="rh-control-form"><summary>Nova demanda</summary><div class="rh-form-grid"><label><span>Tipo *</span><select id="rh_demanda_tipo" class="config-input"><option value="alteracao_cadastral">Alteração cadastral</option><option value="ferias">Férias</option><option value="afastamento">Afastamento</option><option value="beneficio">Benefício</option><option value="remuneracao">Remuneração</option><option value="outro">Outro</option></select></label><label><span>Prioridade</span><select id="rh_demanda_prioridade" class="config-input"><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option><option value="baixa">Baixa</option></select></label><label class="rh-span-2"><span>Título *</span><input id="rh_demanda_titulo" class="config-input" type="text" placeholder="Ex.: Alteração de jornada"></label><label><span>Competência</span><input id="rh_demanda_competencia" class="config-input" type="month"></label><label><span>Prazo</span><input id="rh_demanda_prazo" class="config-input" type="date"></label><label class="rh-span-2"><span>Descrição</span><textarea id="rh_demanda_descricao" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarDemanda()">Registrar demanda</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando demandas...</p>' : `<div class="rh-control-list">${state.demandas.length ? state.demandas.map(item => `<article><div><strong>${escapeHtml(item.titulo)}</strong><span>${escapeHtml(item.rh_colaboradores?.nome_completo || formatarCategoriaArquivo(item.tipo))}${item.prazo ? ` · prazo ${formatarData(item.prazo)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma demanda registrada.</p>'}</div>`}</section>`;
+    return `
+      <section class="admin-panel rh-panel">
+        <div class="admin-panel-header rh-panel-header">
+          <div>
+            <h2>Demandas à contabilidade</h2>
+            <p>Controle de solicitações, prazos, retornos e divergências.</p>
+          </div>
+          ${podeCriarDemandas() ? '<button class="save-btn" type="button" data-rh-action="open-demanda-modal">Nova demanda</button>' : ''}
+        </div>
+        <p class="admin-message rh-internal-notice">Esta área não transmite eventos oficiais; ela organiza a comunicação e a conferência interna.</p>
+        ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+        <div class="rh-summary-grid">
+          <article class="rh-summary-card"><span>Em aberto</span><strong>${abertas.length}</strong></article>
+          <article class="rh-summary-card"><span>Com prazo vencido</span><strong>${abertas.filter(item => item.prazo && item.prazo < new Date().toISOString().slice(0, 10)).length}</strong></article>
+          <article class="rh-summary-card"><span>Com divergência</span><strong>${state.demandas.filter(item => item.divergencia_descricao).length}</strong></article>
+        </div>
+        ${state.controleLoading
+          ? '<p class="quick-link-empty">Carregando demandas...</p>'
+          : `<div class="rh-control-list">${state.demandas.length ? state.demandas.map(item => `<article><div><strong>${escapeHtml(item.titulo)}</strong><span>${escapeHtml(item.rh_colaboradores?.nome_completo || formatarCategoriaArquivo(item.tipo))}${item.prazo ? ` · prazo ${formatarData(item.prazo)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma demanda registrada.</p>'}</div>`}
+      </section>
+      ${renderModalDemanda()}
+    `;
+  }
+
+  function renderFormularioDemanda() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Tipo *</span><select id="rh_demanda_tipo" class="config-input"><option value="alteracao_cadastral">Alteração cadastral</option><option value="ferias">Férias</option><option value="afastamento">Afastamento</option><option value="beneficio">Benefício</option><option value="remuneracao">Remuneração</option><option value="outro">Outro</option></select></label>
+        <label><span>Prioridade</span><select id="rh_demanda_prioridade" class="config-input"><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option><option value="baixa">Baixa</option></select></label>
+        <label class="rh-span-2"><span>Título *</span><input id="rh_demanda_titulo" class="config-input" type="text" placeholder="Ex.: Alteração de jornada"></label>
+        <label><span>Competência</span><input id="rh_demanda_competencia" class="config-input" type="month"></label>
+        <label><span>Prazo</span><input id="rh_demanda_prazo" class="config-input" type="date"></label>
+        <label class="rh-span-2"><span>Descrição</span><textarea id="rh_demanda_descricao" class="config-input rh-textarea" rows="2"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderModalDemanda() {
+    if (!state.demandaModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Nova demanda">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Nova demanda</h3><p>Solicitação interna para organização e conferência com a contabilidade.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-demanda-modal" ${state.demandaModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioDemanda()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-demanda-modal" ${state.demandaModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-demanda-modal" ${state.demandaModal.saving ? 'disabled' : ''}>${state.demandaModal.saving ? 'Salvando...' : 'Registrar demanda'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderFechamentos() {
     if (!podeVerFechamentos()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso ao fechamento mensal.</p></div>';
     const emAberto = state.competencias.filter(item => item.status !== 'concluido').length;
     const eventosPendentes = state.competencias.flatMap(item => item.rh_eventos_competencia || []).filter(item => ['pendente', 'enviado', 'divergencia'].includes(item.status)).length;
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Fechamento mensal</h2><p>Competências, eventos enviados, retorno e conferência com a contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não há cálculo de folha, impostos ou transmissão ao eSocial neste módulo.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Competências abertas</span><strong>${emAberto}</strong></article><article class="rh-summary-card"><span>Eventos pendentes</span><strong>${eventosPendentes}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.competencias.filter(item => item.status === 'com_divergencia').length}</strong></article></div>${podeCriarFechamentos() ? `<details class="rh-control-form"><summary>Nova competência</summary><div class="rh-form-grid"><label><span>Competência *</span><input id="rh_competencia_mes" class="config-input" type="month" required></label><label><span>Prazo de envio</span><input id="rh_competencia_prazo" class="config-input" type="date"></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarCompetencia()">Abrir competência</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando competências...</p>' : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => { const eventos = item.rh_eventos_competencia || []; return `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${eventos.length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span>${eventos.length ? `<small>${eventos.map(evento => `${escapeHtml(evento.tipo.replaceAll('_',' '))}: ${escapeHtml(evento.rh_colaboradores?.nome_completo || evento.descricao)} (${escapeHtml(evento.status)})${podeEditarFechamentos() && !['confirmado','dispensado'].includes(evento.status) ? ` <button type="button" class="icon-action-btn" onclick="hubRhDpAtualizarEvento('${evento.id}')">Atualizar</button>` : ''}`).join(' · ')}</small>` : ''}</div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span>${podeEditarFechamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpAdicionarEvento('${item.id}')">Evento</button><button type="button" class="icon-action-btn" ${eventos.some(evento => ['pendente','enviado','divergencia'].includes(evento.status)) ? 'disabled' : ''} onclick="hubRhDpConcluirCompetencia('${item.id}')">Concluir</button>` : ''}</div></article>`; }).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}</section>`;
+    return `
+      <section class="admin-panel rh-panel">
+        <div class="admin-panel-header rh-panel-header">
+          <div>
+            <h2>Fechamento mensal</h2>
+            <p>Competências, eventos enviados, retorno e conferência com a contabilidade.</p>
+          </div>
+          ${podeCriarFechamentos() ? '<button class="save-btn" type="button" data-rh-action="open-competencia-modal">Nova competência</button>' : ''}
+        </div>
+        <p class="admin-message rh-internal-notice">Não há cálculo de folha, impostos ou transmissão ao eSocial neste módulo.</p>
+        ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+        <div class="rh-summary-grid">
+          <article class="rh-summary-card"><span>Competências abertas</span><strong>${emAberto}</strong></article>
+          <article class="rh-summary-card"><span>Eventos pendentes</span><strong>${eventosPendentes}</strong></article>
+          <article class="rh-summary-card"><span>Com divergência</span><strong>${state.competencias.filter(item => item.status === 'com_divergencia').length}</strong></article>
+        </div>
+        ${state.controleLoading
+          ? '<p class="quick-link-empty">Carregando competências...</p>'
+          : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => { const eventos = item.rh_eventos_competencia || []; return `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${eventos.length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span>${eventos.length ? `<small>${eventos.map(evento => `${escapeHtml(evento.tipo.replaceAll('_',' '))}: ${escapeHtml(evento.rh_colaboradores?.nome_completo || evento.descricao)} (${escapeHtml(evento.status)})${podeEditarFechamentos() && !['confirmado','dispensado'].includes(evento.status) ? ` <button type="button" class="icon-action-btn" onclick="hubRhDpAtualizarEvento('${evento.id}')">Atualizar</button>` : ''}`).join(' · ')}</small>` : ''}</div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span>${podeEditarFechamentos() ? `<button type="button" class="icon-action-btn" data-rh-action="open-evento-modal" data-competencia-id="${escapeAttr(item.id)}">Evento</button><button type="button" class="icon-action-btn" ${eventos.some(evento => ['pendente','enviado','divergencia'].includes(evento.status)) ? 'disabled' : ''} onclick="hubRhDpConcluirCompetencia('${item.id}')">Concluir</button>` : ''}</div></article>`; }).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}
+      </section>
+      ${renderModalCompetencia()}
+      ${renderModalEvento()}
+    `;
+  }
+
+  function renderFormularioCompetencia() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Competência *</span><input id="rh_competencia_mes" class="config-input" type="month" required></label>
+        <label><span>Prazo de envio</span><input id="rh_competencia_prazo" class="config-input" type="date"></label>
+      </div>
+    `;
+  }
+
+  function renderFormularioEvento() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Tipo *</span><select id="rh_evento_tipo" class="config-input"><option value="admissao">Admissão</option><option value="alteracao_cadastral">Alteração cadastral</option><option value="ferias">Férias</option><option value="afastamento">Afastamento</option><option value="desligamento">Desligamento</option><option value="beneficio">Benefício</option><option value="remuneracao">Remuneração</option><option value="variavel">Variável</option><option value="outro">Outro</option></select></label>
+        <label class="rh-span-2"><span>Descrição *</span><textarea id="rh_evento_descricao" class="config-input rh-textarea" rows="3"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderModalCompetencia() {
+    if (!state.competenciaModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Nova competência">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Nova competência</h3><p>Abertura do ciclo mensal para preparação e conferência.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-competencia-modal" ${state.competenciaModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioCompetencia()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-competencia-modal" ${state.competenciaModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-competencia-modal" ${state.competenciaModal.saving ? 'disabled' : ''}>${state.competenciaModal.saving ? 'Salvando...' : 'Abrir competência'}</button>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  function renderModalEvento() {
+    if (!state.eventoModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Novo evento">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Novo evento</h3><p>Evento para conferência com a contabilidade dentro da competência.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-evento-modal" ${state.eventoModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioEvento()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-evento-modal" ${state.eventoModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-evento-modal" ${state.eventoModal.saving ? 'disabled' : ''}>${state.eventoModal.saving ? 'Salvando...' : 'Incluir evento'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderDesligamentos() {
     if (!podeVerDesligamentos()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso aos desligamentos.</p></div>';
     const abertos = state.desligamentos.filter(item => !['concluido', 'cancelado'].includes(item.status));
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Desligamentos</h2><p>Controle do processo interno, comunicação e checklist de saída.</p></div></div><p class="admin-message rh-internal-notice">A contabilidade continua responsável por cálculos, documentos e registros oficiais.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Em andamento</span><strong>${abertos.length}</strong></article><article class="rh-summary-card"><span>Aguardando retorno</span><strong>${state.desligamentos.filter(item => item.status === 'aguardando_retorno').length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.desligamentos.filter(item => item.status === 'divergente').length}</strong></article></div>${podeCriarDesligamentos() ? `<details class="rh-control-form"><summary>Novo desligamento</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_desligamento_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Tipo *</span><select id="rh_desligamento_tipo" class="config-input"><option value="pedido_colaborador">Pedido do colaborador</option><option value="iniciativa_empresa">Iniciativa da empresa</option><option value="termino_contrato">Término de contrato</option><option value="acordo">Acordo</option><option value="aposentadoria">Aposentadoria</option><option value="outro">Outro</option></select></label><label><span>Competência *</span><input id="rh_desligamento_competencia" class="config-input" type="month"></label><label><span>Último dia de trabalho</span><input id="rh_desligamento_ultimo_dia" class="config-input" type="date"></label><label><span>Aviso prévio</span><select id="rh_desligamento_aviso" class="config-input"><option value="">Não informado</option><option value="trabalhado">Trabalhado</option><option value="indenizado">Indenizado</option><option value="dispensado">Dispensado</option><option value="nao_aplicavel">Não aplicável</option></select></label><label class="rh-span-2"><span>Resumo / motivo *</span><textarea id="rh_desligamento_motivo" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarDesligamento()">Registrar desligamento</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando desligamentos...</p>' : `<div class="rh-control-list">${state.desligamentos.length ? state.desligamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · competência ${formatarData(item.competencia).slice(3)}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}</span><small>${(item.rh_checklist_desligamento || []).filter(check => check.status === 'concluido').length}/6 itens da checklist concluídos</small></div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span>${podeEditarDesligamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpConcluirChecklistDesligamento('${item.id}')">Checklist</button>` : ''}</div></article>`).join('') : '<p class="quick-link-empty">Nenhum desligamento registrado.</p>'}</div>`}</section>`;
+    return `
+      <section class="admin-panel rh-panel">
+        <div class="admin-panel-header rh-panel-header">
+          <div>
+            <h2>Desligamentos</h2>
+            <p>Controle do processo interno, comunicação e checklist de saída.</p>
+          </div>
+          ${podeCriarDesligamentos() ? '<button class="save-btn" type="button" data-rh-action="open-desligamento-modal">Novo desligamento</button>' : ''}
+        </div>
+        <p class="admin-message rh-internal-notice">A contabilidade continua responsável por cálculos, documentos e registros oficiais.</p>
+        ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+        <div class="rh-summary-grid">
+          <article class="rh-summary-card"><span>Em andamento</span><strong>${abertos.length}</strong></article>
+          <article class="rh-summary-card"><span>Aguardando retorno</span><strong>${state.desligamentos.filter(item => item.status === 'aguardando_retorno').length}</strong></article>
+          <article class="rh-summary-card"><span>Com divergência</span><strong>${state.desligamentos.filter(item => item.status === 'divergente').length}</strong></article>
+        </div>
+        ${state.controleLoading
+          ? '<p class="quick-link-empty">Carregando desligamentos...</p>'
+          : `<div class="rh-control-list">${state.desligamentos.length ? state.desligamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · competência ${formatarData(item.competencia).slice(3)}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}</span><small>${(item.rh_checklist_desligamento || []).filter(check => check.status === 'concluido').length}/6 itens da checklist concluídos</small></div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span>${podeEditarDesligamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpConcluirChecklistDesligamento('${item.id}')">Checklist</button>` : ''}</div></article>`).join('') : '<p class="quick-link-empty">Nenhum desligamento registrado.</p>'}</div>`}
+      </section>
+      ${renderModalDesligamento()}
+    `;
+  }
+
+  function renderFormularioDesligamento() {
+    return `
+      <div class="rh-form-grid">
+        <label><span>Colaborador *</span><select id="rh_desligamento_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Tipo *</span><select id="rh_desligamento_tipo" class="config-input"><option value="pedido_colaborador">Pedido do colaborador</option><option value="iniciativa_empresa">Iniciativa da empresa</option><option value="termino_contrato">Término de contrato</option><option value="acordo">Acordo</option><option value="aposentadoria">Aposentadoria</option><option value="outro">Outro</option></select></label>
+        <label><span>Competência *</span><input id="rh_desligamento_competencia" class="config-input" type="month"></label>
+        <label><span>Último dia de trabalho</span><input id="rh_desligamento_ultimo_dia" class="config-input" type="date"></label>
+        <label><span>Aviso prévio</span><select id="rh_desligamento_aviso" class="config-input"><option value="">Não informado</option><option value="trabalhado">Trabalhado</option><option value="indenizado">Indenizado</option><option value="dispensado">Dispensado</option><option value="nao_aplicavel">Não aplicável</option></select></label>
+        <label class="rh-span-2"><span>Resumo / motivo *</span><textarea id="rh_desligamento_motivo" class="config-input rh-textarea" rows="2"></textarea></label>
+      </div>
+    `;
+  }
+
+  function renderModalDesligamento() {
+    if (!state.desligamentoModal.aberto) return '';
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="Novo desligamento">
+        <section class="small-modal rh-modal">
+          <div class="small-modal-header">
+            <div><h3>Novo desligamento</h3><p>Registro interno do processo de saída para acompanhamento.</p></div>
+            <button class="secondary-btn" type="button" data-rh-action="close-desligamento-modal" ${state.desligamentoModal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${state.message && state.messageType === 'error' ? `<p class="admin-message error">${escapeHtml(state.message)}</p>` : ''}
+            ${renderFormularioDesligamento()}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" data-rh-action="close-desligamento-modal" ${state.desligamentoModal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" data-rh-action="save-desligamento-modal" ${state.desligamentoModal.saving ? 'disabled' : ''}>${state.desligamentoModal.saving ? 'Salvando...' : 'Registrar desligamento'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderDashboard() {
@@ -563,7 +960,7 @@ export function criarRhDpController({
               <h2>Colaboradores</h2>
               <p>Cadastro pessoal para controle interno da Transmares.</p>
             </div>
-            ${podeCriar() ? '<button class="save-btn" type="button" onclick="hubRhDpAbrirCadastro(\'\', \'create\')">Incluir</button>' : ''}
+            ${podeCriar() ? '<button class="save-btn" type="button" data-rh-action="open-create">Incluir</button>' : ''}
           </div>
 
           <p class="admin-message rh-internal-notice">
@@ -583,6 +980,100 @@ export function criarRhDpController({
       descricaoPagina: 'Cadastro e gestão interna de colaboradores.',
       classeConteudo: 'rh-dp-page',
       conteudo
+    });
+    conectarEventos();
+  }
+
+  function conectarEventos() {
+    document.querySelector('[data-rh-action="open-create"]')?.addEventListener('click', () => {
+      abrirCadastro('', 'create');
+    });
+    document.querySelectorAll('[data-rh-action="close-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharCadastro();
+      });
+    });
+    document.querySelector('[data-rh-action="save-modal"]')?.addEventListener('click', () => {
+      salvarCadastro();
+    });
+    document.querySelector('[data-rh-action="open-ferias-modal"]')?.addEventListener('click', () => {
+      abrirModalFerias();
+    });
+    document.querySelectorAll('[data-rh-action="close-ferias-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalFerias();
+      });
+    });
+    document.querySelector('[data-rh-action="save-ferias-modal"]')?.addEventListener('click', () => {
+      salvarFerias();
+    });
+    document.querySelector('[data-rh-action="open-afastamento-modal"]')?.addEventListener('click', () => {
+      abrirModalAfastamento();
+    });
+    document.querySelectorAll('[data-rh-action="close-afastamento-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalAfastamento();
+      });
+    });
+    document.querySelector('[data-rh-action="save-afastamento-modal"]')?.addEventListener('click', () => {
+      salvarAfastamento();
+    });
+    document.querySelector('[data-rh-action="open-ocorrencia-modal"]')?.addEventListener('click', () => {
+      abrirModalOcorrencia();
+    });
+    document.querySelectorAll('[data-rh-action="close-ocorrencia-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalOcorrencia();
+      });
+    });
+    document.querySelector('[data-rh-action="save-ocorrencia-modal"]')?.addEventListener('click', () => {
+      salvarOcorrencia();
+    });
+    document.querySelector('[data-rh-action="open-demanda-modal"]')?.addEventListener('click', () => {
+      abrirModalDemanda();
+    });
+    document.querySelectorAll('[data-rh-action="close-demanda-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalDemanda();
+      });
+    });
+    document.querySelector('[data-rh-action="save-demanda-modal"]')?.addEventListener('click', () => {
+      salvarDemanda();
+    });
+    document.querySelector('[data-rh-action="open-competencia-modal"]')?.addEventListener('click', () => {
+      abrirModalCompetencia();
+    });
+    document.querySelectorAll('[data-rh-action="close-competencia-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalCompetencia();
+      });
+    });
+    document.querySelector('[data-rh-action="save-competencia-modal"]')?.addEventListener('click', () => {
+      salvarCompetencia();
+    });
+    document.querySelectorAll('[data-rh-action="open-evento-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        abrirModalEvento(botao.dataset.competenciaId || '');
+      });
+    });
+    document.querySelectorAll('[data-rh-action="close-evento-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalEvento();
+      });
+    });
+    document.querySelector('[data-rh-action="save-evento-modal"]')?.addEventListener('click', () => {
+      salvarEvento();
+    });
+    document.querySelector('[data-rh-action="open-desligamento-modal"]')?.addEventListener('click', () => {
+      abrirModalDesligamento();
+    });
+    document.querySelectorAll('[data-rh-action="close-desligamento-modal"]').forEach(botao => {
+      botao.addEventListener('click', () => {
+        fecharModalDesligamento();
+      });
+    });
+    document.querySelector('[data-rh-action="save-desligamento-modal"]')?.addEventListener('click', () => {
+      salvarDesligamento();
     });
   }
 
@@ -1009,7 +1500,7 @@ export function criarRhDpController({
               <h3>${escapeHtml(titulo)}</h3>
               <p>Cadastro pessoal e documentos para controle interno.</p>
             </div>
-            <button class="secondary-btn" type="button" onclick="hubRhDpFecharCadastro()" ${state.modal.saving ? 'disabled' : ''}>Fechar</button>
+            <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>Fechar</button>
           </div>
 
           <div class="rh-modal-content">
@@ -1033,8 +1524,8 @@ export function criarRhDpController({
 
           ${state.modal.loading ? '' : `
             <div class="small-modal-actions rh-modal-actions">
-              <button class="secondary-btn" type="button" onclick="hubRhDpFecharCadastro()" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
-              ${readonly || state.modal.erros.carregamento ? '' : `<button class="save-btn" type="button" onclick="hubRhDpSalvarCadastro()" ${state.modal.saving ? 'disabled' : ''}>${state.modal.saving ? 'Salvando...' : 'Salvar'}</button>`}
+              <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
+              ${readonly || state.modal.erros.carregamento ? '' : `<button class="save-btn" type="button" data-rh-action="save-modal" ${state.modal.saving ? 'disabled' : ''}>${state.modal.saving ? 'Salvando...' : 'Salvar'}</button>`}
             </div>
           `}
         </section>
@@ -1190,6 +1681,24 @@ export function criarRhDpController({
     }
   }
 
+  function abrirModalFerias() {
+    if (!podeCriarFerias()) return;
+    state.feriasModal = {
+      aberto: true,
+      saving: false
+    };
+    render();
+  }
+
+  function fecharModalFerias() {
+    if (state.feriasModal.saving) return;
+    state.feriasModal = {
+      aberto: false,
+      saving: false
+    };
+    render();
+  }
+
   async function salvarFerias() {
     const colaborador_id = document.getElementById('rh_ferias_colaborador')?.value;
     const periodo_aquisitivo_inicio = document.getElementById('rh_ferias_aquisitivo_inicio')?.value;
@@ -1197,59 +1706,293 @@ export function criarRhDpController({
     const inicio_gozo = document.getElementById('rh_ferias_inicio')?.value;
     const fim_gozo = document.getElementById('rh_ferias_fim')?.value;
     const dias_gozo = document.getElementById('rh_ferias_dias')?.value;
-    if (!colaborador_id || !periodo_aquisitivo_inicio || !periodo_aquisitivo_fim || !inicio_gozo || !fim_gozo || !dias_gozo) { state.message = 'Preencha todos os campos obrigatórios das férias.'; state.messageType = 'error'; render(); return; }
-    try { await salvarFeriasRhDp({ ferias: { colaborador_id, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, inicio_gozo, fim_gozo, dias_gozo, abono_pecuniario: document.getElementById('rh_ferias_abono')?.checked, observacoes: document.getElementById('rh_ferias_observacoes')?.value, status: 'rascunho' } }); state.message = 'Planejamento de férias registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('ferias'); } catch (error) { state.message = error.message || 'Não foi possível registrar as férias.'; state.messageType = 'error'; render(); }
+    const abono_pecuniario = document.getElementById('rh_ferias_abono')?.checked;
+    const observacoes = document.getElementById('rh_ferias_observacoes')?.value;
+
+    if (!colaborador_id || !periodo_aquisitivo_inicio || !periodo_aquisitivo_fim || !inicio_gozo || !fim_gozo || !dias_gozo) {
+      state.message = 'Preencha todos os campos obrigatórios das férias.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.feriasModal.saving = true;
+    render();
+
+    try {
+      await salvarFeriasRhDp({
+        ferias: {
+          colaborador_id,
+          periodo_aquisitivo_inicio,
+          periodo_aquisitivo_fim,
+          inicio_gozo,
+          fim_gozo,
+          dias_gozo,
+          abono_pecuniario,
+          observacoes,
+          status: 'rascunho'
+        }
+      });
+      state.feriasModal = { aberto: false, saving: false };
+      state.message = 'Planejamento de férias registrado como rascunho.';
+      state.messageType = 'success';
+      await abrirSecao('ferias');
+    } catch (error) {
+      state.feriasModal.saving = false;
+      state.message = error.message || 'Não foi possível registrar as férias.';
+      state.messageType = 'error';
+      render();
+    }
+  }
+
+  function abrirModalAfastamento() {
+    if (!podeCriarOcorrencias()) return;
+    state.afastamentoModal = { aberto: true, saving: false };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalAfastamento() {
+    if (state.afastamentoModal.saving) return;
+    state.afastamentoModal = { aberto: false, saving: false };
+    render();
+  }
+
+  function abrirModalOcorrencia() {
+    if (!podeCriarOcorrencias()) return;
+    state.ocorrenciaModal = { aberto: true, saving: false };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalOcorrencia() {
+    if (state.ocorrenciaModal.saving) return;
+    state.ocorrenciaModal = { aberto: false, saving: false };
+    render();
   }
 
   async function salvarAfastamento() {
-    const colaborador_id = document.getElementById('rh_afast_colaborador')?.value; const tipo = document.getElementById('rh_afast_tipo')?.value; const inicio_em = document.getElementById('rh_afast_inicio')?.value; const motivo = document.getElementById('rh_afast_motivo')?.value;
-    if (!colaborador_id || !tipo || !inicio_em || !motivo?.trim()) { state.message = 'Preencha os campos obrigatórios do afastamento.'; state.messageType = 'error'; render(); return; }
-    try { await salvarAfastamentoRhDp({ afastamento: { colaborador_id, tipo, inicio_em, motivo, previsao_retorno_em: document.getElementById('rh_afast_previsao')?.value, cid_referencia: document.getElementById('rh_afast_cid')?.value, comunicacao_emitida: document.getElementById('rh_afast_comunicacao')?.checked, status: 'rascunho' } }); state.message = 'Afastamento registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('afastamentos'); } catch (error) { state.message = error.message || 'Não foi possível registrar o afastamento.'; state.messageType = 'error'; render(); }
+    const colaborador_id = document.getElementById('rh_afast_colaborador')?.value;
+    const tipo = document.getElementById('rh_afast_tipo')?.value;
+    const inicio_em = document.getElementById('rh_afast_inicio')?.value;
+    const previsao_retorno_em = document.getElementById('rh_afast_previsao')?.value;
+    const cid_referencia = document.getElementById('rh_afast_cid')?.value;
+    const comunicacao_emitida = document.getElementById('rh_afast_comunicacao')?.checked;
+    const motivo = document.getElementById('rh_afast_motivo')?.value;
+
+    if (!colaborador_id || !tipo || !inicio_em || !motivo?.trim()) {
+      state.message = 'Preencha os campos obrigatórios do afastamento.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.afastamentoModal.saving = true;
+    render();
+
+    try {
+      await salvarAfastamentoRhDp({
+        afastamento: {
+          colaborador_id,
+          tipo,
+          inicio_em,
+          motivo,
+          previsao_retorno_em,
+          cid_referencia,
+          comunicacao_emitida,
+          status: 'rascunho'
+        }
+      });
+      state.afastamentoModal = { aberto: false, saving: false };
+      state.message = 'Afastamento registrado como rascunho.';
+      state.messageType = 'success';
+      await abrirSecao('afastamentos');
+    } catch (error) {
+      state.afastamentoModal.saving = false;
+      state.message = error.message || 'Não foi possível registrar o afastamento.';
+      state.messageType = 'error';
+      render();
+    }
   }
 
   async function salvarOcorrencia() {
-    const colaborador_id = document.getElementById('rh_ocorrencia_colaborador')?.value; const categoria = document.getElementById('rh_ocorrencia_categoria')?.value; const data_ocorrencia = document.getElementById('rh_ocorrencia_data')?.value; const titulo = document.getElementById('rh_ocorrencia_titulo')?.value; const descricao = document.getElementById('rh_ocorrencia_descricao')?.value;
-    if (!colaborador_id || !categoria || !data_ocorrencia || !titulo?.trim() || !descricao?.trim()) { state.message = 'Preencha os campos obrigatórios da ocorrência.'; state.messageType = 'error'; render(); return; }
-    try { await salvarOcorrenciaRhDp({ ocorrencia: { colaborador_id, categoria, data_ocorrencia, titulo, descricao, providencias: document.getElementById('rh_ocorrencia_providencias')?.value, status: 'aberta' } }); state.message = 'Ocorrência registrada.'; state.messageType = 'success'; await abrirSecao('afastamentos'); } catch (error) { state.message = error.message || 'Não foi possível registrar a ocorrência.'; state.messageType = 'error'; render(); }
+    const colaborador_id = document.getElementById('rh_ocorrencia_colaborador')?.value;
+    const categoria = document.getElementById('rh_ocorrencia_categoria')?.value;
+    const data_ocorrencia = document.getElementById('rh_ocorrencia_data')?.value;
+    const titulo = document.getElementById('rh_ocorrencia_titulo')?.value;
+    const descricao = document.getElementById('rh_ocorrencia_descricao')?.value;
+    const providencias = document.getElementById('rh_ocorrencia_providencias')?.value;
+
+    if (!colaborador_id || !categoria || !data_ocorrencia || !titulo?.trim() || !descricao?.trim()) {
+      state.message = 'Preencha os campos obrigatórios da ocorrência.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.ocorrenciaModal.saving = true;
+    render();
+
+    try {
+      await salvarOcorrenciaRhDp({
+        ocorrencia: {
+          colaborador_id,
+          categoria,
+          data_ocorrencia,
+          titulo,
+          descricao,
+          providencias,
+          status: 'aberta'
+        }
+      });
+      state.ocorrenciaModal = { aberto: false, saving: false };
+      state.message = 'Ocorrência registrada.';
+      state.messageType = 'success';
+      await abrirSecao('afastamentos');
+    } catch (error) {
+      state.ocorrenciaModal.saving = false;
+      state.message = error.message || 'Não foi possível registrar a ocorrência.';
+      state.messageType = 'error';
+      render();
+    }
+  }
+
+  function abrirModalDemanda() {
+    if (!podeCriarDemandas()) return;
+    state.demandaModal = { aberto: true, saving: false };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalDemanda() {
+    if (state.demandaModal.saving) return;
+    state.demandaModal = { aberto: false, saving: false };
+    render();
   }
 
   async function salvarDemanda() {
     const titulo = document.getElementById('rh_demanda_titulo')?.value.trim();
-    if (!titulo) { state.message = 'Informe o título da demanda.'; state.messageType = 'error'; render(); return; }
+    const tipo = document.getElementById('rh_demanda_tipo')?.value;
+    const prioridade = document.getElementById('rh_demanda_prioridade')?.value;
+    const competencia = document.getElementById('rh_demanda_competencia')?.value;
+    const prazo = document.getElementById('rh_demanda_prazo')?.value;
+    const descricao = document.getElementById('rh_demanda_descricao')?.value;
+
+    if (!titulo) {
+      state.message = 'Informe o título da demanda.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.demandaModal.saving = true;
+    render();
+
     try {
-      await salvarDemandaContabilidadeRhDp({ demanda: {
-        titulo,
-        tipo: document.getElementById('rh_demanda_tipo')?.value,
-        prioridade: document.getElementById('rh_demanda_prioridade')?.value,
-        competencia: document.getElementById('rh_demanda_competencia')?.value,
-        prazo: document.getElementById('rh_demanda_prazo')?.value,
-        descricao: document.getElementById('rh_demanda_descricao')?.value,
-        status: 'rascunho'
-      }});
-      state.message = 'Demanda registrada como rascunho.'; state.messageType = 'success';
+      await salvarDemandaContabilidadeRhDp({
+        demanda: {
+          titulo,
+          tipo,
+          prioridade,
+          competencia,
+          prazo,
+          descricao,
+          status: 'rascunho'
+        }
+      });
+      state.demandaModal = { aberto: false, saving: false };
+      state.message = 'Demanda registrada como rascunho.';
+      state.messageType = 'success';
       await abrirSecao('demandas');
-    } catch (error) { state.message = error.message || 'Não foi possível registrar a demanda.'; state.messageType = 'error'; render(); }
+    } catch (error) {
+      state.demandaModal.saving = false;
+      state.message = error.message || 'Não foi possível registrar a demanda.';
+      state.messageType = 'error';
+      render();
+    }
+  }
+
+  function abrirModalCompetencia() {
+    if (!podeCriarFechamentos()) return;
+    state.competenciaModal = { aberto: true, saving: false };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalCompetencia() {
+    if (state.competenciaModal.saving) return;
+    state.competenciaModal = { aberto: false, saving: false };
+    render();
+  }
+
+  function abrirModalEvento(competenciaId) {
+    if (!podeEditarFechamentos() || !competenciaId) return;
+    state.eventoModal = { aberto: true, saving: false, competenciaId };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalEvento() {
+    if (state.eventoModal.saving) return;
+    state.eventoModal = { aberto: false, saving: false, competenciaId: '' };
+    render();
   }
 
   async function salvarCompetencia() {
     const competencia = document.getElementById('rh_competencia_mes')?.value;
-    if (!competencia) { state.message = 'Informe a competência.'; state.messageType = 'error'; render(); return; }
+    const prazo_envio = document.getElementById('rh_competencia_prazo')?.value;
+
+    if (!competencia) {
+      state.message = 'Informe a competência.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.competenciaModal.saving = true;
+    render();
+
     try {
-      await salvarCompetenciaRhDp({ competencia: { competencia, prazo_envio: document.getElementById('rh_competencia_prazo')?.value, status: 'em_preparacao' }});
-      state.message = 'Competência aberta para preparação.'; state.messageType = 'success';
+      await salvarCompetenciaRhDp({ competencia: { competencia, prazo_envio, status: 'em_preparacao' }});
+      state.competenciaModal = { aberto: false, saving: false };
+      state.message = 'Competência aberta para preparação.';
+      state.messageType = 'success';
       await abrirSecao('fechamentos');
-    } catch (error) { state.message = error.message || 'Não foi possível abrir a competência.'; state.messageType = 'error'; render(); }
+    } catch (error) {
+      state.competenciaModal.saving = false;
+      state.message = error.message || 'Não foi possível abrir a competência.';
+      state.messageType = 'error';
+      render();
+    }
   }
 
-  async function adicionarEvento(competenciaId) {
-    const tipo = window.prompt('Tipo do evento (admissao, alteracao_cadastral, ferias, afastamento, desligamento, beneficio, remuneracao, variavel ou outro):', 'outro');
-    if (!tipo) return;
-    const descricao = window.prompt('Descreva o evento para conferência com a contabilidade:');
-    if (!descricao?.trim()) return;
+  async function salvarEvento() {
+    const competencia_id = state.eventoModal.competenciaId;
+    const tipo = document.getElementById('rh_evento_tipo')?.value;
+    const descricao = document.getElementById('rh_evento_descricao')?.value;
+
+    if (!competencia_id || !tipo || !descricao?.trim()) {
+      state.message = 'Informe tipo e descrição do evento.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.eventoModal.saving = true;
+    render();
+
     try {
-      await salvarEventoCompetenciaRhDp({ evento: { competencia_id: competenciaId, tipo, descricao, status: 'pendente' } });
-      state.message = 'Evento incluído na competência.'; state.messageType = 'success'; await abrirSecao('fechamentos');
-    } catch (error) { state.message = error.message || 'Não foi possível incluir o evento.'; state.messageType = 'error'; render(); }
+      await salvarEventoCompetenciaRhDp({ evento: { competencia_id, tipo, descricao, status: 'pendente' } });
+      state.eventoModal = { aberto: false, saving: false, competenciaId: '' };
+      state.message = 'Evento incluído na competência.';
+      state.messageType = 'success';
+      await abrirSecao('fechamentos');
+    } catch (error) {
+      state.eventoModal.saving = false;
+      state.message = error.message || 'Não foi possível incluir o evento.';
+      state.messageType = 'error';
+      render();
+    }
   }
 
   async function concluirCompetencia(id) {
@@ -1269,15 +2012,59 @@ export function criarRhDpController({
     } catch (error) { state.message = error.message || 'Não foi possível atualizar o evento.'; state.messageType = 'error'; render(); }
   }
 
+  function abrirModalDesligamento() {
+    if (!podeCriarDesligamentos()) return;
+    state.desligamentoModal = { aberto: true, saving: false };
+    state.message = '';
+    render();
+  }
+
+  function fecharModalDesligamento() {
+    if (state.desligamentoModal.saving) return;
+    state.desligamentoModal = { aberto: false, saving: false };
+    render();
+  }
+
   async function salvarDesligamento() {
     const colaborador_id = document.getElementById('rh_desligamento_colaborador')?.value;
+    const tipo = document.getElementById('rh_desligamento_tipo')?.value;
     const competencia = document.getElementById('rh_desligamento_competencia')?.value;
+    const ultimo_dia_trabalho = document.getElementById('rh_desligamento_ultimo_dia')?.value;
+    const aviso_previo = document.getElementById('rh_desligamento_aviso')?.value;
     const motivo_resumo = document.getElementById('rh_desligamento_motivo')?.value;
-    if (!colaborador_id || !competencia || !motivo_resumo?.trim()) { state.message = 'Preencha colaborador, competência e resumo do desligamento.'; state.messageType = 'error'; render(); return; }
+
+    if (!colaborador_id || !competencia || !motivo_resumo?.trim()) {
+      state.message = 'Preencha colaborador, competência e resumo do desligamento.';
+      state.messageType = 'error';
+      render();
+      return;
+    }
+
+    state.desligamentoModal.saving = true;
+    render();
+
     try {
-      await salvarDesligamentoRhDp({ desligamento: { colaborador_id, competencia, motivo_resumo, tipo: document.getElementById('rh_desligamento_tipo')?.value, ultimo_dia_trabalho: document.getElementById('rh_desligamento_ultimo_dia')?.value, aviso_previo: document.getElementById('rh_desligamento_aviso')?.value, status: 'rascunho' } });
-      state.message = 'Desligamento registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('desligamentos');
-    } catch (error) { state.message = error.message || 'Não foi possível registrar o desligamento.'; state.messageType = 'error'; render(); }
+      await salvarDesligamentoRhDp({
+        desligamento: {
+          colaborador_id,
+          competencia,
+          motivo_resumo,
+          tipo,
+          ultimo_dia_trabalho,
+          aviso_previo,
+          status: 'rascunho'
+        }
+      });
+      state.desligamentoModal = { aberto: false, saving: false };
+      state.message = 'Desligamento registrado como rascunho.';
+      state.messageType = 'success';
+      await abrirSecao('desligamentos');
+    } catch (error) {
+      state.desligamentoModal.saving = false;
+      state.message = error.message || 'Não foi possível registrar o desligamento.';
+      state.messageType = 'error';
+      render();
+    }
   }
 
   async function concluirChecklistDesligamento(desligamentoId) {
@@ -1293,25 +2080,13 @@ export function criarRhDpController({
     if (modo === 'create' && !podeCriar()) return;
     if (modo === 'edit' && !podeEditar()) return;
 
-    state.modal = {
+    state.modal = criarEstadoModal({
       aberto: true,
       modo,
       id,
       loading: Boolean(id),
-      saving: false,
-      colaborador: novoColaborador(),
-      documentos: novosDocumentos(),
-      vinculo: novoVinculo(),
-      dependentes: [],
-      arquivos: [],
-      arquivoForm: novoArquivo(id),
-      arquivoEditandoId: '',
-      arquivosLoading: Boolean(id) && podeVerArquivos(),
-      arquivoSaving: false,
-      arquivoMessage: '',
-      arquivoMessageType: '',
-      erros: {}
-    };
+      arquivosLoading: Boolean(id) && podeVerArquivos()
+    });
     render();
 
     if (!id) return;
@@ -1702,7 +2477,7 @@ export function criarRhDpController({
     ,hubRhDpAbrirSecao: abrirSecao
     ,hubRhDpSalvarDemanda: salvarDemanda
     ,hubRhDpSalvarCompetencia: salvarCompetencia
-    ,hubRhDpAdicionarEvento: adicionarEvento
+    ,hubRhDpAdicionarEvento: abrirModalEvento
     ,hubRhDpAtualizarEvento: atualizarEvento
     ,hubRhDpConcluirCompetencia: concluirCompetencia
     ,hubRhDpSalvarDesligamento: salvarDesligamento

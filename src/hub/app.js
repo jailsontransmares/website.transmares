@@ -7,6 +7,7 @@ import {
   invalidarContextoAcessoHub,
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
+import { HUB_MENU_TREE } from './menuTree.js';
 import { criarRhDpController } from './rhDpPage.js';
 import { criarFinanceiroController } from './financeiroController.js';
 
@@ -19,6 +20,11 @@ const state = {
   favoritos: [],
   meta: null,
   permissions: normalizarPermissoes([]),
+  sidebar: {
+    collapsed: false,
+    openGroups: {},
+    floatingGroupId: ''
+  },
   auth: {
     email: '',
     loading: false,
@@ -1284,6 +1290,14 @@ function renderAvisos() {
   `).join('');
 }
 
+function formatarDataAniversario(valor = '') {
+  if (!valor) return '';
+  const data = new Date(`${valor}T12:00:00`);
+  return Number.isNaN(data.getTime())
+    ? String(valor)
+    : data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
 function renderAniversariantes() {
   if (!state.aniversariantes.length) {
     return '<p>Nenhum aniversariante nos próximos dias.</p>';
@@ -1296,7 +1310,7 @@ function renderAniversariantes() {
       : '';
 
     return `
-      <p><strong>${escapeHtml(item.nome || '')}</strong> ${escapeHtml(item.data || '')}${escapeHtml(quando)}</p>
+      <p><strong>${escapeHtml(item.nome || '')}</strong> ${escapeHtml(formatarDataAniversario(item.data))}${escapeHtml(quando)}</p>
     `;
   }).join('');
 }
@@ -10008,15 +10022,308 @@ function renderHubTopbar() {
   `;
 }
 
+function obterCaminhoMenuHub(item = {}) {
+  const rota = item.legacyRoute || item.route || '/';
+  const [pathname = '/', hash = ''] = String(rota || '/').split('#');
+  const base = obterBaseHub();
+  const caminho = pathname === '/'
+    ? (base ? `${base}/` : '/')
+    : `${base || ''}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+
+  return hash ? `${caminho}#${hash}` : caminho;
+}
+
+function obterRotaRelativaAtualHub() {
+  const base = obterBaseHub();
+  const pathname = window.location.pathname || '/';
+  const rota = base ? pathname.slice(base.length) : pathname;
+  const normalizada = rota.replace(/\/+$/g, '') || '/';
+
+  return `${normalizada}${window.location.hash || ''}`;
+}
+
+function normalizarRotaComparacaoHub(rota = '') {
+  const [pathname = '/', hash = ''] = String(rota || '/').split('#');
+  const normalizada = pathname.replace(/\/+$/g, '') || '/';
+  return `${normalizada}${hash ? `#${hash}` : ''}`;
+}
+
+function itemMenuEstaAtivoHub(item = {}) {
+  const atual = obterRotaRelativaAtualHub();
+  return [item.route, item.legacyRoute]
+    .filter(Boolean)
+    .map(normalizarRotaComparacaoHub)
+    .some(rota => rota === atual);
+}
+
+function itemMenuPodeAparecerHub(item = {}) {
+  if (item.permission && !pode(item.permission.resource, item.permission.action || 'view')) {
+    return false;
+  }
+
+  if (item.moduleId && !canAccessModule(state.permissions, item.moduleId)) {
+    return false;
+  }
+
+  return true;
+}
+
+function filtrarMenuHub(items = HUB_MENU_TREE) {
+  return items
+    .filter(itemMenuPodeAparecerHub)
+    .map(item => {
+      const children = Array.isArray(item.children) ? filtrarMenuHub(item.children) : [];
+      return { ...item, children };
+    })
+    .filter(item => item.type !== 'group' || item.children.length);
+}
+
+function encontrarItemMenuHub(id, items = filtrarMenuHub()) {
+  for (const item of items) {
+    if (item.id === id) return item;
+    const encontrado = encontrarItemMenuHub(id, item.children || []);
+    if (encontrado) return encontrado;
+  }
+
+  return null;
+}
+
+function itemMenuTemAtivoHub(item = {}) {
+  if (itemMenuEstaAtivoHub(item)) return true;
+  return (item.children || []).some(itemMenuTemAtivoHub);
+}
+
+function obterIconeMenuHub(item = {}) {
+  const mapa = {
+    inicio: 'IN',
+    dashboards: 'DB',
+    'central-senhas': 'CS',
+    operacoes: 'OP',
+    financeiro: 'FN',
+    'rh-dp': 'RH',
+    administracao: 'AD'
+  };
+  return mapa[item.id] || String(item.label || item.id || '?').slice(0, 2).toUpperCase();
+}
+
+function grupoMenuAbertoHub(item = {}) {
+  if (state.sidebar.collapsed) return false;
+  if (itemMenuTemAtivoHub(item)) return true;
+  if (state.sidebar.openGroups[item.id] === false) return false;
+  return state.sidebar.openGroups[item.id] === true;
+}
+
+function renderHubSidebarRoute(item, nivel = 0) {
+  const ativo = itemMenuEstaAtivoHub(item);
+  const planejado = !['active', 'alias-required'].includes(item.status || 'active');
+  const classe = nivel > 0
+    ? 'hub-sidebar-menu-button hub-sidebar-menu-button--subitem hub-sidebar-subitem'
+    : 'hub-sidebar-menu-button hub-sidebar-menu-button--route hub-sidebar-link';
+  const caminho = obterCaminhoMenuHub(item);
+
+  return `
+    <button
+      class="${classe} ${ativo ? 'active' : ''}"
+      type="button"
+      ${planejado ? 'disabled' : `onclick="navegarMenuSidebarHub('${escapeAttr(caminho)}')"` }
+      title="${escapeAttr(item.label || '')}"
+      data-tooltip="${escapeAttr(item.label || '')}"
+      aria-current="${ativo ? 'page' : 'false'}"
+    >
+      ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true">${escapeHtml(obterIconeMenuHub(item))}</span>` : ''}
+      <span class="hub-sidebar-label">${escapeHtml(item.label || '')}</span>
+      ${planejado ? '<span class="hub-sidebar-badge">Em breve</span>' : ''}
+    </button>
+  `;
+}
+
+function renderHubSidebarFloatingRoute(item, nivel = 0) {
+  const ativo = itemMenuEstaAtivoHub(item);
+  const planejado = !['active', 'alias-required'].includes(item.status || 'active');
+  const caminho = obterCaminhoMenuHub(item);
+
+  return `
+    <button
+      class="hub-sidebar-floating-item ${ativo ? 'active' : ''}"
+      type="button"
+      role="menuitem"
+      data-level="${nivel}"
+      ${planejado ? 'disabled' : `onclick="navegarMenuSidebarHub('${escapeAttr(caminho)}')"` }
+      aria-current="${ativo ? 'page' : 'false'}"
+    >
+      <span>${escapeHtml(item.label || '')}</span>
+      ${planejado ? '<small>Em breve</small>' : ''}
+    </button>
+  `;
+}
+
+function renderHubSidebarFloatingItem(item, nivel = 0) {
+  if (item.type !== 'group') {
+    return renderHubSidebarFloatingRoute(item, nivel);
+  }
+
+  return `
+    <div class="hub-sidebar-floating-group" data-level="${nivel}">
+      <span class="hub-sidebar-floating-group-label">${escapeHtml(item.label || '')}</span>
+      <div class="hub-sidebar-floating-group-items">
+        ${(item.children || []).map(child => renderHubSidebarFloatingItem(child, nivel + 1)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderHubSidebarFloatingPanel(item = {}) {
+  if (!state.sidebar.collapsed || state.sidebar.floatingGroupId !== item.id) return '';
+
+  return `
+    <div class="hub-sidebar-floating-panel" role="menu" aria-label="${escapeAttr(item.label || '')}">
+      <strong class="hub-sidebar-floating-title">${escapeHtml(item.label || '')}</strong>
+      <div class="hub-sidebar-floating-items">
+        ${(item.children || []).map(child => renderHubSidebarFloatingItem(child)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderHubSidebarGroup(item, nivel = 0) {
+  const aberto = grupoMenuAbertoHub(item);
+  const floatingAberto = state.sidebar.collapsed && state.sidebar.floatingGroupId === item.id;
+  const ativo = itemMenuTemAtivoHub(item);
+  const children = item.children || [];
+  const toggleClass = nivel > 0
+    ? 'hub-sidebar-menu-button hub-sidebar-menu-button--subgroup hub-sidebar-subgroup-toggle'
+    : 'hub-sidebar-menu-button hub-sidebar-menu-button--group hub-sidebar-group-toggle';
+  const bodyClass = nivel > 0 ? 'hub-sidebar-subitems' : 'hub-sidebar-submenu';
+
+  return `
+    <div class="${nivel > 0 ? 'hub-sidebar-subgroup' : 'hub-sidebar-group'} ${floatingAberto ? 'is-floating-open' : ''}">
+      <button
+        class="${toggleClass} ${ativo ? 'active' : ''}"
+        type="button"
+        onclick="alternarGrupoSidebarHub('${escapeAttr(item.id)}')"
+        aria-expanded="${aberto || floatingAberto ? 'true' : 'false'}"
+        title="${escapeAttr(item.label || '')}"
+        data-tooltip="${escapeAttr(item.label || '')}"
+      >
+        ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true">${escapeHtml(obterIconeMenuHub(item))}</span>` : ''}
+        <span class="hub-sidebar-label">${escapeHtml(item.label || '')}</span>
+        <span class="hub-sidebar-group-caret" aria-hidden="true">${aberto ? 'v' : '>'}</span>
+      </button>
+      <div class="${bodyClass} ${aberto ? '' : 'is-collapsed'}">
+        ${children.map(child => renderHubSidebarItem(child, nivel + 1)).join('')}
+      </div>
+      ${nivel === 0 ? renderHubSidebarFloatingPanel(item) : ''}
+    </div>
+  `;
+}
+
+function renderHubSidebarItem(item, nivel = 0) {
+  if (item.type === 'group') {
+    return renderHubSidebarGroup(item, nivel);
+  }
+
+  return renderHubSidebarRoute(item, nivel);
+}
+
+function renderHubSidebar() {
+  const items = filtrarMenuHub();
+  const collapsed = state.sidebar.collapsed;
+
+  return `
+    <aside class="hub-sidebar ${collapsed ? 'is-collapsed' : ''}" aria-label="Menu lateral do Hub">
+      <div class="hub-sidebar-header">
+        <span class="hub-sidebar-eyebrow">${collapsed ? 'Hub' : 'Navega&ccedil;&atilde;o'}</span>
+        <button
+          class="hub-sidebar-collapse-btn"
+          type="button"
+          onclick="alternarSidebarHub()"
+          aria-label="${collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}"
+          title="${collapsed ? 'Expandir menu' : 'Recolher menu'}"
+        >
+          <span aria-hidden="true">${collapsed ? '&#9776;' : '&lsaquo;'}</span>
+        </button>
+      </div>
+      <nav class="hub-sidebar-nav" aria-label="M&oacute;dulos do Hub">
+        ${items.map(item => renderHubSidebarItem(item)).join('')}
+      </nav>
+    </aside>
+  `;
+}
+
+function alternarSidebarHub() {
+  state.sidebar.collapsed = !state.sidebar.collapsed;
+  state.sidebar.floatingGroupId = '';
+
+  if (!state.sidebar.collapsed) {
+    filtrarMenuHub().forEach(item => {
+      if (itemMenuTemAtivoHub(item)) {
+        state.sidebar.openGroups[item.id] = true;
+      }
+    });
+  }
+
+  renderizarRotaAtual();
+}
+
+function encontrarIrmaosMenuHub(id, items = filtrarMenuHub()) {
+  for (const item of items) {
+    if ((item.children || []).some(child => child.id === id)) {
+      return item.children || [];
+    }
+
+    const irmaos = encontrarIrmaosMenuHub(id, item.children || []);
+    if (irmaos) return irmaos;
+  }
+
+  return null;
+}
+
+function alternarGrupoSidebarHub(id) {
+  if (state.sidebar.collapsed) {
+    state.sidebar.floatingGroupId = state.sidebar.floatingGroupId === id ? '' : id;
+    renderizarRotaAtual();
+    return;
+  }
+
+  const item = encontrarItemMenuHub(id);
+  const proximoAberto = !grupoMenuAbertoHub(item || { id });
+
+  if (proximoAberto) {
+    (encontrarIrmaosMenuHub(id) || []).forEach(irmao => {
+      if (irmao.type === 'group' && irmao.id !== id) {
+        state.sidebar.openGroups[irmao.id] = false;
+      }
+    });
+  }
+
+  state.sidebar.openGroups[id] = proximoAberto;
+  renderizarRotaAtual();
+}
+
+function fecharPainelFlutuanteSidebarHub() {
+  if (!state.sidebar.floatingGroupId) return;
+
+  state.sidebar.floatingGroupId = '';
+  renderizarRotaAtual();
+}
+
+function navegarMenuSidebarHub(caminho) {
+  state.sidebar.floatingGroupId = '';
+  navegarParaRota(caminho);
+}
+
 function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteudo = '' }) {
   return `
-    <main class="dashboard hub-layout">
+    <main class="dashboard hub-layout ${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''}">
       ${renderHubTopbar()}
-      <section class="hub-page-content ${escapeAttr(classeConteudo)}">
-        ${renderHubBreadcrumb()}
+      <div class="hub-shell">
+        ${renderHubSidebar()}
+        <section class="hub-page-content ${escapeAttr(classeConteudo)}">
+          ${renderHubBreadcrumb()}
 
-        ${conteudo}
-      </section>
+          ${conteudo}
+        </section>
+      </div>
     </main>
   `;
 }
@@ -10516,7 +10823,10 @@ Object.assign(window, {
   alternarFiltrosListaProdutosAr,
   aplicarBuscaParceirosIndicacaoAdmin,
   navegarMenuAcoesParceirosIndicacaoAdmin,
+  navegarMenuSidebarHub,
   alternarFavoritoLink,
+  alternarGrupoSidebarHub,
+  alternarSidebarHub,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
@@ -10567,6 +10877,7 @@ Object.assign(window, {
   executarLoteStatusParceirosIndicacaoAdmin,
   navegarHome,
   navegarParaModulo,
+  navegarParaRota,
   processarArquivoRepasseAr,
   renderDashboard,
   restaurarCoresPadrao,
@@ -10611,9 +10922,23 @@ document.addEventListener('click', event => {
   fecharMenuAcoesParceirosIndicacaoAdmin();
 }, true);
 
+document.addEventListener('click', event => {
+  if (!state.sidebar.floatingGroupId) return;
+  if (event.target?.closest?.('.hub-sidebar')) return;
+
+  fecharPainelFlutuanteSidebarHub();
+}, true);
+
 document.addEventListener('keydown', event => {
   if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;
 
   event.preventDefault();
   fecharMenuAcoesParceirosIndicacaoAdmin();
+});
+
+document.addEventListener('keydown', event => {
+  if (!state.sidebar.floatingGroupId || event.key !== 'Escape') return;
+
+  event.preventDefault();
+  fecharPainelFlutuanteSidebarHub();
 });
