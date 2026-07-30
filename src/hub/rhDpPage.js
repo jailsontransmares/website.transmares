@@ -6,6 +6,7 @@ import {
 } from './services/rhDpService.js';
 
 const LIMITE_POR_PAGINA = 10;
+const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
 
 function novoColaborador() {
   return {
@@ -58,6 +59,30 @@ function novosDocumentos() {
   };
 }
 
+function novoVinculo() {
+  return {
+    tipo_vinculo: '',
+    data_admissao: '',
+    data_desligamento: '',
+    cargo: '',
+    funcao: '',
+    cbo: '',
+    departamento: '',
+    gestor_responsavel: '',
+    situacao: 'ativo',
+    tipo_remuneracao: '',
+    remuneracao_valor: '',
+    modelo_jornada: '',
+    carga_horaria_semanal: '',
+    horario_entrada: '',
+    horario_saida: '',
+    intervalo_inicio: '',
+    intervalo_fim: '',
+    dias_trabalho: '',
+    observacoes: ''
+  };
+}
+
 function digitos(valor = '') {
   return String(valor || '').replace(/\D/g, '');
 }
@@ -85,6 +110,20 @@ function formatarTelefone(valor = '') {
 
 function formatarCep(valor = '') {
   return digitos(valor).slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2');
+}
+
+function normalizarUf(valor = '') {
+  return String(valor || '').trim().toUpperCase().slice(0, 2);
+}
+
+function formatarMoeda(valor = '') {
+  if (valor === null || valor === undefined || valor === '') return '';
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) return String(valor || '');
+  return numero.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }
 
 function cpfValido(valor = '') {
@@ -144,6 +183,11 @@ export function criarRhDpController({
   escapeHtml,
   escapeAttr
 }) {
+  let cepConsultaAtual = {
+    cep: '',
+    sequencia: 0
+  };
+
   const state = {
     colaboradores: [],
     loading: false,
@@ -160,6 +204,7 @@ export function criarRhDpController({
       saving: false,
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
+      vinculo: novoVinculo(),
       dependentes: [],
       erros: {}
     }
@@ -405,6 +450,21 @@ export function criarRhDpController({
     `;
   }
 
+  function campoTextarea(id, label, valor, { readonly = false, rows = 3, placeholder = '' } = {}) {
+    return `
+      <label class="rh-span-2">
+        <span>${escapeHtml(label)}</span>
+        <textarea
+          id="rh_${escapeAttr(id)}"
+          class="config-input rh-textarea"
+          rows="${escapeAttr(rows)}"
+          ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}
+          ${readonly ? 'disabled' : ''}
+        >${escapeHtml(valor || '')}</textarea>
+      </label>
+    `;
+  }
+
   function renderSecaoDadosPessoais(readonly) {
     const item = state.modal.colaborador;
     return `
@@ -457,8 +517,23 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Endereço</strong>
+          <span>Preencha o CEP para buscar o endereço automaticamente.</span>
         </div>
         <div class="rh-form-grid">
+          <label>
+            <span>CEP</span>
+            <input
+              id="rh_endereco_cep"
+              class="config-input"
+              type="text"
+              value="${escapeAttr(formatarCep(item.endereco_cep))}"
+              placeholder="00000-000"
+              data-rh-mask="cep"
+              oninput="hubRhDpAplicarMascara(event); hubRhDpBuscarEnderecoCep(event)"
+              ${readonly ? 'disabled' : ''}
+            >
+            ${readonly ? '' : '<small id="rh_cep_feedback" class="rh-cep-feedback" aria-live="polite"></small>'}
+          </label>
           <label class="rh-span-2">
             <span>Rua / logradouro</span>
             <input id="rh_endereco_logradouro" class="config-input" type="text" value="${escapeAttr(item.endereco_logradouro || '')}" ${readonly ? 'disabled' : ''}>
@@ -468,7 +543,6 @@ export function criarRhDpController({
           ${campo('endereco_bairro', 'Bairro', item.endereco_bairro, { readonly })}
           ${campo('endereco_cidade', 'Cidade', item.endereco_cidade, { readonly })}
           ${campo('endereco_uf', 'UF', item.endereco_uf, { readonly, maxLength: 2, placeholder: 'AL' })}
-          ${campo('endereco_cep', 'CEP', formatarCep(item.endereco_cep), { readonly, mask: 'cep', placeholder: '00000-000' })}
         </div>
       </section>
     `;
@@ -544,6 +618,48 @@ export function criarRhDpController({
     `;
   }
 
+  function renderSecaoVinculo(readonly) {
+    if (!podeVerSensiveis()) {
+      return `
+        <section class="rh-form-section rh-restricted-section">
+          <strong>Vínculo profissional protegido</strong>
+          <p>Seu perfil não possui permissão para visualizar remuneração e vínculo profissional.</p>
+        </section>
+      `;
+    }
+
+    const item = state.modal.vinculo;
+    return `
+      <section class="rh-form-section">
+        <div class="rh-form-section-title">
+          <strong>Vínculo profissional</strong>
+          <span>Controle interno. Não substitui registros da contabilidade.</span>
+        </div>
+        <div class="rh-form-grid">
+          ${campoSelect('tipo_vinculo', 'Tipo de vínculo', item.tipo_vinculo, ['clt', 'estagio', 'socio', 'prestador', 'temporario', 'outro'], { readonly })}
+          ${campo('data_admissao', 'Data de admissão', item.data_admissao, { type: 'date', readonly })}
+          ${campo('cargo', 'Cargo', item.cargo, { readonly })}
+          ${campo('funcao', 'Função', item.funcao, { readonly })}
+          ${campo('cbo', 'CBO', item.cbo, { readonly, placeholder: '0000-00' })}
+          ${campo('departamento', 'Departamento/área', item.departamento, { readonly })}
+          ${campo('gestor_responsavel', 'Gestor responsável', item.gestor_responsavel, { readonly })}
+          ${campoSelect('situacao', 'Situação profissional', item.situacao, ['ativo', 'experiencia', 'afastado', 'desligado'], { readonly })}
+          ${campoSelect('tipo_remuneracao', 'Tipo de remuneração', item.tipo_remuneracao, ['salario', 'bolsa', 'pro_labore', 'honorario', 'outro'], { readonly })}
+          ${campo('remuneracao_valor', 'Valor da remuneração', formatarMoeda(item.remuneracao_valor), { readonly, placeholder: '0,00' })}
+          ${campoSelect('modelo_jornada', 'Modelo de jornada', item.modelo_jornada, ['integral', 'parcial', 'escala', 'flexivel', 'remoto', 'hibrido', 'outro'], { readonly })}
+          ${campo('carga_horaria_semanal', 'Carga horária semanal', item.carga_horaria_semanal, { readonly, placeholder: '44' })}
+          ${campo('horario_entrada', 'Entrada', item.horario_entrada, { type: 'time', readonly })}
+          ${campo('horario_saida', 'Saída', item.horario_saida, { type: 'time', readonly })}
+          ${campo('intervalo_inicio', 'Início do intervalo', item.intervalo_inicio, { type: 'time', readonly })}
+          ${campo('intervalo_fim', 'Fim do intervalo', item.intervalo_fim, { type: 'time', readonly })}
+          ${campo('dias_trabalho', 'Dias de trabalho', item.dias_trabalho, { readonly, placeholder: 'Segunda a sexta' })}
+          ${campo('data_desligamento', 'Data de desligamento', item.data_desligamento, { type: 'date', readonly })}
+          ${campoTextarea('vinculo_observacoes', 'Observações do vínculo', item.observacoes, { readonly })}
+        </div>
+      </section>
+    `;
+  }
+
   function campoDependente(indice, campoNome, label, valor, type, readonly) {
     return `
       <label>
@@ -597,6 +713,7 @@ export function criarRhDpController({
               ${renderSecaoEndereco(readonly)}
               ${renderSecaoDocumentos(readonly)}
               ${renderSecaoDependentes(readonly)}
+              ${renderSecaoVinculo(readonly)}
               ${renderSecaoObservacoes(readonly)}
             `}
           </div>
@@ -621,6 +738,7 @@ export function criarRhDpController({
 
     const camposColaborador = Object.keys(novoColaborador());
     const camposDocumentos = Object.keys(novosDocumentos());
+    const camposVinculo = Object.keys(novoVinculo());
     state.modal.colaborador = camposColaborador.reduce((acc, campoNome) => {
       acc[campoNome] = obterValor(campoNome);
       return acc;
@@ -629,6 +747,13 @@ export function criarRhDpController({
     if (podeVerSensiveis()) {
       state.modal.documentos = camposDocumentos.reduce((acc, campoNome) => {
         acc[campoNome] = obterValor(campoNome);
+        return acc;
+      }, {});
+
+      state.modal.vinculo = camposVinculo.reduce((acc, campoNome) => {
+        acc[campoNome] = campoNome === 'observacoes'
+          ? obterValor('vinculo_observacoes')
+          : obterValor(campoNome);
         return acc;
       }, {});
 
@@ -674,6 +799,19 @@ export function criarRhDpController({
     }
 
     if (podeVerSensiveis()) {
+      const vinculo = state.modal.vinculo;
+      const possuiVinculo = Object.entries(vinculo).some(([campoNome, valor]) => {
+        if (campoNome === 'situacao' && String(valor || 'ativo') === 'ativo') return false;
+        return String(valor || '').trim();
+      });
+      if (possuiVinculo && !vinculo.data_admissao) {
+        return 'Informe a data de admissão do vínculo profissional.';
+      }
+
+      if (vinculo.data_desligamento && vinculo.data_admissao && vinculo.data_desligamento < vinculo.data_admissao) {
+        return 'A data de desligamento não pode ser anterior à admissão.';
+      }
+
       const dependenteIncompleto = state.modal.dependentes.some(item => {
         const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco;
         return possuiAlgumDado && (!item.nome_completo || !item.data_nascimento);
@@ -721,6 +859,7 @@ export function criarRhDpController({
       saving: false,
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
+      vinculo: novoVinculo(),
       dependentes: [],
       erros: {}
     };
@@ -735,6 +874,7 @@ export function criarRhDpController({
       });
       state.modal.colaborador = { ...novoColaborador(), ...(dados.colaborador || {}) };
       state.modal.documentos = { ...novosDocumentos(), ...(dados.documentos || {}) };
+      state.modal.vinculo = { ...novoVinculo(), ...(dados.vinculo || {}) };
       state.modal.dependentes = dados.dependentes || [];
       state.modal.loading = false;
       render();
@@ -787,6 +927,7 @@ export function criarRhDpController({
         id: state.modal.id || null,
         colaborador: state.modal.colaborador,
         documentos: podeVerSensiveis() ? state.modal.documentos : null,
+        vinculo: podeVerSensiveis() ? state.modal.vinculo : null,
         dependentes: podeVerSensiveis() ? state.modal.dependentes : null
       });
       state.modal.aberto = false;
@@ -856,6 +997,60 @@ export function criarRhDpController({
     if (mask === 'cep') input.value = formatarCep(input.value);
   }
 
+  function atualizarFeedbackCep(mensagem = '', tipo = '') {
+    const feedback = document.getElementById('rh_cep_feedback');
+    if (!feedback) return;
+    feedback.textContent = mensagem;
+    feedback.dataset.status = tipo;
+  }
+
+  function preencherCampoEndereco(id, valor) {
+    const input = document.getElementById(`rh_${id}`);
+    if (!input) return;
+    input.value = valor || '';
+  }
+
+  async function buscarEnderecoCep(event) {
+    const input = event?.target || document.getElementById('rh_endereco_cep');
+    if (!input || input.disabled || state.modal.modo === 'view') return;
+
+    const cep = digitos(input.value);
+    if (cep.length < 8) {
+      cepConsultaAtual.cep = '';
+      atualizarFeedbackCep('');
+      return;
+    }
+
+    if (cep === cepConsultaAtual.cep) return;
+
+    cepConsultaAtual.cep = cep;
+    const sequencia = cepConsultaAtual.sequencia + 1;
+    cepConsultaAtual.sequencia = sequencia;
+    atualizarFeedbackCep('Buscando endereço...', 'loading');
+
+    try {
+      const resposta = await fetch(`${VIA_CEP_ENDPOINT}/${cep}/json/`);
+      if (!resposta.ok) throw new Error('CEP indisponível.');
+
+      const dados = await resposta.json();
+      if (sequencia !== cepConsultaAtual.sequencia || digitos(input.value) !== cep) return;
+
+      if (dados?.erro) {
+        atualizarFeedbackCep('CEP não localizado. Preencha o endereço manualmente.', 'error');
+        return;
+      }
+
+      preencherCampoEndereco('endereco_logradouro', dados.logradouro || '');
+      preencherCampoEndereco('endereco_bairro', dados.bairro || '');
+      preencherCampoEndereco('endereco_cidade', dados.localidade || '');
+      preencherCampoEndereco('endereco_uf', normalizarUf(dados.uf));
+      atualizarFeedbackCep('Endereço preenchido. Você pode editar os campos manualmente.', 'success');
+    } catch {
+      if (sequencia !== cepConsultaAtual.sequencia) return;
+      atualizarFeedbackCep('Não foi possível buscar o CEP. Preencha o endereço manualmente.', 'error');
+    }
+  }
+
   Object.assign(window, {
     hubRhDpAbrirCadastro: abrirCadastro,
     hubRhDpFecharCadastro: fecharCadastro,
@@ -866,7 +1061,8 @@ export function criarRhDpController({
     hubRhDpFiltrarBusca: filtrarBusca,
     hubRhDpFiltrarStatus: filtrarStatus,
     hubRhDpSelecionarPagina: selecionarPagina,
-    hubRhDpAplicarMascara: aplicarMascara
+    hubRhDpAplicarMascara: aplicarMascara,
+    hubRhDpBuscarEnderecoCep: buscarEnderecoCep
   });
 
   return {

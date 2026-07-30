@@ -54,6 +54,32 @@ const COLUNAS_DOCUMENTOS = `
   updated_at
 `;
 
+const COLUNAS_VINCULO = `
+  id,
+  colaborador_id,
+  tipo_vinculo,
+  data_admissao,
+  data_desligamento,
+  cargo,
+  funcao,
+  cbo,
+  departamento,
+  gestor_responsavel,
+  situacao,
+  tipo_remuneracao,
+  remuneracao_valor,
+  modelo_jornada,
+  carga_horaria_semanal,
+  horario_entrada,
+  horario_saida,
+  intervalo_inicio,
+  intervalo_fim,
+  dias_trabalho,
+  observacoes,
+  created_at,
+  updated_at
+`;
+
 function limparTexto(valor) {
   const texto = String(valor ?? '').trim();
   return texto || null;
@@ -66,6 +92,23 @@ function limparDigitos(valor) {
 
 function normalizarStatus(valor) {
   return String(valor || '').trim().toLowerCase() === 'inativo' ? 'inativo' : 'ativo';
+}
+
+function normalizarDecimal(valor) {
+  const texto = String(valor ?? '').trim();
+  if (!texto) return null;
+
+  const normalizado = texto
+    .replace(/[^\d,.-]/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function normalizarHora(valor) {
+  const texto = limparTexto(valor);
+  return texto && /^\d{2}:\d{2}$/.test(texto) ? texto : null;
 }
 
 function normalizarColaborador(payload = {}) {
@@ -94,6 +137,37 @@ function normalizarColaborador(payload = {}) {
     status: normalizarStatus(payload.status),
     observacoes: limparTexto(payload.observacoes)
   };
+}
+
+function normalizarVinculo(payload = {}) {
+  const vinculo = {
+    tipo_vinculo: limparTexto(payload.tipo_vinculo)?.toLowerCase() || null,
+    data_admissao: limparTexto(payload.data_admissao),
+    data_desligamento: limparTexto(payload.data_desligamento),
+    cargo: limparTexto(payload.cargo),
+    funcao: limparTexto(payload.funcao),
+    cbo: limparTexto(payload.cbo),
+    departamento: limparTexto(payload.departamento),
+    gestor_responsavel: limparTexto(payload.gestor_responsavel),
+    situacao: limparTexto(payload.situacao)?.toLowerCase() || null,
+    tipo_remuneracao: limparTexto(payload.tipo_remuneracao)?.toLowerCase() || null,
+    remuneracao_valor: normalizarDecimal(payload.remuneracao_valor),
+    modelo_jornada: limparTexto(payload.modelo_jornada)?.toLowerCase() || null,
+    carga_horaria_semanal: normalizarDecimal(payload.carga_horaria_semanal),
+    horario_entrada: normalizarHora(payload.horario_entrada),
+    horario_saida: normalizarHora(payload.horario_saida),
+    intervalo_inicio: normalizarHora(payload.intervalo_inicio),
+    intervalo_fim: normalizarHora(payload.intervalo_fim),
+    dias_trabalho: limparTexto(payload.dias_trabalho),
+    observacoes: limparTexto(payload.observacoes)
+  };
+
+  const possuiDados = Object.entries(vinculo).some(([campoNome, valor]) => {
+    if (campoNome === 'situacao' && valor === 'ativo') return false;
+    return valor !== null && valor !== '';
+  });
+
+  return possuiDados ? vinculo : null;
 }
 
 function normalizarDocumentos(payload = {}) {
@@ -161,6 +235,26 @@ function mensagemErroRh(error, fallback) {
     return 'Há um dependente duplicado neste cadastro.';
   }
 
+  if (/rh_vinculos_datas_check/i.test(texto)) {
+    return 'A data de desligamento não pode ser anterior à admissão.';
+  }
+
+  if (/rh_vinculos_remuneracao_check/i.test(texto)) {
+    return 'Informe uma remuneração válida.';
+  }
+
+  if (/rh_vinculos_carga_horaria_check/i.test(texto)) {
+    return 'Informe uma carga horária semanal válida.';
+  }
+
+  if (/rh_vinculos_cbo_check/i.test(texto)) {
+    return 'Informe o CBO no formato 000000 ou 0000-00.';
+  }
+
+  if (/rh_vinculos_tipo_check|rh_vinculos_situacao_check|rh_vinculos_tipo_remuneracao_check|rh_vinculos_modelo_jornada_check/i.test(texto)) {
+    return 'Revise as informações do vínculo profissional.';
+  }
+
   if (/RH_CREATE_DENIED|RH_UPDATE_DENIED|row-level security/i.test(texto)) {
     return 'Seu perfil não possui permissão para realizar esta alteração.';
   }
@@ -211,6 +305,14 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
       .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
+  const vinculoPromise = incluirSensiveis
+    ? supabase
+      .from('rh_vinculos_profissionais')
+      .select(COLUNAS_VINCULO)
+      .eq('colaborador_id', id)
+      .maybeSingle()
+    : Promise.resolve({ data: null, error: null });
+
   const dependentesPromise = incluirSensiveis
     ? supabase
       .from('rh_dependentes')
@@ -220,13 +322,14 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
       .order('nome_completo', { ascending: true })
     : Promise.resolve({ data: [], error: null });
 
-  const [colaborador, documentos, dependentes] = await Promise.all([
+  const [colaborador, documentos, vinculo, dependentes] = await Promise.all([
     colaboradorPromise,
     documentosPromise,
+    vinculoPromise,
     dependentesPromise
   ]);
 
-  const error = colaborador.error || documentos.error || dependentes.error;
+  const error = colaborador.error || documentos.error || vinculo.error || dependentes.error;
   if (error) {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar o cadastro.'));
   }
@@ -234,6 +337,7 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
   return {
     colaborador: colaborador.data,
     documentos: documentos.data || {},
+    vinculo: vinculo.data || {},
     dependentes: dependentes.data || []
   };
 }
@@ -242,6 +346,7 @@ export async function salvarCadastroPessoalRhDp({
   id = null,
   colaborador = {},
   documentos = null,
+  vinculo = null,
   dependentes = null
 } = {}) {
   const supabase = exigirSupabaseConfigurado();
@@ -249,6 +354,7 @@ export async function salvarCadastroPessoalRhDp({
     p_colaborador_id: id || null,
     p_colaborador: normalizarColaborador(colaborador),
     p_documentos: documentos == null ? null : normalizarDocumentos(documentos),
+    p_vinculo: vinculo == null ? null : normalizarVinculo(vinculo),
     p_dependentes: dependentes == null ? null : normalizarDependentes(dependentes)
   });
 
