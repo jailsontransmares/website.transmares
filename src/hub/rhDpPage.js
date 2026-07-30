@@ -1,14 +1,30 @@
 import {
   alterarStatusColaboradorRhDp,
-  excluirArquivoColaboradorRhDp,
+  abrirArquivoColaboradorRhDp,
+  descartarArquivoColaboradorRhDp,
+  enviarArquivoColaboradorRhDp,
   listarArquivosColaboradorRhDp,
   listarCompetenciasRhDp,
+  listarDesligamentosRhDp,
   listarDemandasContabilidadeRhDp,
+  listarFeriasRhDp,
+  listarAfastamentosRhDp,
+  listarOcorrenciasRhDp,
   listarColaboradoresRhDp,
   obterCadastroPessoalRhDp,
+  salvarBeneficioRhDp,
+  salvarDadosBancariosRhDp,
+  salvarChecklistAdmissionalRhDp,
+  salvarMovimentacaoRhDp,
   salvarArquivoColaboradorRhDp,
   salvarCompetenciaRhDp,
+  salvarDesligamentoRhDp,
+  salvarEventoCompetenciaRhDp,
+  salvarChecklistDesligamentoRhDp,
   salvarDemandaContabilidadeRhDp,
+  salvarFeriasRhDp,
+  salvarAfastamentoRhDp,
+  salvarOcorrenciaRhDp,
   salvarCadastroPessoalRhDp
 } from './services/rhDpService.js';
 
@@ -241,6 +257,10 @@ export function criarRhDpController({
     secao: 'colaboradores',
     demandas: [],
     competencias: [],
+    desligamentos: [],
+    ferias: [],
+    afastamentos: [],
+    ocorrencias: [],
     controleLoading: false,
     busca: '',
     filtroStatus: 'todos',
@@ -255,6 +275,10 @@ export function criarRhDpController({
       documentos: novosDocumentos(),
       vinculo: novoVinculo(),
       dependentes: [],
+      beneficios: [],
+      bancarios: {},
+      movimentacoes: [],
+      checklist: [],
       arquivos: [],
       arquivoForm: novoArquivo(),
       arquivoEditandoId: '',
@@ -310,14 +334,47 @@ export function criarRhDpController({
   function podeCriarDemandas() { return pode('rh_dp.demandas_contabilidade', 'create'); }
   function podeVerFechamentos() { return pode('rh_dp.fechamentos', 'view'); }
   function podeCriarFechamentos() { return pode('rh_dp.fechamentos', 'create'); }
+  function podeEditarFechamentos() { return pode('rh_dp.fechamentos', 'update') || pode('rh_dp.fechamentos', 'close'); }
+  function podeVerDesligamentos() { return pode('rh_dp.desligamentos', 'view'); }
+  function podeCriarDesligamentos() { return pode('rh_dp.desligamentos', 'create'); }
+  function podeEditarDesligamentos() { return pode('rh_dp.desligamentos', 'update'); }
+  function podeVerDashboard() { return pode('rh_dp.dashboard', 'view'); }
+  function podeVerFerias() { return pode('rh_dp.ferias', 'view'); }
+  function podeCriarFerias() { return pode('rh_dp.ferias', 'create'); }
+  function podeVerOcorrencias() { return pode('rh_dp.ocorrencias', 'view'); }
+  function podeCriarOcorrencias() { return pode('rh_dp.ocorrencias', 'create'); }
 
   function renderNavegacaoInterna() {
     const itens = [
+      ['dashboard', 'Dashboard', podeVerDashboard()],
       ['colaboradores', 'Colaboradores', podeVer()],
+      ['ferias', 'Férias', podeVerFerias()],
+      ['afastamentos', 'Afastamentos e ocorrências', podeVerOcorrencias()],
       ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
-      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
+      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()],
+      ['desligamentos', 'Desligamentos', podeVerDesligamentos()]
     ].filter(([, , permitido]) => permitido);
     return `<div class="rh-section-tabs">${itens.map(([id, nome]) => `<button type="button" class="secondary-btn ${state.secao === id ? 'is-active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}</div>`;
+  }
+
+  function nomeColaborador(id) {
+    return state.colaboradores.find(item => item.id === id)?.nome_completo || 'Colaborador não localizado';
+  }
+
+  function opcoesColaboradores() {
+    return state.colaboradores.filter(item => item.status !== 'inativo').map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.nome_completo)}</option>`).join('');
+  }
+
+  function renderFerias() {
+    if (!podeVerFerias()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso às férias.</p></div>';
+    const abertas = state.ferias.filter(item => !['confirmado_contabilidade', 'cancelado'].includes(item.status));
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Férias</h2><p>Planejamento, comunicação e confirmação pela contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não calcula direito, abono ou pagamento de férias. A contabilidade é a fonte oficial.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Registros em aberto</span><strong>${abertas.length}</strong></article><article class="rh-summary-card"><span>Em divergência</span><strong>${state.ferias.filter(item => item.status === 'divergente').length}</strong></article><article class="rh-summary-card"><span>Confirmados</span><strong>${state.ferias.filter(item => item.status === 'confirmado_contabilidade').length}</strong></article></div>${podeCriarFerias() ? `<details class="rh-control-form"><summary>Planejar férias</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_ferias_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Início do período aquisitivo *</span><input id="rh_ferias_aquisitivo_inicio" class="config-input" type="date"></label><label><span>Fim do período aquisitivo *</span><input id="rh_ferias_aquisitivo_fim" class="config-input" type="date"></label><label><span>Início do gozo *</span><input id="rh_ferias_inicio" class="config-input" type="date"></label><label><span>Fim do gozo *</span><input id="rh_ferias_fim" class="config-input" type="date"></label><label><span>Dias planejados *</span><input id="rh_ferias_dias" class="config-input" type="number" min="1" max="30"></label><label class="rh-checkbox"><input id="rh_ferias_abono" type="checkbox"> <span>Abono pecuniário solicitado</span></label><label class="rh-span-2"><span>Observações</span><textarea id="rh_ferias_observacoes" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarFerias()">Registrar planejamento</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando férias...</p>' : `<div class="rh-control-list">${state.ferias.length ? state.ferias.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)} · ${item.dias_gozo} dia(s)</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum planejamento de férias registrado.</p>'}</div>`}</section>`;
+  }
+
+  function renderAfastamentosOcorrencias() {
+    if (!podeVerOcorrencias()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso a afastamentos e ocorrências.</p></div>';
+    const emAberto = state.afastamentos.filter(item => !['retorno_confirmado', 'cancelado'].includes(item.status));
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Afastamentos e ocorrências</h2><p>Registro, acompanhamento de retorno e providências internas.</p></div></div><p class="admin-message rh-internal-notice">Acidentes e doenças ocupacionais são acompanhados aqui, mas medicina ocupacional e obrigações oficiais ficam fora do Hub.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Afastamentos em acompanhamento</span><strong>${emAberto.length}</strong></article><article class="rh-summary-card"><span>Ocorrências abertas</span><strong>${state.ocorrencias.filter(item => !item.encerrada_em).length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.afastamentos.filter(item => item.status === 'divergente').length}</strong></article></div>${podeCriarOcorrencias() ? `<details class="rh-control-form"><summary>Novo afastamento</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_afast_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Tipo *</span><select id="rh_afast_tipo" class="config-input"><option value="">Selecione</option><option value="atestado_medico">Atestado médico</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="licenca_maternidade">Licença-maternidade</option><option value="licenca_paternidade">Licença-paternidade</option><option value="outro">Outro</option></select></label><label><span>Início *</span><input id="rh_afast_inicio" class="config-input" type="date"></label><label><span>Previsão de retorno</span><input id="rh_afast_previsao" class="config-input" type="date"></label><label><span>Referência CID (opcional)</span><input id="rh_afast_cid" class="config-input" type="text"></label><label class="rh-checkbox"><input id="rh_afast_comunicacao" type="checkbox"> <span>Comunicação emitida</span></label><label class="rh-span-2"><span>Motivo / resumo *</span><textarea id="rh_afast_motivo" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarAfastamento()">Registrar afastamento</button></details><details class="rh-control-form"><summary>Nova ocorrência</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_ocorrencia_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Categoria *</span><select id="rh_ocorrencia_categoria" class="config-input"><option value="">Selecione</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="disciplinar">Disciplinar</option><option value="seguranca">Segurança</option><option value="administrativa">Administrativa</option><option value="outro">Outro</option></select></label><label><span>Data *</span><input id="rh_ocorrencia_data" class="config-input" type="date"></label><label class="rh-span-2"><span>Título *</span><input id="rh_ocorrencia_titulo" class="config-input" type="text"></label><label class="rh-span-2"><span>Descrição *</span><textarea id="rh_ocorrencia_descricao" class="config-input rh-textarea" rows="2"></textarea></label><label class="rh-span-2"><span>Providências</span><textarea id="rh_ocorrencia_providencias" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarOcorrencia()">Registrar ocorrência</button></details>` : ''}<div class="rh-control-list">${state.afastamentos.length ? state.afastamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</strong><span>Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno previsto ${formatarData(item.previsao_retorno_em)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum afastamento registrado.</p>'}${state.ocorrencias.length ? state.ocorrencias.map(item => `<article><div><strong>${escapeHtml(item.titulo)} · ${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.data_ocorrencia)} · ${escapeHtml(item.categoria.replaceAll('_',' '))}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma ocorrência registrada.</p>'}</div></section>`;
   }
 
   function renderDemandas() {
@@ -328,7 +385,23 @@ export function criarRhDpController({
 
   function renderFechamentos() {
     if (!podeVerFechamentos()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso ao fechamento mensal.</p></div>';
-    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Fechamento mensal</h2><p>Competências, eventos enviados, retorno e conferência com a contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não há cálculo de folha, impostos ou transmissão ao eSocial neste módulo.</p>${podeCriarFechamentos() ? `<details class="rh-control-form"><summary>Nova competência</summary><div class="rh-form-grid"><label><span>Competência *</span><input id="rh_competencia_mes" class="config-input" type="month" required></label><label><span>Prazo de envio</span><input id="rh_competencia_prazo" class="config-input" type="date"></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarCompetencia()">Abrir competência</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando competências...</p>' : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${(item.rh_eventos_competencia || []).length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}</section>`;
+    const emAberto = state.competencias.filter(item => item.status !== 'concluido').length;
+    const eventosPendentes = state.competencias.flatMap(item => item.rh_eventos_competencia || []).filter(item => ['pendente', 'enviado', 'divergencia'].includes(item.status)).length;
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Fechamento mensal</h2><p>Competências, eventos enviados, retorno e conferência com a contabilidade.</p></div></div><p class="admin-message rh-internal-notice">Não há cálculo de folha, impostos ou transmissão ao eSocial neste módulo.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Competências abertas</span><strong>${emAberto}</strong></article><article class="rh-summary-card"><span>Eventos pendentes</span><strong>${eventosPendentes}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.competencias.filter(item => item.status === 'com_divergencia').length}</strong></article></div>${podeCriarFechamentos() ? `<details class="rh-control-form"><summary>Nova competência</summary><div class="rh-form-grid"><label><span>Competência *</span><input id="rh_competencia_mes" class="config-input" type="month" required></label><label><span>Prazo de envio</span><input id="rh_competencia_prazo" class="config-input" type="date"></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarCompetencia()">Abrir competência</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando competências...</p>' : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => { const eventos = item.rh_eventos_competencia || []; return `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${eventos.length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span>${eventos.length ? `<small>${eventos.map(evento => `${escapeHtml(evento.tipo.replaceAll('_',' '))}: ${escapeHtml(evento.rh_colaboradores?.nome_completo || evento.descricao)} (${escapeHtml(evento.status)})${podeEditarFechamentos() && !['confirmado','dispensado'].includes(evento.status) ? ` <button type="button" class="icon-action-btn" onclick="hubRhDpAtualizarEvento('${evento.id}')">Atualizar</button>` : ''}`).join(' · ')}</small>` : ''}</div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span>${podeEditarFechamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpAdicionarEvento('${item.id}')">Evento</button><button type="button" class="icon-action-btn" ${eventos.some(evento => ['pendente','enviado','divergencia'].includes(evento.status)) ? 'disabled' : ''} onclick="hubRhDpConcluirCompetencia('${item.id}')">Concluir</button>` : ''}</div></article>`; }).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}</section>`;
+  }
+
+  function renderDesligamentos() {
+    if (!podeVerDesligamentos()) return '<div class="rh-empty-state"><strong>Acesso não liberado</strong><p>Seu perfil não possui acesso aos desligamentos.</p></div>';
+    const abertos = state.desligamentos.filter(item => !['concluido', 'cancelado'].includes(item.status));
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Desligamentos</h2><p>Controle do processo interno, comunicação e checklist de saída.</p></div></div><p class="admin-message rh-internal-notice">A contabilidade continua responsável por cálculos, documentos e registros oficiais.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Em andamento</span><strong>${abertos.length}</strong></article><article class="rh-summary-card"><span>Aguardando retorno</span><strong>${state.desligamentos.filter(item => item.status === 'aguardando_retorno').length}</strong></article><article class="rh-summary-card"><span>Com divergência</span><strong>${state.desligamentos.filter(item => item.status === 'divergente').length}</strong></article></div>${podeCriarDesligamentos() ? `<details class="rh-control-form"><summary>Novo desligamento</summary><div class="rh-form-grid"><label><span>Colaborador *</span><select id="rh_desligamento_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label><label><span>Tipo *</span><select id="rh_desligamento_tipo" class="config-input"><option value="pedido_colaborador">Pedido do colaborador</option><option value="iniciativa_empresa">Iniciativa da empresa</option><option value="termino_contrato">Término de contrato</option><option value="acordo">Acordo</option><option value="aposentadoria">Aposentadoria</option><option value="outro">Outro</option></select></label><label><span>Competência *</span><input id="rh_desligamento_competencia" class="config-input" type="month"></label><label><span>Último dia de trabalho</span><input id="rh_desligamento_ultimo_dia" class="config-input" type="date"></label><label><span>Aviso prévio</span><select id="rh_desligamento_aviso" class="config-input"><option value="">Não informado</option><option value="trabalhado">Trabalhado</option><option value="indenizado">Indenizado</option><option value="dispensado">Dispensado</option><option value="nao_aplicavel">Não aplicável</option></select></label><label class="rh-span-2"><span>Resumo / motivo *</span><textarea id="rh_desligamento_motivo" class="config-input rh-textarea" rows="2"></textarea></label></div><button type="button" class="save-btn" onclick="hubRhDpSalvarDesligamento()">Registrar desligamento</button></details>` : ''}${state.controleLoading ? '<p class="quick-link-empty">Carregando desligamentos...</p>' : `<div class="rh-control-list">${state.desligamentos.length ? state.desligamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · competência ${formatarData(item.competencia).slice(3)}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}</span><small>${(item.rh_checklist_desligamento || []).filter(check => check.status === 'concluido').length}/6 itens da checklist concluídos</small></div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span>${podeEditarDesligamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpConcluirChecklistDesligamento('${item.id}')">Checklist</button>` : ''}</div></article>`).join('') : '<p class="quick-link-empty">Nenhum desligamento registrado.</p>'}</div>`}</section>`;
+  }
+
+  function renderDashboard() {
+    const ativos = state.colaboradores.filter(item => item.status === 'ativo').length;
+    const feriasAbertas = state.ferias.filter(item => !['confirmado_contabilidade','cancelado'].includes(item.status)).length;
+    const afastamentos = state.afastamentos.filter(item => !['retorno_confirmado','cancelado'].includes(item.status)).length;
+    const pendencias = state.demandas.filter(item => !['concluido','cancelado'].includes(item.status)).length + state.competencias.flatMap(item => item.rh_eventos_competencia || []).filter(item => ['pendente','enviado','divergencia'].includes(item.status)).length;
+    return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Dashboard RH & DP</h2><p>Indicadores operacionais obtidos apenas dos registros aos quais seu perfil possui acesso.</p></div></div><p class="admin-message rh-internal-notice">Painel de controle interno; não representa folha, indicadores legais ou registros oficiais.</p><div class="rh-summary-grid"><article class="rh-summary-card"><span>Colaboradores ativos</span><strong>${ativos}</strong></article><article class="rh-summary-card"><span>Férias planejadas</span><strong>${feriasAbertas}</strong></article><article class="rh-summary-card"><span>Afastamentos em acompanhamento</span><strong>${afastamentos}</strong></article><article class="rh-summary-card"><span>Pendências operacionais</span><strong>${pendencias}</strong></article></div></section>`;
   }
 
   function colaboradoresFiltrados() {
@@ -483,7 +556,7 @@ export function criarRhDpController({
       `
       : `
         ${renderNavegacaoInterna()}
-        ${state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : `
+        ${state.secao === 'dashboard' ? renderDashboard() : state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : state.secao === 'desligamentos' ? renderDesligamentos() : state.secao === 'ferias' ? renderFerias() : state.secao === 'afastamentos' ? renderAfastamentosOcorrencias() : `
         <section class="admin-panel rh-panel">
           <div class="admin-panel-header rh-panel-header">
             <div>
@@ -777,6 +850,27 @@ export function criarRhDpController({
     `;
   }
 
+  function renderSecaoBeneficios(readonly) {
+    if (!podeVerSensiveis()) return '';
+    const itens = state.modal.beneficios;
+    return `<section class="rh-form-section"><div class="rh-form-section-title rh-files-title"><div><strong>Benefícios</strong><span>Controle interno de concessões e coparticipações.</span></div></div>
+      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · ${escapeHtml(item.status)}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div></article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div>
+      ${readonly || !state.modal.id ? '' : `<details class="rh-control-form"><summary>Adicionar benefício</summary><div class="rh-form-grid">${campoSelect('beneficio_tipo','Tipo','',['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'])}${campo('beneficio_nome','Nome do benefício','')}${campo('beneficio_operadora','Operadora/fornecedor','')}${campo('beneficio_valor_empresa','Valor empresa','',{placeholder:'0,00'})}${campo('beneficio_valor_colaborador','Valor colaborador','',{placeholder:'0,00'})}${campo('beneficio_inicio','Início','',{type:'date'})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarBeneficio()">Adicionar benefício</button></details>`}</section>`;
+  }
+
+  function renderSecaoBancarios(readonly) {
+    if (!podeVerSensiveis()) return '';
+    const item = state.modal.bancarios;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid">${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campo('banco_conta_digito','Dígito',item.conta_digito,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}${campo('banco_titular_nome','Titular',item.titular_nome,{readonly})}${campo('banco_titular_cpf','CPF do titular',formatarCpf(item.titular_cpf),{readonly,mask:'cpf'})}</div>${readonly || !state.modal.id ? '' : '<button type="button" class="save-btn" onclick="hubRhDpSalvarBancarios()">Salvar dados bancários</button>'}</section>`;
+  }
+
+  const CHECKLIST_ADMISSIONAL = [['dados_pessoais','Dados pessoais'],['documentos','Documentos'],['vinculo','Vínculo profissional'],['beneficios','Benefícios'],['dados_bancarios','Dados bancários'],['anexos','Anexos'],['conferencia_contabilidade','Conferência da contabilidade']];
+  function renderSecaoChecklistHistorico(readonly) {
+    if (!podeVerSensiveis()) return '';
+    const registros = Object.fromEntries(state.modal.checklist.map(item => [item.item_chave, item]));
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Checklist admissional e histórico</strong><span>Registros de acompanhamento; não gera eventos oficiais.</span></div><div class="rh-checklist">${CHECKLIST_ADMISSIONAL.map(([chave,nome]) => { const item=registros[chave]; const concluido=item?.status==='concluido'; return `<label class="rh-checklist-row"><input type="checkbox" ${concluido?'checked':''} ${readonly||!state.modal.id?'disabled':''} onchange="hubRhDpAtualizarChecklist('${chave}', this.checked)"><span>${escapeHtml(nome)}</span><small>${concluido ? `Concluído em ${formatarData(item.concluido_em)}` : 'Pendente'}</small></label>`; }).join('')}</div><div class="rh-history-list">${state.modal.movimentacoes.length ? state.modal.movimentacoes.map(item=>`<article><strong>${escapeHtml(item.titulo)}</strong><span>${formatarData(item.data_efetivacao)} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</span>${item.descricao?`<small>${escapeHtml(item.descricao)}</small>`:''}</article>`).join(''):'<p class="quick-link-empty">Nenhuma movimentação registrada.</p>'}</div>${readonly||!state.modal.id?'':`<details class="rh-control-form"><summary>Registrar alteração</summary><div class="rh-form-grid">${campoSelect('mov_tipo','Tipo','',['cargo_funcao','remuneracao','jornada','beneficio','dados_bancarios','situacao','outro'])}${campo('mov_data','Data de efetivação','',{type:'date'})}${campo('mov_titulo','Título','')}${campoTextarea('mov_descricao','Descrição','',{rows:2})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarMovimentacao()">Registrar alteração</button></details>`}</section>`;
+  }
+
   function renderSecaoArquivos(readonly) {
     if (!podeVerArquivos()) {
       return `
@@ -795,7 +889,7 @@ export function criarRhDpController({
         <div class="rh-form-section-title rh-files-title">
           <div>
             <strong>Arquivos e Google Drive</strong>
-            <span>Controle de links e metadados. O upload automático fica para a integração do Drive.</span>
+            <span>Arquivos protegidos no Google Drive, com versões e rastreabilidade.</span>
           </div>
           ${podeManterArquivos && state.modal.arquivoEditandoId ? `
             <button class="secondary-btn" type="button" onclick="hubRhDpCancelarArquivo()">Novo arquivo</button>
@@ -829,17 +923,16 @@ export function criarRhDpController({
     return `
       <div class="rh-files-list">
         ${state.modal.arquivos.map(item => {
-          const link = item.google_drive_preview_url || item.google_drive_web_url || '';
-          const podeAbrir = link && podeBaixarArquivos();
+          const podeAbrir = Boolean(item.google_drive_file_id) && podeBaixarArquivos();
           return `
             <article class="rh-file-row">
               <div class="rh-file-main">
                 <strong>${escapeHtml(item.nome_arquivo || item.tipo_documento || 'Arquivo sem nome')}</strong>
-                <span>${escapeHtml(formatarCategoriaArquivo(item.categoria))}${item.data_validade ? ` • válido até ${escapeHtml(formatarData(item.data_validade))}` : ''}</span>
+                <span>${escapeHtml(formatarCategoriaArquivo(item.categoria))}${item.versao_atual ? ` • versão ${item.versao_atual}` : ''}${item.data_validade ? ` • válido até ${escapeHtml(formatarData(item.data_validade))}` : ''}</span>
                 ${item.descricao ? `<small>${escapeHtml(item.descricao)}</small>` : ''}
               </div>
               <div class="rh-file-actions">
-                ${podeAbrir ? `<button class="icon-action-btn" type="button" onclick="hubRhDpAbrirArquivo('${escapeAttr(link)}')">Visualizar</button>` : ''}
+                ${podeAbrir ? `<button class="icon-action-btn" type="button" onclick="hubRhDpAbrirArquivo('${escapeAttr(item.id)}')">Visualizar</button>` : ''}
                 ${!readonly && podeEditarArquivos() ? `<button class="icon-action-btn" type="button" onclick="hubRhDpEditarArquivo('${escapeAttr(item.id)}')">Editar</button>` : ''}
                 ${!readonly && podeExcluirArquivos() ? `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpExcluirArquivo('${escapeAttr(item.id)}')">Excluir</button>` : ''}
               </div>
@@ -858,10 +951,8 @@ export function criarRhDpController({
         <div class="rh-form-grid">
           ${campoSelectPares('arquivo_categoria', 'Categoria', item.categoria, CATEGORIAS_ARQUIVO, { required: true })}
           ${campo('arquivo_tipo_documento', 'Tipo de documento', item.tipo_documento, { placeholder: 'Ex.: RG, contrato, ASO' })}
-          ${campo('arquivo_nome_arquivo', 'Nome do arquivo', item.nome_arquivo, { required: true })}
-          ${campo('arquivo_google_drive_web_url', 'Link do Google Drive', item.google_drive_web_url, { placeholder: 'https://drive.google.com/...' })}
-          ${campo('arquivo_google_drive_file_id', 'ID do arquivo no Drive', item.google_drive_file_id)}
-          ${campo('arquivo_google_drive_preview_url', 'Link de pré-visualização', item.google_drive_preview_url)}
+          ${campo('arquivo_nome_arquivo', 'Nome de identificação', item.nome_arquivo, { required: true })}
+          <label class="rh-span-2"><span>${editando ? 'Enviar nova versão (opcional)' : 'Arquivo *'}</span><input id="rh_arquivo_upload" class="config-input" type="file" ${editando ? '' : 'required'}></label>
           ${campo('arquivo_data_referencia', 'Data de referência', item.data_referencia, { type: 'date' })}
           ${campo('arquivo_data_validade', 'Validade', item.data_validade, { type: 'date' })}
           ${campo('arquivo_google_drive_folder_id', 'ID da pasta no Drive', item.google_drive_folder_id)}
@@ -870,7 +961,7 @@ export function criarRhDpController({
         </div>
         <div class="rh-file-form-actions">
           <button class="save-btn" type="button" onclick="hubRhDpSalvarArquivo()" ${state.modal.arquivoSaving ? 'disabled' : ''}>
-            ${state.modal.arquivoSaving ? 'Salvando...' : editando ? 'Atualizar arquivo' : 'Vincular arquivo'}
+            ${state.modal.arquivoSaving ? 'Enviando...' : editando ? 'Salvar e enviar nova versão' : 'Enviar arquivo'}
           </button>
           ${editando ? '<button class="secondary-btn" type="button" onclick="hubRhDpCancelarArquivo()">Cancelar edição</button>' : ''}
         </div>
@@ -932,6 +1023,9 @@ export function criarRhDpController({
               ${renderSecaoDocumentos(readonly)}
               ${renderSecaoDependentes(readonly)}
               ${renderSecaoVinculo(readonly)}
+              ${renderSecaoBeneficios(readonly)}
+              ${renderSecaoBancarios(readonly)}
+              ${renderSecaoChecklistHistorico(readonly)}
               ${renderSecaoArquivos(readonly)}
               ${renderSecaoObservacoes(readonly)}
             `}
@@ -1067,7 +1161,7 @@ export function criarRhDpController({
   }
 
   async function abrirSecao(secao) {
-    if (!['colaboradores', 'demandas', 'fechamentos'].includes(secao)) return;
+    if (!['dashboard', 'colaboradores', 'demandas', 'fechamentos', 'desligamentos', 'ferias', 'afastamentos'].includes(secao)) return;
     state.secao = secao;
     if (secao === 'colaboradores') { render(); return; }
     state.controleLoading = true;
@@ -1076,6 +1170,17 @@ export function criarRhDpController({
     try {
       if (secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
       if (secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
+      if (secao === 'desligamentos') state.desligamentos = await listarDesligamentosRhDp();
+      if (secao === 'ferias') state.ferias = await listarFeriasRhDp();
+      if (secao === 'afastamentos') [state.afastamentos, state.ocorrencias] = await Promise.all([listarAfastamentosRhDp(), listarOcorrenciasRhDp()]);
+      if (secao === 'dashboard') {
+        const tarefas = [];
+        if (podeVerFerias()) tarefas.push(listarFeriasRhDp().then(valor => { state.ferias = valor; }));
+        if (podeVerOcorrencias()) tarefas.push(listarAfastamentosRhDp().then(valor => { state.afastamentos = valor; }));
+        if (podeVerDemandas()) tarefas.push(listarDemandasContabilidadeRhDp().then(valor => { state.demandas = valor; }));
+        if (podeVerFechamentos()) tarefas.push(listarCompetenciasRhDp().then(valor => { state.competencias = valor; }));
+        await Promise.all(tarefas);
+      }
     } catch (error) {
       state.message = error.message || 'Não foi possível carregar os controles.';
       state.messageType = 'error';
@@ -1083,6 +1188,29 @@ export function criarRhDpController({
       state.controleLoading = false;
       render();
     }
+  }
+
+  async function salvarFerias() {
+    const colaborador_id = document.getElementById('rh_ferias_colaborador')?.value;
+    const periodo_aquisitivo_inicio = document.getElementById('rh_ferias_aquisitivo_inicio')?.value;
+    const periodo_aquisitivo_fim = document.getElementById('rh_ferias_aquisitivo_fim')?.value;
+    const inicio_gozo = document.getElementById('rh_ferias_inicio')?.value;
+    const fim_gozo = document.getElementById('rh_ferias_fim')?.value;
+    const dias_gozo = document.getElementById('rh_ferias_dias')?.value;
+    if (!colaborador_id || !periodo_aquisitivo_inicio || !periodo_aquisitivo_fim || !inicio_gozo || !fim_gozo || !dias_gozo) { state.message = 'Preencha todos os campos obrigatórios das férias.'; state.messageType = 'error'; render(); return; }
+    try { await salvarFeriasRhDp({ ferias: { colaborador_id, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, inicio_gozo, fim_gozo, dias_gozo, abono_pecuniario: document.getElementById('rh_ferias_abono')?.checked, observacoes: document.getElementById('rh_ferias_observacoes')?.value, status: 'rascunho' } }); state.message = 'Planejamento de férias registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('ferias'); } catch (error) { state.message = error.message || 'Não foi possível registrar as férias.'; state.messageType = 'error'; render(); }
+  }
+
+  async function salvarAfastamento() {
+    const colaborador_id = document.getElementById('rh_afast_colaborador')?.value; const tipo = document.getElementById('rh_afast_tipo')?.value; const inicio_em = document.getElementById('rh_afast_inicio')?.value; const motivo = document.getElementById('rh_afast_motivo')?.value;
+    if (!colaborador_id || !tipo || !inicio_em || !motivo?.trim()) { state.message = 'Preencha os campos obrigatórios do afastamento.'; state.messageType = 'error'; render(); return; }
+    try { await salvarAfastamentoRhDp({ afastamento: { colaborador_id, tipo, inicio_em, motivo, previsao_retorno_em: document.getElementById('rh_afast_previsao')?.value, cid_referencia: document.getElementById('rh_afast_cid')?.value, comunicacao_emitida: document.getElementById('rh_afast_comunicacao')?.checked, status: 'rascunho' } }); state.message = 'Afastamento registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('afastamentos'); } catch (error) { state.message = error.message || 'Não foi possível registrar o afastamento.'; state.messageType = 'error'; render(); }
+  }
+
+  async function salvarOcorrencia() {
+    const colaborador_id = document.getElementById('rh_ocorrencia_colaborador')?.value; const categoria = document.getElementById('rh_ocorrencia_categoria')?.value; const data_ocorrencia = document.getElementById('rh_ocorrencia_data')?.value; const titulo = document.getElementById('rh_ocorrencia_titulo')?.value; const descricao = document.getElementById('rh_ocorrencia_descricao')?.value;
+    if (!colaborador_id || !categoria || !data_ocorrencia || !titulo?.trim() || !descricao?.trim()) { state.message = 'Preencha os campos obrigatórios da ocorrência.'; state.messageType = 'error'; render(); return; }
+    try { await salvarOcorrenciaRhDp({ ocorrencia: { colaborador_id, categoria, data_ocorrencia, titulo, descricao, providencias: document.getElementById('rh_ocorrencia_providencias')?.value, status: 'aberta' } }); state.message = 'Ocorrência registrada.'; state.messageType = 'success'; await abrirSecao('afastamentos'); } catch (error) { state.message = error.message || 'Não foi possível registrar a ocorrência.'; state.messageType = 'error'; render(); }
   }
 
   async function salvarDemanda() {
@@ -1111,6 +1239,54 @@ export function criarRhDpController({
       state.message = 'Competência aberta para preparação.'; state.messageType = 'success';
       await abrirSecao('fechamentos');
     } catch (error) { state.message = error.message || 'Não foi possível abrir a competência.'; state.messageType = 'error'; render(); }
+  }
+
+  async function adicionarEvento(competenciaId) {
+    const tipo = window.prompt('Tipo do evento (admissao, alteracao_cadastral, ferias, afastamento, desligamento, beneficio, remuneracao, variavel ou outro):', 'outro');
+    if (!tipo) return;
+    const descricao = window.prompt('Descreva o evento para conferência com a contabilidade:');
+    if (!descricao?.trim()) return;
+    try {
+      await salvarEventoCompetenciaRhDp({ evento: { competencia_id: competenciaId, tipo, descricao, status: 'pendente' } });
+      state.message = 'Evento incluído na competência.'; state.messageType = 'success'; await abrirSecao('fechamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível incluir o evento.'; state.messageType = 'error'; render(); }
+  }
+
+  async function concluirCompetencia(id) {
+    if (!window.confirm('Concluir esta competência? A conclusão exige que todos os eventos estejam confirmados ou dispensados.')) return;
+    try {
+      await salvarCompetenciaRhDp({ id, competencia: { status: 'concluido' } });
+      state.message = 'Competência concluída.'; state.messageType = 'success'; await abrirSecao('fechamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível concluir a competência.'; state.messageType = 'error'; render(); }
+  }
+
+  async function atualizarEvento(id) {
+    const status = window.prompt('Status do evento (enviado, confirmado, divergencia ou dispensado):', 'confirmado');
+    if (!status) return;
+    try {
+      await salvarEventoCompetenciaRhDp({ id, evento: { status } });
+      state.message = 'Evento atualizado.'; state.messageType = 'success'; await abrirSecao('fechamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível atualizar o evento.'; state.messageType = 'error'; render(); }
+  }
+
+  async function salvarDesligamento() {
+    const colaborador_id = document.getElementById('rh_desligamento_colaborador')?.value;
+    const competencia = document.getElementById('rh_desligamento_competencia')?.value;
+    const motivo_resumo = document.getElementById('rh_desligamento_motivo')?.value;
+    if (!colaborador_id || !competencia || !motivo_resumo?.trim()) { state.message = 'Preencha colaborador, competência e resumo do desligamento.'; state.messageType = 'error'; render(); return; }
+    try {
+      await salvarDesligamentoRhDp({ desligamento: { colaborador_id, competencia, motivo_resumo, tipo: document.getElementById('rh_desligamento_tipo')?.value, ultimo_dia_trabalho: document.getElementById('rh_desligamento_ultimo_dia')?.value, aviso_previo: document.getElementById('rh_desligamento_aviso')?.value, status: 'rascunho' } });
+      state.message = 'Desligamento registrado como rascunho.'; state.messageType = 'success'; await abrirSecao('desligamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível registrar o desligamento.'; state.messageType = 'error'; render(); }
+  }
+
+  async function concluirChecklistDesligamento(desligamentoId) {
+    const item_chave = window.prompt('Item concluído (contabilidade, acessos, equipamentos, beneficios, documentos ou comunicacao_interna):');
+    if (!item_chave) return;
+    try {
+      await salvarChecklistDesligamentoRhDp({ checklist: { desligamento_id: desligamentoId, item_chave, status: 'concluido' } });
+      state.message = 'Checklist atualizada.'; state.messageType = 'success'; await abrirSecao('desligamentos');
+    } catch (error) { state.message = error.message || 'Não foi possível atualizar a checklist.'; state.messageType = 'error'; render(); }
   }
 
   async function abrirCadastro(id = '', modo = 'view') {
@@ -1149,6 +1325,10 @@ export function criarRhDpController({
       state.modal.documentos = { ...novosDocumentos(), ...(dados.documentos || {}) };
       state.modal.vinculo = { ...novoVinculo(), ...(dados.vinculo || {}) };
       state.modal.dependentes = dados.dependentes || [];
+      state.modal.beneficios = dados.beneficios || [];
+      state.modal.bancarios = dados.bancarios || {};
+      state.modal.movimentacoes = dados.movimentacoes || [];
+      state.modal.checklist = dados.checklist || [];
       state.modal.arquivos = podeVerArquivos()
         ? await listarArquivosColaboradorRhDp({ colaboradorId: id })
         : [];
@@ -1211,15 +1391,6 @@ export function criarRhDpController({
     if (!state.modal.id) return 'Salve o cadastro antes de vincular arquivos.';
     if (!arquivo.categoria) return 'Informe a categoria do arquivo.';
     if (String(arquivo.nome_arquivo || '').trim().length < 2) return 'Informe o nome do arquivo.';
-    if (!arquivo.google_drive_web_url && !arquivo.google_drive_file_id) {
-      return 'Informe o link do Google Drive ou o ID do arquivo.';
-    }
-    if (arquivo.google_drive_web_url && !/^https?:\/\//i.test(arquivo.google_drive_web_url)) {
-      return 'Informe um link válido do Google Drive.';
-    }
-    if (arquivo.google_drive_preview_url && !/^https?:\/\//i.test(arquivo.google_drive_preview_url)) {
-      return 'Informe um link de pré-visualização válido.';
-    }
     return '';
   }
 
@@ -1260,15 +1431,22 @@ export function criarRhDpController({
     render();
 
     try {
-      await salvarArquivoColaboradorRhDp({
-        id: state.modal.arquivoEditandoId || null,
-        arquivo: state.modal.arquivoForm
-      });
+      const arquivoSelecionado = document.getElementById('rh_arquivo_upload')?.files?.[0] || null;
+      if (!arquivoSelecionado && !state.modal.arquivoEditandoId) throw new Error('Selecione um arquivo para enviar.');
+      if (arquivoSelecionado) {
+        await enviarArquivoColaboradorRhDp({
+          arquivo: arquivoSelecionado,
+          metadados: state.modal.arquivoForm,
+          arquivoId: state.modal.arquivoEditandoId || null
+        });
+      } else {
+        await salvarArquivoColaboradorRhDp({ id: state.modal.arquivoEditandoId, arquivo: state.modal.arquivoForm });
+      }
       await recarregarArquivos();
       state.modal.arquivoForm = novoArquivo(state.modal.id);
       state.modal.arquivoEditandoId = '';
       state.modal.arquivoSaving = false;
-      state.modal.arquivoMessage = 'Arquivo vinculado com sucesso.';
+      state.modal.arquivoMessage = arquivoSelecionado ? 'Arquivo enviado com sucesso.' : 'Metadados atualizados com sucesso.';
       state.modal.arquivoMessageType = 'success';
       render();
     } catch (error) {
@@ -1282,19 +1460,21 @@ export function criarRhDpController({
   async function excluirArquivo(id) {
     if (!podeExcluirArquivos()) return;
     const arquivo = state.modal.arquivos.find(item => item.id === id);
-    if (!arquivo || !window.confirm(`Deseja excluir o vínculo do arquivo "${arquivo.nome_arquivo || arquivo.tipo_documento || 'sem nome'}"?`)) return;
+    if (!arquivo) return;
+    const justificativa = window.prompt(`Informe o motivo do descarte de "${arquivo.nome_arquivo || arquivo.tipo_documento || 'sem nome'}". O arquivo será enviado à lixeira do Drive.`, '');
+    if (justificativa === null) return;
 
     state.modal.arquivoMessage = '';
     render();
 
     try {
-      await excluirArquivoColaboradorRhDp({ id });
+      await descartarArquivoColaboradorRhDp({ id, justificativa });
       await recarregarArquivos();
       if (state.modal.arquivoEditandoId === id) {
         state.modal.arquivoForm = novoArquivo(state.modal.id);
         state.modal.arquivoEditandoId = '';
       }
-      state.modal.arquivoMessage = 'Arquivo excluído da lista com sucesso.';
+      state.modal.arquivoMessage = 'Arquivo descartado e enviado à lixeira do Drive.';
       state.modal.arquivoMessageType = 'success';
       render();
     } catch (error) {
@@ -1304,9 +1484,18 @@ export function criarRhDpController({
     }
   }
 
-  function abrirArquivo(url) {
-    if (!url || !podeBaixarArquivos()) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  async function abrirArquivo(id) {
+    if (!id || !podeBaixarArquivos()) return;
+    try {
+      const { blob } = await abrirArquivoColaboradorRhDp({ id, disposition: 'inline' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      state.modal.arquivoMessage = error.message || 'Não foi possível abrir o arquivo.';
+      state.modal.arquivoMessageType = 'error';
+      render();
+    }
   }
 
   async function salvarCadastro() {
@@ -1367,6 +1556,43 @@ export function criarRhDpController({
       state.messageType = 'error';
       render();
     }
+  }
+
+  async function recarregarFase5() {
+    const dados = await obterCadastroPessoalRhDp({ id: state.modal.id, incluirSensiveis: true });
+    state.modal.beneficios = dados.beneficios || [];
+    state.modal.bancarios = dados.bancarios || {};
+    state.modal.movimentacoes = dados.movimentacoes || [];
+    state.modal.checklist = dados.checklist || [];
+  }
+
+  async function salvarBeneficio() {
+    try {
+      await salvarBeneficioRhDp({ beneficio: { colaborador_id: state.modal.id, tipo: obterValor('beneficio_tipo'), nome: obterValor('beneficio_nome'), operadora_fornecedor: obterValor('beneficio_operadora'), valor_empresa: obterValor('beneficio_valor_empresa'), valor_colaborador: obterValor('beneficio_valor_colaborador'), inicio_em: obterValor('beneficio_inicio') } });
+      await recarregarFase5(); state.modal.erros = {}; render();
+    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar o benefício.'; render(); }
+  }
+
+  async function salvarBancarios() {
+    try {
+      await salvarDadosBancariosRhDp({ id: state.modal.bancarios.id || null, dados: { colaborador_id: state.modal.id, banco_codigo: obterValor('banco_codigo'), banco_nome: obterValor('banco_nome'), tipo_conta: obterValor('banco_tipo_conta'), agencia: obterValor('banco_agencia'), conta: obterValor('banco_conta'), conta_digito: obterValor('banco_conta_digito'), pix_tipo: obterValor('banco_pix_tipo'), pix_chave: obterValor('banco_pix_chave'), titular_nome: obterValor('banco_titular_nome'), titular_cpf: obterValor('banco_titular_cpf') } });
+      await recarregarFase5(); state.modal.erros = {}; render();
+    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar os dados bancários.'; render(); }
+  }
+
+  async function atualizarChecklist(itemChave, concluido) {
+    try {
+      const atual = state.modal.checklist.find(item => item.item_chave === itemChave);
+      await salvarChecklistAdmissionalRhDp({ id: atual?.id || null, item: { colaborador_id: state.modal.id, item_chave: itemChave, status: concluido ? 'concluido' : 'pendente' } });
+      await recarregarFase5(); render();
+    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível atualizar o checklist.'; render(); }
+  }
+
+  async function salvarMovimentacao() {
+    try {
+      await salvarMovimentacaoRhDp({ movimentacao: { colaborador_id: state.modal.id, tipo: obterValor('mov_tipo'), data_efetivacao: obterValor('mov_data'), titulo: obterValor('mov_titulo'), descricao: obterValor('mov_descricao') } });
+      await recarregarFase5(); state.modal.erros = {}; render();
+    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível registrar a alteração.'; render(); }
   }
 
   function filtrarBusca(valor) {
@@ -1469,9 +1695,21 @@ export function criarRhDpController({
     hubRhDpSelecionarPagina: selecionarPagina,
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
+    ,hubRhDpSalvarBeneficio: salvarBeneficio
+    ,hubRhDpSalvarBancarios: salvarBancarios
+    ,hubRhDpAtualizarChecklist: atualizarChecklist
+    ,hubRhDpSalvarMovimentacao: salvarMovimentacao
     ,hubRhDpAbrirSecao: abrirSecao
     ,hubRhDpSalvarDemanda: salvarDemanda
     ,hubRhDpSalvarCompetencia: salvarCompetencia
+    ,hubRhDpAdicionarEvento: adicionarEvento
+    ,hubRhDpAtualizarEvento: atualizarEvento
+    ,hubRhDpConcluirCompetencia: concluirCompetencia
+    ,hubRhDpSalvarDesligamento: salvarDesligamento
+    ,hubRhDpConcluirChecklistDesligamento: concluirChecklistDesligamento
+    ,hubRhDpSalvarFerias: salvarFerias
+    ,hubRhDpSalvarAfastamento: salvarAfastamento
+    ,hubRhDpSalvarOcorrencia: salvarOcorrencia
   });
 
   return {

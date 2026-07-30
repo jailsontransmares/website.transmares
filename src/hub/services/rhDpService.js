@@ -1,4 +1,4 @@
-import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import { exigirSupabaseConfigurado, obterUrlSupabase } from '../supabaseClient.js';
 
 const COLUNAS_COLABORADOR = `
   id,
@@ -94,6 +94,7 @@ const COLUNAS_ARQUIVO = `
   google_drive_folder_id,
   mime_type,
   tamanho_bytes,
+  versao_atual,
   data_referencia,
   data_validade,
   retencao_ate,
@@ -101,6 +102,46 @@ const COLUNAS_ARQUIVO = `
   observacoes,
   created_at,
   updated_at
+`;
+
+const COLUNAS_BENEFICIO = `
+  id, colaborador_id, tipo, nome, operadora_fornecedor, valor_empresa,
+  valor_colaborador, inicio_em, fim_em, status, observacoes, created_at, updated_at
+`;
+
+const COLUNAS_BANCARIOS = `
+  id, colaborador_id, banco_codigo, banco_nome, tipo_conta, agencia, conta,
+  conta_digito, operacao, pix_tipo, pix_chave, titular_nome, titular_cpf,
+  status, observacoes, created_at, updated_at
+`;
+
+const COLUNAS_MOVIMENTACAO = `
+  id, colaborador_id, tipo, data_efetivacao, titulo, descricao, dados_anteriores,
+  dados_novos, referencia_externa, created_at, updated_at
+`;
+
+const COLUNAS_CHECKLIST = `
+  id, colaborador_id, item_chave, status, concluido_em, observacoes, created_at, updated_at
+`;
+
+const COLUNAS_FERIAS = `
+  id, colaborador_id, periodo_aquisitivo_inicio, periodo_aquisitivo_fim,
+  inicio_gozo, fim_gozo, dias_gozo, abono_pecuniario, observacoes,
+  status, enviado_em, retorno_em, retorno_resumo, divergencia_descricao,
+  created_at, updated_at, rh_colaboradores(nome_completo)
+`;
+
+const COLUNAS_AFASTAMENTO = `
+  id, colaborador_id, tipo, motivo, inicio_em, previsao_retorno_em,
+  retorno_em, cid_referencia, comunicacao_emitida, observacoes, status,
+  enviado_em, retorno_em_contabilidade, retorno_resumo, divergencia_descricao,
+  created_at, updated_at, rh_colaboradores(nome_completo)
+`;
+
+const COLUNAS_OCORRENCIA = `
+  id, colaborador_id, categoria, data_ocorrencia, titulo, descricao,
+  providencias, requer_acompanhamento, encerrada_em, status,
+  created_at, updated_at, rh_colaboradores(nome_completo)
 `;
 
 function limparTexto(valor) {
@@ -249,6 +290,37 @@ function normalizarArquivo(payload = {}) {
     tamanho_bytes: normalizarDecimal(payload.tamanho_bytes),
     data_referencia: limparTexto(payload.data_referencia),
     data_validade: limparTexto(payload.data_validade),
+    observacoes: limparTexto(payload.observacoes)
+  };
+}
+
+function normalizarBeneficio(payload = {}) {
+  return {
+    colaborador_id: limparTexto(payload.colaborador_id),
+    tipo: limparTexto(payload.tipo)?.toLowerCase() || null,
+    nome: limparTexto(payload.nome),
+    operadora_fornecedor: limparTexto(payload.operadora_fornecedor),
+    valor_empresa: normalizarDecimal(payload.valor_empresa),
+    valor_colaborador: normalizarDecimal(payload.valor_colaborador),
+    inicio_em: limparTexto(payload.inicio_em),
+    fim_em: limparTexto(payload.fim_em),
+    status: limparTexto(payload.status)?.toLowerCase() || 'ativo',
+    observacoes: limparTexto(payload.observacoes)
+  };
+}
+
+function normalizarBancarios(payload = {}) {
+  return {
+    colaborador_id: limparTexto(payload.colaborador_id),
+    banco_codigo: limparDigitos(payload.banco_codigo),
+    banco_nome: limparTexto(payload.banco_nome),
+    tipo_conta: limparTexto(payload.tipo_conta)?.toLowerCase() || null,
+    agencia: limparTexto(payload.agencia), conta: limparTexto(payload.conta),
+    conta_digito: limparTexto(payload.conta_digito), operacao: limparTexto(payload.operacao),
+    pix_tipo: limparTexto(payload.pix_tipo)?.toLowerCase() || null,
+    pix_chave: limparTexto(payload.pix_chave), titular_nome: limparTexto(payload.titular_nome),
+    titular_cpf: limparDigitos(payload.titular_cpf),
+    status: limparTexto(payload.status)?.toLowerCase() || 'ativo',
     observacoes: limparTexto(payload.observacoes)
   };
 }
@@ -406,14 +478,23 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
       .order('nome_completo', { ascending: true })
     : Promise.resolve({ data: [], error: null });
 
-  const [colaborador, documentos, vinculo, dependentes] = await Promise.all([
+  const beneficiosPromise = incluirSensiveis ? supabase.from('rh_beneficios_colaboradores').select(COLUNAS_BENEFICIO).eq('colaborador_id', id).order('status').order('nome') : Promise.resolve({ data: [], error: null });
+  const bancariosPromise = incluirSensiveis ? supabase.from('rh_dados_bancarios_colaboradores').select(COLUNAS_BANCARIOS).eq('colaborador_id', id).maybeSingle() : Promise.resolve({ data: null, error: null });
+  const movimentacoesPromise = incluirSensiveis ? supabase.from('rh_movimentacoes_colaboradores').select(COLUNAS_MOVIMENTACAO).eq('colaborador_id', id).order('data_efetivacao', { ascending: false }).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null });
+  const checklistPromise = incluirSensiveis ? supabase.from('rh_checklist_admissional').select(COLUNAS_CHECKLIST).eq('colaborador_id', id).order('item_chave') : Promise.resolve({ data: [], error: null });
+
+  const [colaborador, documentos, vinculo, dependentes, beneficios, bancarios, movimentacoes, checklist] = await Promise.all([
     colaboradorPromise,
     documentosPromise,
     vinculoPromise,
-    dependentesPromise
+    dependentesPromise,
+    beneficiosPromise,
+    bancariosPromise,
+    movimentacoesPromise,
+    checklistPromise
   ]);
 
-  const error = colaborador.error || documentos.error || vinculo.error || dependentes.error;
+  const error = colaborador.error || documentos.error || vinculo.error || dependentes.error || beneficios.error || bancarios.error || movimentacoes.error || checklist.error;
   if (error) {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar o cadastro.'));
   }
@@ -422,8 +503,50 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
     colaborador: colaborador.data,
     documentos: documentos.data || {},
     vinculo: vinculo.data || {},
-    dependentes: dependentes.data || []
+    dependentes: dependentes.data || [],
+    beneficios: beneficios.data || [], bancarios: bancarios.data || {},
+    movimentacoes: movimentacoes.data || [], checklist: checklist.data || []
   };
+}
+
+export async function salvarBeneficioRhDp({ id = null, beneficio = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarBeneficio(beneficio);
+  const { data, error } = id
+    ? await supabase.from('rh_beneficios_colaboradores').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_beneficios_colaboradores').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o benefício.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarDadosBancariosRhDp({ id = null, dados = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarBancarios(dados);
+  const { data, error } = id
+    ? await supabase.from('rh_dados_bancarios_colaboradores').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_dados_bancarios_colaboradores').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar os dados bancários.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarChecklistAdmissionalRhDp({ id = null, item = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = { colaborador_id: limparTexto(item.colaborador_id), item_chave: limparTexto(item.item_chave), status: limparTexto(item.status)?.toLowerCase() || 'pendente', concluido_em: limparTexto(item.concluido_em), observacoes: limparTexto(item.observacoes) };
+  if (payload.status === 'concluido' && !payload.concluido_em) payload.concluido_em = new Date().toISOString().slice(0, 10);
+  if (payload.status !== 'concluido') payload.concluido_em = null;
+  const { data, error } = id
+    ? await supabase.from('rh_checklist_admissional').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_checklist_admissional').upsert(payload, { onConflict: 'colaborador_id,item_chave' }).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o checklist.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarMovimentacaoRhDp({ movimentacao = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = { colaborador_id: limparTexto(movimentacao.colaborador_id), tipo: limparTexto(movimentacao.tipo)?.toLowerCase(), data_efetivacao: limparTexto(movimentacao.data_efetivacao), titulo: limparTexto(movimentacao.titulo), descricao: limparTexto(movimentacao.descricao), referencia_externa: limparTexto(movimentacao.referencia_externa) };
+  const { data, error } = await supabase.from('rh_movimentacoes_colaboradores').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível registrar a movimentação.'));
+  return { id: data?.id };
 }
 
 export async function salvarCadastroPessoalRhDp({
@@ -517,6 +640,66 @@ export async function excluirArquivoColaboradorRhDp({ id } = {}) {
   return { ok: true };
 }
 
+async function invocarDriveRh({ acao, corpo, arquivo = null }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data: sessaoData } = await supabase.auth.getSession();
+  const token = sessaoData?.session?.access_token;
+  if (!token) throw new Error('Sua sessão expirou. Entre novamente para acessar os arquivos.');
+
+  let body;
+  if (arquivo) {
+    body = new FormData();
+    body.append('action', acao);
+    Object.entries(corpo || {}).forEach(([chave, valor]) => {
+      if (valor !== undefined && valor !== null) body.append(chave, String(valor));
+    });
+    body.append('file', arquivo);
+  } else {
+    body = JSON.stringify({ action: acao, ...(corpo || {}) });
+  }
+
+  const resposta = await fetch(`${obterUrlSupabase()}/functions/v1/rh-drive`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(arquivo ? {} : { 'Content-Type': 'application/json' })
+    },
+    body
+  });
+
+  if (!resposta.ok) {
+    const erro = await resposta.json().catch(() => ({}));
+    throw new Error(erro?.message || 'Não foi possível concluir a operação no Google Drive.');
+  }
+
+  return resposta;
+}
+
+export async function enviarArquivoColaboradorRhDp({ arquivo, metadados = {}, arquivoId = null } = {}) {
+  if (!(arquivo instanceof File) || !arquivo.size) throw new Error('Selecione um arquivo válido para enviar.');
+  const resposta = await invocarDriveRh({
+    acao: arquivoId ? 'nova_versao' : 'upload',
+    corpo: { ...metadados, arquivo_id: arquivoId || '' },
+    arquivo
+  });
+  return resposta.json();
+}
+
+export async function abrirArquivoColaboradorRhDp({ id, disposition = 'inline' } = {}) {
+  if (!id) throw new Error('Arquivo não identificado.');
+  const resposta = await invocarDriveRh({ acao: 'baixar', corpo: { arquivo_id: id, disposition } });
+  const blob = await resposta.blob();
+  const nome = decodeURIComponent(resposta.headers.get('x-rh-filename') || 'arquivo');
+  return { blob, nome };
+}
+
+export async function descartarArquivoColaboradorRhDp({ id, justificativa } = {}) {
+  if (!id) throw new Error('Arquivo não identificado.');
+  if (String(justificativa || '').trim().length < 8) throw new Error('Informe uma justificativa de pelo menos 8 caracteres.');
+  const resposta = await invocarDriveRh({ acao: 'descartar', corpo: { arquivo_id: id, justificativa } });
+  return resposta.json();
+}
+
 function normalizarMesCompetencia(valor) {
   const texto = String(valor || '').trim();
   if (!/^\d{4}-\d{2}(-\d{2})?$/.test(texto)) return null;
@@ -525,10 +708,10 @@ function normalizarMesCompetencia(valor) {
 
 function normalizarControle(payload = {}) {
   return Object.fromEntries(Object.entries(payload).map(([chave, valor]) => {
-    if (['competencia', 'prazo', 'data_referencia'].includes(chave)) {
+    if (['competencia', 'prazo', 'data_referencia', 'comunicado_em', 'ultimo_dia_trabalho'].includes(chave)) {
       return [chave, chave === 'competencia' ? normalizarMesCompetencia(valor) : limparTexto(valor)];
     }
-    if (['titulo', 'descricao', 'retorno_resumo', 'divergencia_descricao', 'google_drive_file_id'].includes(chave)) {
+    if (['titulo', 'descricao', 'retorno_resumo', 'divergencia_descricao', 'google_drive_file_id', 'motivo_resumo', 'aviso_previo', 'observacoes'].includes(chave)) {
       return [chave, limparTexto(valor)];
     }
     if (['tipo', 'prioridade', 'status'].includes(chave)) {
@@ -556,7 +739,7 @@ export async function listarCompetenciasRhDp() {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('rh_competencias')
-    .select('id, competencia, status, prazo_envio, enviado_em, retorno_em, retorno_resumo, divergencia_descricao, google_drive_web_url, google_drive_file_id, fechado_em, created_at, updated_at, rh_eventos_competencia(id, status)')
+    .select('id, competencia, status, prazo_envio, enviado_em, retorno_em, retorno_resumo, divergencia_descricao, google_drive_web_url, google_drive_file_id, fechado_em, created_at, updated_at, rh_eventos_competencia(id, colaborador_id, tipo, descricao, data_referencia, status, retorno_resumo, divergencia_descricao, rh_colaboradores(nome_completo))')
     .order('competencia', { ascending: false });
   if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar os fechamentos mensais.'));
   return data || [];
@@ -579,5 +762,110 @@ export async function salvarCompetenciaRhDp({ id = null, competencia = {} } = {}
     ? await supabase.from('rh_competencias').update(payload).eq('id', id).select('id').single()
     : await supabase.from('rh_competencias').insert(payload).select('id').single();
   if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o fechamento mensal.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarEventoCompetenciaRhDp({ id = null, evento = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarControle(evento);
+  const { data, error } = id
+    ? await supabase.from('rh_eventos_competencia').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_eventos_competencia').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o evento da competência.'));
+  return { id: data?.id || id };
+}
+
+export async function listarDesligamentosRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('rh_desligamentos')
+    .select('id, colaborador_id, tipo, motivo_resumo, comunicado_em, ultimo_dia_trabalho, competencia, aviso_previo, observacoes, status, enviado_em, retorno_em, retorno_resumo, divergencia_descricao, concluido_em, created_at, updated_at, rh_colaboradores(nome_completo), rh_checklist_desligamento(id, item_chave, status, concluido_em, observacoes)')
+    .order('competencia', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar os desligamentos.'));
+  return data || [];
+}
+
+export async function salvarDesligamentoRhDp({ id = null, desligamento = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarControle(desligamento);
+  const { data, error } = id
+    ? await supabase.from('rh_desligamentos').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_desligamentos').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o desligamento.'));
+  return { id: data?.id || id };
+}
+
+export async function salvarChecklistDesligamentoRhDp({ id = null, checklist = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = {
+    ...checklist,
+    observacoes: limparTexto(checklist.observacoes),
+    status: limparTexto(checklist.status)?.toLowerCase() || 'pendente',
+    concluido_em: checklist.status === 'concluido' ? new Date().toISOString() : null
+  };
+  const { data, error } = id
+    ? await supabase.from('rh_checklist_desligamento').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_checklist_desligamento').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar a checklist de desligamento.'));
+  return { id: data?.id || id };
+}
+
+function normalizarFase7(payload = {}) {
+  return Object.fromEntries(Object.entries(payload).map(([chave, valor]) => {
+    if (['abono_pecuniario', 'comunicacao_emitida', 'requer_acompanhamento'].includes(chave)) return [chave, Boolean(valor)];
+    if (['dias_gozo'].includes(chave)) return [chave, valor === '' || valor == null ? null : Number(valor)];
+    return [chave, ['periodo_aquisitivo_inicio', 'periodo_aquisitivo_fim', 'inicio_gozo', 'fim_gozo', 'inicio_em', 'previsao_retorno_em', 'retorno_em', 'data_ocorrencia', 'encerrada_em'].includes(chave) ? limparTexto(valor) : limparTexto(valor)];
+  }));
+}
+
+export async function listarFeriasRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.from('rh_ferias').select(COLUNAS_FERIAS).order('inicio_gozo', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar as férias.'));
+  return data || [];
+}
+
+export async function salvarFeriasRhDp({ id = null, ferias = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarFase7(ferias);
+  const { data, error } = id
+    ? await supabase.from('rh_ferias').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_ferias').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar as férias.'));
+  return { id: data?.id || id };
+}
+
+export async function listarAfastamentosRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.from('rh_afastamentos').select(COLUNAS_AFASTAMENTO).order('inicio_em', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar os afastamentos.'));
+  return data || [];
+}
+
+export async function salvarAfastamentoRhDp({ id = null, afastamento = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarFase7(afastamento);
+  const { data, error } = id
+    ? await supabase.from('rh_afastamentos').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_afastamentos').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o afastamento.'));
+  return { id: data?.id || id };
+}
+
+export async function listarOcorrenciasRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.from('rh_ocorrencias').select(COLUNAS_OCORRENCIA).order('data_ocorrencia', { ascending: false });
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível carregar as ocorrências.'));
+  return data || [];
+}
+
+export async function salvarOcorrenciaRhDp({ id = null, ocorrencia = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = normalizarFase7(ocorrencia);
+  const { data, error } = id
+    ? await supabase.from('rh_ocorrencias').update(payload).eq('id', id).select('id').single()
+    : await supabase.from('rh_ocorrencias').insert(payload).select('id').single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar a ocorrência.'));
   return { id: data?.id || id };
 }

@@ -5472,6 +5472,31 @@ body.dark .ar-products-edit-feedback.is-error {
   padding-top: 14px;
 }
 
+.rh-checklist,
+.rh-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rh-checklist-row,
+.rh-history-list article {
+  align-items: center;
+  background: color-mix(in srgb, var(--cor-principal) 3%, var(--card));
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 10px 12px;
+}
+
+.rh-checklist-row span,
+.rh-history-list strong { color: var(--texto); font-size: 12px; font-weight: 800; }
+.rh-checklist-row small,
+.rh-history-list span,
+.rh-history-list small { color: var(--texto-suave); font-size: 11px; }
+.rh-history-list article { align-items: start; grid-template-columns: 1fr; }
+
 .rh-dependents-list {
   display: grid;
   gap: 10px;

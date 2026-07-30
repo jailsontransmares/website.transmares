@@ -27,3 +27,8 @@ export function exigirSupabaseConfigurado() {
 
   return supabase;
 }
+
+export function obterUrlSupabase() {
+  exigirSupabaseConfigurado();
+  return supabaseUrl;
+}
