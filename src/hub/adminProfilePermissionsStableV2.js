@@ -245,7 +245,13 @@ function rotuloAcao(acao) {
     emitir_recibo: 'Emitir recibo',
     cancelar_recibo: 'Cancelar recibo',
     manage_permissions: 'Gerenciar permissões',
-    block: 'Bloquear'
+    block: 'Bloquear',
+    view_sensitive: 'Ver dados sensíveis',
+    archive: 'Arquivar',
+    download: 'Baixar',
+    cancel: 'Cancelar',
+    close: 'Fechar',
+    reopen: 'Reabrir'
   };
   return rotulos[acao] || acao;
 }
@@ -265,7 +271,18 @@ function acoesDisponiveis(recurso) {
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],
-    'admin.permissoes': ['view', 'update']
+    'admin.permissoes': ['view', 'update'],
+    rh_dp: ['view'],
+    'rh_dp.dashboard': ['view'],
+    'rh_dp.colaboradores': ['view', 'view_sensitive', 'create', 'update', 'archive'],
+    'rh_dp.documentos': ['view', 'create', 'update', 'delete', 'download'],
+    'rh_dp.historicos': ['view'],
+    'rh_dp.ferias': ['view', 'create', 'update', 'cancel'],
+    'rh_dp.ocorrencias': ['view', 'create', 'update'],
+    'rh_dp.fechamentos': ['view', 'create', 'update', 'close', 'reopen'],
+    'rh_dp.desligamentos': ['view', 'create', 'update'],
+    'rh_dp.auditoria': ['view'],
+    'rh_dp.configuracoes': ['view', 'update']
   };
   return mapa[chave] || ['view'];
 }
@@ -276,11 +293,12 @@ function grupoRecurso(recurso) {
   if (chave === 'central_senhas') return 'Central de Senhas';
   if (chave.startsWith('painel_ar')) return 'Painel AR';
   if (chave.startsWith('links_')) return 'Links';
+  if (chave.startsWith('rh_dp')) return 'RH & DP';
   return 'Outros';
 }
 
 function ordemAcao(acao) {
-  const ordem = { view: 1, view_secret: 2, create: 3, update: 4, delete: 5, execute: 6, importar: 7, excluir_importacao: 8, emitir_recibo: 9, cancelar_recibo: 10, manage_permissions: 11, block: 12 };
+  const ordem = { view: 1, view_sensitive: 2, view_secret: 3, create: 4, update: 5, archive: 6, delete: 7, download: 8, cancel: 9, close: 10, reopen: 11, execute: 12, importar: 13, excluir_importacao: 14, emitir_recibo: 15, cancelar_recibo: 16, manage_permissions: 17, block: 18 };
   return ordem[acao] || 999;
 }
 

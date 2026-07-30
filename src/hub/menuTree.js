@@ -71,8 +71,10 @@ export const HUB_MENU_TREE = [
     label: 'RH & DP',
     type: 'route',
     route: '/rh-dp',
-    status: 'planned',
-    note: 'Item previsto no novo menu. Ainda não possui rota/tela dedicada no roteador atual.'
+    moduleId: 'rh-dp',
+    permission: { resource: 'rh_dp', action: 'view' },
+    status: 'active',
+    note: 'Cadastro pessoal de colaboradores ativo. As demais rotinas serão liberadas nas próximas fases.'
   },
   {
     id: 'administracao',

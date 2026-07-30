@@ -7,6 +7,7 @@ import {
   invalidarContextoAcessoHub,
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
+import { criarRhDpController } from './rhDpPage.js';
 
 const state = {
   usuario: null,
@@ -1236,6 +1237,21 @@ function renderModuloIndisponivel(idModulo) {
   `;
 }
 
+let rhDpController = null;
+
+function obterRhDpController() {
+  if (!rhDpController) {
+    rhDpController = criarRhDpController({
+      renderShell: renderHubShell,
+      pode,
+      escapeHtml,
+      escapeAttr
+    });
+  }
+
+  return rhDpController;
+}
+
 function renderAvisos() {
   if (!state.avisos.length) {
     return '<p>Nenhum aviso ativo no momento.</p>';
@@ -1304,6 +1320,11 @@ async function abrirModuloDireto(id) {
 
   if (idModulo === 'painel-ar') {
     await abrirPainelAr();
+    return;
+  }
+
+  if (idModulo === 'rh-dp') {
+    await obterRhDpController().abrir();
     return;
   }
 
@@ -9717,6 +9738,8 @@ const HUB_BREADCRUMB_LABELS = {
   'links-corretora': 'Links Corretora',
   'links-ar': 'Links AR',
   'links-gestao': 'Links Gestão',
+  'rh-dp': 'RH & DP',
+  colaboradores: 'Colaboradores',
   categorias: 'Categorias',
   grupos: 'Grupos',
   usuarios: 'Usuários',
