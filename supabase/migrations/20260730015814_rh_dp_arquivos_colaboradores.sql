@@ -192,4 +192,4 @@ with check (
       and (select public.app_tem_permissao('rh_dp.documentos', 'delete'))
     )
   )
-);
+);;

@@ -180,3 +180,4 @@ $$;
 revoke execute on function public.ar_atualizar_produtos_grupo(text, jsonb) from public;
 revoke execute on function public.ar_atualizar_produtos_grupo(text, jsonb) from anon;
 grant execute on function public.ar_atualizar_produtos_grupo(text, jsonb) to authenticated;
+;

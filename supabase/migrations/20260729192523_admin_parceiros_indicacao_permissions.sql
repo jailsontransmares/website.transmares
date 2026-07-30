@@ -80,4 +80,4 @@ using (
 with check (
   public.app_tem_permissao('admin.parceiros_indicacao', 'update')
   or public.app_tem_permissao('admin.parceiros_indicacao', 'archive')
-);
+);;

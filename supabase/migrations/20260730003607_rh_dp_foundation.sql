@@ -292,3 +292,4 @@ on public.rh_auditoria
 for select
 to authenticated
 using ((select public.app_tem_permissao('rh_dp.auditoria', 'view')));
+;

@@ -251,7 +251,11 @@ function rotuloAcao(acao) {
     download: 'Baixar',
     cancel: 'Cancelar',
     close: 'Fechar',
-    reopen: 'Reabrir'
+    reopen: 'Reabrir',
+    export: 'Exportar',
+    settle: 'Baixar lançamento',
+    reconcile: 'Conciliar',
+    unreconcile: 'Desconciliar'
   };
   return rotulos[acao] || acao;
 }
@@ -272,6 +276,17 @@ function acoesDisponiveis(recurso) {
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],
     'admin.permissoes': ['view', 'update'],
+    financeiro: ['view'],
+    'financeiro.dashboard': ['view'],
+    'financeiro.lancamentos': ['view', 'create', 'update', 'settle', 'cancel', 'export'],
+    'financeiro.conciliacao': ['view', 'importar', 'reconcile', 'unreconcile'],
+    'financeiro.cartoes': ['view', 'create', 'update', 'cancel'],
+    'financeiro.relatorios': ['view', 'export'],
+    'financeiro.cadastros': ['view', 'create', 'update', 'archive'],
+    'financeiro.fechamento': ['view', 'close', 'reopen'],
+    'financeiro.auditoria': ['view'],
+    'financeiro.configuracoes': ['view', 'update'],
+    'financeiro.dados_sensiveis': ['view_sensitive'],
     rh_dp: ['view'],
     'rh_dp.dashboard': ['view'],
     'rh_dp.colaboradores': ['view', 'view_sensitive', 'create', 'update', 'archive'],
@@ -293,12 +308,13 @@ function grupoRecurso(recurso) {
   if (chave === 'central_senhas') return 'Central de Senhas';
   if (chave.startsWith('painel_ar')) return 'Painel AR';
   if (chave.startsWith('links_')) return 'Links';
+  if (chave.startsWith('financeiro')) return 'Financeiro';
   if (chave.startsWith('rh_dp')) return 'RH & DP';
   return 'Outros';
 }
 
 function ordemAcao(acao) {
-  const ordem = { view: 1, view_sensitive: 2, view_secret: 3, create: 4, update: 5, archive: 6, delete: 7, download: 8, cancel: 9, close: 10, reopen: 11, execute: 12, importar: 13, excluir_importacao: 14, emitir_recibo: 15, cancelar_recibo: 16, manage_permissions: 17, block: 18 };
+  const ordem = { view: 1, view_sensitive: 2, view_secret: 3, create: 4, update: 5, archive: 6, delete: 7, download: 8, settle: 9, cancel: 10, close: 11, reopen: 12, reconcile: 13, unreconcile: 14, export: 15, execute: 16, importar: 17, excluir_importacao: 18, emitir_recibo: 19, cancelar_recibo: 20, manage_permissions: 21, block: 22 };
   return ordem[acao] || 999;
 }
 

@@ -84,3 +84,4 @@ after insert or update or delete on public.rh_arquivos_colaboradores_versoes for
 drop trigger if exists rh_drive_operacoes_audit on public.rh_drive_operacoes;
 create trigger rh_drive_operacoes_audit
 after insert or update or delete on public.rh_drive_operacoes for each row execute function private.rh_auditar_linha();
+;

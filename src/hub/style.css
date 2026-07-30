@@ -6764,3 +6764,218 @@ body.dark .ar-products-edit-feedback.is-error {
     width: auto;
   }
 }
+/* Financeiro — fundação do módulo */
+.financeiro-page {
+  display: grid;
+  gap: 16px;
+}
+
+.fin-section-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: thin;
+}
+
+.fin-section-tabs .secondary-btn {
+  flex: 0 0 auto;
+  min-height: 38px;
+}
+
+.fin-section-tabs .secondary-btn.is-active {
+  border-color: var(--primary, #294895);
+  background: color-mix(in srgb, var(--primary, #294895) 12%, white);
+  color: var(--primary, #294895);
+}
+
+.fin-panel {
+  min-height: 360px;
+}
+
+.fin-panel-header {
+  gap: 24px;
+}
+
+.fin-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fin-title-row h2 {
+  margin: 0;
+}
+
+.fin-phase-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--primary, #294895) 25%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary, #294895) 8%, white);
+  color: var(--primary, #294895);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.fin-company-select {
+  display: grid;
+  gap: 6px;
+  min-width: min(280px, 100%);
+}
+
+.fin-company-select > span {
+  color: var(--muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fin-company-empty {
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.86rem;
+}
+
+.fin-foundation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.fin-foundation-grid article {
+  min-height: 150px;
+  padding: 8px 16px;
+  border-left: 2px solid var(--border, #dbe3ef);
+}
+
+.fin-foundation-grid span,
+.fin-foundation-grid strong,
+.fin-foundation-grid p {
+  display: block;
+}
+
+.fin-foundation-grid span {
+  margin-bottom: 12px;
+  color: var(--muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fin-foundation-grid strong {
+  margin-bottom: 8px;
+  color: var(--text, #172033);
+  font-size: 1.05rem;
+}
+
+.fin-foundation-grid p {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.fin-cadastros-layout {
+  display: grid;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.fin-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+}
+
+.fin-metric-card {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--border, #dbe3ef);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary, #294895) 5%, white);
+}
+
+.fin-metric-card span {
+  color: var(--muted, #64748b);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fin-metric-card strong {
+  color: var(--text, #172033);
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.fin-empty-state,
+.fin-error-state,
+.fin-loading {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 28px;
+  text-align: center;
+}
+
+.fin-empty-state strong,
+.fin-error-state strong {
+  margin-top: 8px;
+  color: var(--text, #172033);
+  font-size: 1.02rem;
+}
+
+.fin-empty-state p,
+.fin-error-state p {
+  max-width: 620px;
+  margin: 7px auto;
+  color: var(--muted, #64748b);
+}
+
+.fin-empty-state small {
+  color: var(--muted, #64748b);
+}
+
+.fin-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary, #294895) 10%, white);
+  color: var(--primary, #294895);
+  font-size: 1.45rem;
+}
+
+.fin-error-state {
+  color: #991b1b;
+}
+
+@media (max-width: 900px) {
+  .fin-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fin-foundation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fin-company-select {
+    width: 100%;
+  }
+}

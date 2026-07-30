@@ -8,6 +8,7 @@ import {
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { criarRhDpController } from './rhDpPage.js';
+import { criarFinanceiroController } from './financeiroController.js';
 
 const state = {
   usuario: null,
@@ -1170,6 +1171,10 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
+  if (idNormalizado === 'financeiro') {
+    return canAccessModule(state.permissions, idNormalizado);
+  }
+
   return (state.cards || []).some(card => card.id === idNormalizado)
     && canAccessModule(state.permissions, idNormalizado);
 }
@@ -1238,6 +1243,7 @@ function renderModuloIndisponivel(idModulo) {
 }
 
 let rhDpController = null;
+let financeiroController = null;
 
 function obterRhDpController() {
   if (!rhDpController) {
@@ -1250,6 +1256,22 @@ function obterRhDpController() {
   }
 
   return rhDpController;
+}
+
+function obterFinanceiroController() {
+  if (!financeiroController) {
+    financeiroController = criarFinanceiroController({
+      renderShell: renderHubShell,
+      pode,
+      escapeHtml,
+      escapeAttr,
+      obterPartesRota: obterPartesDaRotaAtual,
+      montarCaminhoModulo: montarCaminhoHub,
+      navegarParaRota
+    });
+  }
+
+  return financeiroController;
 }
 
 function renderAvisos() {
@@ -1320,6 +1342,11 @@ async function abrirModuloDireto(id) {
 
   if (idModulo === 'painel-ar') {
     await abrirPainelAr();
+    return;
+  }
+
+  if (idModulo === 'financeiro') {
+    await obterFinanceiroController().abrir();
     return;
   }
 
@@ -3254,7 +3281,14 @@ function obterRotuloAcaoPermissao(acao) {
     manage_permissions: 'Gerenciar permissões',
     block: 'Bloquear',
     archive: 'Arquivar',
-    view_sensitive: 'Ver dados sensíveis'
+    view_sensitive: 'Ver dados sensíveis',
+    export: 'Exportar',
+    settle: 'Baixar lançamento',
+    reconcile: 'Conciliar',
+    unreconcile: 'Desconciliar',
+    cancel: 'Cancelar',
+    close: 'Fechar',
+    reopen: 'Reabrir'
   };
 
   return rotulos[acao] || acao;
@@ -3276,7 +3310,18 @@ function obterAcoesDisponiveisRecurso(recurso) {
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],
     'admin.permissoes': ['view', 'update'],
-    'admin.parceiros_indicacao': ['view', 'create', 'update', 'archive', 'view_sensitive']
+    'admin.parceiros_indicacao': ['view', 'create', 'update', 'archive', 'view_sensitive'],
+    financeiro: ['view'],
+    'financeiro.dashboard': ['view'],
+    'financeiro.lancamentos': ['view', 'create', 'update', 'settle', 'cancel', 'export'],
+    'financeiro.conciliacao': ['view', 'importar', 'reconcile', 'unreconcile'],
+    'financeiro.cartoes': ['view', 'create', 'update', 'cancel'],
+    'financeiro.relatorios': ['view', 'export'],
+    'financeiro.cadastros': ['view', 'create', 'update', 'archive'],
+    'financeiro.fechamento': ['view', 'close', 'reopen'],
+    'financeiro.auditoria': ['view'],
+    'financeiro.configuracoes': ['view', 'update'],
+    'financeiro.dados_sensiveis': ['view_sensitive']
   };
 
   return porRecurso[chave] || ['view'];
@@ -3289,6 +3334,7 @@ function obterGrupoRecursoPermissao(recurso) {
   if (chave === 'central_senhas') return 'Central de Senhas';
   if (chave.startsWith('painel_ar')) return 'Painel AR';
   if (chave.startsWith('links_')) return 'Links';
+  if (chave.startsWith('financeiro')) return 'Financeiro';
 
   return 'Outros';
 }
@@ -3317,7 +3363,14 @@ function obterOrdemAcaoPermissao(acao) {
     manage_permissions: 11,
     block: 12,
     archive: 13,
-    view_sensitive: 14
+    view_sensitive: 14,
+    settle: 15,
+    cancel: 16,
+    close: 17,
+    reopen: 18,
+    reconcile: 19,
+    unreconcile: 20,
+    export: 21
   };
 
   return ordem[acao] || 999;
@@ -9738,6 +9791,16 @@ const HUB_BREADCRUMB_LABELS = {
   'links-corretora': 'Links Corretora',
   'links-ar': 'Links AR',
   'links-gestao': 'Links Gestão',
+  financeiro: 'Financeiro',
+  dashboard: 'Dashboard',
+  lancamentos: 'Lançamentos',
+  conciliacao: 'Conciliação',
+  cartoes: 'Cartões',
+  relatorios: 'Relatórios',
+  cadastros: 'Cadastros',
+  fechamento: 'Fechamento',
+  auditoria: 'Auditoria',
+  configuracoes: 'Configurações',
   'rh-dp': 'RH & DP',
   colaboradores: 'Colaboradores',
   categorias: 'Categorias',

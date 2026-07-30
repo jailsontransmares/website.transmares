@@ -141,3 +141,4 @@ drop policy if exists rh_ocorrencias_update_permission on public.rh_ocorrencias;
 create policy rh_ocorrencias_update_permission on public.rh_ocorrencias for update to authenticated
 using ((select public.app_tem_permissao('rh_dp.ocorrencias', 'update')))
 with check ((select public.app_tem_permissao('rh_dp.ocorrencias', 'update')));
+;

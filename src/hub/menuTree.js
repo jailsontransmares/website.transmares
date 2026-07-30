@@ -63,8 +63,10 @@ export const HUB_MENU_TREE = [
     label: 'Financeiro',
     type: 'route',
     route: '/financeiro',
-    status: 'planned',
-    note: 'Item previsto no novo menu. Ainda não possui rota/tela dedicada no roteador atual.'
+    moduleId: 'financeiro',
+    permission: { resource: 'financeiro', action: 'view' },
+    status: 'active',
+    note: 'Fundação técnica preparada. A exibição depende da ativação controlada e de permissão explícita.'
   },
   {
     id: 'rh-dp',

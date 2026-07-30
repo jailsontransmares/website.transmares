@@ -125,4 +125,4 @@ with check ((select public.app_tem_permissao('rh_dp.desligamentos', 'create')));
 drop policy if exists rh_checklist_desligamento_update_permission on public.rh_checklist_desligamento;
 create policy rh_checklist_desligamento_update_permission on public.rh_checklist_desligamento for update to authenticated
 using ((select public.app_tem_permissao('rh_dp.desligamentos', 'update')))
-with check ((select public.app_tem_permissao('rh_dp.desligamentos', 'update')));
+with check ((select public.app_tem_permissao('rh_dp.desligamentos', 'update')));;

@@ -17,3 +17,4 @@ create index if not exists rh_dependentes_updated_by_idx
   on public.rh_dependentes (updated_by);
 
 drop index if exists public.rh_documentos_colaborador_idx;
+;

@@ -8,4 +8,4 @@ update public.recursos_acesso
 set rota = '/admin/cadastros/perfis',
     updated_at = now()
 where chave = 'admin.perfis'
-  and rota is distinct from '/admin/cadastros/perfis';
+  and rota is distinct from '/admin/cadastros/perfis';;

@@ -300,16 +300,17 @@ begin
   end if;
 
   with payload as (
-    select item.id
-    from jsonb_to_recordset(p_produtos) as item(
+    select item.id, item.ordem
+    from jsonb_to_recordset(p_produtos) with ordinality as item(
       id uuid,
       descricao_comercial text,
       preco_com_desconto numeric,
       preco_sem_desconto numeric,
-      product_id text
+      product_id text,
+      ordem bigint
     )
   )
-  select jsonb_agg(to_jsonb(produto) order by produto.id)
+  select jsonb_agg(to_jsonb(produto) order by payload.ordem)
     into v_produtos
   from payload
   join public.produtos_ar produto on produto.id = payload.id;
@@ -325,3 +326,4 @@ $$;
 revoke execute on function public.ar_atualizar_produtos_grupo(text, jsonb) from public;
 revoke execute on function public.ar_atualizar_produtos_grupo(text, jsonb) from anon;
 grant execute on function public.ar_atualizar_produtos_grupo(text, jsonb) to authenticated;
+;

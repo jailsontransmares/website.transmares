@@ -11,6 +11,7 @@ const MODULE_RESOURCE_MAP = {
   'admin-permissoes': 'admin.permissoes',
   'admin-parceiros-indicacao': 'admin.parceiros_indicacao',
   'admin-modulos': 'admin.modulos',
+  financeiro: 'financeiro',
   'rh-dp': 'rh_dp',
   perfil: 'perfil',
   configuracoes: 'configuracoes',

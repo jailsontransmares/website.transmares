@@ -144,3 +144,4 @@ create policy rh_competencias_update_permission on public.rh_competencias for up
 create policy rh_eventos_select_permission on public.rh_eventos_competencia for select to authenticated using ((select public.app_tem_permissao('rh_dp.fechamentos', 'view')));
 create policy rh_eventos_insert_permission on public.rh_eventos_competencia for insert to authenticated with check ((select public.app_tem_permissao('rh_dp.fechamentos', 'create')));
 create policy rh_eventos_update_permission on public.rh_eventos_competencia for update to authenticated using ((select public.app_tem_permissao('rh_dp.fechamentos', 'update'))) with check ((select public.app_tem_permissao('rh_dp.fechamentos', 'update')));
+;

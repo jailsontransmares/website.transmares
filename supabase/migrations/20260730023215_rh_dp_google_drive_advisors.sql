@@ -12,3 +12,4 @@ drop policy if exists rh_drive_pastas_no_direct_access on public.rh_drive_pastas
 create policy rh_drive_pastas_no_direct_access
 on public.rh_drive_pastas for select to authenticated
 using (false);
+;
