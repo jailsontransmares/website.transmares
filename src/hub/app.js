@@ -11,6 +11,18 @@ import { HUB_MENU_TREE } from './menuTree.js';
 import { criarRhDpController } from './rhDpPage.js';
 import { criarFinanceiroController } from './financeiroController.js';
 
+const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
+
+function obterPreferenciaSidebarFixado() {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.localStorage.getItem(SIDEBAR_PINNED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 const state = {
   usuario: null,
   config: null,
@@ -21,7 +33,8 @@ const state = {
   meta: null,
   permissions: normalizarPermissoes([]),
   sidebar: {
-    collapsed: false,
+    collapsed: true,
+    pinned: obterPreferenciaSidebarFixado(),
     openGroups: {},
     floatingGroupId: ''
   },
@@ -6479,7 +6492,7 @@ function renderPainelAr() {
               </svg>
             </button>
             ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>` : ''}
+            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
             ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
             ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
           </div>
@@ -6559,15 +6572,23 @@ function renderValidacoesAr() {
 
   return `
     <section class="ar-validacoes">
-      <div class="ar-validacoes-subnav" role="group" aria-label="Subáreas de Validações">
-        ${podeEmitir ? `<button class="${validacoes.aba === 'emitir' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>` : ''}
-        <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
-        ${podeImportar ? `<button class="${validacoes.aba === 'importacao' ? 'active' : ''}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importação</button>` : ''}
-      </div>
-
       ${validacoes.message ? `<p class="admin-message">${escapeHtml(validacoes.message)}</p>` : ''}
       ${renderConteudoValidacoesAr()}
     </section>
+  `;
+}
+
+function renderSubnavValidacoesAr() {
+  const validacoes = state.ar.validacoes;
+  const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
+  const podeImportar = pode('painel_ar.validacoes', 'importar');
+
+  return `
+    <div class="ar-validacoes-subnav" role="tablist" aria-label="Paginas internas de Validacoes">
+      ${podeEmitir ? `<button class="${validacoes.aba === 'emitir' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'emitir'}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>` : ''}
+      <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'consultar'}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
+      ${podeImportar ? `<button class="${validacoes.aba === 'importacao' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'importacao'}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importar recibos</button>` : ''}
+    </div>
   `;
 }
 
@@ -6598,8 +6619,9 @@ function renderEmitirReciboAr() {
   return `
     <div class="ar-validacoes-panel">
       <div class="ar-validacoes-header">
-        <div>
+        <div class="ar-validacoes-title">
           <span class="ar-eyebrow">Validações</span>
+          ${renderSubnavValidacoesAr()}
           <h3>Emitir recibo</h3>
           <p>Consulte lançamentos pendentes, selecione itens por parceiro e emita recibos atômicos via Supabase RPC.</p>
         </div>
@@ -6739,8 +6761,9 @@ function renderConsultarRecibosAr() {
   return `
     <div class="ar-validacoes-panel">
       <div class="ar-validacoes-header">
-        <div>
+        <div class="ar-validacoes-title">
           <span class="ar-eyebrow">Validações</span>
+          ${renderSubnavValidacoesAr()}
           <h3>Consultar recibos</h3>
           <p>Últimos recibos emitidos, com opção de visualização, impressão e cancelamento.</p>
         </div>
@@ -6871,9 +6894,10 @@ function renderImportacaoValidacoesAr() {
   return `
     <div class="ar-validacoes-panel">
       <div class="ar-validacoes-header">
-        <div>
+        <div class="ar-validacoes-title">
           <span class="ar-eyebrow">Validações</span>
-          <h3>Importação</h3>
+          ${renderSubnavValidacoesAr()}
+          <h3>Importar recibos</h3>
           <p>Importe o repasse por mês-base para gerar lançamentos pendentes de recibo.</p>
         </div>
       </div>
@@ -10011,6 +10035,15 @@ function renderHubTopbar() {
 
   return `
     <header class="topbar">
+      <button
+        class="hub-mobile-menu-toggle"
+        type="button"
+        onclick="alternarMenuSidebarHub()"
+        aria-label="${state.sidebar.collapsed ? 'Abrir menu principal' : 'Fechar menu principal'}"
+        title="${state.sidebar.collapsed ? 'Abrir menu principal' : 'Fechar menu principal'}"
+      >
+        <span aria-hidden="true">&#9776;</span>
+      </button>
       ${renderHeaderLogo()}
       <div class="brand">
         <h1>${escapeHtml(nomeSistema)}</h1>
@@ -10234,13 +10267,14 @@ function renderHubSidebar() {
       <div class="hub-sidebar-header">
         <span class="hub-sidebar-eyebrow">${collapsed ? 'Hub' : 'Navega&ccedil;&atilde;o'}</span>
         <button
-          class="hub-sidebar-collapse-btn"
+          class="hub-sidebar-pin-btn ${state.sidebar.pinned ? 'is-active' : ''}"
           type="button"
-          onclick="alternarSidebarHub()"
-          aria-label="${collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}"
-          title="${collapsed ? 'Expandir menu' : 'Recolher menu'}"
+          onclick="alternarFixacaoSidebarHub()"
+          aria-label="${state.sidebar.pinned ? 'Desafixar menu lateral' : 'Fixar menu lateral'}"
+          aria-pressed="${state.sidebar.pinned ? 'true' : 'false'}"
+          title="${state.sidebar.pinned ? 'Desafixar menu' : 'Fixar menu'}"
         >
-          <span aria-hidden="true">${collapsed ? '&#9776;' : '&lsaquo;'}</span>
+          <span aria-hidden="true">&#128204;</span>
         </button>
       </div>
       <nav class="hub-sidebar-nav" aria-label="M&oacute;dulos do Hub">
@@ -10250,7 +10284,24 @@ function renderHubSidebar() {
   `;
 }
 
-function alternarSidebarHub() {
+function alternarMenuSidebarHub() {
+  const experienciaCompacta = window.matchMedia('(max-width: 800px)').matches;
+
+  if (experienciaCompacta) {
+    state.sidebar.pinned = false;
+    state.sidebar.collapsed = !state.sidebar.collapsed;
+    state.sidebar.floatingGroupId = '';
+    renderizarRotaAtual();
+    return;
+  }
+
+  if (state.sidebar.pinned) {
+    state.sidebar.collapsed = false;
+    state.sidebar.floatingGroupId = '';
+    renderizarRotaAtual();
+    return;
+  }
+
   state.sidebar.collapsed = !state.sidebar.collapsed;
   state.sidebar.floatingGroupId = '';
 
@@ -10260,6 +10311,20 @@ function alternarSidebarHub() {
         state.sidebar.openGroups[item.id] = true;
       }
     });
+  }
+
+  renderizarRotaAtual();
+}
+
+function alternarFixacaoSidebarHub() {
+  state.sidebar.pinned = !state.sidebar.pinned;
+  state.sidebar.collapsed = false;
+  state.sidebar.floatingGroupId = '';
+
+  try {
+    window.localStorage.setItem(SIDEBAR_PINNED_STORAGE_KEY, String(state.sidebar.pinned));
+  } catch {
+    // A preferência permanece apenas na sessão quando o armazenamento não está disponível.
   }
 
   renderizarRotaAtual();
@@ -10307,14 +10372,41 @@ function fecharPainelFlutuanteSidebarHub() {
   renderizarRotaAtual();
 }
 
+function fecharMenusAoClicarForaHub(event) {
+  const alvo = event.target;
+  const dentroDoSidebar = alvo?.closest?.('.hub-sidebar');
+  const acionadorDoSidebar = alvo?.closest?.('.hub-mobile-menu-toggle');
+
+  if (!state.sidebar.collapsed && !state.sidebar.pinned && !dentroDoSidebar && !acionadorDoSidebar) {
+    state.sidebar.collapsed = true;
+    state.sidebar.floatingGroupId = '';
+
+    const layout = document.querySelector('.hub-layout');
+    const sidebar = layout?.querySelector('.hub-sidebar');
+    const acionador = document.querySelector('.hub-mobile-menu-toggle');
+
+    layout?.classList.add('is-sidebar-collapsed');
+    sidebar?.classList.add('is-collapsed');
+    acionador?.setAttribute('aria-label', 'Abrir menu principal');
+    acionador?.setAttribute('title', 'Abrir menu principal');
+  }
+
+  document.querySelectorAll('details.fin-section-more[open]').forEach(menu => {
+    if (!menu.contains(alvo)) menu.open = false;
+  });
+}
+
 function navegarMenuSidebarHub(caminho) {
   state.sidebar.floatingGroupId = '';
+  const experienciaCompacta = window.matchMedia('(max-width: 800px)').matches;
+  if (experienciaCompacta) state.sidebar.pinned = false;
+  state.sidebar.collapsed = experienciaCompacta || !state.sidebar.pinned;
   navegarParaRota(caminho);
 }
 
 function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteudo = '' }) {
   return `
-    <main class="dashboard hub-layout ${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''}">
+    <main class="dashboard hub-layout ${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}">
       ${renderHubTopbar()}
       <div class="hub-shell">
         ${renderHubSidebar()}
@@ -10576,7 +10668,7 @@ const renderPainelArHubPhase1 = function() {
                 </svg>
               </button>
               ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-              ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista produtos</button>` : ''}
+              ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
               ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
               ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
             </div>
@@ -10826,7 +10918,8 @@ Object.assign(window, {
   navegarMenuSidebarHub,
   alternarFavoritoLink,
   alternarGrupoSidebarHub,
-  alternarSidebarHub,
+  alternarFixacaoSidebarHub,
+  alternarMenuSidebarHub,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
@@ -10928,6 +11021,8 @@ document.addEventListener('click', event => {
 
   fecharPainelFlutuanteSidebarHub();
 }, true);
+
+document.addEventListener('click', fecharMenusAoClicarForaHub);
 
 document.addEventListener('keydown', event => {
   if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;

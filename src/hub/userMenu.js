@@ -103,7 +103,7 @@ function renderMenu(usuario) {
 
   return `
     <div class="${MENU_ROOT_CLASS}" data-menu-fechado="true">
-      <button class="hub-user-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+      <button class="hub-user-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Abrir menu do usuário">
         <span class="hub-user-menu-avatar" aria-hidden="true">${escapeHtml(iniciais)}</span>
         <span class="hub-user-menu-copy">
           <strong>${escapeHtml(usuario.nome)}</strong>
@@ -502,11 +502,29 @@ function aplicarEstilosMenuUsuario() {
       background: rgba(255, 255, 255, 0.10);
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 800px) {
       .user-box.hub-user-menu-host,
       .hub-user-box.hub-user-menu-host {
-        width: min(100%, 320px) !important;
-        max-width: 320px !important;
+        width: 42px !important;
+        max-width: 42px !important;
+      }
+
+      .hub-user-menu {
+        width: 42px;
+      }
+
+      .hub-user-menu-trigger {
+        width: 42px;
+        min-height: 42px;
+        padding: 4px;
+        display: inline-flex;
+        justify-content: center;
+        border-radius: 999px;
+      }
+
+      .hub-user-menu-copy,
+      .hub-user-menu-caret {
+        display: none;
       }
 
       .hub-user-menu-copy small {

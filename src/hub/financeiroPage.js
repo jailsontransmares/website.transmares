@@ -176,7 +176,7 @@ function renderSeletorEmpresa({ empresas, empresaId, escapeHtml, escapeAttr }) {
   }
 
   return `
-    <label class="fin-company-select">
+    <label class="fin-company-select fin-company-select-inline">
       <span>Empresa</span>
       <select class="config-input" data-fin-action="change-company">
         ${empresas.map(empresa => `
@@ -190,18 +190,45 @@ function renderSeletorEmpresa({ empresas, empresaId, escapeHtml, escapeAttr }) {
 }
 
 function renderNavegacao({ secoes, secaoAtiva, escapeHtml, escapeAttr }) {
+  const abreviacoes = {
+    dashboard: 'Resumo',
+    lancamentos: 'Lançar',
+    conciliacao: 'Conciliar',
+    cartoes: 'Cartões',
+    relatorios: 'Relatórios',
+    cadastros: 'Cadastros',
+    configuracoes: 'Ajustes'
+  };
+  const idsMais = new Set(['cadastros', 'configuracoes']);
+  const secundarias = secoes.filter(secao => idsMais.has(secao.id));
+  const renderTab = (secao, classe = '') => `
+    <button
+      class="fin-section-tab ${classe} ${secao.id === secaoAtiva ? 'is-active' : ''}"
+      type="button"
+      data-fin-route="${escapeAttr(secao.id)}"
+      aria-label="${escapeAttr(secao.nome)}"
+      title="${escapeAttr(secao.nome)}"
+      ${secao.id === secaoAtiva ? 'aria-current="page"' : ''}
+    >
+      <span class="fin-section-tab-label">${escapeHtml(secao.nome)}</span>
+      <span class="fin-section-tab-short" aria-hidden="true">${escapeHtml(abreviacoes[secao.id] || secao.nome)}</span>
+    </button>
+  `;
+
   return `
     <nav class="fin-section-tabs" aria-label="Navegação do Financeiro">
-      ${secoes.map(secao => `
-        <button
-          class="secondary-btn ${secao.id === secaoAtiva ? 'is-active' : ''}"
-          type="button"
-          data-fin-route="${escapeAttr(secao.id)}"
-          ${secao.id === secaoAtiva ? 'aria-current="page"' : ''}
-        >
-          ${escapeHtml(secao.nome)}
-        </button>
-      `).join('')}
+      ${secoes.filter(secao => !idsMais.has(secao.id)).map(secao => renderTab(secao)).join('')}
+      ${secundarias.map(secao => renderTab(secao, 'fin-section-tab-secondary')).join('')}
+      ${secundarias.length ? `
+        <details class="fin-section-more" ${secundarias.some(secao => secao.id === secaoAtiva) ? 'open' : ''}>
+          <summary class="fin-section-more-trigger ${secundarias.some(secao => secao.id === secaoAtiva) ? 'is-active' : ''}" aria-label="Mais áreas do Financeiro" title="Mais áreas do Financeiro">
+            <span>Mais</span><span aria-hidden="true">⌄</span>
+          </summary>
+          <div class="fin-section-more-menu" role="menu" aria-label="Mais áreas do Financeiro">
+            ${secundarias.map(secao => renderTab(secao, 'fin-section-more-item')).join('')}
+          </div>
+        </details>
+      ` : ''}
     </nav>
   `;
 }
@@ -217,6 +244,30 @@ function renderMetricaCadastro(label, valor) {
       <strong>${valorFormatado}</strong>
     </article>
   `;
+}
+
+function renderMetricasLancamentos(metricas, escapeHtml) {
+  const abreviacoes = {
+    Total: 'T',
+    'Em aberto': 'Abertos',
+    Liquidados: 'Liq.',
+    Cancelados: 'Canc.',
+    'Parcelas abertas': 'Abertas',
+    Vencidas: 'Venc.',
+    'A vencer': 'A vencer',
+    'Valor aberto': 'Valor',
+    Baixas: 'Baixas',
+    'Titulos base': 'Base',
+    Contratos: 'Contratos'
+  };
+
+  return `<div class="fin-lancamento-metrics" aria-label="Indicadores de lançamentos">${metricas.map(([label, valor]) => `
+    <span class="fin-lancamento-metric">
+      <span class="fin-lancamento-metric-label">${escapeHtml(label)}</span>
+      <span class="fin-lancamento-metric-short" aria-hidden="true">${escapeHtml(abreviacoes[label] || label.slice(0, 3))}</span>
+      <strong>${escapeHtml(String(valor))}</strong>
+    </span>
+  `).join('')}</div>`;
 }
 
 function formatarMoeda(valor) {
@@ -302,13 +353,14 @@ function renderLinhaResumo(label, valor, detalhe = '') {
 
 function renderCadastrosTabs({ state }) {
   return `
-    <nav class="fin-subtabs" aria-label="Cadastros financeiros">
+    <nav class="fin-subtabs ar-validacoes-subnav" role="tablist" aria-label="Cadastros financeiros">
       ${FINANCEIRO_CADASTRO_ABAS.map(aba => `
         <button
-          class="fin-subtab ${state.cadastroAba === aba.id ? 'is-active' : ''}"
+          class="fin-subtab ${state.cadastroAba === aba.id ? 'is-active active' : ''}"
+          role="tab"
           type="button"
           data-fin-cadastro-tab="${aba.id}"
-          ${state.cadastroAba === aba.id ? 'aria-current="page"' : ''}
+          aria-selected="${state.cadastroAba === aba.id}"
         >
           ${aba.nome}
         </button>
@@ -318,16 +370,30 @@ function renderCadastrosTabs({ state }) {
 }
 
 function renderLancamentosTabs({ state }) {
+  const abreviacoes = {
+    titulos: 'Tít.',
+    receber: 'Receber',
+    pagar: 'Pagar',
+    parcelas: 'Parcel.',
+    recorrentes: 'Recorr.',
+    rateios: 'Rateios',
+    baixas: 'Baixas'
+  };
+
   return `
-    <nav class="fin-subtabs" aria-label="Lancamentos financeiros">
+    <nav class="fin-lancamento-tabs" role="tablist" aria-label="Lançamentos financeiros">
       ${FINANCEIRO_LANCAMENTO_ABAS.map(aba => `
         <button
-          class="fin-subtab ${state.lancamentoAba === aba.id ? 'is-active' : ''}"
+          class="fin-lancamento-tab ${state.lancamentoAba === aba.id ? 'is-active' : ''}"
+          role="tab"
           type="button"
           data-fin-lancamento-tab="${aba.id}"
-          ${state.lancamentoAba === aba.id ? 'aria-current="page"' : ''}
+          aria-selected="${state.lancamentoAba === aba.id}"
+          aria-label="${aba.nome}"
+          title="${aba.nome}"
         >
-          ${aba.nome}
+          <span class="fin-lancamento-tab-label">${aba.nome}</span>
+          <span class="fin-lancamento-tab-short" aria-hidden="true">${abreviacoes[aba.id] || aba.nome}</span>
         </button>
       `).join('')}
     </nav>
@@ -336,13 +402,14 @@ function renderLancamentosTabs({ state }) {
 
 function renderConfiguracoesTabs({ state }) {
   return `
-    <nav class="fin-subtabs" aria-label="Configuracoes financeiras">
+    <nav class="fin-subtabs ar-validacoes-subnav" role="tablist" aria-label="Configuracoes financeiras">
       ${FINANCEIRO_CONFIG_ABAS.map(aba => `
         <button
-          class="fin-subtab ${state.configuracaoAba === aba.id ? 'is-active' : ''}"
+          class="fin-subtab ${state.configuracaoAba === aba.id ? 'is-active active' : ''}"
+          role="tab"
           type="button"
           data-fin-config-tab="${aba.id}"
-          ${state.configuracaoAba === aba.id ? 'aria-current="page"' : ''}
+          aria-selected="${state.configuracaoAba === aba.id}"
         >
           ${aba.nome}
         </button>
@@ -727,10 +794,6 @@ function renderCadastros({ state, escapeHtml, escapeAttr }) {
 
   return `
     <div class="fin-cadastros-layout">
-      ${renderCadastrosTabs({ state })}
-      <div class="fin-metrics-grid">
-        ${painel.metricas.map(([label, valor]) => renderMetricaCadastro(label, valor)).join('')}
-      </div>
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${operacional.loading
@@ -738,12 +801,17 @@ function renderCadastros({ state, escapeHtml, escapeAttr }) {
         : `
           <div class="fin-operational-toolbar">
             <div>
+              <span class="ar-eyebrow">Cadastros</span>
+              ${renderCadastrosTabs({ state })}
               <strong>${escapeHtml(aba.nome)}</strong>
               <p>${escapeHtml(aba.descricao)}</p>
             </div>
             <button class="save-btn" type="button" data-fin-action="open-cadastro-modal" ${operacional.loading ? 'disabled' : ''}>
               Incluir cadastro
             </button>
+          </div>
+          <div class="fin-metrics-grid">
+            ${painel.metricas.map(([label, valor]) => renderMetricaCadastro(label, valor)).join('')}
           </div>
           ${renderCadastroLista({ abaId: aba.id, operacional, escapeHtml, escapeAttr })}
           ${renderCadastroModal({ aba, operacional, escapeHtml, escapeAttr })}
@@ -858,7 +926,7 @@ function renderLancamentoModal({ operacional, escapeHtml, escapeAttr }) {
   if (!operacional.modalLancamentoAberto) return '';
 
   return `
-    <div class="fin-modal-backdrop" role="presentation">
+    <div class="fin-modal-backdrop fin-lancamento-modal-backdrop" role="presentation">
       <section class="fin-modal" role="dialog" aria-modal="true" aria-label="Incluir lancamento">
         <div class="fin-modal-header">
           <div>
@@ -1084,24 +1152,20 @@ function renderLancamentos({ state, escapeHtml, escapeAttr }) {
 
   return `
     <div class="fin-cadastros-layout">
-      ${renderLancamentosTabs({ state })}
-      <div class="fin-metrics-grid">
-        ${painel.metricas.map(([label, valor]) => renderMetricaCadastro(label, valor)).join('')}
-      </div>
-      <div class="fin-operational-toolbar">
-        <div>
-          <strong>${escapeHtml(aba.nome)}</strong>
-          <p>${escapeHtml(aba.descricao)}</p>
-        </div>
+      <div class="fin-lancamentos-toolbar">
+        ${renderLancamentosTabs({ state })}
         <div class="fin-toolbar-actions">
           <button class="save-btn" type="button" data-fin-action="open-lancamento-modal" ${operacional.loading ? 'disabled' : ''}>
-            Incluir lancamento
+            + Incluir
           </button>
-          <button class="secondary-btn" type="button" data-fin-action="refresh-lancamentos" ${operacional.loading ? 'disabled' : ''}>
-            Atualizar
+          <button class="secondary-btn fin-refresh-btn" type="button" data-fin-action="refresh-lancamentos" aria-label="Atualizar lançamentos" title="Atualizar lançamentos" ${operacional.loading ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M20 11a8 8 0 0 0-14.9-3.8L3 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.9 3.8L21 15m0 0v5m0-5h-5"></path>
+            </svg>
           </button>
         </div>
       </div>
+      ${renderMetricasLancamentos(painel.metricas, escapeHtml)}
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${operacional.loading
@@ -2110,13 +2174,19 @@ function renderConfiguracoes({ state, escapeHtml, escapeAttr }) {
 
   return `
     <div class="fin-cadastros-layout">
-      ${renderConfiguracoesTabs({ state })}
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${!podeEditar && aba.id !== 'auditoria' ? '<p class="fin-operational-message error">Seu perfil pode visualizar, mas nao alterar configuracoes financeiras.</p>' : ''}
       ${operacional.loading
         ? '<div class="fin-loading" role="status">Carregando configuracoes...</div>'
-        : conteudo[aba.id]()}
+        : `
+          <div class="fin-subarea-header">
+            <span class="ar-eyebrow">Configurações</span>
+            ${renderConfiguracoesTabs({ state })}
+            <strong>${escapeHtml(aba.nome)}</strong>
+          </div>
+          ${conteudo[aba.id]()}
+        `}
     </div>
   `;
 }
@@ -2210,27 +2280,26 @@ export function renderFinanceiroPagina({
     `;
   } else {
     conteudoPrincipal = `
-      ${renderNavegacao({
-        secoes: secoesPermitidas,
-        secaoAtiva: secao.id,
-        escapeHtml,
-        escapeAttr
-      })}
       <section class="admin-panel fin-panel">
         <div class="admin-panel-header fin-panel-header">
           <div>
             <div class="fin-title-row">
               <h2>${escapeHtml(secao.nome)}</h2>
-              <span class="fin-phase-badge">Fundação</span>
+              ${renderSeletorEmpresa({
+                empresas: state.empresas,
+                empresaId: state.empresaId,
+                escapeHtml,
+                escapeAttr
+              })}
             </div>
             <p>${escapeHtml(secao.descricao)}</p>
+            ${renderNavegacao({
+              secoes: secoesPermitidas,
+              secaoAtiva: secao.id,
+              escapeHtml,
+              escapeAttr
+            })}
           </div>
-          ${renderSeletorEmpresa({
-            empresas: state.empresas,
-            empresaId: state.empresaId,
-            escapeHtml,
-            escapeAttr
-          })}
         </div>
         ${secao.id === 'cadastros'
           ? renderCadastros({ state, escapeHtml, escapeAttr })

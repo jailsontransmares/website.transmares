@@ -12,6 +12,18 @@ O roteador principal lê o `pathname`, remove a base `/hub` quando existir, norm
 
 Rotas especiais como `/perfil` e `/configuracoes/corretora` não são módulos do roteador principal; são páginas próprias carregadas por scripts específicos.
 
+## Diretriz de navegação secundária
+
+A navegação principal representa as áreas principais de um módulo. A navegação secundária representa páginas internas da área principal ativa e deve ficar associada visualmente ao conteúdo que controla, dentro do cabeçalho ou contexto imediato da área, sem aparecer solta entre a navegação principal e o card de conteúdo.
+
+Abas secundárias devem ter menor peso visual que as abas principais. O estado ativo deve ser indicado preferencialmente por linha inferior, tipografia ou contraste moderado, evitando cápsulas aninhadas, bordas, sombras e múltiplos níveis de navegação com o mesmo destaque.
+
+Em telas menores, a navegação secundária deve manter as opções em uma única linha, sem quebra de texto, com rolagem horizontal. Novas implementações devem reutilizar o padrão ou componente existente antes de criar uma variação paralela.
+
+## Diretriz do menu de ações de Parceiros de Indicação
+
+O menu `Ações` de Parceiros de Indicação deve ser flutuante, alinhado ao seu trigger e renderizado com `z-index` elevado para permanecer acima da tabela e dos demais controles. Seus itens devem ser apresentados em uma lista vertical, preservando a leitura e a navegação por teclado.
+
 ## Rotas principais atuais
 
 | Rota | Tela/módulo atual | Tipo | Status para o novo menu |
