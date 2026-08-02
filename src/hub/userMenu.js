@@ -65,12 +65,11 @@ function obterIniciais(nome = '', email = '') {
 }
 
 function usuarioPodeVerConfiguracoes() {
-  return Boolean(
-    document.querySelector('.hub-sidebar [onclick*="admin"]')
-    || document.querySelector('.module-card[onclick*="administracao"]')
-    || document.querySelector('.module-card[onclick*="admin"]')
-    || document.querySelector('.admin-shell')
-  );
+  if (typeof window.hubPodeVerConfiguracoes === 'function') {
+    return Boolean(window.hubPodeVerConfiguracoes());
+  }
+
+  return true;
 }
 
 function obterUrlHub(path = '') {
@@ -83,8 +82,8 @@ function navegarMenuUsuario(destino) {
   fecharTodosMenusUsuario();
 
   if (destino === 'perfil') {
-    if (typeof window.navegarParaModulo === 'function') {
-      window.navegarParaModulo('perfil');
+    if (typeof window.navegarParaRota === 'function') {
+      window.navegarParaRota(obterUrlHub('perfil'));
       return;
     }
 
@@ -93,7 +92,12 @@ function navegarMenuUsuario(destino) {
   }
 
   if (destino === 'configuracoes') {
-    window.location.assign(obterUrlHub('configuracoes'));
+    if (typeof window.navegarParaRota === 'function') {
+      window.navegarParaRota(obterUrlHub('configuracoes/corretora'));
+      return;
+    }
+
+    window.location.assign(obterUrlHub('configuracoes/corretora'));
   }
 }
 
@@ -156,17 +160,11 @@ function posicionarDropdown(menu) {
 
   if (!trigger || !dropdown || dropdown.hidden) return;
 
-  const rect = trigger.getBoundingClientRect();
-  const margem = 16;
-  const topo = Math.min(rect.bottom + 10, window.innerHeight - margem);
-  const direita = Math.max(margem, window.innerWidth - rect.right);
-  const larguraMaxima = Math.min(360, window.innerWidth - margem * 2);
-  const alturaMaxima = Math.max(180, window.innerHeight - topo - margem);
-
-  dropdown.style.setProperty('--hub-user-menu-top', `${topo}px`);
-  dropdown.style.setProperty('--hub-user-menu-right', `${direita}px`);
-  dropdown.style.setProperty('--hub-user-menu-width', `${larguraMaxima}px`);
-  dropdown.style.setProperty('--hub-user-menu-max-height', `${alturaMaxima}px`);
+  const largura = Math.ceil(trigger.getBoundingClientRect().width);
+  dropdown.style.setProperty('--hub-user-menu-width', `${largura}px`);
+  dropdown.style.removeProperty('--hub-user-menu-top');
+  dropdown.style.removeProperty('--hub-user-menu-right');
+  dropdown.style.removeProperty('--hub-user-menu-max-height');
 }
 
 function alternarMenuUsuario(menu, aberto) {
@@ -277,8 +275,6 @@ function aplicarEstilosMenuUsuario() {
   style.textContent = `
     .topbar {
       overflow: visible !important;
-      position: relative;
-      z-index: 20;
     }
 
     .user-box.hub-user-menu-host,
@@ -287,9 +283,9 @@ function aplicarEstilosMenuUsuario() {
       display: flex !important;
       justify-content: flex-end !important;
       align-items: center !important;
-      width: clamp(248px, 28vw, 340px) !important;
+      width: auto !important;
       min-width: 0 !important;
-      max-width: 340px !important;
+      max-width: none !important;
       margin: 0 !important;
       padding: 0 !important;
       border: 0 !important;
@@ -308,23 +304,25 @@ function aplicarEstilosMenuUsuario() {
     .hub-user-menu {
       position: relative;
       z-index: 9998;
-      width: 100%;
-      max-width: 340px;
+      width: auto;
+      max-width: none;
       overflow: visible;
       isolation: isolate;
     }
 
     .hub-user-menu-trigger {
-      width: 100%;
-      min-height: 50px;
+      width: auto;
+      min-width: 0;
+      max-width: 230px;
+      min-height: 42px;
       border: 1px solid rgba(15, 23, 42, 0.12);
       background: rgba(255, 255, 255, 0.88);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
       border-radius: 999px;
-      padding: 7px 11px 7px 7px;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      gap: 9px;
+      padding: 5px 9px 5px 5px;
+      display: inline-grid;
+      grid-template-columns: auto minmax(0, max-content) auto;
+      gap: 7px;
       align-items: center;
       cursor: pointer;
       color: #0f172a;
@@ -406,20 +404,23 @@ function aplicarEstilosMenuUsuario() {
     }
 
     .hub-user-menu-dropdown {
-      position: fixed;
-      top: var(--hub-user-menu-top, 84px);
-      right: var(--hub-user-menu-right, 24px);
-      width: min(var(--hub-user-menu-width, 360px), calc(100vw - 32px));
-      max-height: var(--hub-user-menu-max-height, calc(100vh - 100px));
-      overflow: auto;
+      position: absolute;
+      top: calc(100% - 1px);
+      right: 0;
+      left: auto;
+      width: var(--hub-user-menu-width, 100%);
+      min-width: 100%;
+      max-width: 230px;
+      max-height: none;
+      overflow: visible;
       overscroll-behavior: contain;
-      border-radius: 22px;
+      border-radius: 0 0 18px 18px;
       border: 1px solid rgba(15, 23, 42, 0.12);
       background: rgba(255, 255, 255, 0.98);
       box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
       backdrop-filter: blur(22px);
       -webkit-backdrop-filter: blur(22px);
-      padding: 10px;
+      padding: 5px 7px 7px;
       z-index: 9999;
     }
 
@@ -434,7 +435,7 @@ function aplicarEstilosMenuUsuario() {
     }
 
     .hub-user-menu-header {
-      display: grid;
+      display: none;
       grid-template-columns: auto minmax(0, 1fr);
       gap: 10px;
       align-items: center;
@@ -451,15 +452,14 @@ function aplicarEstilosMenuUsuario() {
 
     .hub-user-menu-item {
       width: 100%;
-      min-height: 54px;
+      min-height: 36px;
       border: 0;
       background: transparent;
-      border-radius: 14px;
-      padding: 10px 11px;
-      display: flex;
-      flex-direction: column;
+      border-radius: 11px;
+      padding: 8px 9px;
+      display: block;
       justify-content: center;
-      gap: 2px;
+      gap: 0;
       text-align: left;
       color: #0f172a;
       cursor: pointer;
@@ -487,6 +487,13 @@ function aplicarEstilosMenuUsuario() {
       line-height: 1.22;
     }
 
+    .hub-user-menu-copy small,
+    .hub-user-menu-header small,
+    .hub-user-menu-header em,
+    .hub-user-menu-item small {
+      display: none;
+    }
+
     .hub-user-menu-item.danger span,
     .hub-user-menu-item.danger small {
       color: #dc2626;
@@ -503,16 +510,6 @@ function aplicarEstilosMenuUsuario() {
     }
 
     @media (max-width: 800px) {
-      .user-box.hub-user-menu-host,
-      .hub-user-box.hub-user-menu-host {
-        width: 42px !important;
-        max-width: 42px !important;
-      }
-
-      .hub-user-menu {
-        width: 42px;
-      }
-
       .hub-user-menu-trigger {
         width: 42px;
         min-height: 42px;
@@ -524,10 +521,6 @@ function aplicarEstilosMenuUsuario() {
 
       .hub-user-menu-copy,
       .hub-user-menu-caret {
-        display: none;
-      }
-
-      .hub-user-menu-copy small {
         display: none;
       }
     }

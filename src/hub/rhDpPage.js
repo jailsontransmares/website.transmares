@@ -27,6 +27,11 @@ import {
   salvarOcorrenciaRhDp,
   salvarCadastroPessoalRhDp
 } from './services/rhDpService.js';
+import {
+  abrirMenuAcaoGlobal,
+  fecharMenuAcaoGlobal,
+  limparMenusAcoesGlobais
+} from './actionMenuPortal.js';
 
 const LIMITE_POR_PAGINA = 10;
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
@@ -242,7 +247,10 @@ export function criarRhDpController({
   renderShell,
   pode,
   escapeHtml,
-  escapeAttr
+  escapeAttr,
+  obterPartesRota,
+  montarCaminhoModulo,
+  navegarParaRota
 }) {
   let cepConsultaAtual = {
     cep: '',
@@ -264,11 +272,13 @@ export function criarRhDpController({
     controleLoading: false,
     feriasModal: {
       aberto: false,
-      saving: false
+      saving: false,
+      colaboradorId: ''
     },
     afastamentoModal: {
       aberto: false,
-      saving: false
+      saving: false,
+      colaboradorId: ''
     },
     ocorrenciaModal: {
       aberto: false,
@@ -289,7 +299,8 @@ export function criarRhDpController({
     },
     desligamentoModal: {
       aberto: false,
-      saving: false
+      saving: false,
+      colaboradorId: ''
     },
     busca: '',
     filtroStatus: 'todos',
@@ -302,7 +313,8 @@ export function criarRhDpController({
     modo = 'view',
     id = '',
     loading = false,
-    arquivosLoading = false
+    arquivosLoading = false,
+    acaoOperacionalPendente = ''
   } = {}) {
     return {
       aberto,
@@ -319,6 +331,9 @@ export function criarRhDpController({
       bancarios: {},
       movimentacoes: [],
       checklist: [],
+      ferias: [],
+      afastamentos: [],
+      desligamentos: [],
       arquivos: [],
       arquivoForm: novoArquivo(id),
       arquivoEditandoId: '',
@@ -327,6 +342,7 @@ export function criarRhDpController({
       arquivoMessage: '',
       arquivoMessageType: '',
       mensagem: '',
+      acaoOperacionalPendente,
       erros: {}
     };
   }
@@ -385,15 +401,50 @@ export function criarRhDpController({
   function podeVerOcorrencias() { return pode('rh_dp.ocorrencias', 'view'); }
   function podeCriarOcorrencias() { return pode('rh_dp.ocorrencias', 'create'); }
 
+  const RH_SECOES = [
+    { id: 'dashboard', pode: podeVerDashboard },
+    { id: 'colaboradores', pode: podeVer },
+    { id: 'demandas', pode: podeVerDemandas },
+    { id: 'fechamentos', pode: podeVerFechamentos }
+  ];
+
+  function obterSecaoRota() {
+    const partes = obterPartesRota?.() || [];
+    const informada = String(partes[1] || 'colaboradores').trim().toLowerCase();
+    return RH_SECOES.some(secao => secao.id === informada) ? informada : 'colaboradores';
+  }
+
+  function obterSecaoPermitida(secao) {
+    const candidata = RH_SECOES.find(item => item.id === secao);
+    if (candidata?.pode()) return candidata.id;
+    return RH_SECOES.find(item => item.pode())?.id || '';
+  }
+
+  function obterCadastroRota() {
+    const partes = obterPartesRota?.() || [];
+    if (partes[1] !== 'colaboradores' || !partes[2]) return null;
+    if (partes[2] === 'novo') return { id: '', modo: 'create' };
+    return {
+      id: partes[2],
+      modo: partes[3] === 'editar' ? 'edit' : 'view'
+    };
+  }
+
+  function obterRotaColaboradores() {
+    return `${montarCaminhoModulo('rh-dp').replace(/\/+$/g, '')}/colaboradores`;
+  }
+
+  function obterRotaCadastro(id = '', modo = 'view') {
+    if (!id) return `${obterRotaColaboradores()}/novo`;
+    return `${obterRotaColaboradores()}/${id}/${modo === 'edit' ? 'editar' : 'visualizar'}`;
+  }
+
   function renderMenuRhDp() {
     const itens = [
       ['dashboard', 'Dashboard', podeVerDashboard()],
       ['colaboradores', 'Colaboradores', podeVer()],
-      ['ferias', 'Férias', podeVerFerias()],
-      ['afastamentos', 'Afastamentos e ocorrências', podeVerOcorrencias()],
       ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
-      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()],
-      ['desligamentos', 'Desligamentos', podeVerDesligamentos()]
+      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
     ].filter(([, , permitido]) => permitido);
     return `<nav class="module-tabs rh-module-tabs" role="group" aria-label="Menu do RH e DP">${itens.map(([id, nome]) => `<button type="button" class="${state.secao === id ? 'active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}</nav>`;
   }
@@ -406,8 +457,8 @@ export function criarRhDpController({
     return state.colaboradores.find(item => item.id === id)?.nome_completo || 'Colaborador não localizado';
   }
 
-  function opcoesColaboradores() {
-    return state.colaboradores.filter(item => item.status !== 'inativo').map(item => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.nome_completo)}</option>`).join('');
+  function opcoesColaboradores(selecionado = '') {
+    return state.colaboradores.filter(item => item.status !== 'inativo').map(item => `<option value="${escapeAttr(item.id)}" ${item.id === selecionado ? 'selected' : ''}>${escapeHtml(item.nome_completo)}</option>`).join('');
   }
 
   function renderFerias() {
@@ -440,7 +491,7 @@ export function criarRhDpController({
   function renderFormularioFerias() {
     return `
       <div class="rh-form-grid">
-        <label><span>Colaborador *</span><select id="rh_ferias_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Colaborador *</span><select id="rh_ferias_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores(state.feriasModal.colaboradorId)}</select></label>
         <label><span>Início do período aquisitivo *</span><input id="rh_ferias_aquisitivo_inicio" class="config-input" type="date"></label>
         <label><span>Fim do período aquisitivo *</span><input id="rh_ferias_aquisitivo_fim" class="config-input" type="date"></label>
         <label><span>Início do gozo *</span><input id="rh_ferias_inicio" class="config-input" type="date"></label>
@@ -510,7 +561,7 @@ export function criarRhDpController({
   function renderFormularioAfastamento() {
     return `
       <div class="rh-form-grid">
-        <label><span>Colaborador *</span><select id="rh_afast_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Colaborador *</span><select id="rh_afast_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores(state.afastamentoModal.colaboradorId)}</select></label>
         <label><span>Tipo *</span><select id="rh_afast_tipo" class="config-input"><option value="">Selecione</option><option value="atestado_medico">Atestado médico</option><option value="acidente_trabalho">Acidente de trabalho</option><option value="doenca_ocupacional">Doença ocupacional</option><option value="licenca_maternidade">Licença-maternidade</option><option value="licenca_paternidade">Licença-paternidade</option><option value="outro">Outro</option></select></label>
         <label><span>Início *</span><input id="rh_afast_inicio" class="config-input" type="date"></label>
         <label><span>Previsão de retorno</span><input id="rh_afast_previsao" class="config-input" type="date"></label>
@@ -766,7 +817,7 @@ export function criarRhDpController({
   function renderFormularioDesligamento() {
     return `
       <div class="rh-form-grid">
-        <label><span>Colaborador *</span><select id="rh_desligamento_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores()}</select></label>
+        <label><span>Colaborador *</span><select id="rh_desligamento_colaborador" class="config-input"><option value="">Selecione</option>${opcoesColaboradores(state.desligamentoModal.colaboradorId)}</select></label>
         <label><span>Tipo *</span><select id="rh_desligamento_tipo" class="config-input"><option value="pedido_colaborador">Pedido do colaborador</option><option value="iniciativa_empresa">Iniciativa da empresa</option><option value="termino_contrato">Término de contrato</option><option value="acordo">Acordo</option><option value="aposentadoria">Aposentadoria</option><option value="outro">Outro</option></select></label>
         <label><span>Competência *</span><input id="rh_desligamento_competencia" class="config-input" type="month"></label>
         <label><span>Último dia de trabalho</span><input id="rh_desligamento_ultimo_dia" class="config-input" type="date"></label>
@@ -801,13 +852,9 @@ export function criarRhDpController({
 
   function renderDashboard() {
     const ativos = state.colaboradores.filter(item => item.status === 'ativo').length;
-    const feriasAbertas = state.ferias.filter(item => !['confirmado_contabilidade','cancelado'].includes(item.status)).length;
-    const afastamentos = state.afastamentos.filter(item => !['retorno_confirmado','cancelado'].includes(item.status)).length;
     const pendencias = state.demandas.filter(item => !['concluido','cancelado'].includes(item.status)).length + state.competencias.flatMap(item => item.rh_eventos_competencia || []).filter(item => ['pendente','enviado','divergencia'].includes(item.status)).length;
     return `<section class="admin-panel rh-panel"><div class="admin-panel-header rh-panel-header"><div><h2>Dashboard RH & DP</h2><p>Indicadores operacionais obtidos apenas dos registros aos quais seu perfil possui acesso.</p></div>${renderMenuRhDp()}</div>${renderMetricasRhDp([
       { label: 'Colaboradores ativos', shortLabel: 'C', value: ativos, tone: 'success' },
-      { label: 'Férias planejadas', shortLabel: 'F', value: feriasAbertas },
-      { label: 'Afastamentos', shortLabel: 'A', value: afastamentos },
       { label: 'Pendências', shortLabel: 'P', value: pendencias, tone: pendencias ? 'danger' : 'success' }
     ])}</section>`;
   }
@@ -902,6 +949,7 @@ export function criarRhDpController({
     const idade = calcularIdade(item.data_nascimento);
     const contato = item.telefone_celular || item.email_contato || '-';
     const status = item.status === 'inativo' ? 'inativo' : 'ativo';
+    const colaboradorId = escapeAttr(item.id);
 
     return `
       <article class="rh-table rh-table-row" role="row">
@@ -914,13 +962,17 @@ export function criarRhDpController({
         <span><span class="status-badge ${status}">${status}</span></span>
         <span>${escapeHtml(formatarDataHora(item.updated_at))}</span>
         <div class="rh-row-actions">
-          <button class="icon-action-btn" type="button" title="Visualizar" aria-label="Visualizar ${escapeAttr(item.nome_completo)}" onclick="hubRhDpAbrirCadastro('${escapeAttr(item.id)}', 'view')">Ver</button>
-          ${podeEditar() ? `<button class="icon-action-btn" type="button" title="Editar" aria-label="Editar ${escapeAttr(item.nome_completo)}" onclick="hubRhDpAbrirCadastro('${escapeAttr(item.id)}', 'edit')">Editar</button>` : ''}
-          ${podeInativar() ? `
-            <button class="icon-action-btn ${status === 'ativo' ? 'danger-text' : ''}" type="button" onclick="hubRhDpAlterarStatus('${escapeAttr(item.id)}', '${status === 'ativo' ? 'inativo' : 'ativo'}')">
-              ${status === 'ativo' ? 'Inativar' : 'Reativar'}
-            </button>
-          ` : ''}
+          <details class="rh-row-actions-menu">
+            <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome_completo)}" title="Ações rápidas">⋮</summary>
+            <div class="rh-row-actions-popover" role="menu">
+              <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorId}', 'view')">Visualizar</button>
+              ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorId}', 'edit')">Editar</button>` : ''}
+              ${status === 'ativo' && podeCriarFerias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-ferias" data-colaborador-id="${colaboradorId}">Incluir férias</button>` : ''}
+              ${status === 'ativo' && podeCriarOcorrencias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-afastamento" data-colaborador-id="${colaboradorId}">Lançar afastamento</button>` : ''}
+              ${status === 'ativo' && podeCriarDesligamentos() ? `<button type="button" role="menuitem" data-rh-action="quick-open-desligamento" data-colaborador-id="${colaboradorId}">Lançar desligamento</button>` : ''}
+              ${podeInativar() ? `<button class="${status === 'ativo' ? 'danger-text' : ''}" type="button" role="menuitem" onclick="hubRhDpAlterarStatus('${colaboradorId}', '${status === 'ativo' ? 'inativo' : 'ativo'}')">${status === 'ativo' ? 'Inativar' : 'Reativar'}</button>` : ''}
+            </div>
+          </details>
         </div>
       </article>
     `;
@@ -981,7 +1033,7 @@ export function criarRhDpController({
         </section>
       `
       : `
-        ${state.secao === 'dashboard' ? renderDashboard() : state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : state.secao === 'desligamentos' ? renderDesligamentos() : state.secao === 'ferias' ? renderFerias() : state.secao === 'afastamentos' ? renderAfastamentosOcorrencias() : `
+        ${state.secao === 'dashboard' ? renderDashboard() : state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : state.modal.aberto ? `${renderModal()}${renderModalFerias()}${renderModalAfastamento()}${renderModalDesligamento()}` : `
         <section class="admin-panel rh-panel">
           <div class="admin-panel-header rh-panel-header">
             ${renderMenuRhDp()}
@@ -994,10 +1046,10 @@ export function criarRhDpController({
           <div class="rh-collaborators-overview">${renderToolbar()}</div>
           ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
           ${state.loading ? '<p class="quick-link-empty">Carregando colaboradores...</p>' : renderTabela()}
-        </section>
-        ${renderModal()}`}
+        </section>`}
       `;
 
+    limparMenusAcoesGlobais();
     document.getElementById('app').innerHTML = renderShell({
       tituloPagina: 'RH & DP',
       descricaoPagina: 'Cadastro e gestão interna de colaboradores.',
@@ -1010,6 +1062,46 @@ export function criarRhDpController({
   function conectarEventos() {
     document.querySelector('[data-rh-action="open-create"]')?.addEventListener('click', () => {
       abrirCadastro('', 'create');
+    });
+    document.querySelectorAll('[data-rh-action="quick-open-ferias"]').forEach(botao => {
+      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'ferias'));
+    });
+    document.querySelectorAll('[data-rh-action="quick-open-afastamento"]').forEach(botao => {
+      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'afastamento'));
+    });
+    document.querySelectorAll('[data-rh-action="quick-open-desligamento"]').forEach(botao => {
+      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'desligamento'));
+    });
+    document.querySelector('[data-rh-action="quick-open-modal-ferias"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('ferias'));
+    document.querySelector('[data-rh-action="quick-open-modal-afastamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('afastamento'));
+    document.querySelector('[data-rh-action="quick-open-modal-desligamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('desligamento'));
+    document.querySelectorAll('.rh-row-actions-menu').forEach(menu => {
+      const popover = menu.querySelector('.rh-row-actions-popover');
+      const trigger = menu.querySelector('summary');
+      if (!popover || !trigger) return;
+
+      menu.addEventListener('toggle', () => {
+        if (!menu.open) {
+          fecharMenuAcaoGlobal(popover);
+          return;
+        }
+
+        abrirMenuAcaoGlobal(trigger, popover, {
+          minWidth: 120,
+          maxWidth: 190,
+          gap: 6
+        });
+      });
+
+      trigger.addEventListener('click', () => window.requestAnimationFrame(() => {
+        if (menu.open) {
+          abrirMenuAcaoGlobal(trigger, popover, {
+            minWidth: 120,
+            maxWidth: 190,
+            gap: 6
+          });
+        }
+      }));
     });
     document.querySelectorAll('[data-rh-action="close-modal"]').forEach(botao => {
       botao.addEventListener('click', () => {
@@ -1497,7 +1589,7 @@ export function criarRhDpController({
 
   function renderSecaoObservacoes(readonly) {
     return `
-      <section class="rh-form-section">
+      <section class="rh-form-section rh-fixed-observations">
         <div class="rh-form-section-title">
           <strong>Observações</strong>
         </div>
@@ -1506,6 +1598,32 @@ export function criarRhDpController({
         </label>
       </section>
     `;
+  }
+
+  function renderSecaoHistoricoOperacional() {
+    const renderRegistro = (item, tipo) => {
+      const titulo = tipo === 'ferias'
+        ? `${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)}`
+        : tipo === 'afastamentos'
+          ? (item.tipo || 'Afastamento').replaceAll('_', ' ')
+          : (item.tipo || 'Desligamento').replaceAll('_', ' ');
+      const detalhe = tipo === 'ferias'
+        ? `${item.dias_gozo || '-'} dia(s) · ${item.status || 'sem status'}`
+        : tipo === 'afastamentos'
+          ? `Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno ${formatarData(item.previsao_retorno_em)}` : ''}`
+          : `${item.competencia ? `Competência ${formatarData(item.competencia).slice(3)}` : ''}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}`;
+      return `<article class="rh-operational-record"><div><strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(detalhe)}</span></div><span class="status-badge">${escapeHtml(String(item.status || 'sem status').replaceAll('_', ' '))}</span></article>`;
+    };
+
+    const blocos = [
+      ['Férias', 'ferias', state.modal.ferias, podeVerFerias(), podeCriarFerias(), 'quick-open-modal-ferias'],
+      ['Afastamentos', 'afastamentos', state.modal.afastamentos, podeVerOcorrencias(), podeCriarOcorrencias(), 'quick-open-modal-afastamento'],
+      ['Desligamento', 'desligamentos', state.modal.desligamentos, podeVerDesligamentos(), podeCriarDesligamentos(), 'quick-open-modal-desligamento']
+    ].filter(([, , , permitido]) => permitido);
+
+    if (!blocos.length) return '<section class="rh-form-section"><strong>Histórico operacional</strong><p>Seu perfil não possui permissão para visualizar esses registros.</p></section>';
+
+    return `<div class="rh-operational-history">${blocos.map(([titulo, tipo, itens, permitido, podeCriar, action]) => `<section class="rh-form-section rh-operational-section"><div class="rh-form-section-title"><strong>${titulo}</strong>${podeCriar && state.modal.id ? `<button class="secondary-btn" type="button" data-rh-action="${action}">+ Incluir</button>` : ''}</div><div class="rh-operational-list">${itens.length ? itens.slice(0, 8).map(item => renderRegistro(item, tipo)).join('') : '<p class="quick-link-empty">Nenhum registro encontrado.</p>'}</div>${itens.length > 8 ? `<small class="rh-operational-more">Exibindo os 8 registros mais recentes.</small>` : ''}</section>`).join('')}</div>`;
   }
 
   function obterEtapasCadastro(readonly) {
@@ -1523,7 +1641,7 @@ export function criarRhDpController({
       {
         id: 'documentos',
         label: 'Documentos',
-        conteudo: renderSecaoDocumentos(readonly)
+        conteudo: `${renderSecaoDocumentos(readonly)}${renderSecaoArquivos(readonly)}`
       },
       {
         id: 'vinculo',
@@ -1537,14 +1655,14 @@ export function criarRhDpController({
       },
       {
         id: 'historico',
-        label: 'Dados bancários e histórico',
+        label: 'Dados bancários',
         conteudo: `${renderSecaoBancarios(readonly)}${renderSecaoChecklistHistorico(readonly)}`
       },
-      {
-        id: 'anexos',
-        label: 'Anexos e observações',
-        conteudo: `${renderSecaoArquivos(readonly)}${renderSecaoObservacoes(readonly)}`
-      }
+      ...(state.modal.id && (podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos()) ? [{
+        id: 'operacional',
+        label: 'Histórico RH',
+        conteudo: renderSecaoHistoricoOperacional()
+      }] : []),
     ];
 
     return podeVerSensiveis()
@@ -1605,8 +1723,7 @@ export function criarRhDpController({
     const ultimaEtapa = etapaAtual === etapas.length - 1;
 
     return `
-      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
-        <section class="small-modal rh-modal">
+      <section class="rh-collaborator-screen" role="region" aria-label="${escapeAttr(titulo)}">
           <div class="small-modal-header">
             <div>
               <h3>${escapeHtml(titulo)}</h3>
@@ -1627,6 +1744,8 @@ export function criarRhDpController({
             `}
           </div>
 
+          ${state.modal.loading ? '' : renderSecaoObservacoes(readonly)}
+
           ${state.modal.loading ? '' : `
             <div class="small-modal-actions rh-modal-actions">
               <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
@@ -1637,8 +1756,7 @@ export function criarRhDpController({
               </div>
             </div>
           `}
-        </section>
-      </div>
+      </section>
     `;
   }
 
@@ -1742,6 +1860,20 @@ export function criarRhDpController({
   }
 
   async function abrir() {
+    const secaoRota = obterSecaoRota();
+    const secaoPermitida = obterSecaoPermitida(secaoRota);
+    const partesRota = obterPartesRota?.() || [];
+    const secaoInformada = String(partesRota[1] || '').trim().toLowerCase();
+
+    if (
+      secaoPermitida
+      && (!secaoInformada || secaoPermitida !== secaoRota || secaoInformada !== secaoPermitida)
+    ) {
+      await navegar(secaoPermitida);
+      return;
+    }
+
+    state.secao = secaoPermitida || secaoRota;
     state.loading = true;
     state.message = '';
     render();
@@ -1754,7 +1886,20 @@ export function criarRhDpController({
 
     try {
       state.colaboradores = await listarColaboradoresRhDp();
+      if (state.secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
+      if (state.secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
+      if (state.secao === 'dashboard') {
+        const tarefas = [];
+        if (podeVerDemandas()) tarefas.push(listarDemandasContabilidadeRhDp().then(valor => { state.demandas = valor; }));
+        if (podeVerFechamentos()) tarefas.push(listarCompetenciasRhDp().then(valor => { state.competencias = valor; }));
+        await Promise.all(tarefas);
+      }
       state.loading = false;
+      const cadastroRota = obterCadastroRota();
+      if (cadastroRota) {
+        await abrirCadastro(cadastroRota.id, cadastroRota.modo, '', { atualizarRota: false });
+        return;
+      }
       render();
     } catch (error) {
       state.loading = false;
@@ -1765,40 +1910,23 @@ export function criarRhDpController({
   }
 
   async function abrirSecao(secao) {
-    if (!['dashboard', 'colaboradores', 'demandas', 'fechamentos', 'desligamentos', 'ferias', 'afastamentos'].includes(secao)) return;
-    state.secao = secao;
-    if (secao === 'colaboradores') { render(); return; }
-    state.controleLoading = true;
-    state.message = '';
-    render();
-    try {
-      if (secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
-      if (secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
-      if (secao === 'desligamentos') state.desligamentos = await listarDesligamentosRhDp();
-      if (secao === 'ferias') state.ferias = await listarFeriasRhDp();
-      if (secao === 'afastamentos') [state.afastamentos, state.ocorrencias] = await Promise.all([listarAfastamentosRhDp(), listarOcorrenciasRhDp()]);
-      if (secao === 'dashboard') {
-        const tarefas = [];
-        if (podeVerFerias()) tarefas.push(listarFeriasRhDp().then(valor => { state.ferias = valor; }));
-        if (podeVerOcorrencias()) tarefas.push(listarAfastamentosRhDp().then(valor => { state.afastamentos = valor; }));
-        if (podeVerDemandas()) tarefas.push(listarDemandasContabilidadeRhDp().then(valor => { state.demandas = valor; }));
-        if (podeVerFechamentos()) tarefas.push(listarCompetenciasRhDp().then(valor => { state.competencias = valor; }));
-        await Promise.all(tarefas);
-      }
-    } catch (error) {
-      state.message = error.message || 'Não foi possível carregar os controles.';
-      state.messageType = 'error';
-    } finally {
-      state.controleLoading = false;
-      render();
-    }
+    const destino = obterSecaoPermitida(secao);
+    if (!destino || !navegarParaRota || !montarCaminhoModulo) return;
+    await navegar(destino);
   }
 
-  function abrirModalFerias() {
+  function navegar(secao) {
+    const destino = obterSecaoPermitida(secao);
+    if (!destino || !navegarParaRota || !montarCaminhoModulo) return Promise.resolve();
+    return navegarParaRota(`${montarCaminhoModulo('rh-dp').replace(/\/+$/g, '')}/${destino}`);
+  }
+
+  function abrirModalFerias(colaboradorId = '') {
     if (!podeCriarFerias()) return;
     state.feriasModal = {
       aberto: true,
-      saving: false
+      saving: false,
+      colaboradorId
     };
     render();
   }
@@ -1847,9 +1975,9 @@ export function criarRhDpController({
         }
       });
       state.feriasModal = { aberto: false, saving: false };
-      state.message = 'Planejamento de férias registrado como rascunho.';
-      state.messageType = 'success';
-      await abrirSecao('ferias');
+      await recarregarHistoricoColaborador();
+      state.modal.mensagem = 'Planejamento de férias registrado como rascunho.';
+      render();
     } catch (error) {
       state.feriasModal.saving = false;
       state.message = error.message || 'Não foi possível registrar as férias.';
@@ -1858,9 +1986,9 @@ export function criarRhDpController({
     }
   }
 
-  function abrirModalAfastamento() {
+  function abrirModalAfastamento(colaboradorId = '') {
     if (!podeCriarOcorrencias()) return;
-    state.afastamentoModal = { aberto: true, saving: false };
+    state.afastamentoModal = { aberto: true, saving: false, colaboradorId };
     state.message = '';
     render();
   }
@@ -1917,9 +2045,9 @@ export function criarRhDpController({
         }
       });
       state.afastamentoModal = { aberto: false, saving: false };
-      state.message = 'Afastamento registrado como rascunho.';
-      state.messageType = 'success';
-      await abrirSecao('afastamentos');
+      await recarregarHistoricoColaborador();
+      state.modal.mensagem = 'Afastamento registrado como rascunho.';
+      render();
     } catch (error) {
       state.afastamentoModal.saving = false;
       state.message = error.message || 'Não foi possível registrar o afastamento.';
@@ -1959,9 +2087,8 @@ export function criarRhDpController({
         }
       });
       state.ocorrenciaModal = { aberto: false, saving: false };
-      state.message = 'Ocorrência registrada.';
-      state.messageType = 'success';
-      await abrirSecao('afastamentos');
+      state.modal.mensagem = 'Ocorrência registrada.';
+      render();
     } catch (error) {
       state.ocorrenciaModal.saving = false;
       state.message = error.message || 'Não foi possível registrar a ocorrência.';
@@ -2125,9 +2252,9 @@ export function criarRhDpController({
     } catch (error) { state.message = error.message || 'Não foi possível atualizar o evento.'; state.messageType = 'error'; render(); }
   }
 
-  function abrirModalDesligamento() {
+  function abrirModalDesligamento(colaboradorId = '') {
     if (!podeCriarDesligamentos()) return;
-    state.desligamentoModal = { aberto: true, saving: false };
+    state.desligamentoModal = { aberto: true, saving: false, colaboradorId };
     state.message = '';
     render();
   }
@@ -2169,9 +2296,9 @@ export function criarRhDpController({
         }
       });
       state.desligamentoModal = { aberto: false, saving: false };
-      state.message = 'Desligamento registrado como rascunho.';
-      state.messageType = 'success';
-      await abrirSecao('desligamentos');
+      await recarregarHistoricoColaborador();
+      state.modal.mensagem = 'Desligamento registrado como rascunho.';
+      render();
     } catch (error) {
       state.desligamentoModal.saving = false;
       state.message = error.message || 'Não foi possível registrar o desligamento.';
@@ -2185,20 +2312,38 @@ export function criarRhDpController({
     if (!item_chave) return;
     try {
       await salvarChecklistDesligamentoRhDp({ checklist: { desligamento_id: desligamentoId, item_chave, status: 'concluido' } });
-      state.message = 'Checklist atualizada.'; state.messageType = 'success'; await abrirSecao('desligamentos');
+      state.modal.mensagem = 'Checklist atualizada.'; render();
     } catch (error) { state.message = error.message || 'Não foi possível atualizar a checklist.'; state.messageType = 'error'; render(); }
   }
 
-  async function abrirCadastro(id = '', modo = 'view') {
+  async function recarregarHistoricoColaborador() {
+    if (!state.modal.id) return;
+    const colaboradorId = state.modal.id;
+    const [ferias, afastamentos, desligamentos] = await Promise.all([
+      podeVerFerias() ? listarFeriasRhDp() : Promise.resolve([]),
+      podeVerOcorrencias() ? listarAfastamentosRhDp() : Promise.resolve([]),
+      podeVerDesligamentos() ? listarDesligamentosRhDp() : Promise.resolve([])
+    ]);
+    state.modal.ferias = ferias.filter(item => item.colaborador_id === colaboradorId);
+    state.modal.afastamentos = afastamentos.filter(item => item.colaborador_id === colaboradorId);
+    state.modal.desligamentos = desligamentos.filter(item => item.colaborador_id === colaboradorId);
+  }
+
+  async function abrirCadastro(id = '', modo = 'view', acaoOperacionalPendente = '', { atualizarRota = true } = {}) {
     if (modo === 'create' && !podeCriar()) return;
     if (modo === 'edit' && !podeEditar()) return;
+
+    if (atualizarRota && navegarParaRota && montarCaminhoModulo) {
+      return navegarParaRota(obterRotaCadastro(id, modo));
+    }
 
     state.modal = criarEstadoModal({
       aberto: true,
       modo,
       id,
       loading: Boolean(id),
-      arquivosLoading: Boolean(id) && podeVerArquivos()
+      arquivosLoading: Boolean(id) && podeVerArquivos(),
+      acaoOperacionalPendente
     });
     render();
 
@@ -2217,12 +2362,25 @@ export function criarRhDpController({
       state.modal.bancarios = dados.bancarios || {};
       state.modal.movimentacoes = dados.movimentacoes || [];
       state.modal.checklist = dados.checklist || [];
+      const [ferias, afastamentos, desligamentos] = await Promise.all([
+        podeVerFerias() ? listarFeriasRhDp() : Promise.resolve([]),
+        podeVerOcorrencias() ? listarAfastamentosRhDp() : Promise.resolve([]),
+        podeVerDesligamentos() ? listarDesligamentosRhDp() : Promise.resolve([])
+      ]);
+      state.modal.ferias = ferias.filter(item => item.colaborador_id === id);
+      state.modal.afastamentos = afastamentos.filter(item => item.colaborador_id === id);
+      state.modal.desligamentos = desligamentos.filter(item => item.colaborador_id === id);
       state.modal.arquivos = podeVerArquivos()
         ? await listarArquivosColaboradorRhDp({ colaboradorId: id })
         : [];
       state.modal.loading = false;
       state.modal.arquivosLoading = false;
       render();
+      if (state.modal.acaoOperacionalPendente) {
+        const acao = state.modal.acaoOperacionalPendente;
+        state.modal.acaoOperacionalPendente = '';
+        abrirAcaoOperacionalColaborador(acao);
+      }
     } catch (error) {
       state.modal.loading = false;
       state.modal.arquivosLoading = false;
@@ -2234,7 +2392,19 @@ export function criarRhDpController({
   function fecharCadastro() {
     if (state.modal.saving) return;
     state.modal.aberto = false;
+    if (obterCadastroRota() && navegarParaRota) {
+      navegarParaRota(obterRotaColaboradores());
+      return;
+    }
     render();
+  }
+
+  function abrirAcaoOperacionalColaborador(tipo) {
+    if (!state.modal.id) return;
+    const colaboradorId = state.modal.id;
+    if (tipo === 'ferias') abrirModalFerias(colaboradorId);
+    if (tipo === 'afastamento') abrirModalAfastamento(colaboradorId);
+    if (tipo === 'desligamento') abrirModalDesligamento(colaboradorId);
   }
 
   function adicionarDependente() {
@@ -2425,7 +2595,11 @@ export function criarRhDpController({
           : 'Colaborador incluído, mas a lista não pôde ser recarregada agora.';
       }
 
-      render();
+      if (fecharAoSalvar && obterCadastroRota() && navegarParaRota) {
+        await navegarParaRota(obterRotaColaboradores());
+      } else {
+        render();
+      }
     } catch (error) {
       state.modal.saving = false;
       state.modal.erros.geral = error.message || 'Não foi possível salvar o cadastro.';

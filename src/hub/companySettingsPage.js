@@ -71,7 +71,7 @@ function injetarEstilos() {
       min-width: 0;
       margin: 0;
       display: grid;
-      gap: 18px;
+      gap: 14px;
       box-sizing: border-box;
     }
 
@@ -190,7 +190,7 @@ function injetarEstilos() {
       flex-wrap: wrap;
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 880px) {
       .company-settings-grid,
       .company-settings-logo-row {
         grid-template-columns: 1fr;
@@ -288,14 +288,16 @@ function renderFormulario() {
   const r = registroAtual || {};
 
   return `
-    <main class="dashboard hub-layout company-settings-page">
+    <main class="dashboard hub-layout company-settings-page ${escapeAttr(window.hubObterClassesLayoutPadrao?.() || 'is-sidebar-collapsed')}" >
       ${renderTopo()}
-      <section class="hub-page-content company-settings-shell">
-        <section class="hub-page-intro">
-          <span class="hub-page-kicker">Configurações</span>
-          <h2>Dados da corretora</h2>
-          <p>Centralize os dados institucionais e a identidade visual usada no Hub.</p>
-        </section>
+      <div class="hub-shell">
+        ${window.hubRenderizarSidebarPadrao?.() || ''}
+        <section class="hub-page-content company-settings-shell">
+          <section class="hub-page-intro">
+            <span class="hub-page-kicker">Configurações</span>
+            <h2>Dados da corretora</h2>
+            <p>Centralize os dados institucionais e a identidade visual usada no Hub.</p>
+          </section>
 
         <section class="company-settings-card">
           <h2>Identificação</h2>
@@ -355,11 +357,12 @@ function renderFormulario() {
 
         ${mensagem ? `<p class="company-settings-message ${escapeAttr(mensagemTipo)}">${escapeHtml(mensagem)}</p>` : ''}
 
-        <div class="company-settings-actions">
-          <button class="secondary-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Cancelar</button>
-          <button class="save-btn" type="button" onclick="hubCorretoraSalvar()">Salvar dados</button>
-        </div>
-      </section>
+          <div class="company-settings-actions">
+            <button class="secondary-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Cancelar</button>
+            <button class="save-btn" type="button" onclick="hubCorretoraSalvar()">Salvar dados</button>
+          </div>
+        </section>
+      </div>
     </main>
   `;
 }
@@ -369,15 +372,18 @@ function renderErro(mensagemErro) {
   const app = document.getElementById('app');
   app.dataset.companySettingsPage = 'true';
   app.innerHTML = `
-    <main class="dashboard hub-layout company-settings-page">
+    <main class="dashboard hub-layout company-settings-page ${escapeAttr(window.hubObterClassesLayoutPadrao?.() || 'is-sidebar-collapsed')}" >
       ${renderTopo()}
-      <section class="hub-page-content company-settings-shell">
-        <section class="error-card">
-          <h1>Dados da corretora indisponíveis</h1>
-          <p>${escapeHtml(mensagemErro || 'Não foi possível carregar esta área.')}</p>
-          <button class="save-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Voltar</button>
+      <div class="hub-shell">
+        ${window.hubRenderizarSidebarPadrao?.() || ''}
+        <section class="hub-page-content company-settings-shell">
+          <section class="error-card">
+            <h1>Dados da corretora indisponíveis</h1>
+            <p>${escapeHtml(mensagemErro || 'Não foi possível carregar esta área.')}</p>
+            <button class="save-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Voltar</button>
+          </section>
         </section>
-      </section>
+      </div>
     </main>
   `;
 }
@@ -404,10 +410,17 @@ async function renderizarPagina({ force = false } = {}) {
     renderizadoPara = chave;
     await garantirAcesso();
     registroAtual = await carregarRegistroCorretora();
+
+    const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (!estaNaRotaCorretora() || chaveAtual !== chave) return;
+
     injetarEstilos();
     app.dataset.companySettingsPage = 'true';
     app.innerHTML = renderFormulario();
   } catch (erro) {
+    const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (!estaNaRotaCorretora() || chaveAtual !== chave) return;
+
     renderErro(erro.message || 'Erro ao carregar dados da corretora.');
   } finally {
     carregando = false;

@@ -1,4 +1,5 @@
 import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarPedidosRelacionadosCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr } from './services/arCrmService.js';
 import {
   cancelarReciboAR,
   carregarDadosValidacoesAR,
@@ -94,6 +95,29 @@ export async function chamarApi(action, payload = {}) {
       const dados = await carregarDadosAR();
       return { ok: true, data: dados };
     }
+
+    if (action === 'getArCrmData') {
+      const dados = await carregarDadosCrmAr(payload.pagina, payload.limite);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'syncArCrm') {
+      const dados = await sincronizarCrmAr();
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'getArCrmRelated') {
+      const dados = await carregarPedidosRelacionadosCrmAr(payload.cpf);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'getArCrmActivity') return { ok: true, data: await carregarAtividadeCrmAr(payload.taskId) };
+    if (action === 'createArCrmComment') return { ok: true, data: await criarComentarioCrmAr(payload.taskId, payload.commentText, payload.mentions) };
+    if (action === 'replyArCrmComment') return { ok: true, data: await responderComentarioCrmAr(payload.taskId, payload.commentId, payload.commentText, payload.mentions) };
+    if (action === 'toggleArCrmReaction') return { ok: true, data: await alternarReacaoComentarioCrmAr(payload.taskId, payload.commentId, payload.emoji) };
+    if (action === 'updateArCrmComment') return { ok: true, data: await atualizarComentarioCrmAr(payload.taskId, payload.commentId, payload.commentText) };
+    if (action === 'deleteArCrmComment') return { ok: true, data: await excluirComentarioCrmAr(payload.taskId, payload.commentId) };
+    if (action === 'addArCrmAttachment') return { ok: true, data: await adicionarAnexoCrmAr(payload.taskId, payload.file) };
 
     if (action === 'generateArLinks') {
       const resultado = await gerarLinksAR(payload);

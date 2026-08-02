@@ -1,8 +1,6 @@
 import { chamarApi } from './api.js';
 
 const STYLE_ID = 'admin-user-permissions-v2-style';
-const BOOT_DELAYS = [0, 80, 180, 360, 700];
-
 window.hubAdminUserPermissionsV2Ativa = true;
 
 let recursos = [];
@@ -276,6 +274,7 @@ function acoesDisponiveis(recurso) {
     'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
+    'painel_ar.crm': ['view', 'execute'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
@@ -786,33 +785,19 @@ function manipularChange(event) {
   alternarPermissao(input.dataset.resource || '', input.dataset.permissionAction || '', input.checked);
 }
 
-function removerModaisLegadosUsuario() {
-  document.querySelectorAll('.admin-user-modal.is-permissions-stage, .modal-backdrop').forEach(elemento => {
-    if (elemento.querySelector?.('.admin-user-modal.is-permissions-stage') || elemento.classList?.contains('is-permissions-stage')) {
-      elemento.remove();
-    }
-  });
-  document.body.classList.remove('modal-open', 'no-scroll', 'is-modal-open');
-}
-
-function agendarBoot() {
-  BOOT_DELAYS.forEach(delay => {
-    window.setTimeout(() => {
-      renderizarPermissoesV2();
-      if (telaAtiva()) removerModaisLegadosUsuario();
-    }, delay);
-  });
+function iniciarRenderizacao() {
+  agendarRender();
 }
 
 function iniciar() {
   injetarEstilos();
-  agendarBoot();
+  iniciarRenderizacao();
 }
 
 document.addEventListener('click', manipularClick, true);
 document.addEventListener('change', manipularChange, true);
-window.addEventListener('hubAdminUsuarioTelaAtualizada', agendarBoot);
-window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', agendarBoot);
+window.addEventListener('hubAdminUsuarioTelaAtualizada', iniciarRenderizacao);
+window.addEventListener('hubAdminUsuarioTelaRenderSolicitado', iniciarRenderizacao);
 window.addEventListener('load', iniciar);
 
 if (document.readyState === 'loading') {

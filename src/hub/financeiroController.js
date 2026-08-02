@@ -203,6 +203,15 @@ export function criarFinanceiroController({
     return FINANCEIRO_CADASTRO_ABAS.some(item => item.id === aba) ? aba : 'pessoas';
   }
 
+  function obterRotaCadastros() {
+    return `${montarCaminhoModulo('financeiro').replace(/\/+$/g, '')}/cadastros/${state.cadastroAba.replace(/_/g, '-')}`;
+  }
+
+  function obterCadastroModalRota() {
+    const partes = obterPartesRota();
+    return state.secao === 'cadastros' && partes[3] === 'novo';
+  }
+
   function obterLancamentoAbaRota() {
     const partes = obterPartesRota();
     const aliases = {
@@ -347,6 +356,12 @@ export function criarFinanceiroController({
       state.cadastrosOperacional.mensagem = mensagem || 'Cadastro salvo.';
       await carregarContextoBase();
       await carregarCadastrosOperacionais(true);
+      if (!state.cadastrosOperacional.modalCadastroAberto) {
+        const url = new URL(window.location.href);
+        url.pathname = obterRotaCadastros();
+        url.hash = '';
+        window.history.replaceState({}, '', url);
+      }
     } catch (erro) {
       state.cadastrosOperacional.erro = erro?.message || 'Nao foi possivel concluir a operacao.';
     } finally {
@@ -661,16 +676,14 @@ export function criarFinanceiroController({
     });
 
     document.querySelector('[data-fin-action="open-cadastro-modal"]')?.addEventListener('click', () => {
-      state.cadastrosOperacional.modalCadastroAberto = true;
       state.cadastrosOperacional.erro = '';
       state.cadastrosOperacional.mensagem = '';
-      render();
+      navegarParaRota(`${obterRotaCadastros()}/novo`);
     });
 
     document.querySelectorAll('[data-fin-action="close-cadastro-modal"]').forEach(botao => {
       botao.addEventListener('click', () => {
-        state.cadastrosOperacional.modalCadastroAberto = false;
-        render();
+        navegarParaRota(obterRotaCadastros());
       });
     });
 
@@ -1029,6 +1042,7 @@ export function criarFinanceiroController({
   async function carregar(forcar = false) {
     state.secao = obterSecaoPermitida(obterSecaoRota());
     state.cadastroAba = state.secao === 'cadastros' ? obterCadastroAbaRota() : state.cadastroAba;
+    state.cadastrosOperacional.modalCadastroAberto = state.secao === 'cadastros' && obterCadastroModalRota();
     state.lancamentoAba = state.secao === 'lancamentos' ? obterLancamentoAbaRota() : state.lancamentoAba;
     state.configuracaoAba = state.secao === 'configuracoes' ? obterConfiguracaoAbaRota() : state.configuracaoAba;
 

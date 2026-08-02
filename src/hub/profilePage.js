@@ -79,15 +79,15 @@ function injetarEstilosPerfil() {
   style.id = 'hub-profile-style';
   style.textContent = `
     .hub-profile-shell {
-      max-width: 1120px;
-      margin: 0 auto;
+      max-width: none;
+      margin: 0;
       width: 100%;
     }
 
     .hub-profile-layout {
       display: grid;
       grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-      gap: 22px;
+      gap: 18px;
       align-items: start;
     }
 
@@ -95,9 +95,9 @@ function injetarEstilosPerfil() {
     .hub-profile-form-card {
       background: rgba(255, 255, 255, 0.82);
       border: 1px solid rgba(148, 163, 184, 0.26);
-      border-radius: 28px;
-      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.10);
-      padding: 24px;
+      border-radius: 24px;
+      box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+      padding: 22px;
       backdrop-filter: blur(18px);
     }
 
@@ -394,10 +394,13 @@ function renderizarPerfil({ usuario }) {
 
   app.dataset.hubProfilePage = 'true';
   app.innerHTML = `
-    <main class="dashboard hub-profile-page">
+    <main class="dashboard hub-layout hub-profile-page ${escapeAttr(window.hubObterClassesLayoutPadrao?.() || 'is-sidebar-collapsed')}">
       ${renderizarTopoPerfil(usuario)}
 
-      <section class="hub-profile-shell">
+      <div class="hub-shell">
+        ${window.hubRenderizarSidebarPadrao?.() || ''}
+        <section class="hub-page-content hub-profile-page-content">
+          <section class="hub-profile-shell">
         <section class="hub-page-intro">
           <span class="hub-page-kicker">Conta do usuário</span>
           <h2>Meu perfil</h2>
@@ -469,6 +472,8 @@ function renderizarPerfil({ usuario }) {
             </form>
           </section>
         </div>
+          </section>
+        </section>
       </section>
 
       ${renderizarModalSenha(usuario)}
@@ -481,12 +486,18 @@ function renderizarPerfilErro(mensagem) {
   const app = document.getElementById('app');
   app.dataset.hubProfilePage = 'true';
   app.innerHTML = `
-    <main class="dashboard hub-profile-page">
-      <section class="error-card">
-        <h1>Perfil indisponível</h1>
-        <p>${escapeHtml(mensagem || 'Não foi possível carregar seu perfil.')}</p>
-        <button class="save-btn" type="button" onclick="hubPerfilVoltarHome()">Voltar para a Home</button>
-      </section>
+    <main class="dashboard hub-layout hub-profile-page ${escapeAttr(window.hubObterClassesLayoutPadrao?.() || 'is-sidebar-collapsed')}" >
+      ${renderizarTopoPerfil({})}
+      <div class="hub-shell">
+        ${window.hubRenderizarSidebarPadrao?.() || ''}
+        <section class="hub-page-content hub-profile-page-content">
+          <section class="error-card">
+            <h1>Perfil indisponível</h1>
+            <p>${escapeHtml(mensagem || 'Não foi possível carregar seu perfil.')}</p>
+            <button class="save-btn" type="button" onclick="hubPerfilVoltarHome()">Voltar para a Home</button>
+          </section>
+        </section>
+      </div>
     </main>
   `;
 }
@@ -509,8 +520,15 @@ async function renderizarRotaPerfil({ force = false } = {}) {
     perfilCarregando = true;
     perfilRenderizadoPara = chave;
     const dados = await carregarPerfilAtual();
+
+    const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (!estaNaRotaPerfil() || chaveAtual !== chave) return;
+
     renderizarPerfil(dados);
   } catch (erro) {
+    const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (!estaNaRotaPerfil() || chaveAtual !== chave) return;
+
     renderizarPerfilErro(erro.message || 'Erro ao carregar perfil.');
   } finally {
     perfilCarregando = false;
@@ -613,40 +631,6 @@ function fecharModalSenha() {
   renderizarRotaPerfil({ force: true });
 }
 
-function instalarInterceptadoresPerfil() {
-  const originalPushState = window.history.pushState;
-  const originalReplaceState = window.history.replaceState;
-
-  window.history.pushState = function pushStatePerfil(...args) {
-    const retorno = originalPushState.apply(this, args);
-    window.setTimeout(() => renderizarRotaPerfil(), 0);
-    return retorno;
-  };
-
-  window.history.replaceState = function replaceStatePerfil(...args) {
-    const retorno = originalReplaceState.apply(this, args);
-    window.setTimeout(() => renderizarRotaPerfil(), 0);
-    return retorno;
-  };
-
-  window.addEventListener('popstate', () => {
-    window.setTimeout(() => renderizarRotaPerfil(), 40);
-  });
-
-  const app = document.getElementById('app');
-  if (app) {
-    const observer = new MutationObserver(() => {
-      if (estaNaRotaPerfil() && app.dataset.hubProfilePage !== 'true') {
-        window.setTimeout(() => renderizarRotaPerfil(), 40);
-      }
-    });
-    observer.observe(app, { childList: true, subtree: false });
-  }
-
-  window.setTimeout(() => renderizarRotaPerfil(), 0);
-  window.setTimeout(() => renderizarRotaPerfil(), 450);
-}
-
 Object.assign(window, {
   hubPerfilSalvar: salvarPerfil,
   hubPerfilAbrirSenha: abrirModalSenha,
@@ -656,5 +640,6 @@ Object.assign(window, {
 });
 
 if (supabase) {
-  instalarInterceptadoresPerfil();
+  window.hubRenderizarPerfil = renderizarRotaPerfil;
+  renderizarRotaPerfil();
 }

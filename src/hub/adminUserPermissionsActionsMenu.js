@@ -1,3 +1,8 @@
+import {
+  abrirMenuAcaoGlobal,
+  fecharMenuAcaoGlobal,
+  limparMenusAcoesGlobaisOrfaos
+} from './actionMenuPortal.js';
 const STYLE_ID = 'admin-user-permissions-actions-menu-style';
 const APPLY_DELAYS = [0, 80, 180, 360, 700];
 
@@ -42,25 +47,30 @@ function injectActionsMenuStyle() {
 
     .admin-user-permissions-v2-actions-trigger,
     .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn {
-      min-width: 92px;
+      min-width: 32px;
+      width: 32px;
+      height: 32px;
+      padding: 0 !important;
+      border-radius: 4px;
       justify-content: center;
-      background: #ffffff !important;
-      color: var(--text-strong, #0f172a) !important;
-      border-color: rgba(15, 23, 42, 0.22) !important;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+      background: var(--color-primary, #294895) !important;
+      color: #ffffff !important;
+      border-color: var(--color-primary, #294895) !important;
+      box-shadow: 0 4px 10px color-mix(in srgb, var(--color-primary, #294895) 24%, transparent) !important;
+      font-size: 0;
     }
 
     .admin-user-permissions-v2-actions-trigger:hover,
     .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn:hover {
-      background: #ffffff !important;
-      border-color: rgba(15, 23, 42, 0.34) !important;
+      background: color-mix(in srgb, var(--color-primary, #294895) 88%, #000000) !important;
+      border-color: color-mix(in srgb, var(--color-primary, #294895) 88%, #000000) !important;
     }
 
     .admin-user-permissions-v2-actions-trigger::after {
-      content: '▾';
-      margin-left: 6px;
-      font-size: 0.68rem;
-      opacity: 0.72;
+      content: '⋮';
+      font-size: 20px;
+      line-height: 1;
+      opacity: 1;
     }
 
     .admin-user-permissions-v2-actions-panel {
@@ -83,9 +93,9 @@ function injectActionsMenuStyle() {
 
     body.dark .admin-user-permissions-v2-actions-trigger,
     body.dark .admin-user-permissions-v2 .admin-user-permissions-v2-actions-trigger.filter-btn {
-      background: #ffffff !important;
-      color: #0f172a !important;
-      border-color: rgba(15, 23, 42, 0.28) !important;
+      background: var(--color-primary, #294895) !important;
+      color: #ffffff !important;
+      border-color: var(--color-primary, #294895) !important;
     }
 
     body.dark .admin-user-permissions-v2-actions-panel {
@@ -147,9 +157,11 @@ function createActionsMenu(items, moduleKey, disabled) {
   wrapper.dataset.userActionsMenu = 'true';
 
   const trigger = document.createElement('button');
-  trigger.className = 'filter-btn admin-user-permissions-v2-actions-trigger';
+  trigger.className = 'filter-btn admin-user-permissions-v2-actions-trigger hub-quick-actions-trigger';
   trigger.type = 'button';
-  trigger.textContent = 'Ações';
+  trigger.textContent = '⋮';
+  trigger.setAttribute('aria-label', 'Ações rápidas');
+  trigger.title = 'Ações rápidas';
   trigger.setAttribute('aria-haspopup', 'menu');
   trigger.setAttribute('aria-expanded', 'false');
   trigger.dataset.userActionsTrigger = 'true';
@@ -210,12 +222,16 @@ function closeAllMenus(exceptMenu = null) {
     const panel = menu.querySelector('.admin-user-permissions-v2-actions-panel');
     menu.classList.remove('is-open');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
-    if (panel) panel.hidden = true;
+    if (panel) {
+      fecharMenuAcaoGlobal(panel);
+      panel.hidden = true;
+    }
   });
 }
 
 function applyActionsMenus() {
   injectActionsMenuStyle();
+  limparMenusAcoesGlobaisOrfaos();
 
   const scope = document.querySelector('.admin-user-permissions-v2');
   if (!scope) return;
@@ -238,7 +254,8 @@ function scheduleApplyActionsMenus() {
 function handleActionsMenuClick(event) {
   const trigger = event.target?.closest?.('[data-user-actions-trigger]');
   if (!trigger) {
-    if (!event.target?.closest?.('.admin-user-permissions-v2-actions-menu')) {
+    if (!event.target?.closest?.('.admin-user-permissions-v2-actions-menu')
+      && !event.target?.closest?.('[data-hub-action-menu-portal]')) {
       closeAllMenus();
     }
     return;
@@ -257,6 +274,15 @@ function handleActionsMenuClick(event) {
   panel.hidden = !willOpen;
   menu.classList.toggle('is-open', willOpen);
   trigger.setAttribute('aria-expanded', String(willOpen));
+  if (willOpen) {
+    abrirMenuAcaoGlobal(trigger, panel, {
+      minWidth: 184,
+      maxWidth: 260,
+      gap: 8
+    });
+  } else {
+    fecharMenuAcaoGlobal(panel);
+  }
 }
 
 startActionsMenuObserver();

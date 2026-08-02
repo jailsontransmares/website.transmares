@@ -955,8 +955,8 @@ function renderLancamentosTabela({ lancamentos, operacional, escapeHtml, escapeA
   }
 
   return `
-    <div class="fin-table-wrap">
-      <table class="fin-data-table">
+    <div class="fin-table-wrap fin-titulos-table-wrap">
+      <table class="fin-data-table fin-titulos-table">
         <thead>
           <tr>
             <th>Descricao</th>

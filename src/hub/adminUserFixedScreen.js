@@ -407,6 +407,11 @@ async function renderizarTelaDireta() {
       carregarUsuario(estado.id)
     ]);
 
+    const estadoAtual = obterEstadoTela();
+    if (estadoAtual.modo !== estado.modo || estadoAtual.id !== estado.id || estadoAtual.etapa !== estado.etapa) {
+      return;
+    }
+
     const titulo = estado.etapa === 'permissoes'
       ? 'Permissões do usuário'
       : estado.modo === 'editar'

@@ -485,6 +485,8 @@ export async function listarUsuariosAdmin() {
       id: usuario.id,
       nome: usuario.nome || usuario.email || 'Usuário',
       email: usuario.email || '',
+      cpf: usuario.cpf || '',
+      telefone: usuario.telefone || '',
       perfil_id: usuario.perfil_id || '',
       perfil: perfil.nome || usuario.perfil || '',
       perfil_slug: perfil.slug || usuario.perfil || '',
@@ -532,46 +534,33 @@ export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
   };
 }
 
-export async function salvarUsuarioAdmin({ id, nome, email, perfil_id, status }) {
+export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfil_id, status, password }) {
   const supabase = exigirSupabaseConfigurado();
-  const payload = {
-    nome: String(nome || '').trim(),
-    email: String(email || '').trim().toLowerCase(),
-    perfil_id: perfil_id || null,
-    status: ['pendente', 'ativo', 'bloqueado', 'inativo'].includes(status) ? status : 'pendente',
-    updated_at: new Date().toISOString()
-  };
-
-  if (!payload.nome) {
-    throw new Error('Informe o nome do usuário.');
-  }
-
-  if (!payload.email) {
-    throw new Error('Informe o e-mail do usuário.');
-  }
-
-  const query = id
-    ? supabase.from('usuarios').update(payload).eq('id', id).select('*').single()
-    : supabase.from('usuarios').insert(payload).select('*').single();
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: {
+      action: 'saveUser',
+      user: {
+        id: id || null,
+        nome,
+        email,
+        cpf,
+        telefone,
+        perfil_id,
+        status,
+        password: password || ''
+      }
+    }
+  });
 
   if (error) {
     throw new Error(error.message || 'Não foi possível salvar o usuário.');
   }
 
-  await supabase.rpc('app_registrar_auditoria', {
-    p_acao: id ? 'usuario.atualizar' : 'usuario.criar',
-    p_recurso: 'admin.usuarios',
-    p_alvo_usuario_id: data.id,
-    p_detalhes: {
-      email: data.email,
-      status: data.status,
-      perfil_id: data.perfil_id
-    }
-  });
+  if (data?.ok === false) {
+    throw new Error(data.message || 'Não foi possível salvar o usuário.');
+  }
 
-  return { record: data };
+  return data || {};
 }
 
 export async function listarPerfisAdmin() {

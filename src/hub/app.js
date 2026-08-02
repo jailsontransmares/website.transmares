@@ -10,6 +10,15 @@ import {
 import { HUB_MENU_TREE } from './menuTree.js';
 import { criarRhDpController } from './rhDpPage.js';
 import { criarFinanceiroController } from './financeiroController.js';
+import {
+  abrirMenuAcaoGlobal,
+  limparMenusAcoesGlobais
+} from './actionMenuPortal.js';
+import {
+  inicializarNotificacoesHub,
+  renderHubNotificationBell,
+  renderizarPaginaNotificacoesHub
+} from './notificationsUi.js';
 
 const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
 
@@ -233,6 +242,45 @@ const state = {
     loading: false,
     message: ''
   },
+  crm: {
+    aba: 'resumo',
+    filtro: '',
+    items: [],
+    totalItens: 0,
+    ultimaSincronizacao: null,
+    configurado: false,
+    tokenConfigurado: false,
+    listasConfiguradas: 0,
+    carregado: false,
+    pagina: 1,
+    itensPorPagina: 20,
+    detalhe: null,
+    pedidosRelacionados: {
+      aberto: false,
+      loading: false,
+      cpf: '',
+      items: [],
+      message: ''
+    },
+    atividade: {
+      loading: false,
+      saving: false,
+      savingAction: '',
+      respondingTo: '',
+      repliesCollapsed: {},
+      reactionMenuFor: '',
+      activeUsers: [],
+      viewerId: '',
+      mentionMenu: { campoId: '', query: '', index: 0 },
+      requestId: '',
+      comments: [],
+      attachments: [],
+      message: ''
+    },
+    sincronizando: false,
+    loading: false,
+    message: ''
+  },
   produtoBusca: '',
   filtros: {
     ac: '',
@@ -426,6 +474,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.meta = response.data.meta || null;
     state.permissions = response.data.permissions || normalizarPermissoes([]);
     sincronizarContextoInicialHub();
+    inicializarNotificacoesHub();
 
     aplicarConfigVisual();
     definirTemaInicial();
@@ -1219,7 +1268,8 @@ function podeAcessarAbaAr(aba) {
     gerar: ['painel_ar.gerar_links', 'view'],
     produtos: ['painel_ar.gerar_links', 'view'],
     validacoes: ['painel_ar.validacoes', 'view'],
-    historico: ['painel_ar.validacoes', 'view']
+    historico: ['painel_ar.validacoes', 'view'],
+    crm: ['painel_ar.crm', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -1270,7 +1320,10 @@ function obterRhDpController() {
       renderShell: renderHubShell,
       pode,
       escapeHtml,
-      escapeAttr
+      escapeAttr,
+      obterPartesRota: obterPartesDaRotaAtual,
+      montarCaminhoModulo: montarCaminhoHub,
+      navegarParaRota
     });
   }
 
@@ -1415,6 +1468,7 @@ async function abrirAdministracao(preservarMensagem = false) {
 }
 
 function renderAdministracao() {
+  limparMenusAcoesGlobais();
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
@@ -1885,13 +1939,13 @@ function renderParceirosIndicacaoAdmin() {
               >
             </label>
             <button
-              class="secondary-btn action-toolbar-btn admin-partners-actions-btn"
+              class="secondary-btn action-toolbar-btn admin-partners-actions-btn hub-quick-actions-trigger"
               type="button"
               onclick="alternarMenuAcoesParceirosIndicacaoAdmin()"
               onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)"
               aria-haspopup="menu"
               aria-expanded="${state.admin.acoesParceirosAberto ? 'true' : 'false'}"
-            >Ações ▾</button>
+            >⋮</button>
             ${renderMenuAcoesParceirosIndicacaoAdmin()}
           </div>
         </div>
@@ -2462,6 +2516,13 @@ function alternarMenuAcoesParceirosIndicacaoAdmin() {
   renderAdministracao();
 
   if (state.admin.acoesParceirosAberto) {
+    const trigger = document.querySelector('.admin-partners-actions-btn');
+    const menu = document.querySelector('.admin-partners-actions-menu');
+    abrirMenuAcaoGlobal(trigger, menu, {
+      minWidth: 220,
+      maxWidth: 320,
+      gap: 10
+    });
     window.setTimeout(() => {
       document.querySelector('.admin-partners-actions-menu [role="menuitem"]')?.focus();
     }, 0);
@@ -2685,7 +2746,15 @@ function renderModalParceiroIndicacaoAdmin() {
           <button class="icon-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar" aria-label="Fechar">×</button>
         </div>
 
-        <div class="partner-modal-section">
+        <div class="partner-modal-tabs" role="tablist" aria-label="Seções do parceiro">
+          <button class="partner-modal-tab is-active" type="button" role="tab" aria-selected="true" data-partner-tab="principais">Dados principais</button>
+          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="contatos">Contatos</button>
+          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="empresa">Empresa</button>
+          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="remuneracao">Remuneração</button>
+        </div>
+
+        <div class="partner-modal-body">
+          <div class="partner-modal-section" data-partner-tab-panel="principais">
           <strong>Dados principais</strong>
           <div class="modal-inline-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('nome_completo', 'Nome completo', 'text', erros.nome_completo, true, item.nome_completo || item.nome || '', somenteLeitura)}
@@ -2702,9 +2771,9 @@ function renderModalParceiroIndicacaoAdmin() {
               </select>
             </label>
           </div>
-        </div>
+          </div>
 
-        <div class="partner-modal-section">
+          <div class="partner-modal-section" data-partner-tab-panel="contatos" hidden>
           <strong>Contatos</strong>
           <div class="modal-inline-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('whatsapp_comercial', 'WhatsApp comercial', 'text', '', false, item.whatsapp_comercial || '', somenteLeitura)}
@@ -2713,9 +2782,9 @@ function renderModalParceiroIndicacaoAdmin() {
             ${renderCampoParceiroIndicacao('email_comercial', 'E-mail comercial', 'email', '', false, item.email_comercial || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('email_pessoal', 'E-mail pessoal', 'email', '', false, item.email_pessoal || '', somenteLeitura)}
           </div>
-        </div>
+          </div>
 
-        <div class="partner-modal-section">
+          <div class="partner-modal-section" data-partner-tab-panel="empresa" hidden>
           <strong>Empresa</strong>
           <div class="modal-inline-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('vinculo_empresa', 'Vínculo/Tipo', 'text', '', false, item.vinculo_empresa || '', somenteLeitura)}
@@ -2723,9 +2792,9 @@ function renderModalParceiroIndicacaoAdmin() {
             ${podeVerSensiveis ? renderCampoParceiroIndicacao('cnpj_empresa', 'CNPJ da empresa', 'text', '', false, item.cnpj_empresa || '', somenteLeitura) : ''}
             ${renderCampoParceiroIndicacao('telefone_empresa', 'Telefone da empresa', 'text', '', false, item.telefone_empresa || '', somenteLeitura)}
           </div>
-        </div>
+          </div>
 
-        <div class="partner-modal-section">
+          <div class="partner-modal-section" data-partner-tab-panel="remuneracao" hidden>
           <strong>Remuneração</strong>
           <div class="modal-inline-grid partner-modal-grid">
             <label>
@@ -2738,12 +2807,16 @@ function renderModalParceiroIndicacaoAdmin() {
             ${podeVerSensiveis ? renderCampoParceiroIndicacao('chave_pix', 'Chave PIX', 'text', '', false, item.chave_pix || '', somenteLeitura) : ''}
             ${podeVerSensiveis ? renderCampoParceiroIndicacao('nome_chave_pix', 'Nome da chave PIX', 'text', '', false, item.nome_chave_pix || '', somenteLeitura) : ''}
           </div>
+          </div>
+
         </div>
 
-        <label>
-          <span>Observações</span>
-          <textarea id="parceiro_observacoes" class="config-input config-textarea" rows="3" ${somenteLeitura ? 'disabled' : ''}>${escapeHtml(item.observacoes || '')}</textarea>
-        </label>
+        <div class="partner-modal-fixed-field">
+          <label>
+            <span>Observações</span>
+            <textarea id="parceiro_observacoes" class="config-input config-textarea" rows="3" ${somenteLeitura ? 'disabled' : ''}>${escapeHtml(item.observacoes || '')}</textarea>
+          </label>
+        </div>
 
         <div class="small-modal-actions">
           <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()">${somenteLeitura ? 'Fechar' : 'Cancelar'}</button>
@@ -2755,16 +2828,71 @@ function renderModalParceiroIndicacaoAdmin() {
 }
 
 function renderCampoParceiroIndicacao(campo, label, tipo = 'text', erro = '', obrigatorio = false, valor = '', disabled = false) {
+  const mascara = {
+    cpf: 'cpf',
+    cnpj_empresa: 'cnpj',
+    whatsapp_comercial: 'telefone',
+    whatsapp_pessoal: 'telefone',
+    telefone_empresa: 'telefone'
+  }[campo] || '';
+  const valorFormatado = mascara ? formatarMascaraParceiro(valor, mascara) : valor;
+
   return `
     <label>
       <span>${escapeHtml(label)}${obrigatorio ? ' *' : ''}</span>
-      <input id="parceiro_${escapeAttr(campo)}" class="config-input" type="${escapeAttr(tipo)}" value="${escapeAttr(valor || '')}" ${disabled ? 'disabled' : ''}>
+      <input id="parceiro_${escapeAttr(campo)}" class="config-input" type="${escapeAttr(tipo)}" value="${escapeAttr(valorFormatado || '')}" data-partner-mask="${mascara}" oninput="aplicarMascaraParceiroIndicacao(this)" ${disabled ? 'disabled' : ''}>
       ${renderErroCampo(erro)}
     </label>
   `;
 }
 
+function formatarMascaraParceiro(valor = '', mascara = '') {
+  let digitos = String(valor || '').replace(/\D/g, '');
+
+  if (mascara === 'cpf') {
+    digitos = digitos.slice(0, 11);
+    return digitos
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+
+  if (mascara === 'cnpj') {
+    digitos = digitos.slice(0, 14);
+    return digitos
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+
+  if (mascara === 'telefone') {
+    if (digitos.startsWith('55') && digitos.length > 11) digitos = digitos.slice(2);
+    digitos = digitos.slice(0, 11);
+    if (digitos.length <= 10) {
+      return digitos
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{4})(\d{1,4})$/, '$1-$2');
+    }
+    return digitos
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+  }
+
+  return valor;
+}
+
+function aplicarMascaraParceiroIndicacao(input) {
+  if (!input?.dataset?.partnerMask) return;
+  const posicao = input.selectionStart || 0;
+  const anterior = input.value;
+  input.value = formatarMascaraParceiro(input.value, input.dataset.partnerMask);
+  const diferenca = input.value.length - anterior.length;
+  input.setSelectionRange(Math.max(0, posicao + diferenca), Math.max(0, posicao + diferenca));
+}
+
 function abrirModalParceiroIndicacaoAdmin() {
+  atualizarRotaCadastroAdmin('parceiros-indicacao');
   state.admin.parceiroModal = {
     aberto: true,
     modo: 'create',
@@ -2779,6 +2907,7 @@ function abrirModalParceiroIndicacaoAdmin() {
 }
 
 function fecharModalParceiroIndicacaoAdmin() {
+  restaurarRotaCadastroAdmin('parceiros-indicacao');
   state.admin.parceiroModal = {
     aberto: false,
     modo: 'create',
@@ -2803,6 +2932,8 @@ async function abrirModalParceiroIndicacaoExistenteAdmin(id, modo = 'view') {
     renderAdministracao();
     return;
   }
+
+  atualizarRotaCadastroAdmin('parceiros-indicacao', id, modo);
 
   try {
     state.admin.loading = true;
@@ -3332,6 +3463,7 @@ function obterAcoesDisponiveisRecurso(recurso) {
     'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
+    'painel_ar.crm': ['view', 'execute'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
@@ -3601,6 +3733,8 @@ function renderModalUsuarioAdmin() {
   const senhaCopiada = Boolean(state.admin.credencialModal?.senhaCopiada);
   const etapa = state.admin.usuarioModalEtapa || 'dados';
   const emPermissoes = etapa === 'permissoes' && editando;
+  const cpf = formatarMascaraParceiro(usuario.cpf || '', 'cpf');
+  const telefone = formatarMascaraParceiro(usuario.telefone || '', 'telefone');
 
   if (state.admin.modalNovo !== 'usuarios' && !editando) {
     return '';
@@ -3643,6 +3777,8 @@ function renderModalUsuarioAdmin() {
           : `
             <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
             <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
+            <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
+            <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="numeric" maxlength="15" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
             <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
             <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
             ${editando ? `
@@ -4578,6 +4714,40 @@ function renderCrudAdmin(entidade, titulo, subtitulo) {
   `;
 }
 
+function atualizarRotaCadastroAdmin(entidade, id = '', modo = 'novo', { replace = false } = {}) {
+  const rotas = {
+    categorias: 'cadastros/categorias',
+    grupos: 'cadastros/grupos',
+    usuarios: 'cadastros/usuarios',
+    perfis: 'cadastros/perfis',
+    'parceiros-indicacao': 'cadastros/parceiros-indicacao'
+  };
+  if (!rotas[entidade]) return;
+
+  const sufixo = id ? `${encodeURIComponent(id)}/${modo === 'edit' ? 'editar' : 'visualizar'}` : 'novo';
+  const url = new URL(window.location.href);
+  url.pathname = `${montarCaminhoHub('administracao').replace(/\/+$/g, '')}/${rotas[entidade]}/${sufixo}`;
+  url.hash = '';
+  if (replace) window.history.replaceState({}, '', url);
+  else window.history.pushState({}, '', url);
+}
+
+function restaurarRotaCadastroAdmin(entidade) {
+  const rotas = {
+    categorias: 'cadastros/categorias',
+    grupos: 'cadastros/grupos',
+    usuarios: 'cadastros/usuarios',
+    perfis: 'cadastros/perfis',
+    'parceiros-indicacao': 'cadastros/parceiros-indicacao'
+  };
+  if (!rotas[entidade]) return;
+
+  const url = new URL(window.location.href);
+  url.pathname = `${montarCaminhoHub('administracao').replace(/\/+$/g, '')}/${rotas[entidade]}`;
+  url.hash = '';
+  window.history.pushState({}, '', url);
+}
+
 function renderRegistrosAdmin(entidade, records) {
   const filtrados = filtrarRegistrosAdmin(entidade, records);
 
@@ -4701,14 +4871,17 @@ function abrirModalNovoRegistro(entidade) {
   }
 
   state.admin.modalNovo = entidade;
+  atualizarRotaCadastroAdmin(entidade);
   renderAdministracao();
 }
 
 function fecharModalNovoRegistro() {
+  restaurarRotaCadastroAdmin(state.admin.modalNovo);
   resetarFluxoModalUsuarioAdmin(true);
 }
 
 function abrirModalUsuarioAdmin(id = '') {
+  atualizarRotaCadastroAdmin('usuarios', id, id ? 'edit' : 'novo');
   state.admin.modalNovo = 'usuarios';
   state.admin.editando.usuarios = id || '';
   state.admin.usuarioModalEtapa = 'dados';
@@ -4813,6 +4986,7 @@ function filtrarAdmin(entidade, filtro) {
 
 function editarRegistroAdmin(entidade, id) {
   state.admin.editando[entidade] = id;
+  atualizarRotaCadastroAdmin(entidade, id, 'edit');
   renderAdministracao();
 }
 
@@ -4941,8 +5115,11 @@ async function salvarUsuarioAdmin(id) {
     id,
     nome: document.getElementById(`${prefixo}_nome`)?.value || '',
     email: document.getElementById(`${prefixo}_email`)?.value || '',
+    cpf: document.getElementById(`${prefixo}_cpf`)?.value || '',
+    telefone: document.getElementById(`${prefixo}_telefone`)?.value || '',
     perfil_id: document.getElementById(`${prefixo}_perfil`)?.value || '',
-    status: document.getElementById(`${prefixo}_status`)?.value || 'pendente'
+    status: document.getElementById(`${prefixo}_status`)?.value || 'pendente',
+    password: document.querySelector('.admin-user-password-value')?.textContent?.trim() || ''
   };
 
   try {
@@ -4965,7 +5142,10 @@ async function salvarUsuarioAdmin(id) {
       senhaTemporaria: '',
       senhaCopiada: false
     };
-    state.admin.message = 'Usuário salvo. Se for novo, crie ou vincule o login correspondente no Supabase Auth antes de ativar o acesso.';
+    const senhaProvisoria = response.data?.temporary_password || '';
+    state.admin.message = senhaProvisoria
+      ? `Usuário salvo. Senha provisória: ${senhaProvisoria}`
+      : 'Usuário salvo e sincronizado com o Supabase Auth.';
     await carregarUsuariosAdmin();
   } catch (erro) {
     state.admin.loading = false;
@@ -5244,6 +5424,7 @@ function editarPerfilAdmin(id) {
     status: perfil.status || 'ativo'
   };
   state.admin.message = '';
+  atualizarRotaCadastroAdmin('perfis', id, 'edit');
   renderAdministracao();
 }
 
@@ -6456,6 +6637,94 @@ async function carregarPainelAr() {
   }
 }
 
+async function carregarCrmAr(pagina = state.ar.crm.pagina) {
+  const crm = state.ar.crm;
+  crm.loading = true;
+  crm.message = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('getArCrmData', {
+      pagina,
+      limite: crm.itensPorPagina
+    });
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível carregar o CRM AR.'));
+    }
+
+    crm.items = response.data.items || [];
+    crm.totalItens = Number(response.data.totalItens || 0);
+    crm.pagina = Number(response.data.pagina || pagina);
+    const totalPaginas = Math.max(1, Math.ceil(crm.totalItens / crm.itensPorPagina));
+    crm.pagina = Math.min(crm.pagina, totalPaginas);
+    crm.ultimaSincronizacao = response.data.ultimaSincronizacao || null;
+    crm.configurado = Boolean(response.data.configurado);
+    crm.tokenConfigurado = Boolean(response.data.configuracao?.token);
+    crm.listasConfiguradas = Number(response.data.configuracao?.listas || 0);
+    crm.carregado = true;
+  } catch (erro) {
+    crm.message = erro.message || 'Erro ao carregar o CRM AR.';
+  } finally {
+    crm.loading = false;
+    renderPainelAr();
+  }
+}
+
+async function sincronizarCrmAr() {
+  if (!pode('painel_ar.crm', 'execute')) {
+    state.ar.crm.message = 'Seu usuário não possui permissão para sincronizar o CRM AR.';
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.crm.sincronizando = true;
+  state.ar.crm.message = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('syncArCrm');
+
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível sincronizar o CRM AR.'));
+    }
+
+    await carregarCrmAr();
+    state.ar.crm.message = `Sincronização concluída: ${response.data.totalProcessados || 0} registro(s) processado(s).`;
+  } catch (erro) {
+    state.ar.crm.message = erro.message || 'Erro ao sincronizar o CRM AR.';
+  } finally {
+    state.ar.crm.sincronizando = false;
+    renderPainelAr();
+  }
+}
+
+async function abrirPedidosRelacionadosCrmAr(cpf) {
+  const relacionados = state.ar.crm.pedidosRelacionados;
+  relacionados.aberto = true;
+  relacionados.loading = true;
+  relacionados.cpf = cpf;
+  relacionados.items = [];
+  relacionados.message = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('getArCrmRelated', { cpf });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os pedidos relacionados.'));
+    relacionados.items = response.data.items || [];
+  } catch (erro) {
+    relacionados.message = erro.message || 'Não foi possível carregar os pedidos relacionados.';
+  } finally {
+    relacionados.loading = false;
+    renderPainelAr();
+  }
+}
+
+function fecharPedidosRelacionadosCrmAr() {
+  state.ar.crm.pedidosRelacionados = { aberto: false, loading: false, cpf: '', items: [], message: '' };
+  renderPainelAr();
+}
+
 function renderPainelAr() {
   const podeHistorico = podeAcessarAbaAr('historico');
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
@@ -6526,7 +6795,918 @@ function renderConteudoAr() {
     return renderValidacoesAr();
   }
 
+  if (state.ar.aba === 'crm') {
+    return renderCrmArPhase1();
+  }
+
   return renderGeradorLinksAr();
+}
+
+function formatarDataHoraCrmAr(valor = '') {
+  if (!valor) return '';
+
+  const texto = String(valor).trim();
+  const timestamp = /^\d{10,13}$/.test(texto) ? Number(texto) : null;
+  const data = timestamp !== null
+    ? new Date(texto.length === 10 ? timestamp * 1000 : timestamp)
+    : new Date(valor);
+  if (Number.isNaN(data.getTime())) return String(valor);
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(data);
+}
+
+function renderCrmArPhase1() {
+  const crm = state.ar.crm;
+  if (crm.detalhe) return renderDetalheCrmAr(crm.detalhe);
+  const podeSincronizar = pode('painel_ar.crm', 'execute');
+  const items = crm.items || [];
+  const totalItens = crm.totalItens || 0;
+  const totalPaginas = Math.max(1, Math.ceil(totalItens / crm.itensPorPagina));
+  const inicioPagina = (crm.pagina - 1) * crm.itensPorPagina;
+  const itensPagina = items;
+  const statusIntegracao = crm.configurado ? 'Integração configurada' : 'Integração não configurada';
+  const faltasConfiguracao = [
+    !crm.tokenConfigurado ? 'CLICKUP_API_TOKEN' : '',
+    !crm.listasConfiguradas ? 'CLICKUP_LIST_IDS' : ''
+  ].filter(Boolean);
+
+  return `
+    <section class="ar-crm-phase1" aria-labelledby="ar-crm-title">
+      <div class="ar-crm-phase1-intro">
+        <div>
+          <span class="ar-crm-phase1-kicker">FASE 2 · IMPORTAÇÃO CLICKUP</span>
+          <h3 id="ar-crm-title">CRM do setor AR</h3>
+          <p>Registros do ClickUp serão importados para uma base local, sem expor credenciais no navegador.</p>
+        </div>
+        <div class="ar-crm-phase1-actions">
+          <span class="ar-crm-phase1-status">${statusIntegracao}</span>
+          <button class="primary-btn" type="button" onclick="sincronizarCrmAr()" ${!podeSincronizar || crm.sincronizando ? 'disabled' : ''}>
+            ${crm.sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
+          </button>
+        </div>
+      </div>
+
+      ${faltasConfiguracao.length ? `<p class="ar-crm-config-help">Secret(s) ausente(s): <code>${escapeHtml(faltasConfiguracao.join(', '))}</code></p>` : ''}
+
+      ${crm.message ? `<p class="admin-message">${escapeHtml(crm.message)}</p>` : ''}
+
+      <div class="ar-crm-phase1-grid">
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Registros</span>
+          <strong>${totalItens}</strong>
+          <p>Itens importados para o CRM local.</p>
+        </article>
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Última sincronização</span>
+          <strong>${crm.ultimaSincronizacao ? escapeHtml(formatarDataHoraCrmAr(crm.ultimaSincronizacao)) : 'Ainda não'}</strong>
+          <p>A importação é incremental e registrada no histórico.</p>
+        </article>
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Próxima etapa</span>
+          <strong>Comentários</strong>
+          <p>Comentários, subcomentários e anexos serão adicionados depois da importação.</p>
+        </article>
+      </div>
+
+      ${crm.loading ? '<p class="quick-link-empty">Carregando registros do CRM...</p>' : totalItens ? `
+        <div class="ar-crm-phase1-table-wrap">
+          <table class="ar-crm-phase1-table">
+            <thead>
+              <tr><th>Registro</th><th>Status</th><th>Responsável</th><th>Vencimento</th><th>Sincronização</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              ${itensPagina.map(item => `
+                <tr>
+                  <td><strong>${escapeHtml(item.nome || 'Sem nome')}</strong></td>
+                  <td>${escapeHtml(item.status || 'Sem status')}</td>
+                  <td>${escapeHtml(item.responsavel || 'Não atribuído')}</td>
+                  <td>${escapeHtml(item.data_vencimento || '—')}</td>
+                  <td><span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(item.sync_status || 'pending')}</span></td>
+                  <td><button class="secondary-btn" type="button" onclick="visualizarCrmAr('${escapeAttr(item.id)}')">Visualizar</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="ar-crm-pagination" aria-label="Paginação do CRM">
+          <span>Exibindo ${inicioPagina + 1}-${Math.min(inicioPagina + items.length, totalItens)} de ${totalItens}</span>
+          <div>
+            <button class="secondary-btn" type="button" onclick="selecionarPaginaCrmAr(${crm.pagina - 1})" ${crm.pagina <= 1 ? 'disabled' : ''}>Anterior</button>
+            <strong>Página ${crm.pagina} de ${totalPaginas}</strong>
+            <button class="secondary-btn" type="button" onclick="selecionarPaginaCrmAr(${crm.pagina + 1})" ${crm.pagina >= totalPaginas ? 'disabled' : ''}>Próxima</button>
+          </div>
+        </div>
+      ` : '<div class="ar-crm-phase1-next-step"><strong>Nenhum registro importado</strong><span>Configure as listas do ClickUp e execute a primeira sincronização.</span></div>'}
+    </section>
+  `;
+}
+
+function visualizarCrmAr(id) {
+  const item = state.ar.crm.items.find((registro) => registro.id === id);
+  if (!item) return;
+  state.ar.crm.detalhe = item;
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], message: '' };
+  renderPainelAr();
+  carregarAtividadeDetalheCrmAr(item, requestId);
+}
+
+async function carregarAtividadeDetalheCrmAr(item, requestId = state.ar.crm.atividade.requestId) {
+  const atividade = state.ar.crm.atividade;
+  const taskId = item.dados?.clickup_task_id || '';
+  const isCurrentRequest = () => state.ar.crm.detalhe?.id === item.id
+    && state.ar.crm.atividade.requestId === requestId
+    && state.ar.crm.detalhe?.dados?.clickup_task_id === taskId;
+  try {
+    const response = await chamarApi('getArCrmActivity', { taskId, itemId: item.id });
+    if (!isCurrentRequest()) return;
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar comentários e anexos.'));
+    const dadosAtividade = response.data?.comments || response.data?.attachments
+      ? response.data
+      : response.data?.data || {};
+    if ((dadosAtividade.taskId && dadosAtividade.taskId !== taskId)
+      || (dadosAtividade.itemId && dadosAtividade.itemId !== item.id)) throw new Error('A atividade retornada não corresponde ao cadastro aberto.');
+    atividade.comments = dadosAtividade.comments || [];
+    atividade.attachments = dadosAtividade.attachments || [];
+    atividade.activeUsers = dadosAtividade.activeUsers || [];
+    atividade.viewerId = dadosAtividade.viewerId || '';
+  } catch (erro) {
+    if (!isCurrentRequest()) return;
+    atividade.message = erro.message || 'Não foi possível carregar comentários e anexos.';
+  } finally {
+    if (!isCurrentRequest()) return;
+    atividade.loading = false;
+    renderPainelAr();
+  }
+}
+
+function fecharVisualizacaoCrmAr() {
+  state.ar.crm.detalhe = null;
+  state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], message: '' };
+  renderPainelAr();
+}
+
+async function criarComentarioDetalheCrmAr() {
+  const editor = document.getElementById('ar-crm-new-comment');
+  const texto = editor?.innerText?.trim();
+  const mentions = extrairMencoesEditorCrmAr(editor);
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  if (state.ar.crm.atividade.saving) return;
+  if (!texto) {
+    state.ar.crm.atividade.message = 'Digite um comentário antes de enviar.';
+    renderPainelAr();
+    return;
+  }
+  if (!taskId) {
+    state.ar.crm.atividade.message = 'Este cadastro não possui uma tarefa do ClickUp vinculada.';
+    renderPainelAr();
+    return;
+  }
+  await executarAtividadeCrmAr('createArCrmComment', { taskId, commentText: texto, mentions });
+}
+
+function obterMenuMencoesCrmAr(campoId) {
+  return Array.from(document.querySelectorAll('.ar-crm-mention-menu')).find((menu) => menu.dataset.for === campoId);
+}
+
+function normalizarTextoMencaoCrmAr(valor = '') {
+  return String(valor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function obterPontoTextoCrmAr(root, offset) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let restante = Math.max(0, offset);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (restante <= node.nodeValue.length) return { node, offset: restante };
+    restante -= node.nodeValue.length;
+  }
+  return { node: root, offset: root.childNodes.length };
+}
+
+function obterTextoAntesCursorCrmAr(campo) {
+  const selection = window.getSelection();
+  if (!campo || !selection?.rangeCount || !campo.contains(selection.anchorNode)) return campo?.innerText || '';
+  const range = selection.getRangeAt(0).cloneRange();
+  range.selectNodeContents(campo);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString();
+}
+
+function atualizarMenuMencoesCrmAr(campo) {
+  const menu = obterMenuMencoesCrmAr(campo?.id);
+  if (!campo || !menu) return;
+  const antes = obterTextoAntesCursorCrmAr(campo);
+  const match = antes.match(/(?:^|\s)@([^\s@]*)$/u);
+  if (!match) {
+    menu.hidden = true;
+    state.ar.crm.atividade.mentionMenu = { campoId: '', query: '', index: 0 };
+    return;
+  }
+  const query = normalizarTextoMencaoCrmAr(match[1]);
+  const usuarios = (state.ar.crm.atividade.activeUsers || []).filter((usuario) => {
+    const nome = normalizarTextoMencaoCrmAr(usuario.nome);
+    const email = normalizarTextoMencaoCrmAr(usuario.email);
+    return !query || nome.includes(query) || email.includes(query);
+  }).slice(0, 8);
+  state.ar.crm.atividade.mentionMenu = { campoId: campo.id, query, index: 0 };
+  menu.innerHTML = usuarios.length ? usuarios.map((usuario, index) => `<button type="button" class="ar-crm-mention-option ${index === 0 ? 'is-active' : ''}" data-mention-user-id="${escapeAttr(usuario.id)}" onmousedown="event.preventDefault()" onclick="selecionarMencaoComentarioCrmAr(this.dataset.mentionUserId, '${escapeAttr(campo.id)}')"><strong>${escapeHtml(usuario.nome)}</strong><small>${escapeHtml(usuario.email || '')}</small></button>`).join('') : '<span class="ar-crm-mention-empty">Nenhum usuário ativo encontrado.</span>';
+  menu.hidden = false;
+}
+
+function aoDigitarComentarioCrmAr(campo) {
+  ajustarAlturaEditorComentarioCrmAr(campo);
+  atualizarMenuMencoesCrmAr(campo);
+}
+
+function selecionarMencaoComentarioCrmAr(userId, campoId) {
+  const campo = document.getElementById(campoId);
+  const usuario = (state.ar.crm.atividade.activeUsers || []).find((item) => String(item.id) === String(userId));
+  if (!campo || !usuario) return;
+  const selection = window.getSelection();
+  if (!selection?.rangeCount || !campo.contains(selection.anchorNode)) return;
+  const antes = obterTextoAntesCursorCrmAr(campo);
+  const match = antes.match(/(?:^|\s)@([^\s@]*)$/u);
+  if (!match) return;
+  const caretOffset = antes.length;
+  const deleteRange = document.createRange();
+  const inicio = obterPontoTextoCrmAr(campo, caretOffset - match[0].length);
+  const fim = obterPontoTextoCrmAr(campo, caretOffset);
+  deleteRange.setStart(inicio.node, inicio.offset);
+  deleteRange.setEnd(fim.node, fim.offset);
+  deleteRange.deleteContents();
+  const mention = document.createElement('span');
+  mention.className = 'ar-crm-mention';
+  mention.dataset.mentionUserId = usuario.id;
+  mention.dataset.mentionUserName = usuario.nome;
+  mention.textContent = `@${usuario.nome}`;
+  deleteRange.insertNode(mention);
+  const space = document.createTextNode(' ');
+  mention.after(space);
+  selection.removeAllRanges();
+  const nextRange = document.createRange();
+  nextRange.setStart(space, 1);
+  nextRange.collapse(true);
+  selection.addRange(nextRange);
+  const menu = obterMenuMencoesCrmAr(campoId);
+  if (menu) menu.hidden = true;
+  campo.focus();
+}
+
+function extrairMencoesEditorCrmAr(campo) {
+  return Array.from(campo?.querySelectorAll('[data-mention-user-id]') || []).map((elemento) => ({
+    userId: elemento.dataset.mentionUserId,
+    displayName: elemento.dataset.mentionUserName || elemento.textContent.replace(/^@/, '')
+  })).filter((mention) => mention.userId);
+}
+
+function formatarTextoComentarioCrmAr(tipo, campoId = 'ar-crm-new-comment') {
+  const campo = document.getElementById(campoId);
+  if (!campo) return;
+  campo.focus();
+  if (tipo === 'negrito') document.execCommand('bold');
+  if (tipo === 'italico') document.execCommand('italic');
+  if (tipo === 'sublinhado') document.execCommand('underline');
+  if (tipo === 'tachado') document.execCommand('strikeThrough');
+  if (tipo === 'citacao') document.execCommand('formatBlock', false, 'blockquote');
+  if (tipo === 'lista') document.execCommand('insertUnorderedList');
+  if (tipo.startsWith('cor-')) document.execCommand('backColor', false, tipo.slice(4));
+}
+
+function acionarAtalhoComentarioCrmAr(event, campoId = 'ar-crm-new-comment') {
+  const campo = document.getElementById(campoId);
+  const menu = obterMenuMencoesCrmAr(campoId);
+  const opcoes = menu && !menu.hidden ? Array.from(menu.querySelectorAll('.ar-crm-mention-option')) : [];
+  if (opcoes.length && ['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+    const mentionMenu = state.ar.crm.atividade.mentionMenu;
+    if (event.key === 'Escape') {
+      menu.hidden = true;
+      return;
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      selecionarMencaoComentarioCrmAr(opcoes[mentionMenu.index]?.dataset.mentionUserId, campoId);
+      return;
+    }
+    event.preventDefault();
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    mentionMenu.index = (mentionMenu.index + delta + opcoes.length) % opcoes.length;
+    opcoes.forEach((opcao, index) => opcao.classList.toggle('is-active', index === mentionMenu.index));
+    return;
+  }
+  if (!(event.ctrlKey || event.metaKey)) return;
+  const atalhos = {
+    b: 'negrito',
+    i: 'italico',
+    u: 'sublinhado'
+  };
+  const tecla = String(event.key || '').toLowerCase();
+  const tipo = event.shiftKey && tecla === 'x' ? 'tachado' : atalhos[tecla];
+  if (!tipo) return;
+  event.preventDefault();
+  formatarTextoComentarioCrmAr(tipo, campoId);
+}
+
+function ajustarAlturaEditorComentarioCrmAr(campo) {
+  if (!campo) return;
+  campo.style.height = 'auto';
+  campo.style.height = `${Math.max(76, campo.scrollHeight)}px`;
+  campo.focus();
+}
+
+function iniciarRedimensionamentoComentarioCrmAr(event) {
+  const editor = document.getElementById('ar-crm-new-comment');
+  if (!editor) return;
+  event.preventDefault();
+  const inicioY = event.clientY;
+  const alturaInicial = editor.offsetHeight;
+  const mover = (movimento) => {
+    const altura = Math.max(76, Math.min(window.innerHeight * 0.55, alturaInicial + movimento.clientY - inicioY));
+    editor.style.height = `${altura}px`;
+  };
+  const finalizar = () => {
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', finalizar);
+  };
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', finalizar);
+}
+
+async function executarAtividadeCrmAr(action, payload) {
+  const atividade = state.ar.crm.atividade;
+  if (atividade.saving) return;
+  const publicacao = ['createArCrmComment', 'replyArCrmComment'].includes(action);
+  const comentarioPendente = publicacao
+    ? (payload._pendingCommentId ? localizarComentarioCrmAr(atividade.comments, payload._pendingCommentId) : criarComentarioPendenteCrmAr(action, payload))
+    : null;
+  atividade.saving = true;
+  atividade.savingAction = action === 'replyArCrmComment' ? 'Respondendo...' : 'Adicionando...';
+  atividade.message = '';
+  renderPainelAr();
+  try {
+    const response = await chamarApi(action, payload);
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível atualizar os comentários.'));
+    if (comentarioPendente) {
+      reconciliarComentarioPendenteCrmAr(comentarioPendente, response);
+      delete comentarioPendente.hub_retry_payload;
+    }
+    const inseridoLocalmente = publicacao && Boolean(comentarioPendente);
+    if (!inseridoLocalmente) await carregarAtividadeDetalheCrmAr(state.ar.crm.detalhe);
+  } catch (erro) {
+    if (comentarioPendente) {
+      comentarioPendente.hub_pending = 'error';
+      comentarioPendente.hub_error = erro.message || 'Não foi possível enviar o comentário.';
+      comentarioPendente.hub_retry_payload = {
+        action,
+        payload: {
+          taskId: payload.taskId,
+          commentId: payload.commentId,
+          commentText: payload.commentText,
+          mentions: payload.mentions || [],
+          _pendingCommentId: comentarioPendente.id
+        }
+      };
+    }
+    state.ar.crm.atividade.message = erro.message || 'Não foi possível atualizar os comentários.';
+    renderPainelAr();
+  } finally {
+    state.ar.crm.atividade.saving = false;
+    state.ar.crm.atividade.savingAction = '';
+    renderPainelAr();
+  }
+}
+
+async function reenviarComentarioPendenteCrmAr(commentId) {
+  const comentario = localizarComentarioCrmAr(state.ar.crm.atividade.comments, commentId);
+  const reenvio = comentario?.hub_retry_payload;
+  if (!comentario || !reenvio || state.ar.crm.atividade.saving) return;
+  comentario.hub_pending = true;
+  comentario.hub_error = '';
+  renderPainelAr();
+  await executarAtividadeCrmAr(reenvio.action, reenvio.payload);
+}
+
+async function responderComentarioDetalheCrmAr(commentId) {
+  if (!commentId || state.ar.crm.atividade.saving) return;
+  state.ar.crm.atividade.respondingTo = commentId;
+  state.ar.crm.atividade.message = '';
+  renderPainelAr();
+  document.getElementById('ar-crm-reply-editor')?.focus();
+}
+
+async function enviarRespostaComentarioCrmAr(commentId) {
+  const editor = document.getElementById('ar-crm-reply-editor');
+  const texto = editor?.innerText?.trim();
+  const mentions = extrairMencoesEditorCrmAr(editor);
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  if (!texto || !taskId || state.ar.crm.atividade.saving) return;
+  state.ar.crm.atividade.respondingTo = '';
+  state.ar.crm.atividade.repliesCollapsed[commentId] = false;
+  await executarAtividadeCrmAr('replyArCrmComment', { taskId, commentId, commentText: texto, mentions });
+}
+
+function cancelarRespostaComentarioCrmAr() {
+  state.ar.crm.atividade.respondingTo = '';
+  renderPainelAr();
+}
+
+function alternarRespostasComentarioCrmAr(commentId) {
+  const atividade = state.ar.crm.atividade;
+  atividade.repliesCollapsed[commentId] = !atividade.repliesCollapsed[commentId];
+  renderPainelAr();
+}
+
+function alternarMenuReacoesCrmAr(commentId) {
+  const atividade = state.ar.crm.atividade;
+  atividade.reactionMenuFor = atividade.reactionMenuFor === String(commentId) ? '' : String(commentId);
+  renderPainelAr();
+}
+
+function localizarComentarioCrmAr(comentarios, commentId) {
+  for (const comentario of comentarios || []) {
+    if (String(comentario.id || '') === String(commentId)) return comentario;
+    const encontrado = localizarComentarioCrmAr(comentario.replies, commentId);
+    if (encontrado) return encontrado;
+  }
+  return null;
+}
+
+function obterIdComentarioRespostaCrmAr(response) {
+  let atual = response;
+  for (let nivel = 0; nivel < 5 && atual; nivel += 1) {
+    if (typeof atual !== 'object') break;
+    const item = atual;
+    const id = item.id || item.comment_id || item.hist_id || item.comment?.id;
+    if (id) return String(id).trim();
+    atual = item.data;
+  }
+  return '';
+}
+
+function criarComentarioPendenteCrmAr(action, payload) {
+  const atividade = state.ar.crm.atividade;
+  const comentario = {
+    id: `hub-pending-${Date.now()}`,
+    comment_text: payload.commentText,
+    date: String(Date.now()),
+    user: { username: state.usuario?.nome || 'Você' },
+    hub_mentions: (payload.mentions || []).map((mention) => {
+      const usuario = (atividade.activeUsers || []).find((item) => String(item.id) === String(mention.userId));
+      return usuario ? { user_id: usuario.id, display_name: usuario.nome } : null;
+    }).filter(Boolean),
+    hub_reactions: [],
+    replies: [],
+    hub_pending: true
+  };
+  const comentarios = atividade.comments || [];
+  if (action === 'createArCrmComment') {
+    comentarios.push(comentario);
+    return comentario;
+  }
+  const pai = localizarComentarioCrmAr(comentarios, payload.commentId);
+  if (!pai) return null;
+  pai.replies = Array.isArray(pai.replies) ? pai.replies : [];
+  pai.replies.push(comentario);
+  return comentario;
+}
+
+function reconciliarComentarioPendenteCrmAr(comentario, response) {
+  if (!comentario) return;
+  const idConfirmado = obterIdComentarioRespostaCrmAr(response);
+  if (idConfirmado) comentario.id = idConfirmado;
+  comentario.hub_pending = false;
+}
+
+function removerComentarioCrmAr(comentarios, alvo) {
+  const indice = (comentarios || []).indexOf(alvo);
+  if (indice >= 0) {
+    comentarios.splice(indice, 1);
+    return true;
+  }
+  return (comentarios || []).some((comentario) => removerComentarioCrmAr(comentario.replies, alvo));
+}
+
+async function alternarReacaoComentarioCrmAr(commentId, emoji) {
+  const atividade = state.ar.crm.atividade;
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  const comentario = localizarComentarioCrmAr(atividade.comments, commentId);
+  if (!taskId || !commentId || !emoji || atividade.saving || !comentario) return;
+  const reacoesAnteriores = Array.isArray(comentario.hub_reactions) ? [...comentario.hub_reactions] : [];
+  const reacaoAtual = reacoesAnteriores.findIndex((reaction) => String(reaction.user_id) === String(atividade.viewerId) && reaction.emoji === emoji);
+  comentario.hub_reactions = reacaoAtual >= 0
+    ? reacoesAnteriores.filter((_reaction, index) => index !== reacaoAtual)
+    : [...reacoesAnteriores, { user_id: atividade.viewerId, emoji }];
+  atividade.reactionMenuFor = '';
+  atividade.saving = true;
+  atividade.savingAction = 'Atualizando reação...';
+  atividade.message = '';
+  renderPainelAr();
+  try {
+    const response = await chamarApi('toggleArCrmReaction', { taskId, commentId, emoji });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível atualizar a reação.'));
+  } catch (erro) {
+    comentario.hub_reactions = reacoesAnteriores;
+    atividade.message = erro.message || 'Não foi possível atualizar a reação.';
+  } finally {
+    atividade.saving = false;
+    atividade.savingAction = '';
+    renderPainelAr();
+  }
+}
+
+async function editarComentarioDetalheCrmAr(commentId) {
+  const comentario = (state.ar.crm.atividade.comments || []).find((item) => String(item.id || '') === String(commentId));
+  const atual = comentario ? extrairTextoComentarioCrmAr(comentario) : '';
+  const texto = window.prompt('Editar comentário:', atual);
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  if (texto?.trim() && taskId) await executarAtividadeCrmAr('updateArCrmComment', { taskId, commentId, commentText: texto.trim() });
+}
+
+async function excluirComentarioDetalheCrmAr(commentId) {
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  if (taskId && window.confirm('Excluir este comentário?')) await executarAtividadeCrmAr('deleteArCrmComment', { taskId, commentId });
+}
+
+async function adicionarAnexoDetalheCrmAr(input) {
+  const arquivo = input?.files?.[0];
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
+  if (!arquivo || !taskId) return;
+  if (arquivo.size > 10 * 1024 * 1024) {
+    state.ar.crm.atividade.message = 'O arquivo deve ter no máximo 10 MB.';
+    renderPainelAr();
+    return;
+  }
+  try {
+    const response = await chamarApi('addArCrmAttachment', { taskId, file: arquivo });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível adicionar o anexo.'));
+    await carregarAtividadeDetalheCrmAr(state.ar.crm.detalhe);
+  } catch (erro) {
+    state.ar.crm.atividade.message = erro.message || 'Não foi possível adicionar o anexo.';
+    renderPainelAr();
+  } finally {
+    if (input) input.value = '';
+  }
+}
+
+function renderDetalheCrmAr(item) {
+  const dados = item.dados || {};
+  const campos = Array.isArray(dados.campos_personalizados) ? dados.campos_personalizados : [];
+  const descricao = dados.descricao || 'Sem descrição.';
+  const usados = new Set();
+  const campoSituacaoLead = selecionarCampoCrmAr(campos, ['situação do lead', 'situacao do lead', 'status do lead']);
+  const campoCpf = selecionarCampoCrmAr(campos, ['cpf']);
+  const nomeCliente = item.nome || 'Sem nome';
+  [campoSituacaoLead].filter(Boolean).forEach((campo) => usados.add(campo));
+  const cliente = selecionarCamposCrmAr(campos, ['cpf', 'cnpj', 'razão social', 'razao social', 'nascimento', 'profissão', 'profissao', 'e-mail', 'email', 'telefone', 'celular', 'whatsapp', 'origem do cliente'], usados)
+    .filter((campo) => {
+      const nomeCampo = normalizarNomeCampoCrm(obterNomeCampoCrm(campo)).replace(/[-\s]/g, '');
+      return !nomeCampo.includes('emailcd/parceiro');
+    });
+  ordenarCamposCrmAr(cliente, [
+    ['nascimento'],
+    ['telefone', 'celular', 'whatsapp'],
+    ['e-mail', 'email'],
+    ['cpf'],
+    ['cnpj'],
+    ['razão social', 'razao social']
+  ]);
+  const pedido = selecionarCamposCrmAr(campos, ['pedido atual', 'produto', 'data de emissão', 'data emissao', 'data de vencimento', 'vencimento', 'renovação', 'renovacao'], usados);
+  ordenarCamposCrmAr(pedido, [
+    ['pedido atual'],
+    ['produto'],
+    ['data de emissão', 'data emissao', 'emissao'],
+    ['data de vencimento', 'vencimento', 'renovação', 'renovacao']
+  ]);
+  const parceiro = selecionarCamposCrmAr(campos, ['parceiro de indicação', 'parceiro', 'indicação', 'indicacao'], usados);
+  const vencimentoExiste = pedido.some((campo) => normalizarNomeCampoCrm(obterNomeCampoCrm(campo)).includes('vencimento'));
+  if (!vencimentoExiste && item.data_vencimento) {
+    pedido.push({ name: 'Data de Vencimento', value: item.data_vencimento });
+  }
+  const outros = campos.filter((campo) => !usados.has(campo) && obterValorCampoCrmAr(campo) !== '—');
+  const cpf = campoCpf ? formatarCampoCrmAr('cpf', obterValorCampoCrmAr(campoCpf)) : '';
+
+  return `
+    <section class="ar-crm-detail-screen" aria-labelledby="ar-crm-detail-title">
+      <div class="ar-crm-detail-screen-header">
+        <div>
+          <button class="secondary-btn" type="button" onclick="fecharVisualizacaoCrmAr()">← Voltar para clientes</button>
+          <span class="ar-crm-phase1-kicker">CADASTRO IMPORTADO</span>
+          <h3 id="ar-crm-detail-title">${escapeHtml(nomeCliente)}</h3>
+          <div class="ar-crm-header-pills" aria-label="Status do cadastro">
+            <span class="ar-crm-lead-pill"><small>Status</small>${escapeHtml(item.status || 'Sem status')}</span>
+            <span class="ar-crm-lead-pill"><small>Situação do Lead</small>${escapeHtml(campoSituacaoLead ? obterValorCampoCrmAr(campoSituacaoLead) : '—')}</span>
+          </div>
+        </div>
+        <div class="ar-crm-detail-header-actions">
+          <span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(item.sync_status || 'pending')}</span>
+          ${dados.clickup_url ? `<a class="secondary-btn" href="${escapeAttr(dados.clickup_url)}" target="_blank" rel="noopener">Abrir no ClickUp</a>` : ''}
+        </div>
+      </div>
+      <div class="ar-crm-detail-layout">
+        <main class="ar-crm-detail-main">
+          ${renderGrupoCamposCrmAr('Dados do cliente', cliente)}
+          ${renderGrupoCamposCrmAr('Dados do Pedido', pedido, 'ar-crm-order-data', cpf ? `<button class="secondary-btn ar-crm-related-orders-button" type="button" onclick="abrirPedidosRelacionadosCrmAr('${escapeAttr(cpf)}')">Ver pedidos deste CPF</button>` : '')}
+          ${renderGrupoCamposCrmAr('Parceiro de Indicação', parceiro)}
+          ${renderGrupoCamposCrmAr('Outras informações', outros, 'ar-crm-secondary-data')}
+          <div class="ar-crm-detail-section ar-crm-description-block">
+            <span>Descrição</span>
+            <p>${escapeHtml(descricao)}</p>
+          </div>
+          <div class="ar-crm-sync-meta" aria-label="Origem e sincronização">
+            <span>Lista: ${escapeHtml(dados.lista?.name || dados.lista?.id || '—')}</span>
+            <span>Pasta: ${escapeHtml(dados.pasta?.name || dados.pasta?.id || '—')}</span>
+            <span>Criado: ${escapeHtml(formatarDataHoraCrmAr(dados.data_criacao) || '—')}</span>
+            <span>Atualizado: ${escapeHtml(formatarDataHoraCrmAr(dados.data_atualizacao) || '—')}</span>
+            <span>ID: ${escapeHtml(dados.clickup_task_id || '—')}</span>
+          </div>
+          ${renderAnexosCrmAr()}
+        </main>
+        ${renderAtividadeCrmAr()}
+      </div>
+      ${renderPedidosRelacionadosCrmAr()}
+    </section>
+  `;
+}
+
+function extrairTextoComentarioCrmAr(comentario) {
+  if (typeof comentario?.comment_text === 'string') return comentario.comment_text;
+  if (Array.isArray(comentario?.comment_text)) return comentario.comment_text.map((item) => item.text || item.value || '').join('');
+  return comentario?.comment_text?.text || comentario?.text || 'Comentário sem texto';
+}
+
+function achatarRespostasCrmAr(respostas = []) {
+  return respostas.flatMap((resposta) => [
+    resposta,
+    ...achatarRespostasCrmAr(Array.isArray(resposta.replies) ? resposta.replies : [])
+  ]);
+}
+
+function escaparRegexCrmAr(valor = '') {
+  return String(valor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function renderTextoComentarioCrmAr(comentario) {
+  let html = escapeHtml(extrairTextoComentarioCrmAr(comentario));
+  const mencoes = Array.isArray(comentario.hub_mentions) ? comentario.hub_mentions : [];
+  mencoes
+    .filter((mention) => mention.display_name)
+    .sort((a, b) => String(b.display_name).length - String(a.display_name).length)
+    .forEach((mention) => {
+      const token = `@${mention.display_name}`;
+      const escapedToken = escapeHtml(token);
+      html = html.replace(new RegExp(escaparRegexCrmAr(escapedToken), 'g'), `<span class="ar-crm-mention" data-mention-user-id="${escapeAttr(mention.user_id || '')}">${escapedToken}</span>`);
+    });
+  return html;
+}
+
+function renderReacoesComentarioCrmAr(comentario) {
+  const reacoes = Array.isArray(comentario.hub_reactions) ? comentario.hub_reactions : [];
+  const agrupadas = new Map();
+  reacoes.forEach((reaction) => {
+    const atual = agrupadas.get(reaction.emoji) || { total: 0, active: false };
+    atual.total += 1;
+    atual.active = atual.active || String(reaction.user_id) === String(state.ar.crm.atividade.viewerId);
+    agrupadas.set(reaction.emoji, atual);
+  });
+  const pills = Array.from(agrupadas.entries()).map(([emoji, dados]) => `<button type="button" class="ar-crm-reaction-pill ${dados.active ? 'is-active' : ''}" onclick="alternarReacaoComentarioCrmAr('${escapeAttr(comentario.id || '')}', '${escapeAttr(emoji)}')" aria-label="Reagir com ${escapeAttr(emoji)}">${emoji} <span>${dados.total}</span></button>`).join('');
+  const menuAberto = state.ar.crm.atividade.reactionMenuFor === String(comentario.id || '');
+  const menu = menuAberto ? `<span class="ar-crm-reaction-menu">${['👍', '❤️', '😂', '😮', '😢', '🎉'].map((emoji) => `<button type="button" onclick="alternarReacaoComentarioCrmAr('${escapeAttr(comentario.id || '')}', '${escapeAttr(emoji)}')" aria-label="Reagir com ${escapeAttr(emoji)}">${emoji}</button>`).join('')}</span>` : '';
+  return `<div class="ar-crm-comment-reactions">${pills}${menu}<button type="button" class="ar-crm-reaction-trigger" onclick="alternarMenuReacoesCrmAr('${escapeAttr(comentario.id || '')}')" aria-label="Adicionar reação">☺</button></div>`;
+}
+
+function renderComentarioCrmAr(comentario, nivel = 0) {
+  const id = comentario.id || '';
+  const autor = comentario.user?.username || comentario.user?.initials || 'Usuário';
+  const estadoEnvio = comentario.hub_pending === 'error' ? 'Falha no envio' : comentario.hub_pending ? 'Enviando…' : formatarDataHoraCrmAr(comentario.date) || '';
+  const respostas = nivel === 0 ? achatarRespostasCrmAr(Array.isArray(comentario.replies) ? comentario.replies : []) : [];
+  const respostaAberta = nivel === 0 && state.ar.crm.atividade.respondingTo === String(id);
+  const respostasRecolhidas = nivel === 0 && respostas.length > 1 && state.ar.crm.atividade.repliesCollapsed[id] !== false;
+  return `<article class="ar-crm-comment-item" style="--crm-comment-level:${Math.min(nivel, 4)}">
+    <div><strong>${escapeHtml(autor)}</strong><small class="${comentario.hub_pending === 'error' ? 'is-error' : comentario.hub_pending ? 'is-pending' : ''}">${escapeHtml(estadoEnvio)}</small></div>
+    <p>${renderTextoComentarioCrmAr(comentario)}</p>
+    ${nivel === 0 ? `<div class="ar-crm-comment-actions">
+      <button type="button" data-comment-id="${escapeAttr(id)}" onclick="responderComentarioDetalheCrmAr(this.dataset.commentId)">Responder</button>
+      ${respostas.length ? `<button type="button" class="ar-crm-replies-toggle" onclick="alternarRespostasComentarioCrmAr('${escapeAttr(id)}')" aria-expanded="${respostasRecolhidas ? 'false' : 'true'}">${respostasRecolhidas ? '▸' : '▾'} ${respostas.length} ${respostas.length === 1 ? 'resposta' : 'respostas'}</button>` : ''}
+      ${renderReacoesComentarioCrmAr(comentario)}
+    </div>` : ''}
+    ${comentario.hub_pending === 'error' ? `<div class="ar-crm-comment-pending-error"><span>${escapeHtml(comentario.hub_error || 'Não foi possível enviar.')}</span><button type="button" onclick="reenviarComentarioPendenteCrmAr('${escapeAttr(id)}')">Reenviar</button></div>` : ''}
+    ${respostaAberta ? `<div class="ar-crm-reply-compose">
+      <div class="ar-crm-comment-toolbar" aria-label="Formatação da resposta">
+        <button type="button" title="Negrito" onclick="formatarTextoComentarioCrmAr('negrito', 'ar-crm-reply-editor')"><strong>B</strong></button>
+        <button type="button" title="Itálico" onclick="formatarTextoComentarioCrmAr('italico', 'ar-crm-reply-editor')"><em>I</em></button>
+        <button type="button" title="Sublinhado" onclick="formatarTextoComentarioCrmAr('sublinhado', 'ar-crm-reply-editor')"><u>U</u></button>
+        <button type="button" title="Tachado" onclick="formatarTextoComentarioCrmAr('tachado', 'ar-crm-reply-editor')"><s>S</s></button>
+        <button type="button" class="ar-crm-format-color-yellow" title="Destacar em amarelo" onclick="formatarTextoComentarioCrmAr('cor-#fff3a3', 'ar-crm-reply-editor')">A</button>
+        <button type="button" class="ar-crm-format-color-blue" title="Destacar em azul" onclick="formatarTextoComentarioCrmAr('cor-#cfe8ff', 'ar-crm-reply-editor')">A</button>
+        <button type="button" class="ar-crm-format-color-red" title="Destacar em vermelho" onclick="formatarTextoComentarioCrmAr('cor-#ffd6d6', 'ar-crm-reply-editor')">A</button>
+      </div>
+      <div class="ar-crm-reply-editor-wrap"><div id="ar-crm-reply-editor" class="ar-crm-reply-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Escreva uma resposta..." oninput="aoDigitarComentarioCrmAr(this)" onkeydown="acionarAtalhoComentarioCrmAr(event, 'ar-crm-reply-editor')"></div><div class="ar-crm-mention-menu" data-for="ar-crm-reply-editor" hidden></div></div>
+      <div><button type="button" class="secondary-btn" onclick="cancelarRespostaComentarioCrmAr()">Cancelar</button><button type="button" class="save-btn" onclick="enviarRespostaComentarioCrmAr('${escapeAttr(id)}')" ${state.ar.crm.atividade.saving ? 'disabled' : ''}>${state.ar.crm.atividade.saving ? 'Respondendo...' : 'Enviar resposta'}</button></div>
+    </div>` : ''}
+    ${respostas.length && !respostasRecolhidas ? `<div class="ar-crm-comment-replies">${respostas.map((resposta) => renderComentarioCrmAr(resposta, nivel + 1)).join('')}</div>` : ''}
+  </article>`;
+}
+
+function renderAtividadeCrmAr() {
+  const atividade = state.ar.crm.atividade;
+  const comentarios = atividade.comments || [];
+  return `<aside class="ar-crm-comments-column" aria-label="Comentários">
+    <div class="ar-crm-comments-header"><span>Comentários</span><small>${comentarios.length}</small></div>
+    ${atividade.loading ? '<p class="ar-crm-detail-muted">Carregando atividade...</p>' : `
+      ${atividade.message ? `<p class="admin-message">${escapeHtml(atividade.message)}</p>` : ''}
+      <div class="ar-crm-comment-compose">
+        <div class="ar-crm-comment-toolbar" aria-label="Formatação do comentário">
+          <button type="button" title="Negrito" onclick="formatarTextoComentarioCrmAr('negrito')"><strong>B</strong></button>
+          <button type="button" title="Itálico" onclick="formatarTextoComentarioCrmAr('italico')"><em>I</em></button>
+          <button type="button" title="Sublinhado" onclick="formatarTextoComentarioCrmAr('sublinhado')"><u>U</u></button>
+          <button type="button" title="Tachado" onclick="formatarTextoComentarioCrmAr('tachado')"><s>S</s></button>
+          <button type="button" title="Citação" onclick="formatarTextoComentarioCrmAr('citacao')">❝</button>
+          <button type="button" title="Lista" onclick="formatarTextoComentarioCrmAr('lista')">☷</button>
+          <button type="button" class="ar-crm-format-color-yellow" title="Destacar em amarelo" onclick="formatarTextoComentarioCrmAr('cor-#fff3a3')">A</button>
+          <button type="button" class="ar-crm-format-color-blue" title="Destacar em azul" onclick="formatarTextoComentarioCrmAr('cor-#cfe8ff')">A</button>
+          <button type="button" class="ar-crm-format-color-red" title="Destacar em vermelho" onclick="formatarTextoComentarioCrmAr('cor-#ffd6d6')">A</button>
+        </div>
+        <div class="ar-crm-comment-editor-wrap"><div id="ar-crm-new-comment" class="ar-crm-comment-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Adicionar comentário" oninput="aoDigitarComentarioCrmAr(this)" onkeydown="acionarAtalhoComentarioCrmAr(event)"></div><div class="ar-crm-mention-menu" data-for="ar-crm-new-comment" hidden></div><span class="ar-crm-comment-resize-handle" title="Redimensionar" onmousedown="iniciarRedimensionamentoComentarioCrmAr(event)"></span></div>
+        <div class="ar-crm-comment-submit"><button class="save-btn" type="button" onclick="criarComentarioDetalheCrmAr()" ${atividade.saving ? 'disabled' : ''}>${atividade.saving ? atividade.savingAction : 'Adicionar comentário'}</button></div>
+      </div>
+      <div class="ar-crm-comments-list">
+        ${comentarios.length ? comentarios.map((comentario) => renderComentarioCrmAr(comentario)).join('') : '<p class="ar-crm-detail-muted">Nenhum comentário encontrado.</p>'}
+      </div>
+    `}
+  </aside>`;
+}
+
+function renderAnexosCrmAr() {
+  const anexos = state.ar.crm.atividade.attachments || [];
+  return `<section class="ar-crm-attachments-fixed" aria-label="Anexos">
+    <div><span>Anexos</span>${anexos.length ? `<div class="ar-crm-attachments-list">${anexos.map((anexo) => { const url = anexo.url || anexo.thumbnail || ''; const nome = anexo.title || anexo.filename || 'Anexo sem nome'; return url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`; }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}</div>
+    <label class="secondary-btn ar-crm-attachment-upload">Adicionar anexo<input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>
+  </section>`;
+}
+
+function normalizarNomeCampoCrm(nome) {
+  return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function obterNomeCampoCrm(campo) {
+  return campo?.name || campo?.field_name || 'Campo';
+}
+
+function selecionarCampoCrmAr(campos, termos) {
+  const normalizados = termos.map(normalizarNomeCampoCrm);
+  return campos.find((campo) => normalizados.includes(normalizarNomeCampoCrm(obterNomeCampoCrm(campo))))
+    || campos.find((campo) => {
+      const nome = normalizarNomeCampoCrm(obterNomeCampoCrm(campo));
+      return normalizados.some((termo) => nome.includes(termo));
+    });
+}
+
+function selecionarCamposCrmAr(campos, termos, usados) {
+  const encontrados = campos.filter((campo) => {
+    const nome = normalizarNomeCampoCrm(obterNomeCampoCrm(campo));
+    const corresponde = termos.some((termo) => nome.includes(normalizarNomeCampoCrm(termo)));
+    if (corresponde) usados.add(campo);
+    return corresponde;
+  });
+  return encontrados;
+}
+
+function ordenarCamposCrmAr(campos, ordem) {
+  const ordenados = [];
+  ordem.forEach((termos) => {
+    campos.forEach((campo) => {
+      const nome = normalizarNomeCampoCrm(obterNomeCampoCrm(campo));
+      if (!ordenados.includes(campo) && termos.some((termo) => nome.includes(normalizarNomeCampoCrm(termo)))) {
+        ordenados.push(campo);
+      }
+    });
+  });
+  campos.forEach((campo) => {
+    if (!ordenados.includes(campo)) ordenados.push(campo);
+  });
+  campos.splice(0, campos.length, ...ordenados);
+}
+
+function obterRotuloCampoCrmAr(nome) {
+  const chave = normalizarNomeCampoCrm(nome);
+  if (chave.includes('parceiro de indicacao')) return 'Nome';
+  if (chave.includes('data de emissao') || chave.includes('emissao')) return 'Início de Validade';
+  if (chave.includes('data de vencimento') || chave.includes('vencimento') || chave.includes('renovacao')) return 'Fim de Validade';
+  return nome;
+}
+
+function renderGrupoCamposCrmAr(titulo, campos, classe = '', acao = '') {
+  if (!campos.length && !acao) return '';
+  return `
+    <section class="ar-crm-detail-section ar-crm-field-group ${escapeAttr(classe)}">
+      <div class="ar-crm-field-group-heading"><span>${escapeHtml(titulo)}</span>${acao}</div>
+      <div class="ar-crm-field-group-grid">
+        ${campos.map((campo) => {
+          const nome = obterNomeCampoCrm(campo);
+          const rotulo = obterRotuloCampoCrmAr(nome);
+          return `<div class="ar-crm-field"><small>${escapeHtml(rotulo)}</small><strong>${escapeHtml(formatarCampoCrmAr(nome, obterValorCampoCrmAr(campo)))}</strong></div>`;
+        }).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function obterCampoRelacionadoCrmAr(campos, termos, fallback = '—') {
+  const campo = selecionarCampoCrmAr(campos, termos);
+  return campo ? formatarCampoCrmAr(obterNomeCampoCrm(campo), obterValorCampoCrmAr(campo)) : fallback;
+}
+
+function renderPedidosRelacionadosCrmAr() {
+  const modal = state.ar.crm.pedidosRelacionados;
+  if (!modal.aberto) return '';
+  return `
+    <div class="modal-backdrop ar-crm-related-modal-backdrop" role="dialog" aria-modal="true" aria-label="Pedidos relacionados ao CPF" onclick="if(event.target === this) fecharPedidosRelacionadosCrmAr()">
+      <section class="ar-crm-related-modal">
+        <header class="ar-crm-related-modal-header">
+          <div><span class="ar-crm-phase1-kicker">PEDIDOS RELACIONADOS</span><h3>Pedidos do CPF ${escapeHtml(formatarCampoCrmAr('cpf', modal.cpf))}</h3></div>
+          <button class="secondary-btn" type="button" onclick="fecharPedidosRelacionadosCrmAr()">Fechar</button>
+        </header>
+        ${modal.loading ? '<p class="quick-link-empty">Carregando pedidos...</p>' : modal.message ? `<p class="admin-message">${escapeHtml(modal.message)}</p>` : modal.items.length ? `
+          <div class="ar-crm-related-list">
+            ${modal.items.map((registro) => {
+              const campos = Array.isArray(registro.campos_personalizados) ? registro.campos_personalizados : [];
+              const atual = state.ar.crm.detalhe?.id === registro.id;
+              return `<article class="ar-crm-related-card ${atual ? 'is-current' : ''}">
+                ${atual ? '<span class="ar-crm-current-pill">Cadastro atual</span>' : ''}
+                <div class="ar-crm-related-grid">
+                  <div><small>Pedido</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['pedido atual'], registro.nome || '—'))}</strong></div>
+                  <div><small>CNPJ</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['cnpj']))}</strong></div>
+                  <div><small>Produto</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['produto']))}</strong></div>
+                  <div><small>Razão Social</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['razão social', 'razao social']))}</strong></div>
+                  <div class="ar-crm-related-validity"><small>Início de Validade</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['data de emissão', 'data emissao', 'emissao']))}</strong></div>
+                  <div class="ar-crm-related-validity"><small>Fim de Validade</small><strong>${escapeHtml(obterCampoRelacionadoCrmAr(campos, ['data de vencimento', 'vencimento', 'renovação', 'renovacao']))}</strong></div>
+                </div>
+              </article>`;
+            }).join('')}
+          </div>
+        ` : '<p class="quick-link-empty">Nenhum outro pedido encontrado para este CPF.</p>'}
+      </section>
+    </div>
+  `;
+}
+
+function formatarCampoCrmAr(nome, valor) {
+  const chave = String(nome || '').toLowerCase();
+  const texto = String(valor ?? '').trim();
+  const digitos = texto.replace(/\D/g, '');
+
+  if (chave.includes('data') || chave.includes('vencimento') || chave.includes('venc.') || chave.includes('renova') || chave.includes('prazo')) {
+    const timestamp = Number(texto);
+    const data = /^\d{10,13}$/.test(texto)
+      ? new Date(texto.length === 10 ? timestamp * 1000 : timestamp)
+      : new Date(texto);
+
+    if (!Number.isNaN(data.getTime())) {
+      return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(data);
+    }
+  }
+
+  if ((chave.includes('cpf') && digitos.length <= 11) || chave === 'cpf') {
+    return digitos.slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  }
+  if (chave.includes('cnpj')) {
+    return digitos.slice(0, 14).replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+  if (chave.includes('telefone') || chave.includes('celular') || chave.includes('whatsapp')) {
+    const numero = digitos.startsWith('55') && digitos.length > 11 ? digitos.slice(2) : digitos;
+    return numero.length > 10
+      ? numero.slice(0, 11).replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d{1,4})$/, '$1-$2')
+      : numero.slice(0, 10).replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d{1,4})$/, '$1-$2');
+  }
+  if (chave.includes('valor') || chave.includes('preço') || chave.includes('preco')) {
+    const numero = Number(texto.replace(/[^\d,.-]/g, '').replace(',', '.'));
+    if (Number.isFinite(numero)) return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+  return texto;
+}
+
+function obterValorCampoCrmAr(campo) {
+  if (campo?.display_value) return campo.display_value;
+
+  const config = campo?.type_config || {};
+  const options = Array.isArray(config.options) ? config.options : [];
+  const rawValue = campo?.value;
+  const rawId = rawValue && typeof rawValue === 'object'
+    ? (rawValue.id ?? rawValue.orderindex)
+    : rawValue;
+  const option = options.find((item) => [item.id, item.orderindex, item.value].some((value) => String(value ?? '') === String(rawId ?? '')));
+
+  return option?.name || option?.label || rawValue || '—';
+}
+
+function selecionarPaginaCrmAr(pagina) {
+  const totalPaginas = Math.max(1, Math.ceil(state.ar.crm.totalItens / state.ar.crm.itensPorPagina));
+  const proximaPagina = Math.max(1, Math.min(Number(pagina) || 1, totalPaginas));
+  state.ar.crm.pagina = proximaPagina;
+  carregarCrmAr(proximaPagina);
 }
 
 function renderInicioPainelAr() {
@@ -7020,21 +8200,9 @@ function renderGeradorLinksAr() {
     ${renderPainelProdutoMvpAr()}
   </section>
 
-  <section class="ar-flow-card ar-flow-budget">
-    <div class="ar-flow-card-header">
-      <span class="ar-step-number">2</span>
-      <div>
-        <h3>Orçamento</h3>
-        <p>Confira os valores antes de gerar os links.</p>
-      </div>
-    </div>
-
-    ${renderOrcamentoAr()}
-  </section>
-
   <section class="ar-flow-card ar-flow-partner">
     <div class="ar-flow-card-header">
-      <span class="ar-step-number">3</span>
+      <span class="ar-step-number">2</span>
       <div>
         <h3>Parceiro</h3>
         <p>Selecione o parceiro responsável pelo atendimento.</p>
@@ -7042,6 +8210,18 @@ function renderGeradorLinksAr() {
     </div>
 
     ${renderPainelParceiroMvpAr()}
+  </section>
+
+  <section class="ar-flow-card ar-flow-budget">
+    <div class="ar-flow-card-header">
+      <span class="ar-step-number">3</span>
+      <div>
+        <h3>Resumo do produto</h3>
+        <p>Confira os valores antes de gerar os links.</p>
+      </div>
+    </div>
+
+    ${renderOrcamentoAr()}
   </section>
 
   <section class="ar-flow-card ar-flow-links">
@@ -7063,23 +8243,23 @@ function renderGeradorLinksAr() {
 function renderAcaoGerarLinksAr() {
   const produto = obterProdutoSelecionadoAr();
   const parceiro = obterParceiroSelecionadoAr();
-  const podeGerar = produto && parceiro && !state.ar.gerando;
 
   return `
     <div class="ar-action-box">
-      <button 
-        class="save-btn ar-generate-main-btn" 
-        type="button" 
-        onclick="gerarLinksAr()" 
-        ${podeGerar ? '' : 'disabled'}>
-        ${state.ar.gerando ? 'Gerando links...' : 'Gerar links'}
-      </button>
-
-      ${!produto || !parceiro ? `
+      ${state.ar.gerando ? `
+        <p class="ar-action-status" role="status">Gerando links automaticamente...</p>
+      ` : state.ar.message ? `
+        <p class="ar-action-status is-error" role="alert">Não foi possível gerar os links.</p>
+        <button class="secondary-btn ar-retry-links-btn" type="button" onclick="gerarLinksAr()">Tentar novamente</button>
+      ` : state.ar.resultado ? `
+        <p class="ar-action-status is-success" role="status">Links gerados automaticamente.</p>
+      ` : !produto || !parceiro ? `
         <p class="ar-action-hint">
-          Selecione um produto e um parceiro para liberar a geração dos links.
+          Selecione um produto e um parceiro para gerar os links automaticamente.
         </p>
-      ` : ''}
+      ` : `
+        <p class="ar-action-status" role="status">Preparando geração automática...</p>
+      `}
     </div>
   `;
 }
@@ -7088,77 +8268,44 @@ function renderPainelParceiroMvpAr() {
   const parceiro = obterParceiroSelecionadoAr();
 
   return `
-    <div class="ar-mvp-card ar-partner-search-card">
-      <label class="ar-autocomplete-wrap ar-partner-search-wrap">
-        <div class="ar-autocomplete-field">
-          <input
-            id="ar_parceiro_busca"
-            class="ar-mvp-input"
-            type="search"
-            value="${escapeAttr(state.ar.parceiroBusca || '')}"
-            placeholder="Digite o nome do parceiro"
-            oninput="alterarBuscaParceiroAr(this.value)"
-            autocomplete="off">
+    <label class="ar-autocomplete-wrap ar-partner-search-wrap">
+      <div class="ar-autocomplete-field">
+        <input
+          id="ar_parceiro_busca"
+          class="ar-mvp-input"
+          type="search"
+          value="${escapeAttr(state.ar.parceiroBusca || '')}"
+          placeholder="Digite o nome do parceiro"
+          oninput="alterarBuscaParceiroAr(this.value)"
+          autocomplete="off">
 
-          <div id="ar_sugestoes_parceiros" class="ar-suggestions ar-partner-suggestions" hidden></div>
-        </div>
-      </label>
+        <div id="ar_sugestoes_parceiros" class="ar-suggestions ar-partner-suggestions" hidden></div>
+      </div>
+    </label>
 
-      ${parceiro ? renderParceiroSelecionadoCardAr(parceiro) : `
-        <div class="ar-empty-state compact">
-          <strong>Nenhum parceiro selecionado</strong>
-          <p>Use o campo acima para localizar e selecionar o parceiro.</p>
-        </div>
-      `}
-    </div>
+    ${parceiro ? renderParceiroSelecionadoCardAr(parceiro) : `
+      <p class="ar-compact-empty">Selecione um parceiro para continuar.</p>
+    `}
   `;
 }
 function renderParceiroSelecionadoCardAr(parceiro) {
   const nome = parceiro.nome_completo || parceiro.nome || 'Parceiro';
-  const empresa = parceiro.nome_empresa || parceiro.empresa || parceiro.escritorio || '';
-  const status = parceiro.status || '';
-  const codigo = parceiro.codigo_revendedor || parceiro.codigo || '';
+  const status = parceiro.status || 'não informado';
+  const codigo = parceiro.codigo_revendedor || parceiro.codigo || 'sem código';
   const email = parceiro.email_cadastro_certificado || parceiro.email_comercial || parceiro.email || '';
   const whatsappPessoal = parceiro.whatsapp_pessoal || parceiro.whatsapp || '';
   const whatsappComercial = parceiro.whatsapp_comercial || '';
+  const contatos = [email, whatsappPessoal, whatsappComercial].filter(Boolean).join(' · ') || 'Sem contatos informados';
 
   return `
-    <article class="ar-partner-card-modern">
-      ${(codigo || status) ? `
-        <p class="ar-partner-meta-line">
-          ${codigo ? `<span>Código: ${escapeHtml(codigo)}</span>` : ''}
-          ${codigo && status ? '<span aria-hidden="true">·</span>' : ''}
-          ${status ? `<span>Status: ${escapeHtml(status)}</span>` : ''}
-        </p>
-      ` : ''}
-
-      ${empresa ? `
-        <div class="ar-partner-main">
-          <p>${escapeHtml(empresa)}</p>
-        </div>
-      ` : ''}
-
-      <div class="ar-partner-contact-list">
-        ${email ? `
-          <div>
-            <span>E-mail cadastro</span>
-            <strong>${escapeHtml(email)}</strong>
-          </div>
-        ` : ''}
-
-        ${whatsappPessoal ? `
-          <div>
-            <span>WhatsApp pessoal</span>
-            <strong>${escapeHtml(whatsappPessoal)}</strong>
-          </div>
-        ` : ''}
-
-        ${whatsappComercial ? `
-          <div>
-            <span>WhatsApp comercial</span>
-            <strong>${escapeHtml(whatsappComercial)}</strong>
-          </div>
-        ` : ''}
+    <article class="ar-compact-selection-summary" aria-label="Resumo do parceiro selecionado">
+      <div class="ar-compact-summary-line ar-compact-summary-primary">
+        <strong>${escapeHtml(nome)}</strong>
+        <span>Código: ${escapeHtml(codigo)}</span>
+        <span>Status: ${escapeHtml(status)}</span>
+      </div>
+      <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(contatos)}">
+        ${escapeHtml(contatos)}
       </div>
     </article>
   `;
@@ -7224,23 +8371,11 @@ function renderPainelProdutoMvpAr() {
   const produto = obterProdutoSelecionadoAr();
 
   return `
-    <div class="ar-mvp-card ar-product-card">
-      <div class="ar-mvp-card-header">
-        <div>
-          <h3>Selecionar tipo de certificado</h3>
-          <p>Digite parte do produto, modelo, validade, mídia ou AC para localizar rapidamente.</p>
-        </div>
-      </div>
+    ${renderBuscaProdutoUnicaAr()}
 
-      ${renderBuscaProdutoUnicaAr()}
-
-      ${produto ? renderProdutoSelecionadoResumoAr(produto) : `
-        <div class="ar-empty-state compact">
-          <strong>Nenhum produto selecionado</strong>
-          <p>Use o campo acima para buscar e selecionar um certificado.</p>
-        </div>
-      `}
-    </div>
+    ${produto ? renderProdutoSelecionadoResumoAr(produto) : `
+      <p class="ar-compact-empty">Selecione um produto para continuar.</p>
+    `}
   `;
 }
 function renderBuscaProdutoUnicaAr() {
@@ -7262,20 +8397,21 @@ function renderBuscaProdutoUnicaAr() {
   `;
 }
 function renderProdutoSelecionadoResumoAr(produto) {
-  return `
-    <article class="ar-selected-product">
-      <div>
-        <span class="ar-mini-label">Produto selecionado</span>
-        <h4>${escapeHtml(produto.descricao_comercial || produto.produto || 'Certificado digital')}</h4>
-        <p>
-          ${escapeHtml(produto.modelo || 'Modelo não informado')}
-          ${produto.validade ? ` · Validade: ${escapeHtml(produto.validade)}` : ''}
-        </p>
-      </div>
+  const nome = produto.descricao_comercial || produto.produto || 'Certificado digital';
+  const detalhes = [
+    produto.modelo || 'Modelo não informado',
+    produto.ac ? `AC: ${produto.ac}` : '',
+    produto.validade ? `Validade: ${produto.validade}` : '',
+    produto.midia ? `Mídia: ${produto.midia}` : ''
+  ].filter(Boolean).join(' · ');
 
-      <div class="ar-selected-product-meta">
-        ${produto.ac ? `<span>AC: ${escapeHtml(produto.ac)}</span>` : ''}
-        ${produto.midia ? `<span>Mídia: ${escapeHtml(produto.midia)}</span>` : ''}
+  return `
+    <article class="ar-compact-selection-summary" aria-label="Resumo do produto selecionado">
+      <div class="ar-compact-summary-line ar-compact-summary-primary">
+        <strong>${escapeHtml(nome)}</strong>
+      </div>
+      <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(detalhes)}">
+        ${escapeHtml(detalhes)}
       </div>
     </article>
   `;
@@ -9334,7 +10470,7 @@ async function gerarLinksAr() {
   try {
     state.ar.message = '';
     state.ar.gerando = true;
-    atualizarBotaoAr('Gerando...', true, 'is-saving');
+    renderPainelAr();
 
     const response = await chamarApi('generateArLinks', {
       produto_id: state.ar.produtoId,
@@ -9348,14 +10484,12 @@ async function gerarLinksAr() {
     state.ar.gerando = false;
     state.ar.resultado = response.data;
     state.ar.alertas = response.data.alertas || [];
-    atualizarBotaoAr('Gerado', true, 'is-saved');
     await esperar(500);
     renderPainelAr();
   } catch (erro) {
     state.ar.gerando = false;
     state.ar.resultado = null;
     state.ar.message = erro.message || 'Erro ao gerar links.';
-    atualizarBotaoAr('Gerar links', false, '');
     renderPainelAr();
   }
 }
@@ -9826,11 +10960,14 @@ const HUB_BREADCRUMB_LABELS = {
   administracao: 'Administração',
   'central-senhas': 'Central de Senhas',
   'painel-ar': 'Painel AR',
+  crm: 'CRM',
   'links-corretora': 'Links Corretora',
   'links-ar': 'Links AR',
   'links-gestao': 'Links Gestão',
   financeiro: 'Financeiro',
   dashboard: 'Dashboard',
+  demandas: 'Demandas à contabilidade',
+  fechamentos: 'Fechamento mensal',
   lancamentos: 'Lançamentos',
   conciliacao: 'Conciliação',
   cartoes: 'Cartões',
@@ -9993,7 +11130,7 @@ function sincronizarContextoArPelaRota() {
   const { modulo, principal, secundaria } = obterContextoRotaHub();
   if (modulo !== 'painel-ar') return;
 
-  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico'];
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm'];
   if (principal && abasValidas.includes(principal)) {
     state.ar.aba = principal;
   }
@@ -10050,6 +11187,7 @@ function renderHubTopbar() {
         <p>${escapeHtml(subtitulo)}</p>
       </div>
 
+      ${renderHubNotificationBell()}
       ${renderHubUserBox()}
     </header>
   `;
@@ -10420,6 +11558,23 @@ function renderHubShell({ tituloPagina, descricaoPagina, conteudo, classeConteud
   `;
 }
 
+function atualizarLayoutHubEspecial() {
+  const main = document.querySelector('#app > main.hub-layout');
+  const topbar = main?.querySelector(':scope > .topbar');
+  const shell = main?.querySelector(':scope > .hub-shell');
+  const sidebar = shell?.querySelector(':scope > .hub-sidebar');
+
+  if (!main || !topbar || !shell || !sidebar) return false;
+
+  main.classList.remove('is-sidebar-collapsed', 'is-sidebar-pinned');
+  const classes = `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim();
+  classes.split(/\s+/).filter(Boolean).forEach(classe => main.classList.add(classe));
+
+  topbar.outerHTML = renderHubTopbar();
+  sidebar.outerHTML = renderHubSidebar();
+  return true;
+}
+
 const renderDashboardHubPhase1 = function() {
   document.getElementById('app').innerHTML = renderHubShell({
     tituloPagina: 'Inicio',
@@ -10476,6 +11631,26 @@ const renderDashboardHubPhase1 = function() {
 };
 
 const renderizarRotaAtualHubPhase2 = async function() {
+  const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+
+  if (rotaRelativa === 'notificacoes') {
+    await renderizarPaginaNotificacoesHub();
+    return;
+  }
+
+  if (rotaRelativa === 'perfil') {
+    const app = document.getElementById('app');
+    const perfilAberto = app?.querySelector(':scope > main.hub-profile-page');
+
+    if (perfilAberto && typeof window.hubAtualizarLayoutEspecial === 'function') {
+      window.hubAtualizarLayoutEspecial();
+      return;
+    }
+
+    await window.hubRenderizarPerfil?.();
+    return;
+  }
+
   const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
 
   if (idModulo === 'sidebar-teste') {
@@ -10495,6 +11670,11 @@ const renderizarRotaAtualHubPhase2 = async function() {
     const app = document.getElementById('app');
     const paginaCorretoraRenderizada = app.dataset.companySettingsPage === 'true'
       && Boolean(app.querySelector(':scope > main.company-settings-page'));
+
+    if (paginaCorretoraRenderizada && typeof window.hubAtualizarLayoutEspecial === 'function') {
+      window.hubAtualizarLayoutEspecial();
+      return;
+    }
 
     if (!paginaCorretoraRenderizada) {
       app.dataset.companySettingsPage = 'loading';
@@ -10671,13 +11851,14 @@ const renderPainelArHubPhase1 = function() {
               ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
               ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
               ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
+              ${podeAcessarAbaAr('crm') ? `<button class="${state.ar.aba === 'crm' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm')">CRM</button>` : ''}
             </div>
             ${podeGerenciarParceiros ? `<button class="secondary-btn ar-manage-partners-btn" type="button" onclick="navegarParaModulo('administracao', 'parceiros-indicacao')">Gerenciar parceiros</button>` : ''}
           </div>
         </div>
 
         ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-        ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
+    ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
       </section>
     `
   });
@@ -10749,6 +11930,10 @@ const selecionarAbaArHubPhase2 = function(aba) {
   if (aba === 'validacoes' && !state.ar.validacoes.loading) {
     carregarValidacoesAr();
   }
+
+  if (aba === 'crm' && !state.ar.crm.loading && !state.ar.crm.carregado) {
+    carregarCrmAr();
+  }
 };
 
 const selecionarSubabaValidacoesArHubPhase2 = function(aba) {
@@ -10791,6 +11976,10 @@ const abrirPainelArHubPhase2 = async function() {
   state.ar.resultado = null;
   state.ar.alertas = [];
   await carregarPainelAr();
+
+  if (state.ar.aba === 'crm' && !state.ar.crm.carregado) {
+    await carregarCrmAr();
+  }
 };
 
 const abrirAdministracaoOriginal = abrirAdministracao;
@@ -10860,6 +12049,10 @@ function obterMensagemApi(response, fallback) {
 // Funções usadas por handlers inline gerados pelo template do painel.
 Object.assign(window, {
   hubRenderizarTopbarPadrao: renderHubTopbar,
+  hubRenderizarSidebarPadrao: renderHubSidebar,
+  hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
+  hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
+  hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
   hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
   iniciarApp,
   abrirLink,
@@ -10885,6 +12078,7 @@ Object.assign(window, {
   alterarBuscaUsuariosAdmin,
   alterarBuscaPerfisAdmin,
   alterarBuscaParceirosIndicacaoAdmin,
+  aplicarMascaraParceiroIndicacao,
   alternarMenuAcoesParceirosIndicacaoAdmin,
   alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
@@ -10993,6 +12187,27 @@ Object.assign(window, {
   selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
+  selecionarPaginaCrmAr,
+  sincronizarCrmAr,
+  abrirPedidosRelacionadosCrmAr,
+  fecharPedidosRelacionadosCrmAr,
+  criarComentarioDetalheCrmAr,
+  aoDigitarComentarioCrmAr,
+  selecionarMencaoComentarioCrmAr,
+  formatarTextoComentarioCrmAr,
+  acionarAtalhoComentarioCrmAr,
+  iniciarRedimensionamentoComentarioCrmAr,
+  responderComentarioDetalheCrmAr,
+  enviarRespostaComentarioCrmAr,
+  reenviarComentarioPendenteCrmAr,
+  cancelarRespostaComentarioCrmAr,
+  alternarMenuReacoesCrmAr,
+  alternarReacaoComentarioCrmAr,
+  editarComentarioDetalheCrmAr,
+  excluirComentarioDetalheCrmAr,
+  adicionarAnexoDetalheCrmAr,
+  visualizarCrmAr,
+  fecharVisualizacaoCrmAr,
   selecionarAbaSenhas,
   selecionarSubabaValidacoesAr,
   selecionarParceiroAr,
@@ -11010,7 +12225,8 @@ Object.assign(window, {
 
 document.addEventListener('click', event => {
   if (!state.admin.acoesParceirosAberto) return;
-  if (event.target?.closest?.('.admin-partners-main-actions')) return;
+  if (event.target?.closest?.('.admin-partners-main-actions')
+    || event.target?.closest?.('[data-hub-action-menu-portal]')) return;
 
   fecharMenuAcoesParceirosIndicacaoAdmin();
 }, true);
@@ -11023,6 +12239,24 @@ document.addEventListener('click', event => {
 }, true);
 
 document.addEventListener('click', fecharMenusAoClicarForaHub);
+
+document.addEventListener('click', event => {
+  const tab = event.target?.closest?.('[data-partner-tab]');
+  if (!tab) return;
+
+  const modal = tab.closest('.partner-modal');
+  if (!modal) return;
+
+  const aba = tab.dataset.partnerTab || '';
+  modal.querySelectorAll('[data-partner-tab]').forEach(item => {
+    const ativo = item === tab;
+    item.classList.toggle('is-active', ativo);
+    item.setAttribute('aria-selected', ativo ? 'true' : 'false');
+  });
+  modal.querySelectorAll('[data-partner-tab-panel]').forEach(panel => {
+    panel.hidden = panel.dataset.partnerTabPanel !== aba;
+  });
+});
 
 document.addEventListener('keydown', event => {
   if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;
