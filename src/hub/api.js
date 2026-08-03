@@ -1,5 +1,5 @@
 import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
-import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarPedidosRelacionadosCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr } from './services/arCrmService.js';
+import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarPedidosRelacionadosCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr } from './services/arCrmService.js';
 import {
   cancelarReciboAR,
   carregarDadosValidacoesAR,
@@ -18,6 +18,7 @@ import {
   listarPermissoesUsuarioAdmin,
   listarParceirosIndicacaoAdmin,
   listarRegistrosAdmin,
+  listarLogsIntegracoesAdmin,
   salvarParceiroIndicacaoAdmin,
   arquivarParceiroIndicacaoAdmin,
   atualizarStatusParceirosIndicacaoAdmin,
@@ -106,6 +107,11 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'updateArCrmTask') {
+      const dados = await atualizarTarefaCrmAr(payload.taskId, payload.itemId, payload.changes);
+      return { ok: true, data: dados };
+    }
+
     if (action === 'getArCrmRelated') {
       const dados = await carregarPedidosRelacionadosCrmAr(payload.cpf);
       return { ok: true, data: dados };
@@ -178,6 +184,7 @@ export async function chamarApi(action, payload = {}) {
       listAdminPermissions: () => listarPermissoesAdmin(),
       listAdminUserPermissions: () => listarPermissoesUsuarioAdmin(payload),
       listAdminRecords: () => listarRegistrosAdmin(payload),
+      listAdminIntegrationLogs: () => listarLogsIntegracoesAdmin(payload),
       saveAdminUser: () => salvarUsuarioAdmin(payload),
       saveAdminProfile: () => salvarPerfilAdmin(payload),
       deleteAdminProfile: () => excluirPerfilAdmin(payload),

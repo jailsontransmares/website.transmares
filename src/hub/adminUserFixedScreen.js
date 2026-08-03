@@ -366,7 +366,7 @@ function renderTelaPermissoesUsuario() {
         <h4>Permissões adicionais</h4>
         <p>Carregando tela contínua de permissões do usuário...</p>
       </div>
-      <div class="admin-user-direct-loading"><p class="quick-link-empty">Preparando permissões do usuário...</p></div>
+      <div class="admin-user-direct-loading" role="status" aria-live="polite" aria-busy="true">${window.hubRenderLoading?.('Preparando permissões do usuário...') || '<p class="quick-link-empty">Preparando permissões do usuário...</p>'}</div>
     </section>
   `;
 }

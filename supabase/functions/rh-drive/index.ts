@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { novoCorrelationId, registrarLogIntegracao } from "../_shared/integrationLog.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -111,15 +112,21 @@ Deno.serve(async (req: Request) => {
   const client = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   let parsed: Record<string, unknown> = {};
   let user: AppUser | null = null;
+  let action = "";
+  let correlationId = "";
+  let startedAt = 0;
   try {
     const isMultipart = (req.headers.get("content-type") || "").includes("multipart/form-data");
     let file: File | null = null;
     if (isMultipart) { const form = await req.formData(); form.forEach((value, key) => { if (key !== "file") parsed[key] = value; }); file = form.get("file") instanceof File ? form.get("file") as File : null; }
     else parsed = await req.json().catch(() => ({}));
-    const action = text(parsed.action);
+    action = text(parsed.action);
     const identity = await requireUser(client, req.headers.get("Authorization") || ""); user = identity.user;
+    correlationId = novoCorrelationId();
+    startedAt = Date.now();
+    await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action, status: "started", correlation_id: correlationId, external_id: text(parsed.arquivo_id) || text(parsed.colaborador_id), detalhes: { action, usuario_id: user.id } });
 
-    if (action === "status") { await requirePermission(client, user, identity.isAdmin, "view"); return json({ ok: true, configured: configured(), max_file_size: MAX_FILE_SIZE }); }
+    if (action === "status") { await requirePermission(client, user, identity.isAdmin, "view"); await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action, status: "success", correlation_id: correlationId, duracao_ms: Date.now() - startedAt, detalhes: { configured: configured() } }); return json({ ok: true, configured: configured(), max_file_size: MAX_FILE_SIZE }); }
     if (!configured()) return json({ ok: false, message: "A integração do Google Drive ainda não foi configurada pelo administrador." }, 503);
 
     const fileId = text(parsed.arquivo_id);
@@ -149,6 +156,7 @@ Deno.serve(async (req: Request) => {
       }
       await client.from("rh_arquivos_colaboradores_versoes").insert({ arquivo_id: documentId, versao: version, google_drive_file_id: stored.id, nome_arquivo: stored.name, mime_type: stored.mimeType || file.type, tamanho_bytes: file.size, sha256: digest, enviado_por: user.id, enviado_at: now });
       await log(client, { usuario_id: user.id, colaborador_id: collaboratorId, arquivo_id: documentId, acao: action, detalhes: { versao: version, tamanho_bytes: file.size, mime_type: file.type } });
+      await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action, status: "success", correlation_id: correlationId, external_id: documentId, duracao_ms: Date.now() - startedAt, detalhes: { document_id: documentId, colaborador_id: collaboratorId, versao: version } });
       return json({ ok: true, id: documentId, versao: version });
     }
 
@@ -158,6 +166,7 @@ Deno.serve(async (req: Request) => {
       await requirePermission(client, user, identity.isAdmin, "download");
       const drive = await driveFetch(`files/${encodeURIComponent(document.google_drive_file_id)}?alt=media&supportsAllDrives=true`);
       await log(client, { usuario_id: user.id, colaborador_id: document.colaborador_id, arquivo_id: document.id, acao: text(parsed.disposition) === "inline" ? "visualizar" : "baixar", detalhes: {} });
+      await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action, status: "success", correlation_id: correlationId, external_id: document.id, duracao_ms: Date.now() - startedAt, detalhes: { document_id: document.id, disposition: text(parsed.disposition) || "attachment" } });
       return new Response(drive.body, { headers: { ...corsHeaders, "Content-Type": drive.headers.get("content-type") || document.mime_type || "application/octet-stream", "Content-Disposition": `${text(parsed.disposition) === "inline" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(document.nome_arquivo)}`, "X-RH-Filename": encodeURIComponent(document.nome_arquivo), "Cache-Control": "no-store" } });
     }
     if (action === "descartar") {
@@ -167,12 +176,14 @@ Deno.serve(async (req: Request) => {
       await driveFetch(`files/${encodeURIComponent(document.google_drive_file_id)}?supportsAllDrives=true`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) });
       await client.from("rh_arquivos_colaboradores").update({ status: "excluido", descartado_motivo: justification, descartado_drive_at: new Date().toISOString() }).eq("id", document.id);
       await log(client, { usuario_id: user.id, colaborador_id: document.colaborador_id, arquivo_id: document.id, acao: "descartar", detalhes: { justificativa: justification } });
+      await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action, status: "success", correlation_id: correlationId, external_id: document.id, duracao_ms: Date.now() - startedAt, detalhes: { document_id: document.id, colaborador_id: document.colaborador_id } });
       return json({ ok: true });
     }
     return json({ ok: false, message: "Ação não suportada." }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado no Google Drive.";
     if (user) await log(client, { usuario_id: user.id, acao: "erro", detalhes: { message: message.slice(0, 500) } });
+    if (correlationId) await registrarLogIntegracao(client, { sistema: "google_drive", tipo: "operacao", evento: action || "erro", status: "failed", nivel: "error", mensagem: message, correlation_id: correlationId, duracao_ms: startedAt ? Date.now() - startedAt : null, detalhes: { usuario_id: user?.id || null } });
     return json({ ok: false, message }, message.includes("sem permissão") || message.includes("requer confirmação") ? 403 : 400);
   }
 });

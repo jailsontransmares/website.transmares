@@ -25,6 +25,10 @@ export async function sincronizarCrmAr() {
   return invocarCrmAr('sync');
 }
 
+export async function atualizarTarefaCrmAr(taskId, itemId, changes) {
+  return invocarCrmAr('updateTask', { taskId, itemId, changes });
+}
+
 export async function carregarPedidosRelacionadosCrmAr(cpf) {
   return invocarCrmAr('getRelatedByCpf', { cpf });
 }

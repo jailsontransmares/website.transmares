@@ -519,6 +519,26 @@ async function renderizarRotaPerfil({ force = false } = {}) {
   try {
     perfilCarregando = true;
     perfilRenderizadoPara = chave;
+    injetarEstilosPerfil();
+    app.dataset.hubProfilePage = 'loading';
+    app.innerHTML = `
+      <main class="dashboard hub-layout hub-profile-page ${escapeAttr(window.hubObterClassesLayoutPadrao?.() || 'is-sidebar-collapsed')}" aria-busy="true" aria-live="polite">
+        ${renderizarTopoPerfil({})}
+        <div class="hub-shell">
+          ${window.hubRenderizarSidebarPadrao?.() || ''}
+          <section class="hub-page-content hub-profile-page-content">
+            <section class="admin-panel hub-profile-loading">
+              <div class="hub-page-intro">
+                <span class="hub-page-kicker">Conta do usuário</span>
+                <h2>Meu perfil</h2>
+                <p>Aguarde enquanto seus dados são carregados.</p>
+              </div>
+              ${window.hubRenderLoading?.('Carregando perfil...') || '<p role="status">Carregando perfil...</p>'}
+            </section>
+          </section>
+        </div>
+      </main>
+    `;
     const dados = await carregarPerfilAtual();
 
     const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;

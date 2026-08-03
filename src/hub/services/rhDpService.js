@@ -2,6 +2,7 @@ import { exigirSupabaseConfigurado, obterUrlSupabase } from '../supabaseClient.j
 
 const COLUNAS_COLABORADOR = `
   id,
+  codigo,
   nome_completo,
   data_nascimento,
   estado_civil,
@@ -447,17 +448,24 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
     throw new Error('Colaborador não identificado.');
   }
 
-  const colaboradorPromise = supabase
+  const ehUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id));
+  const colaboradorResponse = await supabase
     .from('rh_colaboradores')
     .select(COLUNAS_COLABORADOR)
-    .eq('id', id)
+    .eq(ehUuid ? 'id' : 'codigo', id)
     .single();
+
+  if (colaboradorResponse.error || !colaboradorResponse.data) {
+    throw new Error(mensagemErroRh(colaboradorResponse.error, 'Não foi possível carregar o cadastro.'));
+  }
+
+  const colaboradorId = colaboradorResponse.data.id;
 
   const documentosPromise = incluirSensiveis
     ? supabase
       .from('rh_documentos_cadastrais')
       .select(COLUNAS_DOCUMENTOS)
-      .eq('colaborador_id', id)
+      .eq('colaborador_id', colaboradorId)
       .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
@@ -465,7 +473,7 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
     ? supabase
       .from('rh_vinculos_profissionais')
       .select(COLUNAS_VINCULO)
-      .eq('colaborador_id', id)
+      .eq('colaborador_id', colaboradorId)
       .maybeSingle()
     : Promise.resolve({ data: null, error: null });
 
@@ -473,18 +481,17 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
     ? supabase
       .from('rh_dependentes')
       .select('id, colaborador_id, nome_completo, data_nascimento, parentesco, ativo, created_at, updated_at')
-      .eq('colaborador_id', id)
+      .eq('colaborador_id', colaboradorId)
       .eq('ativo', true)
       .order('nome_completo', { ascending: true })
     : Promise.resolve({ data: [], error: null });
 
-  const beneficiosPromise = incluirSensiveis ? supabase.from('rh_beneficios_colaboradores').select(COLUNAS_BENEFICIO).eq('colaborador_id', id).order('status').order('nome') : Promise.resolve({ data: [], error: null });
-  const bancariosPromise = incluirSensiveis ? supabase.from('rh_dados_bancarios_colaboradores').select(COLUNAS_BANCARIOS).eq('colaborador_id', id).maybeSingle() : Promise.resolve({ data: null, error: null });
-  const movimentacoesPromise = incluirSensiveis ? supabase.from('rh_movimentacoes_colaboradores').select(COLUNAS_MOVIMENTACAO).eq('colaborador_id', id).order('data_efetivacao', { ascending: false }).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null });
-  const checklistPromise = incluirSensiveis ? supabase.from('rh_checklist_admissional').select(COLUNAS_CHECKLIST).eq('colaborador_id', id).order('item_chave') : Promise.resolve({ data: [], error: null });
+  const beneficiosPromise = incluirSensiveis ? supabase.from('rh_beneficios_colaboradores').select(COLUNAS_BENEFICIO).eq('colaborador_id', colaboradorId).order('status').order('nome') : Promise.resolve({ data: [], error: null });
+  const bancariosPromise = incluirSensiveis ? supabase.from('rh_dados_bancarios_colaboradores').select(COLUNAS_BANCARIOS).eq('colaborador_id', colaboradorId).maybeSingle() : Promise.resolve({ data: null, error: null });
+  const movimentacoesPromise = incluirSensiveis ? supabase.from('rh_movimentacoes_colaboradores').select(COLUNAS_MOVIMENTACAO).eq('colaborador_id', colaboradorId).order('data_efetivacao', { ascending: false }).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null });
+  const checklistPromise = incluirSensiveis ? supabase.from('rh_checklist_admissional').select(COLUNAS_CHECKLIST).eq('colaborador_id', colaboradorId).order('item_chave') : Promise.resolve({ data: [], error: null });
 
-  const [colaborador, documentos, vinculo, dependentes, beneficios, bancarios, movimentacoes, checklist] = await Promise.all([
-    colaboradorPromise,
+  const [documentos, vinculo, dependentes, beneficios, bancarios, movimentacoes, checklist] = await Promise.all([
     documentosPromise,
     vinculoPromise,
     dependentesPromise,
@@ -494,13 +501,13 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
     checklistPromise
   ]);
 
-  const error = colaborador.error || documentos.error || vinculo.error || dependentes.error || beneficios.error || bancarios.error || movimentacoes.error || checklist.error;
+  const error = documentos.error || vinculo.error || dependentes.error || beneficios.error || bancarios.error || movimentacoes.error || checklist.error;
   if (error) {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar o cadastro.'));
   }
 
   return {
-    colaborador: colaborador.data,
+    colaborador: colaboradorResponse.data,
     documentos: documentos.data || {},
     vinculo: vinculo.data || {},
     dependentes: dependentes.data || [],

@@ -131,6 +131,30 @@ export async function listarRegistrosAdmin({ entidade }) {
   return { records: data || [] };
 }
 
+export async function listarLogsIntegracoesAdmin({ pagina = 1, limite = 20, filtros = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const limiteNormalizado = Math.min(Math.max(Number(limite) || 20, 1), 100);
+  const paginaNormalizada = Math.max(Number(pagina) || 1, 1);
+  const inicio = (paginaNormalizada - 1) * limiteNormalizado;
+  let query = supabase
+    .from('integracao_logs')
+    .select('id, sistema, tipo, evento, nivel, status, mensagem, correlation_id, external_id, duracao_ms, tentativa, detalhes, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(inicio, inicio + limiteNormalizado - 1);
+
+  if (filtros.sistema) query = query.eq('sistema', filtros.sistema);
+  if (filtros.nivel) query = query.eq('nivel', filtros.nivel);
+  if (filtros.status) query = query.eq('status', filtros.status);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar os logs de integrações.');
+  }
+
+  return { records: data || [], total: count || 0, pagina: paginaNormalizada, limite: limiteNormalizado };
+}
+
 export async function listarParceirosIndicacaoAdmin() {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase

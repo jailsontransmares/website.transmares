@@ -8,7 +8,14 @@ export default defineConfig({
     outDir: resolve(__dirname, 'dist-hub'),
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, 'hub/index.html')
+      input: resolve(__dirname, 'hub/index.html'),
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        }
+      }
     }
   }
 });

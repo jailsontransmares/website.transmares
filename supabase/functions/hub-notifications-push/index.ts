@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
+import { novoCorrelationId, registrarLogIntegracao } from "../_shared/integrationLog.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +52,17 @@ Deno.serve(async request => {
     if (!notificationId) return json({ ok: false, message: "notification_id é obrigatório." }, 400);
 
     const supabase = clientAdmin();
+    const correlationId = novoCorrelationId();
+    const startedAt = Date.now();
+    await registrarLogIntegracao(supabase, {
+      sistema: "hub",
+      tipo: "notificacao_push",
+      evento: "envio_push",
+      status: "started",
+      correlation_id: correlationId,
+      external_id: notificationId,
+      detalhes: { notification_id: notificationId }
+    });
     const { data: notification, error: notificationError } = await supabase
       .from("hub_notificacoes")
       .select("id, usuario_id, titulo, descricao, rota, metadados")
@@ -98,6 +110,17 @@ Deno.serve(async request => {
       }
     }
 
+    await registrarLogIntegracao(supabase, {
+      sistema: "hub",
+      tipo: "notificacao_push",
+      evento: "envio_push",
+      status: "success",
+      mensagem: "Notificação processada.",
+      correlation_id: correlationId,
+      external_id: notificationId,
+      duracao_ms: Date.now() - startedAt,
+      detalhes: { enviados, removidos }
+    });
     return json({ ok: true, enviados, removidos });
   } catch (error) {
     console.error(error);

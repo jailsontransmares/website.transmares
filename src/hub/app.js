@@ -1,5 +1,6 @@
 import './style.css';
 import { chamarApi } from './api.js';
+import { obterRotuloStatusHub } from './statusLabels.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
 import {
@@ -8,8 +9,6 @@ import {
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
-import { criarRhDpController } from './rhDpPage.js';
-import { criarFinanceiroController } from './financeiroController.js';
 import {
   abrirMenuAcaoGlobal,
   limparMenusAcoesGlobais
@@ -19,11 +18,80 @@ import {
   renderHubNotificationBell,
   renderizarPaginaNotificacoesHub
 } from './notificationsUi.js';
+import {
+  Archive,
+  AtSign,
+  Bell,
+  Calendar,
+  Check,
+  Circle,
+  CircleHelp,
+  CircleAlert,
+  Clock3,
+  createIcons,
+  ExternalLink,
+  Filter,
+  House,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  MessageCircle,
+  Menu,
+  Moon,
+  Pin,
+  Search,
+  Settings,
+  Sun,
+  Trash2,
+  RotateCcw,
+  RefreshCw,
+  UsersRound,
+  Workflow,
+  X
+} from 'lucide';
+
+const HUB_LUCIDE_ICONS = {
+  Archive,
+  AtSign,
+  Bell,
+  Calendar,
+  Check,
+  Circle,
+  CircleAlert,
+  CircleHelp,
+  Clock3,
+  Filter,
+  House,
+  KeyRound,
+  Landmark,
+  LayoutDashboard,
+  MessageCircle,
+  Menu,
+  Moon,
+  Pin,
+  Search,
+  Settings,
+  Sun,
+  Trash2,
+  RotateCcw,
+  RefreshCw,
+  UsersRound,
+  Workflow,
+  X,
+  ExternalLink
+};
+
+const CRM_STATUS_OPTIONS = ['em prospecção', 'cliente ativo', 'finalizado', 'lead perdido'];
 
 const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
 
+function sidebarMobileHub() {
+  return typeof window !== 'undefined'
+    && window.matchMedia?.('(max-width: 600px)').matches;
+}
+
 function obterPreferenciaSidebarFixado() {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || sidebarMobileHub()) return false;
 
   try {
     return window.localStorage.getItem(SIDEBAR_PINNED_STORAGE_KEY) === 'true';
@@ -42,8 +110,9 @@ const state = {
   meta: null,
   permissions: normalizarPermissoes([]),
   sidebar: {
-    collapsed: true,
+    collapsed: !obterPreferenciaSidebarFixado(),
     pinned: obterPreferenciaSidebarFixado(),
+    searchQuery: '',
     openGroups: {},
     floatingGroupId: ''
   },
@@ -68,6 +137,13 @@ const state = {
     categorias: [],
     grupos: [],
     parceirosIndicacao: [],
+    logsIntegracoes: [],
+    logsIntegracoesLoading: false,
+    logsIntegracoesFiltros: { sistema: '', nivel: '', status: '' },
+    logsIntegracoesPagina: 1,
+    logsIntegracoesLimite: 20,
+    logsIntegracoesTotal: 0,
+    logsIntegracoesDetalhe: null,
     modulos: [],
     usuarios: [],
     perfis: [],
@@ -102,11 +178,13 @@ const state = {
     parceiroModal: {
       aberto: false,
       modo: 'create',
+      aba: 'dados',
       id: '',
       dados: null,
       erros: {},
       salvando: false,
-      salvo: false
+      salvo: false,
+      focoAnterior: null
     },
     filtros: {
       categorias: 'todos',
@@ -255,6 +333,9 @@ const state = {
     pagina: 1,
     itensPorPagina: 20,
     detalhe: null,
+    editando: false,
+    edicaoAlterada: false,
+    salvandoEdicao: false,
     pedidosRelacionados: {
       aberto: false,
       loading: false,
@@ -429,7 +510,15 @@ function agendarAtualizacaoContextoAcessoHub(motivo = '') {
 }
 
 document.addEventListener('DOMContentLoaded', iniciarApp);
+document.addEventListener('DOMContentLoaded', iniciarIconesLucideHub);
+document.addEventListener('DOMContentLoaded', iniciarTooltipsGlobais);
 document.addEventListener('click', fecharFiltrosListaAoClicarForaAr);
+document.addEventListener('click', fecharDropdownCrmAr);
+document.addEventListener('click', fecharDropdownLogsAdmin);
+window.addEventListener('resize', reposicionarDropdownsCrmAr);
+window.addEventListener('scroll', reposicionarDropdownsCrmAr, true);
+window.addEventListener('resize', reposicionarDropdownsLogsAdmin);
+window.addEventListener('scroll', reposicionarDropdownsLogsAdmin, true);
 window.addEventListener('hubAccessContextRefreshRequested', event => {
   agendarAtualizacaoContextoAcessoHub(event?.detail?.motivo || 'alteracao-acesso');
 });
@@ -537,8 +626,7 @@ function renderLoginLoading() {
   document.getElementById('app').innerHTML = `
     <section class="login-loading-screen" aria-live="polite" aria-busy="true">
       <div class="login-loading-content">
-        <div class="login-loading-spinner" aria-hidden="true"></div>
-        <p>Carregando...</p>
+        ${renderHubLoading('Carregando acesso...')}
       </div>
     </section>
   `;
@@ -587,10 +675,19 @@ async function sair() {
 
 function renderLoading() {
   document.getElementById('app').innerHTML = `
-    <section class="loading-card">
-    <h1>Hub Transmares</h1>
-      <p>Carregando sistema...</p>
+    <section class="loading-card" aria-live="polite" aria-busy="true">
+      <h1>Hub Transmares</h1>
+      ${renderHubLoading('Carregando sistema...')}
     </section>
+  `;
+}
+
+function renderHubLoading(mensagem = 'Carregando...') {
+  return `
+    <div class="hub-loading" role="status" aria-live="polite" aria-busy="true">
+      <span class="hub-loading-spinner" aria-hidden="true"></span>
+      <span class="hub-loading-text">${escapeHtml(mensagem)}</span>
+    </div>
   `;
 }
 
@@ -667,7 +764,7 @@ function renderDashboard() {
 
           <br>
           <button class="theme-btn icon-only" onclick="alternarTema()" title="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}" aria-label="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}">
-            ${state.temaAtual === 'escuro' ? '☀️' : '🌙'}
+            <i data-lucide="${state.temaAtual === 'escuro' ? 'sun' : 'moon'}" aria-hidden="true"></i>
           </button>
           <button class="secondary-btn logout-btn" type="button" onclick="sair()">Sair</button>
         </div>
@@ -766,7 +863,7 @@ function renderModalConfigurarModulosHome() {
         <div class="permission-modal-layout">
           <div class="permission-modal-content">
             ${modal.message ? `<p class="admin-message">${escapeHtml(modal.message)}</p>` : ''}
-            ${modal.loading ? '<p class="quick-link-empty">Carregando módulos...</p>' : renderConteudoModalConfigurarModulosHome()}
+            ${modal.loading ? renderHubLoading('Carregando módulos...') : renderConteudoModalConfigurarModulosHome()}
           </div>
         </div>
 
@@ -1123,11 +1220,17 @@ async function salvarConfigModulosHome() {
 }
 
 function renderHeaderLogo() {
+  const home = montarCaminhoHub();
+
   return `
-    <div class="brand-logo-slot" aria-label="Transmares Corretora de Seguros">
+    <a class="brand-logo-slot" href="${escapeAttr(home)}" aria-label="Ir para a página inicial" onclick="event.preventDefault(); navegarLogoParaHomeHub()">
       <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
-    </div>
+    </a>
   `;
+}
+
+function navegarLogoParaHomeHub() {
+  navegarHome();
 }
 
 function acionarCardModulo(event, id) {
@@ -1156,13 +1259,18 @@ function obterModuloDaRotaAtual() {
   const base = obterBaseHub();
   const pathname = window.location.pathname || '/';
   const rota = base ? pathname.slice(base.length) : pathname;
-  const [modulo = ''] = rota
+  const partes = rota
     .replace(/^\/+|\/+$/g, '')
     .replace(/^index\.html$/i, '')
     .split('/')
     .filter(Boolean);
+  const caminho = partes.join('/').toLowerCase();
 
-  return modulo
+  if (caminho === 'configuracoes/corretora') {
+    return 'configuracoes-corretora';
+  }
+
+  return (partes[0] || '')
     .replace(/^\/+|\/+$/g, '')
     .replace(/^index\.html$/i, '');
 }
@@ -1239,7 +1347,7 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
-  if (idNormalizado === 'financeiro') {
+  if (idNormalizado === 'financeiro' || idNormalizado === 'rh-dp') {
     return canAccessModule(state.permissions, idNormalizado);
   }
 
@@ -1256,7 +1364,8 @@ function podeAcessarAbaAdmin(aba) {
     usuarios: ['admin.usuarios', 'view'],
     perfis: ['admin.perfis', 'view'],
     permissoes: ['admin.permissoes', 'view'],
-    'parceiros-indicacao': ['admin.parceiros_indicacao', 'view']
+    'parceiros-indicacao': ['admin.parceiros_indicacao', 'view'],
+    'logs-integracoes': ['admin.logs_integracoes', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -1314,8 +1423,9 @@ function renderModuloIndisponivel(idModulo) {
 let rhDpController = null;
 let financeiroController = null;
 
-function obterRhDpController() {
+async function obterRhDpController() {
   if (!rhDpController) {
+    const { criarRhDpController } = await import('./rhDpPage.js');
     rhDpController = criarRhDpController({
       renderShell: renderHubShell,
       pode,
@@ -1330,8 +1440,9 @@ function obterRhDpController() {
   return rhDpController;
 }
 
-function obterFinanceiroController() {
+async function obterFinanceiroController() {
   if (!financeiroController) {
+    const { criarFinanceiroController } = await import('./financeiroController.js');
     financeiroController = criarFinanceiroController({
       renderShell: renderHubShell,
       pode,
@@ -1426,12 +1537,14 @@ async function abrirModuloDireto(id) {
   }
 
   if (idModulo === 'financeiro') {
-    await obterFinanceiroController().abrir();
+    const controller = await obterFinanceiroController();
+    await controller.abrir();
     return;
   }
 
   if (idModulo === 'rh-dp') {
-    await obterRhDpController().abrir();
+    const controller = await obterRhDpController();
+    await controller.abrir();
     return;
   }
 
@@ -1496,6 +1609,9 @@ function renderAdministracao() {
           ${renderAdminTab('logo', 'Logo e Marca')}
           ${renderAdminTab('limites', 'Limites do Painel')}
 
+          <span class="admin-nav-label">Sistema</span>
+          ${pode('admin.logs_integracoes', 'view') ? renderAdminTab('logs-integracoes', 'Logs') : ''}
+
           <span class="admin-nav-label">Cadastros</span>
           ${renderAdminTab('categorias', 'Categorias')}
           ${renderAdminTab('grupos', 'Grupos')}
@@ -1550,6 +1666,14 @@ function renderAdminPanel() {
     return renderPerfisAdmin();
   }
 
+  if (state.admin.aba === 'logs-integracoes') {
+    return renderLogsIntegracoesAdmin();
+  }
+
+  if (state.admin.aba === 'auditoria') {
+    return renderAuditoriaAdminFutura();
+  }
+
   const gruposPorAba = {
     configuracoes: 'identidade',
     identidade: 'identidade',
@@ -1589,7 +1713,7 @@ function renderAdminPanel() {
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando configurações...</p>' : renderConfigAdmin(grupoId)}
+      ${state.admin.loading ? renderHubLoading('Carregando configurações...') : renderConfigAdmin(grupoId)}
     </section>
   `;
 }
@@ -1626,6 +1750,300 @@ async function selecionarAbaAdmin(aba) {
   }
 
   renderAdministracao();
+}
+
+async function carregarLogsIntegracoesAdmin() {
+  state.admin.logsIntegracoesLoading = true;
+  state.admin.message = '';
+  renderAdministracao();
+
+  try {
+    const response = await chamarApi('listAdminIntegrationLogs', {
+      pagina: state.admin.logsIntegracoesPagina,
+      limite: state.admin.logsIntegracoesLimite,
+      filtros: state.admin.logsIntegracoesFiltros
+    });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os logs.'));
+    state.admin.logsIntegracoes = response.data?.records || [];
+    state.admin.logsIntegracoesTotal = Number(response.data?.total || 0);
+  } catch (erro) {
+    state.admin.logsIntegracoes = [];
+    state.admin.message = erro.message || 'Erro ao carregar os logs de integrações.';
+  } finally {
+    state.admin.logsIntegracoesLoading = false;
+    renderAdministracao();
+  }
+}
+
+function alterarFiltroLogsIntegracoesAdmin(campo, valor) {
+  state.admin.logsIntegracoesFiltros[campo] = valor;
+  state.admin.logsIntegracoesPagina = 1;
+  carregarLogsIntegracoesAdmin();
+}
+
+function limparFiltrosLogsIntegracoesAdmin() {
+  state.admin.logsIntegracoesFiltros = { sistema: '', nivel: '', status: '' };
+  state.admin.logsIntegracoesPagina = 1;
+  carregarLogsIntegracoesAdmin();
+}
+
+function selecionarPaginaLogsIntegracoesAdmin(delta) {
+  const totalPaginas = Math.max(Math.ceil(state.admin.logsIntegracoesTotal / state.admin.logsIntegracoesLimite), 1);
+  const proxima = Math.min(Math.max(state.admin.logsIntegracoesPagina + Number(delta || 0), 1), totalPaginas);
+  if (proxima === state.admin.logsIntegracoesPagina) return;
+  state.admin.logsIntegracoesPagina = proxima;
+  carregarLogsIntegracoesAdmin();
+}
+
+function abrirDetalheLogIntegracaoAdmin(id) {
+  state.admin.logsIntegracoesDetalhe = state.admin.logsIntegracoes.find(log => log.id === id) || null;
+  renderAdministracao();
+}
+
+function fecharDetalheLogIntegracaoAdmin() {
+  state.admin.logsIntegracoesDetalhe = null;
+  renderAdministracao();
+}
+
+function renderLogsAdminSubmoduleTabs(abaAtual) {
+  return `
+    <div class="module-tabs admin-logs-submodule-tabs" role="tablist" aria-label="Logs e auditoria">
+      <button class="${abaAtual === 'logs-integracoes' ? 'active' : ''}" type="button" role="tab" aria-selected="${abaAtual === 'logs-integracoes'}" onclick="selecionarAbaAdmin('logs-integracoes')">Logs</button>
+      <button class="${abaAtual === 'auditoria' ? 'active' : ''}" type="button" role="tab" aria-selected="${abaAtual === 'auditoria'}" onclick="selecionarAbaAdmin('auditoria')">Auditoria</button>
+    </div>
+  `;
+}
+
+function renderDropdownFiltroLogsAdmin(campo, rotulo, opcoes, valorAtual) {
+  const id = `admin-log-filter-${campo}`;
+  const opcaoAtual = opcoes.find(opcao => opcao.value === valorAtual) || opcoes[0];
+  return `
+    <div class="admin-logs-filter-field">
+      <span>${escapeHtml(rotulo)}</span>
+      <div class="hub-filter-combobox">
+        <button id="${id}" class="config-input hub-filter-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="${id}-menu" data-filter-field="${escapeAttr(campo)}" onclick="abrirDropdownLogsAdmin(this, event)" onkeydown="navegarDropdownLogsAdmin(this, event)">
+          <span>${escapeHtml(opcaoAtual.label)}</span><span class="hub-filter-chevron" aria-hidden="true">⌄</span>
+        </button>
+        <div id="${id}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${escapeAttr(rotulo)}" data-trigger-id="${id}" hidden>
+          ${opcoes.map(opcao => `<button class="hub-filter-dropdown-option ${opcao.value === valorAtual ? 'is-selected' : ''}" type="button" role="option" aria-selected="${opcao.value === valorAtual ? 'true' : 'false'}" data-value="${escapeAttr(opcao.value)}" data-label="${escapeAttr(opcao.label)}" onclick="selecionarDropdownLogsAdmin(this)" onkeydown="navegarDropdownLogsAdmin(this, event)">${escapeHtml(opcao.label)}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function posicionarDropdownLogsAdmin(trigger, menu) {
+  const rect = trigger.getBoundingClientRect();
+  const margem = 8;
+  const alturaMaxima = Math.min(280, window.innerHeight - (margem * 2));
+  const largura = Math.min(rect.width, window.innerWidth - (margem * 2));
+  const esquerda = Math.min(Math.max(margem, rect.left), Math.max(margem, window.innerWidth - largura - margem));
+  menu.hidden = false;
+  menu.style.left = `${esquerda}px`;
+  menu.style.width = `${largura}px`;
+  menu.style.maxHeight = `${alturaMaxima}px`;
+  const altura = Math.min(menu.scrollHeight, alturaMaxima);
+  const abaixo = window.innerHeight - rect.bottom - margem;
+  menu.style.top = `${abaixo >= altura ? rect.bottom + 4 : Math.max(margem, rect.top - altura - 4)}px`;
+}
+
+function abrirDropdownLogsAdmin(trigger, event) {
+  event?.stopPropagation();
+  fecharDropdownLogsAdmin();
+  const menu = document.getElementById(trigger?.getAttribute('aria-controls') || '');
+  if (!menu) return;
+  if (menu.parentElement !== document.body) document.body.appendChild(menu);
+  trigger.setAttribute('aria-expanded', 'true');
+  posicionarDropdownLogsAdmin(trigger, menu);
+  menu.querySelector('.hub-filter-dropdown-option.is-selected')?.focus();
+}
+
+function navegarDropdownLogsAdmin(elemento, event) {
+  const tecla = event?.key;
+  const menuId = elemento?.getAttribute('aria-controls') || elemento?.closest('.hub-filter-dropdown-menu')?.id;
+  const menu = document.getElementById(menuId || '');
+  if (!menu) return;
+
+  if (tecla === 'Escape') {
+    event.preventDefault();
+    const trigger = document.getElementById(menu.dataset.triggerId || menuId.replace(/-menu$/, ''));
+    fecharDropdownLogsAdmin();
+    trigger?.focus();
+    return;
+  }
+
+  const opcoes = Array.from(menu.querySelectorAll('.hub-filter-dropdown-option:not([hidden])'));
+  if (!opcoes.length) return;
+
+  if (elemento.classList.contains('hub-filter-trigger') && (tecla === 'ArrowDown' || tecla === 'ArrowUp')) {
+    event.preventDefault();
+    abrirDropdownLogsAdmin(elemento, event);
+    opcoes[tecla === 'ArrowDown' ? 0 : opcoes.length - 1]?.focus();
+    return;
+  }
+
+  if (!elemento.classList.contains('hub-filter-dropdown-option')) return;
+  if (tecla === 'ArrowDown' || tecla === 'ArrowUp' || tecla === 'Home' || tecla === 'End') {
+    event.preventDefault();
+    const atual = opcoes.indexOf(elemento);
+    const proximo = tecla === 'Home'
+      ? 0
+      : tecla === 'End'
+        ? opcoes.length - 1
+        : (atual + (tecla === 'ArrowDown' ? 1 : -1) + opcoes.length) % opcoes.length;
+    opcoes[proximo]?.focus();
+  }
+}
+
+function reposicionarDropdownsLogsAdmin() {
+  document.querySelectorAll('.hub-filter-dropdown-menu:not([hidden])').forEach(menu => {
+    const trigger = document.getElementById(menu.dataset.triggerId || '');
+    if (trigger) posicionarDropdownLogsAdmin(trigger, menu);
+  });
+}
+
+function selecionarDropdownLogsAdmin(opcao) {
+  const menu = opcao?.closest('.hub-filter-dropdown-menu');
+  const trigger = document.getElementById(menu?.dataset.triggerId || '');
+  if (!menu || !trigger) return;
+  const campo = trigger.dataset.filterField;
+  const valor = opcao.dataset.value || '';
+  trigger.querySelector('span').textContent = opcao.dataset.label || '';
+  menu.querySelectorAll('.hub-filter-dropdown-option').forEach(item => {
+    const selecionado = item === opcao;
+    item.classList.toggle('is-selected', selecionado);
+    item.setAttribute('aria-selected', selecionado ? 'true' : 'false');
+  });
+  fecharDropdownLogsAdmin();
+  alterarFiltroLogsIntegracoesAdmin(campo, valor);
+}
+
+function fecharDropdownLogsAdmin(event) {
+  if (event?.target?.closest?.('.hub-filter-combobox')) return;
+  document.querySelectorAll('.hub-filter-dropdown-menu').forEach(menu => {
+    menu.hidden = true;
+    const trigger = document.getElementById(menu.dataset.triggerId || '');
+    trigger?.setAttribute('aria-expanded', 'false');
+    const combo = trigger?.closest('.hub-filter-combobox');
+    if (combo && menu.parentElement === document.body) combo.appendChild(menu);
+  });
+}
+
+function renderLogsIntegracoesAdmin() {
+  const logs = state.admin.logsIntegracoes || [];
+  const filtros = state.admin.logsIntegracoesFiltros;
+  const possuiFiltros = Boolean(filtros.sistema || filtros.nivel || filtros.status);
+  const totalPaginas = Math.max(Math.ceil(state.admin.logsIntegracoesTotal / state.admin.logsIntegracoesLimite), 1);
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Logs de Integrações</h2>
+          <p>Execuções, webhooks, sincronizações e falhas operacionais das integrações do Hub.</p>
+          ${renderLogsAdminSubmoduleTabs('logs-integracoes')}
+        </div>
+        <button class="secondary-btn" type="button" onclick="carregarLogsIntegracoesAdmin()" ${state.admin.logsIntegracoesLoading ? 'disabled' : ''}>Atualizar</button>
+      </div>
+      <div class="action-toolbar admin-logs-toolbar" role="group" aria-label="Filtros dos logs">
+        ${renderDropdownFiltroLogsAdmin('sistema', 'Sistema', [
+          { value: '', label: 'Todos os sistemas' },
+          { value: 'clickup', label: 'ClickUp' },
+          { value: 'hub', label: 'Hub' },
+          { value: 'google_drive', label: 'Google Drive' }
+        ], filtros.sistema)}
+        ${renderDropdownFiltroLogsAdmin('nivel', 'Nível', [
+          { value: '', label: 'Todos os níveis' },
+          { value: 'info', label: 'Info' },
+          { value: 'warning', label: 'Atenção' },
+          { value: 'error', label: 'Erro' }
+        ], filtros.nivel)}
+        ${renderDropdownFiltroLogsAdmin('status', 'Status', [
+          { value: '', label: 'Todos os status' },
+          { value: 'started', label: 'Iniciado' },
+          { value: 'success', label: 'Sucesso' },
+          { value: 'retrying', label: 'Reprocessando' },
+          { value: 'failed', label: 'Falha' }
+        ], filtros.status)}
+        ${possuiFiltros ? '<button class="secondary-btn admin-logs-clear-btn" type="button" onclick="limparFiltrosLogsIntegracoesAdmin()">Limpar filtros</button>' : ''}
+      </div>
+      ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
+      ${state.admin.logsIntegracoesLoading ? renderHubLoading('Carregando logs...') : logs.length ? `
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-logs-table">
+            <thead><tr><th>Data / contexto</th><th>Evento</th><th>Resultado</th><th>Mensagem</th><th>Ações</th></tr></thead>
+            <tbody>${logs.map(log => `
+              <tr class="admin-log-row ${['failed', 'error'].includes(String(log.status || log.nivel || '').toLowerCase()) ? 'is-error' : ''}">
+                <td class="admin-log-context-cell">
+                  <strong>${escapeHtml(formatarDataHoraCrmAr(log.created_at) || '—')}</strong>
+                  <small>${escapeHtml(log.sistema || '—')} · ${Number.isFinite(Number(log.duracao_ms)) ? `${escapeHtml(String(log.duracao_ms))} ms` : 'duração —'} · tentativa ${escapeHtml(String(log.tentativa || 1))}</small>
+                </td>
+                <td class="admin-log-event-cell">
+                  <strong>${escapeHtml(log.evento || log.tipo || '—')}</strong>
+                  ${log.tipo && log.tipo !== log.evento ? `<small>${escapeHtml(log.tipo)}</small>` : ''}
+                </td>
+                <td class="admin-log-result-cell">
+                  <span class="badge integration-log-badge integration-log-status-${escapeAttr(log.status || 'unknown')}">${escapeHtml(log.status || '—')}</span>
+                  <small class="admin-log-level-text">${escapeHtml(log.nivel || 'info')}</small>
+                </td>
+                <td class="admin-log-message-cell" title="${escapeAttr(log.mensagem || '—')}">${escapeHtml(log.mensagem || '—')}</td>
+                <td><button class="secondary-btn admin-log-detail-btn" type="button" onclick="abrirDetalheLogIntegracaoAdmin('${escapeAttr(log.id)}')">Detalhes</button></td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <div class="admin-logs-pagination">
+          <span>${state.admin.logsIntegracoesTotal} registro(s) · página ${state.admin.logsIntegracoesPagina} de ${totalPaginas}</span>
+          <div class="action-toolbar">
+            <button class="secondary-btn" type="button" onclick="selecionarPaginaLogsIntegracoesAdmin(-1)" ${state.admin.logsIntegracoesPagina <= 1 ? 'disabled' : ''}>Anterior</button>
+            <button class="secondary-btn" type="button" onclick="selecionarPaginaLogsIntegracoesAdmin(1)" ${state.admin.logsIntegracoesPagina >= totalPaginas ? 'disabled' : ''}>Próxima</button>
+          </div>
+        </div>` : '<p class="quick-link-empty">Nenhum log de integração registrado.</p>'}
+      ${renderDetalheLogIntegracaoAdmin()}
+    </section>
+  `;
+}
+
+function renderDetalheLogIntegracaoAdmin() {
+  const log = state.admin.logsIntegracoesDetalhe;
+  if (!log) return '';
+  return `
+    <div class="modal-backdrop" role="presentation" onclick="fecharDetalheLogIntegracaoAdmin()">
+      <section class="small-modal admin-log-detail-modal" role="dialog" aria-modal="true" aria-labelledby="admin-log-detail-title" onclick="event.stopPropagation()">
+        <div class="small-modal-header">
+          <div><h3 id="admin-log-detail-title">Detalhes do log</h3><p>${escapeHtml(log.evento || log.tipo || 'Evento')}</p></div>
+          <button class="icon-btn" type="button" onclick="fecharDetalheLogIntegracaoAdmin()" aria-label="Fechar" title="Fechar">×</button>
+        </div>
+        <dl class="admin-log-detail-grid">
+          <div><dt>Sistema</dt><dd>${escapeHtml(log.sistema || '—')}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(log.status || '—')}</dd></div>
+          <div><dt>Correlation ID</dt><dd>${escapeHtml(log.correlation_id || '—')}</dd></div>
+          <div><dt>External ID</dt><dd>${escapeHtml(log.external_id || '—')}</dd></div>
+          <div><dt>Tentativa</dt><dd>${escapeHtml(String(log.tentativa || 1))}</dd></div>
+          <div><dt>Duração</dt><dd>${Number.isFinite(Number(log.duracao_ms)) ? `${escapeHtml(String(log.duracao_ms))} ms` : '—'}</dd></div>
+        </dl>
+        <div class="admin-log-detail-message"><strong>Mensagem</strong><p>${escapeHtml(log.mensagem || '—')}</p></div>
+        <pre class="admin-log-json">${escapeHtml(JSON.stringify(log.detalhes || {}, null, 2))}</pre>
+      </section>
+    </div>
+  `;
+}
+
+function renderAuditoriaAdminFutura() {
+  return `
+    <section class="admin-panel">
+      <div class="admin-panel-header">
+        <div>
+          <h2>Auditoria</h2>
+          <p>Registro de ações administrativas e alterações sensíveis realizadas por usuários.</p>
+          ${renderLogsAdminSubmoduleTabs('auditoria')}
+        </div>
+      </div>
+      <div class="admin-future-state">
+        <span class="badge">Em breve</span>
+        <h3>Auditoria administrativa</h3>
+        <p>Esta tela será construída separadamente dos logs operacionais de integrações.</p>
+      </div>
+    </section>
+  `;
 }
 
 function renderConfigAdmin(grupoAtivo) {
@@ -1758,7 +2176,7 @@ function renderModulosAdmin() {
         ${renderAdminModuleCard('Administração', 'Disponível apenas para gestor.', 'Atual')}
       </div>
 
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando configurações...</p>' : renderConfigAdmin('painel_ar')}
+      ${state.admin.loading ? renderHubLoading('Carregando configurações...') : renderConfigAdmin('painel_ar')}
     </section>
   `;
 }
@@ -1780,7 +2198,7 @@ function renderAdminModuleCard(titulo, descricao, status) {
         <strong>${escapeHtml(titulo)}</strong>
         <p>${escapeHtml(descricao)}</p>
       </div>
-      <span>${escapeHtml(status)}</span>
+      <span>${escapeHtml(obterRotuloStatusHub(status))}</span>
     </article>
   `;
 }
@@ -1807,7 +2225,7 @@ function renderModulosAdminReal() {
         ${renderFiltroModuloAdmin('inativo', 'Inativos')}
       </div>
 
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando módulos...</p>' : renderListaModulosAdmin(modules)}
+      ${state.admin.loading ? renderHubLoading('Carregando módulos...') : renderListaModulosAdmin(modules)}
     </section>
   `;
 }
@@ -1889,6 +2307,10 @@ function renderAdminPreparado(titulo, descricao, itens) {
 }
 
 function renderParceirosIndicacaoAdmin() {
+  if (state.admin.parceiroModal?.aberto) {
+    return renderModalParceiroIndicacaoAdmin();
+  }
+
   const records = state.admin.parceirosIndicacao || [];
   garantirColunasParceirosIndicacaoAdmin();
   const podeCriar = pode('admin.parceiros_indicacao', 'create');
@@ -1909,7 +2331,7 @@ function renderParceirosIndicacaoAdmin() {
 
   return `
     <section class="admin-panel">
-      <div class="admin-panel-header">
+      <div class="admin-panel-header admin-partners-panel-header">
         <div class="admin-users-header-row">
           <div>
             <h2>Parceiros de Indicação</h2>
@@ -1954,7 +2376,7 @@ function renderParceirosIndicacaoAdmin() {
       ${state.admin.seletorColunasParceirosAberto ? renderSeletorColunasParceirosIndicacaoAdmin() : ''}
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${renderBarraLoteParceirosIndicacaoAdmin()}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando parceiros...</p>' : renderListaParceirosIndicacaoAdmin(recordsPagina)}
+      ${state.admin.loading ? renderHubLoading('Carregando parceiros...') : renderListaParceirosIndicacaoAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual)}
       ${renderModalParceiroIndicacaoAdmin()}
     </section>
@@ -2092,10 +2514,10 @@ function renderListaParceirosIndicacaoAdmin(records) {
   const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
 
   return `
-    <div class="crud-list admin-partners-list">
-      <div class="crud-header" style="${escapeAttr(style)}">
+    <div class="crud-list admin-partners-list" role="table" aria-label="Parceiros de indicação">
+      <div class="crud-header" role="row" style="${escapeAttr(style)}">
         ${modoLote ? `
-          <label class="admin-partner-select-cell" aria-label="Selecionar todos os parceiros visíveis">
+          <label class="admin-partner-select-cell" role="columnheader" aria-label="Selecionar todos os parceiros visíveis">
             <input
               type="checkbox"
               ${todosVisiveisSelecionados ? 'checked' : ''}
@@ -2103,7 +2525,7 @@ function renderListaParceirosIndicacaoAdmin(records) {
             >
           </label>
         ` : ''}
-        ${colunas.map(coluna => `<span>${escapeHtml(coluna.label)}</span>`).join('')}
+        ${colunas.map(coluna => `<span role="columnheader">${escapeHtml(coluna.label)}</span>`).join('')}
       </div>
       ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, style, { selecao: modoLote })).join('')}
     </div>
@@ -2130,9 +2552,9 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
   const selecionado = (state.admin.loteParceirosSelecionados || []).includes(parceiro.id);
 
   return `
-    <article class="crud-row admin-partner-row" style="${escapeAttr(style)}">
+    <div class="crud-row admin-partner-row" role="row" style="${escapeAttr(style)}">
       ${selecao ? `
-        <label class="admin-partner-select-cell" aria-label="Selecionar ${escapeAttr(nome)}">
+        <label class="admin-partner-select-cell" role="cell" aria-label="Selecionar ${escapeAttr(nome)}">
           <input
             type="checkbox"
             ${selecionado ? 'checked' : ''}
@@ -2141,17 +2563,18 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
         </label>
       ` : ''}
       ${colunas.map(coluna => renderCelulaParceiroIndicacaoAdmin(coluna.id, parceiro, { nome, empresa, contato, status, remunerado })).join('')}
-    </article>
+    </div>
   `;
 }
 
 function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   const { nome, empresa, contato, status, remunerado } = contexto;
-  const podeEditar = pode('admin.parceiros_indicacao', 'update');
+  const podeEditar = pode('admin.parceiros_indicacao', 'update')
+    && (status !== 'arquivado' || pode('admin.parceiros_indicacao', 'archive'));
 
   if (colunaId === 'acoes') {
     return `
-      <div class="crud-actions admin-partner-actions">
+      <div class="admin-partner-cell crud-actions admin-partner-actions" role="cell">
         <button class="icon-btn" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Visualizar parceiro" aria-label="Visualizar ${escapeAttr(nome)}">🔍</button>
         ${podeEditar ? `<button class="icon-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Editar parceiro" aria-label="Editar ${escapeAttr(nome)}">✎</button>` : ''}
       </div>
@@ -2160,7 +2583,7 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
 
   if (colunaId === 'parceiro') {
     return `
-      <div class="admin-user-main">
+      <div class="admin-partner-cell admin-user-main" role="cell">
         <div class="admin-user-identity">
           <strong>${escapeHtml(nome)}</strong>
           ${empresa ? `<small>${escapeHtml(empresa)}</small>` : ''}
@@ -2179,10 +2602,10 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   };
 
   if (colunaId === 'status') {
-    return `<span class="badge status-${escapeAttr(status)}">${escapeHtml(status)}${escapeHtml(remunerado)}</span>`;
+    return `<span class="admin-partner-cell" role="cell"><span class="badge status-${escapeAttr(status)}">${escapeHtml(obterRotuloStatusHub(status))}${escapeHtml(remunerado)}</span></span>`;
   }
 
-  return `<span>${escapeHtml(celulas[colunaId] || '-')}</span>`;
+  return `<span class="admin-partner-cell" role="cell">${escapeHtml(celulas[colunaId] || '-')}</span>`;
 }
 
 function obterParceirosIndicacaoFiltradosAdmin(records) {
@@ -2731,32 +3154,31 @@ function renderModalParceiroIndicacaoAdmin() {
   const erros = state.admin.parceiroModal.erros || {};
   const item = state.admin.parceiroModal.dados || {};
   const modo = state.admin.parceiroModal.modo || 'create';
+  const abaAtiva = state.admin.parceiroModal.aba || 'dados';
   const somenteLeitura = modo === 'view';
   const podeVerSensiveis = pode('admin.parceiros_indicacao', 'view_sensitive');
+  const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
   const titulo = modo === 'view' ? 'Visualizar parceiro' : (modo === 'edit' ? 'Editar parceiro' : 'Adicionar parceiro');
   const botaoTexto = state.admin.parceiroModal.salvo
     ? 'Salvo'
     : (state.admin.parceiroModal.salvando ? 'Salvando...' : 'Salvar parceiro');
 
   return `
-    <div class="modal-backdrop admin-user-modal-backdrop partner-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
-      <section class="small-modal admin-user-modal partner-modal">
-        <div class="small-modal-header">
-          <h3>${escapeHtml(titulo)}</h3>
-          <button class="icon-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar" aria-label="Fechar">×</button>
+    <section id="parceiro_modal_dialog" class="hub-form-screen partner-form-screen" role="region" aria-labelledby="parceiro_modal_title" tabindex="-1" data-partner-modal>
+        <div class="hub-form-screen-header">
+          <h3 id="parceiro_modal_title">${escapeHtml(titulo)}</h3>
+          <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
         </div>
 
-        <div class="partner-modal-tabs" role="tablist" aria-label="Seções do parceiro">
-          <button class="partner-modal-tab is-active" type="button" role="tab" aria-selected="true" data-partner-tab="principais">Dados principais</button>
-          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="contatos">Contatos</button>
-          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="empresa">Empresa</button>
-          <button class="partner-modal-tab" type="button" role="tab" aria-selected="false" data-partner-tab="remuneracao">Remuneração</button>
+        <div class="hub-form-screen-steps partner-modal-tabs" role="tablist" aria-label="Seções do parceiro">
+          <button id="parceiro_tab_dados" class="partner-modal-tab ${abaAtiva === 'dados' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${abaAtiva === 'dados'}" aria-controls="parceiro_panel_dados" data-partner-tab="dados">Dados gerais</button>
+          <button id="parceiro_tab_empresa" class="partner-modal-tab ${abaAtiva === 'empresa' ? 'is-active' : ''}" type="button" role="tab" aria-selected="${abaAtiva === 'empresa'}" aria-controls="parceiro_panel_empresa" data-partner-tab="empresa">Empresa e remuneração</button>
         </div>
 
-        <div class="partner-modal-body">
-          <div class="partner-modal-section" data-partner-tab-panel="principais">
-          <strong>Dados principais</strong>
-          <div class="modal-inline-grid partner-modal-grid">
+        <div class="hub-form-screen-content partner-modal-body">
+          <div id="parceiro_panel_dados" class="hub-form-section" role="tabpanel" aria-labelledby="parceiro_tab_dados" tabindex="0" data-partner-tab-panel="dados" ${abaAtiva === 'dados' ? '' : 'hidden'}>
+          <div class="hub-form-section-title"><strong>Dados gerais</strong><span>Identificação e contatos do parceiro.</span></div>
+          <div class="hub-form-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('nome_completo', 'Nome completo', 'text', erros.nome_completo, true, item.nome_completo || item.nome || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('codigo_revendedor', 'Código revendedor', 'text', '', false, item.codigo_revendedor || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('ac', 'AC', 'text', '', false, item.ac || '', somenteLeitura)}
@@ -2767,15 +3189,11 @@ function renderModalParceiroIndicacaoAdmin() {
               <select id="parceiro_status" class="config-input" ${somenteLeitura ? 'disabled' : ''}>
                 <option value="ativo" ${(item.status || 'ativo') === 'ativo' ? 'selected' : ''}>ativo</option>
                 <option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option>
-                <option value="arquivado" ${item.status === 'arquivado' ? 'selected' : ''}>arquivado</option>
+                ${podeArquivar ? `<option value="arquivado" ${item.status === 'arquivado' ? 'selected' : ''}>arquivado</option>` : ''}
               </select>
             </label>
           </div>
-          </div>
-
-          <div class="partner-modal-section" data-partner-tab-panel="contatos" hidden>
-          <strong>Contatos</strong>
-          <div class="modal-inline-grid partner-modal-grid">
+          <div class="hub-form-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('whatsapp_comercial', 'WhatsApp comercial', 'text', '', false, item.whatsapp_comercial || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('whatsapp_pessoal', 'WhatsApp pessoal', 'text', '', false, item.whatsapp_pessoal || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('email_cadastro_certificado', 'E-mail para cadastro', 'email', '', false, item.email_cadastro_certificado || '', somenteLeitura)}
@@ -2784,19 +3202,13 @@ function renderModalParceiroIndicacaoAdmin() {
           </div>
           </div>
 
-          <div class="partner-modal-section" data-partner-tab-panel="empresa" hidden>
-          <strong>Empresa</strong>
-          <div class="modal-inline-grid partner-modal-grid">
+          <div id="parceiro_panel_empresa" class="hub-form-section" role="tabpanel" aria-labelledby="parceiro_tab_empresa" tabindex="0" data-partner-tab-panel="empresa" ${abaAtiva === 'empresa' ? '' : 'hidden'}>
+          <div class="hub-form-section-title"><strong>Empresa e remuneração</strong><span>Vínculo profissional e dados de pagamento.</span></div>
+          <div class="hub-form-grid partner-modal-grid">
             ${renderCampoParceiroIndicacao('vinculo_empresa', 'Vínculo/Tipo', 'text', '', false, item.vinculo_empresa || '', somenteLeitura)}
             ${renderCampoParceiroIndicacao('nome_empresa', 'Nome da empresa', 'text', '', false, item.nome_empresa || '', somenteLeitura)}
             ${podeVerSensiveis ? renderCampoParceiroIndicacao('cnpj_empresa', 'CNPJ da empresa', 'text', '', false, item.cnpj_empresa || '', somenteLeitura) : ''}
             ${renderCampoParceiroIndicacao('telefone_empresa', 'Telefone da empresa', 'text', '', false, item.telefone_empresa || '', somenteLeitura)}
-          </div>
-          </div>
-
-          <div class="partner-modal-section" data-partner-tab-panel="remuneracao" hidden>
-          <strong>Remuneração</strong>
-          <div class="modal-inline-grid partner-modal-grid">
             <label>
               <span>Remunerado</span>
               <select id="parceiro_remunerado" class="config-input" ${somenteLeitura ? 'disabled' : ''}>
@@ -2811,19 +3223,18 @@ function renderModalParceiroIndicacaoAdmin() {
 
         </div>
 
-        <div class="partner-modal-fixed-field">
+        <div class="hub-form-screen-notice partner-modal-fixed-field">
           <label>
             <span>Observações</span>
             <textarea id="parceiro_observacoes" class="config-input config-textarea" rows="3" ${somenteLeitura ? 'disabled' : ''}>${escapeHtml(item.observacoes || '')}</textarea>
           </label>
         </div>
 
-        <div class="small-modal-actions">
+        <div class="hub-form-screen-actions small-modal-actions">
           <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()">${somenteLeitura ? 'Fechar' : 'Cancelar'}</button>
           ${somenteLeitura ? '' : `<button class="save-btn saving-btn ${state.admin.parceiroModal.salvando ? 'is-saving' : ''} ${state.admin.parceiroModal.salvo ? 'is-saved' : ''}" type="button" onclick="salvarParceiroIndicacaoAdmin()" ${state.admin.parceiroModal.salvando ? 'disabled' : ''}>${escapeHtml(botaoTexto)}</button>`}
         </div>
-      </section>
-    </div>
+    </section>
   `;
 }
 
@@ -2896,28 +3307,35 @@ function abrirModalParceiroIndicacaoAdmin() {
   state.admin.parceiroModal = {
     aberto: true,
     modo: 'create',
+    aba: 'dados',
     id: '',
     dados: null,
     erros: {},
     salvando: false,
-    salvo: false
+    salvo: false,
+    focoAnterior: document.activeElement
   };
   state.admin.message = '';
   renderAdministracao();
+  focarModalParceiroIndicacaoAdmin();
 }
 
 function fecharModalParceiroIndicacaoAdmin() {
   restaurarRotaCadastroAdmin('parceiros-indicacao');
+  const focoAnterior = state.admin.parceiroModal?.focoAnterior;
   state.admin.parceiroModal = {
     aberto: false,
     modo: 'create',
+    aba: 'dados',
     id: '',
     dados: null,
     erros: {},
     salvando: false,
-    salvo: false
+    salvo: false,
+    focoAnterior: null
   };
   renderAdministracao();
+  if (focoAnterior?.focus) window.requestAnimationFrame(() => focoAnterior.focus());
 }
 
 async function abrirModalParceiroIndicacaoExistenteAdmin(id, modo = 'view') {
@@ -2953,13 +3371,16 @@ async function abrirModalParceiroIndicacaoExistenteAdmin(id, modo = 'view') {
     state.admin.parceiroModal = {
       aberto: true,
       modo,
+      aba: 'dados',
       id,
       dados: response.data.record || {},
       erros: {},
       salvando: false,
-      salvo: false
+      salvo: false,
+      focoAnterior: state.admin.parceiroModal?.focoAnterior || document.activeElement
     };
     renderAdministracao();
+    focarModalParceiroIndicacaoAdmin();
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar parceiro.';
@@ -3060,6 +3481,12 @@ async function salvarParceiroIndicacaoAdmin() {
   const erros = validarParceiroIndicacaoAdmin(payload);
   const editando = Boolean(payload.id);
 
+  if (payload.status === 'arquivado' && !pode('admin.parceiros_indicacao', 'archive')) {
+    state.admin.message = 'Seu usuário não possui permissão para arquivar parceiros.';
+    renderAdministracao();
+    return;
+  }
+
   if (!pode('admin.parceiros_indicacao', editando ? 'update' : 'create')) {
     state.admin.message = editando
       ? 'Seu usuário não possui permissão para editar parceiros.'
@@ -3148,7 +3575,7 @@ function renderUsuariosAdmin() {
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando usuários...</p>' : renderListaUsuariosAdmin(recordsPagina)}
+      ${state.admin.loading ? renderHubLoading('Carregando usuários...') : renderListaUsuariosAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual)}
       ${renderModalUsuarioAdmin()}
       ${renderPermissoesUsuarioAdmin()}
@@ -3227,7 +3654,7 @@ function renderUsuarioAdmin(usuario) {
     <article class="crud-row admin-user-row">
       <div class="crud-actions admin-user-actions">
         <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
-        <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}>&#128269;</button>
+        <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
       </div>
       <div class="admin-user-main">
         <div class="admin-user-identity">
@@ -3356,6 +3783,7 @@ function resetarFluxoModalUsuarioAdmin(render = true) {
   state.admin.parceiroModal = {
     aberto: false,
     modo: 'create',
+    aba: 'dados',
     id: '',
     dados: null,
     erros: {},
@@ -3939,7 +4367,7 @@ function renderPerfisAdmin() {
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando perfis...</p>' : renderListaPerfisAdmin(recordsPagina)}
+      ${state.admin.loading ? renderHubLoading('Carregando perfis...') : renderListaPerfisAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoPerfisAdmin(totalPaginas, paginaAtual)}
       ${renderModalPerfilAdmin()}
       ${renderPermissoesPerfilAdmin()}
@@ -4076,7 +4504,7 @@ function renderPerfilAdmin(perfil) {
     <article class="crud-row admin-profile-row">
       <div class="crud-actions admin-profile-actions">
         <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do perfil: ${escapeAttr(rotuloStatus)}"></span>
-        <button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar perfil" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}>&#128269;</button>
+        <button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar perfil" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
       </div>
 
       <div class="admin-user-main admin-profile-main">
@@ -4708,7 +5136,7 @@ function renderCrudAdmin(entidade, titulo, subtitulo) {
 
       <button class="add-small-btn" type="button" onclick="abrirModalNovoRegistro('${entidade}')">+ Adicionar</button>
 
-      ${state.admin.loading ? '<p class="quick-link-empty">Carregando registros...</p>' : renderRegistrosAdmin(entidade, records)}
+      ${state.admin.loading ? renderHubLoading('Carregando registros...') : renderRegistrosAdmin(entidade, records)}
       ${renderModalNovoRegistro(entidade)}
     </section>
   `;
@@ -5912,7 +6340,7 @@ function renderLinksUteis() {
 
         <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
         ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
-        ${state.links.loading ? '<p class="quick-link-empty">Carregando links...</p>' : renderListaLinksUteis(gestor)}
+        ${state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(gestor)}
         ${renderModalNovoLink()}
       </section>
     </main>
@@ -6276,7 +6704,7 @@ function renderCentralSenhas() {
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? '<p class="quick-link-empty">Carregando acessos...</p>' : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
+        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
       </section>
     </main>
@@ -6388,7 +6816,7 @@ function renderHistoricoSenhas() {
           <span>${escapeHtml(item.data_evento || '-')}</span>
           <strong>${escapeHtml(item.titulo || 'Acesso')}</strong>
           <span>${escapeHtml(item.operacao === 'criacao' ? 'criação' : 'edição')}</span>
-          <span>${escapeHtml(item.status || '-')}</span>
+          <span>${escapeHtml(obterRotuloStatusHub(item.status, '—'))}</span>
           <small>${escapeHtml(item.usuario_email || '')}</small>
         </article>
       `).join('')}
@@ -6726,6 +7154,7 @@ function fecharPedidosRelacionadosCrmAr() {
 }
 
 function renderPainelAr() {
+  fecharDropdownCrmAr();
   const podeHistorico = podeAcessarAbaAr('historico');
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
@@ -6756,9 +7185,7 @@ function renderPainelAr() {
           </div>
           <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
             <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.2a.5.5 0 0 1-.5-.5v-5.2H9.2v5.2a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-9.7Z"></path>
-              </svg>
+              <i data-lucide="house" aria-hidden="true"></i>
             </button>
             ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
             ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
@@ -6768,7 +7195,7 @@ function renderPainelAr() {
         </div>
 
         ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-        ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
+        ${state.ar.loading ? renderHubLoading('Carregando produtos e parceiros...') : renderConteudoAr()}
       </section>
     </main>
   `;
@@ -6816,6 +7243,27 @@ function formatarDataHoraCrmAr(valor = '') {
     dateStyle: 'short',
     timeStyle: 'short'
   }).format(data);
+}
+
+function obterRotuloEstadoSincronizacaoCrmAr(valor = '') {
+  const rotulos = {
+    pending: 'Pendente',
+    synced: 'Sincronizado',
+    error: 'Erro',
+    conflict: 'Conflito'
+  };
+  return rotulos[String(valor || '').trim().toLowerCase()] || 'Pendente';
+}
+
+function obterRotuloStatusCrmAr(valor = '') {
+  const chave = normalizarNomeCampoCrm(valor);
+  const rotulos = {
+    'em prospeccao': 'Em prospecção',
+    'cliente ativo': 'Cliente ativo',
+    finalizado: 'Finalizado',
+    'lead perdido': 'Lead perdido'
+  };
+  return rotulos[chave] || String(valor || 'Sem status');
 }
 
 function renderCrmArPhase1() {
@@ -6871,7 +7319,7 @@ function renderCrmArPhase1() {
         </article>
       </div>
 
-      ${crm.loading ? '<p class="quick-link-empty">Carregando registros do CRM...</p>' : totalItens ? `
+      ${crm.loading ? renderHubLoading('Carregando registros do CRM...') : totalItens ? `
         <div class="ar-crm-phase1-table-wrap">
           <table class="ar-crm-phase1-table">
             <thead>
@@ -6881,10 +7329,10 @@ function renderCrmArPhase1() {
               ${itensPagina.map(item => `
                 <tr>
                   <td><strong>${escapeHtml(item.nome || 'Sem nome')}</strong></td>
-                  <td>${escapeHtml(item.status || 'Sem status')}</td>
+                  <td>${escapeHtml(obterRotuloStatusCrmAr(item.status))}</td>
                   <td>${escapeHtml(item.responsavel || 'Não atribuído')}</td>
                   <td>${escapeHtml(item.data_vencimento || '—')}</td>
-                  <td><span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(item.sync_status || 'pending')}</span></td>
+                  <td><span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(obterRotuloEstadoSincronizacaoCrmAr(item.sync_status))}</span></td>
                   <td><button class="secondary-btn" type="button" onclick="visualizarCrmAr('${escapeAttr(item.id)}')">Visualizar</button></td>
                 </tr>
               `).join('')}
@@ -6908,6 +7356,9 @@ function visualizarCrmAr(id) {
   const item = state.ar.crm.items.find((registro) => registro.id === id);
   if (!item) return;
   state.ar.crm.detalhe = item;
+  state.ar.crm.editando = false;
+  state.ar.crm.edicaoAlterada = false;
+  state.ar.crm.salvandoEdicao = false;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], message: '' };
   renderPainelAr();
@@ -6945,6 +7396,9 @@ async function carregarAtividadeDetalheCrmAr(item, requestId = state.ar.crm.ativ
 
 function fecharVisualizacaoCrmAr() {
   state.ar.crm.detalhe = null;
+  state.ar.crm.editando = false;
+  state.ar.crm.edicaoAlterada = false;
+  state.ar.crm.salvandoEdicao = false;
   state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], message: '' };
   renderPainelAr();
 }
@@ -7387,6 +7841,7 @@ function renderDetalheCrmAr(item) {
   }
   const outros = campos.filter((campo) => !usados.has(campo) && obterValorCampoCrmAr(campo) !== '—');
   const cpf = campoCpf ? formatarCampoCrmAr('cpf', obterValorCampoCrmAr(campoCpf)) : '';
+  const podeEditar = pode('painel_ar.crm', 'execute');
 
   return `
     <section class="ar-crm-detail-screen" aria-labelledby="ar-crm-detail-title">
@@ -7394,14 +7849,15 @@ function renderDetalheCrmAr(item) {
         <div>
           <button class="secondary-btn" type="button" onclick="fecharVisualizacaoCrmAr()">← Voltar para clientes</button>
           <span class="ar-crm-phase1-kicker">CADASTRO IMPORTADO</span>
-          <h3 id="ar-crm-detail-title">${escapeHtml(nomeCliente)}</h3>
+          ${state.ar.crm.editando ? `<label class="ar-crm-edit-field ar-crm-edit-title-field"><span>Nome do cliente</span><input id="ar-crm-edit-name" class="config-input ar-crm-edit-input ar-crm-edit-title" type="text" value="${escapeAttr(nomeCliente)}" aria-label="Nome do cliente" required oninput="marcarAlteracaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}></label>` : `<h3 id="ar-crm-detail-title">${escapeHtml(nomeCliente)}</h3>`}
           <div class="ar-crm-header-pills" aria-label="Status do cadastro">
-            <span class="ar-crm-lead-pill"><small>Status</small>${escapeHtml(item.status || 'Sem status')}</span>
-            <span class="ar-crm-lead-pill"><small>Situação do Lead</small>${escapeHtml(campoSituacaoLead ? obterValorCampoCrmAr(campoSituacaoLead) : '—')}</span>
+            ${state.ar.crm.editando ? renderEditorStatusCrmAr(item.status) : `<div class="ar-crm-header-status-item ar-crm-status-${escapeAttr(obterClasseStatusCrmAr(item.status))}"><span class="ar-crm-header-status-label">Status</span><span class="ar-crm-lead-pill">${escapeHtml(obterRotuloStatusCrmAr(item.status))}</span></div>`}
+            ${state.ar.crm.editando && campoSituacaoLead ? renderEditorSituacaoLeadCrmAr(campoSituacaoLead) : `<div class="ar-crm-header-status-item ar-crm-status-${escapeAttr(obterClasseStatusCrmAr(campoSituacaoLead ? obterValorCampoCrmAr(campoSituacaoLead) : ''))}"><span class="ar-crm-header-status-label">Situação do Lead</span><span class="ar-crm-lead-pill">${escapeHtml(campoSituacaoLead ? obterValorCampoCrmAr(campoSituacaoLead) : '—')}</span></div>`}
           </div>
         </div>
         <div class="ar-crm-detail-header-actions">
-          <span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(item.sync_status || 'pending')}</span>
+          ${state.ar.crm.editando ? `<button class="secondary-btn" type="button" onclick="cancelarEdicaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}>Cancelar</button><button id="ar-crm-save-fields" class="save-btn" type="button" onclick="salvarCamposCrmAr()" ${!state.ar.crm.edicaoAlterada || state.ar.crm.salvandoEdicao ? 'disabled' : ''}>${state.ar.crm.salvandoEdicao ? 'Salvando...' : 'Salvar'}</button>` : (podeEditar ? '<button class="secondary-btn" type="button" onclick="editarCamposCrmAr()">Editar campos</button>' : '')}
+          <span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(obterRotuloEstadoSincronizacaoCrmAr(item.sync_status))}</span>
           ${dados.clickup_url ? `<a class="secondary-btn" href="${escapeAttr(dados.clickup_url)}" target="_blank" rel="noopener">Abrir no ClickUp</a>` : ''}
         </div>
       </div>
@@ -7412,8 +7868,8 @@ function renderDetalheCrmAr(item) {
           ${renderGrupoCamposCrmAr('Parceiro de Indicação', parceiro)}
           ${renderGrupoCamposCrmAr('Outras informações', outros, 'ar-crm-secondary-data')}
           <div class="ar-crm-detail-section ar-crm-description-block">
-            <span>Descrição</span>
-            <p>${escapeHtml(descricao)}</p>
+            ${state.ar.crm.editando ? '' : '<span>Descrição</span>'}
+            ${state.ar.crm.editando ? `<label class="ar-crm-edit-field"><span>Descrição</span><textarea id="ar-crm-edit-description" class="config-input config-textarea ar-crm-edit-input" rows="4" oninput="marcarAlteracaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}>${escapeHtml(dados.descricao || '')}</textarea></label>` : `<p>${escapeHtml(descricao)}</p>`}
           </div>
           <div class="ar-crm-sync-meta" aria-label="Origem e sincronização">
             <span>Lista: ${escapeHtml(dados.lista?.name || dados.lista?.id || '—')}</span>
@@ -7515,7 +7971,7 @@ function renderAtividadeCrmAr() {
   const comentarios = atividade.comments || [];
   return `<aside class="ar-crm-comments-column" aria-label="Comentários">
     <div class="ar-crm-comments-header"><span>Comentários</span><small>${comentarios.length}</small></div>
-    ${atividade.loading ? '<p class="ar-crm-detail-muted">Carregando atividade...</p>' : `
+    ${atividade.loading ? renderHubLoading('Carregando atividade...') : `
       ${atividade.message ? `<p class="admin-message">${escapeHtml(atividade.message)}</p>` : ''}
       <div class="ar-crm-comment-compose">
         <div class="ar-crm-comment-toolbar" aria-label="Formatação do comentário">
@@ -7598,6 +8054,152 @@ function obterRotuloCampoCrmAr(nome) {
   return nome;
 }
 
+function obterStatusOptionsCrmAr(atual = '') {
+  return Array.from(new Set([atual, ...CRM_STATUS_OPTIONS].map((status) => String(status || '').trim()).filter(Boolean)));
+}
+
+function obterClasseStatusCrmAr(valor = '') {
+  const normalizado = normalizarNomeCampoCrm(valor).replace(/[_-]+/g, ' ');
+  const equivalencias = {
+    'em prospeccao': 'em-prospeccao',
+    'prospeccao': 'em-prospeccao',
+    'novo': 'em-andamento',
+    'primeiro contato realizado': 'em-andamento',
+    'qualificado': 'em-andamento',
+    'em qualificacao': 'em-andamento',
+    'em renovacao': 'em-andamento',
+    'em validacao': 'em-andamento',
+    'em negociacao': 'em-atencao',
+    'aguardando pagamento': 'em-atencao',
+    'cliente': 'cliente-ativo',
+    'cliente ativo': 'cliente-ativo',
+    'convertido': 'cliente-ativo',
+    'pos venda': 'cliente-ativo',
+    'finalizado': 'finalizado',
+    'concluido': 'finalizado',
+    'lead perdido': 'lead-perdido',
+    'perdido': 'lead-perdido',
+    'desqualificado': 'lead-perdido'
+  };
+  return equivalencias[normalizado]
+    || 'neutro';
+}
+
+function renderEditorStatusCrmAr(atual = '') {
+  const options = obterStatusOptionsCrmAr(atual).map((status) => ({
+    value: status,
+    label: obterRotuloStatusCrmAr(status)
+  }));
+  const combo = renderDropdownCrmAr('ar-crm-edit-status', atual, options, 'Status', 'status', 'status', true);
+  return `<label class="ar-crm-header-status-item ar-crm-status-edit ar-crm-status-${escapeAttr(obterClasseStatusCrmAr(atual))}"><span class="ar-crm-header-status-label">Status</span><div class="ar-crm-status-edit-row">${combo}<button class="secondary-btn ar-crm-status-next" type="button" onclick="avancarStatusCrmAr()" aria-label="Avançar status" title="Avançar status" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}>▶</button></div></label>`;
+}
+
+function renderEditorSituacaoLeadCrmAr(campo) {
+  const atual = obterValorCampoCrmAr(campo) === '—' ? '' : obterValorCampoCrmAr(campo);
+  const options = Array.isArray(campo.type_config?.options)
+    ? campo.type_config.options.map((option) => ({
+      value: String(option.id ?? option.orderindex ?? option.value ?? ''),
+      label: String(option.name || option.label || option.value || option.id || '')
+    }))
+    : obterStatusOptionsCrmAr(atual);
+  const classeStatus = obterClasseStatusCrmAr(atual);
+  const combo = renderDropdownCrmAr(campo.id || 'ar-crm-edit-situacao-lead', atual, options, 'Situação do Lead', 'custom', campo.type || 'dropdown', true);
+  return `<label class="ar-crm-header-status-item ar-crm-status-edit ar-crm-lead-situacao-edit ar-crm-status-${escapeAttr(classeStatus)}"><span class="ar-crm-header-status-label">Situação do Lead</span>${combo}</label>`;
+}
+
+function renderDropdownCrmAr(id, valorAtual, options, rotulo, tipo = 'custom', campoTipo = tipo, statusVisual = false) {
+  const valor = String(valorAtual || '');
+  const menuId = `${id}-menu`;
+  const maiorOpcao = options.reduce((maior, option) => Math.max(maior, String(typeof option === 'string' ? option : option.label || '').length), 0);
+  const larguraDropdown = Math.min(220, Math.max(112, Math.round(maiorOpcao * 7.2 + 28)));
+  const optionButtons = options.map((option) => {
+    const label = typeof option === 'string' ? option : option.label;
+    const value = typeof option === 'string' ? option : option.value;
+    return `<button class="ar-crm-dropdown-option" type="button" role="option" data-value="${escapeAttr(value)}" data-label="${escapeAttr(label)}" onclick="selecionarDropdownCrmAr(this)">${escapeHtml(label)}</button>`;
+  }).join('');
+  return `<div class="ar-crm-combobox" style="--crm-dropdown-width:${larguraDropdown}px" data-dropdown-type="${escapeAttr(tipo)}"><input id="${escapeAttr(id)}" class="config-input ar-crm-edit-input ${tipo === 'custom' ? 'ar-crm-edit-custom-field' : ''}" type="text" value="${escapeAttr(valor)}" data-field-id="${tipo === 'custom' ? escapeAttr(id) : ''}" data-field-type="${escapeAttr(campoTipo)}" data-selected-value="${escapeAttr(valor)}" data-status-presentation="${statusVisual ? 'true' : 'false'}" data-dropdown-menu-id="${escapeAttr(menuId)}" aria-label="${escapeAttr(rotulo)}" autocomplete="off" required onfocus="abrirDropdownCrmAr(this, event)" oninput="filtrarDropdownCrmAr(this, event)" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}><div id="${escapeAttr(menuId)}" class="ar-crm-dropdown-menu" data-dropdown-input-id="${escapeAttr(id)}" role="listbox" aria-label="${escapeAttr(rotulo)}" hidden>${optionButtons}</div></div>`;
+}
+
+function posicionarDropdownCrmAr(input, menu) {
+  const rect = input.getBoundingClientRect();
+  const margem = 8;
+  const alturaMaxima = Math.min(280, window.innerHeight - (margem * 2));
+  const larguraDisponivel = Math.max(1, window.innerWidth - (margem * 2));
+  const largura = Math.min(rect.width, larguraDisponivel);
+  const esquerda = Math.min(
+    Math.max(margem, rect.left),
+    Math.max(margem, window.innerWidth - largura - margem),
+  );
+  menu.hidden = false;
+  menu.style.left = `${esquerda}px`;
+  menu.style.width = `${largura}px`;
+  menu.style.maxHeight = `${alturaMaxima}px`;
+  const altura = Math.min(menu.scrollHeight, alturaMaxima);
+  const abaixo = window.innerHeight - rect.bottom - margem;
+  const top = abaixo >= Math.min(altura, 280) ? rect.bottom + 4 : Math.max(margem, rect.top - altura - 4);
+  menu.style.top = `${top}px`;
+}
+
+function reposicionarDropdownsCrmAr() {
+  document.querySelectorAll('.ar-crm-dropdown-menu:not([hidden])').forEach((menu) => {
+    const input = document.getElementById(menu.dataset.dropdownInputId || '');
+    if (input) posicionarDropdownCrmAr(input, menu);
+  });
+}
+
+function atualizarClasseStatusCrmAr(valor, campo = document.querySelector('.ar-crm-status-edit')) {
+  if (!campo) return;
+  Array.from(campo.classList)
+    .filter((classe) => classe.startsWith('ar-crm-status-') && classe !== 'ar-crm-status-edit')
+    .forEach((classe) => campo.classList.remove(classe));
+  const slug = obterClasseStatusCrmAr(valor);
+  campo.classList.add(`ar-crm-status-${slug}`);
+}
+
+function abrirDropdownCrmAr(input, event) {
+  event?.stopPropagation();
+  document.querySelectorAll('.ar-crm-dropdown-menu:not([hidden])').forEach((menu) => { menu.hidden = true; });
+  const menu = document.getElementById(input?.dataset?.dropdownMenuId || '');
+  if (!menu) return;
+  if (menu.parentElement !== document.body) document.body.appendChild(menu);
+  posicionarDropdownCrmAr(input, menu);
+}
+
+function filtrarDropdownCrmAr(input, event) {
+  event?.stopPropagation();
+  input.dataset.selectedValue = '';
+  const menu = document.getElementById(input?.dataset?.dropdownMenuId || '');
+  if (!menu) return;
+  const termo = normalizarNomeCampoCrm(input.value);
+  menu.querySelectorAll('.ar-crm-dropdown-option').forEach((option) => {
+    option.hidden = termo && !normalizarNomeCampoCrm(option.dataset.label).includes(termo);
+  });
+  posicionarDropdownCrmAr(input, menu);
+  if (input.dataset.statusPresentation === 'true') atualizarClasseStatusCrmAr(input.value, input.closest('.ar-crm-status-edit'));
+  marcarAlteracaoCamposCrmAr();
+}
+
+function selecionarDropdownCrmAr(option) {
+  const menu = option?.closest('.ar-crm-dropdown-menu');
+  const input = document.getElementById(menu?.dataset?.dropdownInputId || '');
+  if (!input) return;
+  input.value = option.dataset.label || '';
+  input.dataset.selectedValue = option.dataset.value || '';
+  if (menu) menu.hidden = true;
+  if (input.dataset.statusPresentation === 'true') atualizarClasseStatusCrmAr(input.value, input.closest('.ar-crm-status-edit'));
+  marcarAlteracaoCamposCrmAr();
+}
+
+function fecharDropdownCrmAr(event) {
+  if (event?.target?.closest?.('.ar-crm-combobox')) return;
+  document.querySelectorAll('.ar-crm-dropdown-menu').forEach((menu) => {
+    menu.hidden = true;
+    const input = document.getElementById(menu.dataset.dropdownInputId || '');
+    const combo = input?.closest('.ar-crm-combobox');
+    if (input && combo && menu.parentElement === document.body) combo.appendChild(menu);
+  });
+}
+
 function renderGrupoCamposCrmAr(titulo, campos, classe = '', acao = '') {
   if (!campos.length && !acao) return '';
   return `
@@ -7607,11 +8209,164 @@ function renderGrupoCamposCrmAr(titulo, campos, classe = '', acao = '') {
         ${campos.map((campo) => {
           const nome = obterNomeCampoCrm(campo);
           const rotulo = obterRotuloCampoCrmAr(nome);
-          return `<div class="ar-crm-field"><small>${escapeHtml(rotulo)}</small><strong>${escapeHtml(formatarCampoCrmAr(nome, obterValorCampoCrmAr(campo)))}</strong></div>`;
+          return `<div class="ar-crm-field">${state.ar.crm.editando ? renderControleCampoCrmAr(campo, rotulo) : `<small>${escapeHtml(rotulo)}</small><strong>${escapeHtml(formatarCampoCrmAr(nome, obterValorCampoCrmAr(campo)))}</strong>`}</div>`;
         }).join('')}
       </div>
     </section>
   `;
+}
+
+function campoCrmArEditavel(campo) {
+  return ['text', 'short_text', 'textarea', 'date', 'number', 'currency', 'dropdown', 'drop_down', 'url', 'email', 'phone'].includes(String(campo?.type || '').toLowerCase());
+}
+
+function valorCampoEdicaoCrmAr(campo) {
+  const valor = campo?.value ?? '';
+  if (String(campo?.type || '').toLowerCase() === 'date' && /^\d{10,13}$/.test(String(valor))) {
+    const data = new Date(String(valor).length === 10 ? Number(valor) * 1000 : Number(valor));
+    if (!Number.isNaN(data.getTime())) return data.toISOString().slice(0, 10);
+  }
+  return typeof valor === 'object' ? '' : String(valor);
+}
+
+function renderControleCampoCrmAr(campo, rotulo) {
+  if (!campoCrmArEditavel(campo)) return `<div class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(formatarCampoCrmAr(obterNomeCampoCrm(campo), obterValorCampoCrmAr(campo)))} <small>(somente leitura)</small></strong></div>`;
+  const tipo = String(campo.type || '').toLowerCase();
+  const id = escapeAttr(campo.id || '');
+  const valor = escapeAttr(valorCampoEdicaoCrmAr(campo));
+  if ((tipo === 'dropdown' || tipo === 'drop_down') && Array.isArray(campo.type_config?.options)) {
+    const options = campo.type_config.options.map((option) => ({
+      value: String(option.id ?? option.orderindex ?? option.value ?? ''),
+      label: String(option.name || option.label || option.value || option.id || '')
+    }));
+    const input = renderDropdownCrmAr(campo.id || '', obterValorCampoCrmAr(campo) === '—' ? '' : obterValorCampoCrmAr(campo), options, rotulo, 'custom', tipo);
+    return `<label class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span>${input}</label>`;
+  }
+  const inputType = tipo === 'date' ? 'date' : tipo === 'number' || tipo === 'currency' ? 'number' : 'text';
+  return `<label class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span><input class="config-input ar-crm-edit-input ar-crm-edit-custom-field" data-field-id="${id}" data-field-type="${escapeAttr(tipo)}" type="${inputType}" value="${valor}" aria-label="${escapeAttr(rotulo)}" oninput="marcarAlteracaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}></label>`;
+}
+
+function editarCamposCrmAr() {
+  const item = state.ar.crm.detalhe;
+  const taskId = item?.dados?.clickup_task_id;
+  if (!item || !taskId) return;
+  if (!pode('painel_ar.crm', 'execute')) {
+    state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
+    renderPainelAr();
+    return;
+  }
+  state.ar.crm.editando = true;
+  state.ar.crm.edicaoAlterada = false;
+  renderPainelAr();
+}
+
+function marcarAlteracaoCamposCrmAr() {
+  const item = state.ar.crm.detalhe;
+  if (!item) return;
+  const nome = document.getElementById('ar-crm-edit-name')?.value?.trim() || '';
+  const descricao = document.getElementById('ar-crm-edit-description')?.value ?? '';
+  const status = document.getElementById('ar-crm-edit-status')?.value?.trim() || '';
+  const camposAlterados = Array.from(document.querySelectorAll('.ar-crm-edit-custom-field')).some((input) => {
+    const original = (item.dados?.campos_personalizados || []).find((campo) => String(campo.id) === String(input.dataset.fieldId));
+    if (!original) return false;
+    const tipo = String(original.type || '').toLowerCase();
+    const originalValue = ['dropdown', 'drop_down'].includes(tipo) ? obterValorCampoCrmAr(original) : valorCampoEdicaoCrmAr(original);
+    return String(input.value) !== String(originalValue ?? '');
+  });
+  state.ar.crm.edicaoAlterada = nome !== String(item.nome || '').trim()
+    || descricao !== String(item.dados?.descricao || '')
+    || status !== String(item.status || '').trim()
+    || camposAlterados;
+  const botaoSalvar = document.getElementById('ar-crm-save-fields');
+  if (botaoSalvar) botaoSalvar.disabled = !state.ar.crm.edicaoAlterada || state.ar.crm.salvandoEdicao;
+}
+
+function avancarStatusCrmAr() {
+  const input = document.getElementById('ar-crm-edit-status');
+  if (!input || state.ar.crm.salvandoEdicao) return;
+  const options = obterStatusOptionsCrmAr(input.value);
+  const atual = options.findIndex((status) => normalizarNomeCampoCrm(status) === normalizarNomeCampoCrm(input.value));
+  input.value = options[(atual + 1) % options.length] || options[0] || '';
+  atualizarClasseStatusCrmAr(input.value);
+  marcarAlteracaoCamposCrmAr();
+}
+
+function cancelarEdicaoCamposCrmAr() {
+  state.ar.crm.editando = false;
+  state.ar.crm.edicaoAlterada = false;
+  renderPainelAr();
+}
+
+async function salvarCamposCrmAr() {
+  const item = state.ar.crm.detalhe;
+  const taskId = item?.dados?.clickup_task_id;
+  const nome = document.getElementById('ar-crm-edit-name')?.value?.trim();
+  const descricao = document.getElementById('ar-crm-edit-description')?.value ?? '';
+  if (!item || !taskId || !nome || state.ar.crm.salvandoEdicao) return;
+  if (!pode('painel_ar.crm', 'execute')) {
+    state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
+    renderPainelAr();
+    return;
+  }
+  const changes = {};
+  if (nome !== String(item.nome || '').trim()) changes.name = nome;
+  if (descricao !== String(item.dados?.descricao || '')) changes.description = descricao;
+  const status = document.getElementById('ar-crm-edit-status')?.value?.trim() || '';
+  if (status !== String(item.status || '').trim()) changes.status = status;
+  const customFields = Array.from(document.querySelectorAll('.ar-crm-edit-custom-field'))
+    .map((input) => {
+      const original = (item.dados?.campos_personalizados || []).find((campo) => String(campo.id) === String(input.dataset.fieldId));
+      let value = input.value;
+      if (['dropdown', 'drop_down'].includes(String(input.dataset.fieldType || '').toLowerCase())) {
+        const options = Array.isArray(original?.type_config?.options) ? original.type_config.options : [];
+        const option = options.find((candidate) => normalizarNomeCampoCrm(candidate.name || candidate.label || candidate.value) === normalizarNomeCampoCrm(input.value));
+        value = option ? (option.id ?? option.orderindex ?? option.value) : (input.value ? input.value : null);
+      }
+      return { id: input.dataset.fieldId, value };
+    })
+    .filter((field) => {
+      const original = (item.dados?.campos_personalizados || []).find((campo) => String(campo.id) === String(field.id));
+      if (!field.id || !original) return false;
+      const tipo = String(original.type || '').toLowerCase();
+      const originalValue = tipo === 'date' ? valorCampoEdicaoCrmAr(original) : original.value;
+      return String(field.value ?? '') !== String(originalValue ?? '');
+    });
+  if (customFields.length) changes.custom_fields = customFields;
+  if (!Object.keys(changes).length) {
+    state.ar.crm.editando = false;
+    state.ar.crm.edicaoAlterada = false;
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    state.ar.crm.salvandoEdicao = true;
+    renderPainelAr();
+    const response = await chamarApi('updateArCrmTask', { taskId, itemId: item.id, changes });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível salvar os campos.'));
+    if (Object.prototype.hasOwnProperty.call(changes, 'name')) item.nome = nome;
+    if (Object.prototype.hasOwnProperty.call(changes, 'status')) item.status = status;
+    item.dados = { ...(item.dados || {}), descricao };
+    customFields.forEach((field) => {
+      const atual = (item.dados.campos_personalizados || []).find((campo) => String(campo.id) === String(field.id));
+      if (atual) {
+        atual.value = field.value;
+        atual.valor_original = field.value;
+        const options = Array.isArray(atual.type_config?.options) ? atual.type_config.options : [];
+        const option = options.find((item) => [item.id, item.orderindex, item.value].some((value) => String(value ?? '') === String(field.value ?? '')));
+        atual.display_value = option?.name || option?.label || option?.value || field.value || '—';
+      }
+    });
+    state.ar.crm.editando = false;
+    state.ar.crm.edicaoAlterada = false;
+    state.ar.crm.salvandoEdicao = false;
+    item.sync_status = 'pending';
+    renderPainelAr();
+  } catch (erro) {
+    state.ar.crm.salvandoEdicao = false;
+    state.ar.crm.atividade.message = erro.message || 'Não foi possível salvar os campos.';
+    renderPainelAr();
+  }
 }
 
 function obterCampoRelacionadoCrmAr(campos, termos, fallback = '—') {
@@ -7629,7 +8384,7 @@ function renderPedidosRelacionadosCrmAr() {
           <div><span class="ar-crm-phase1-kicker">PEDIDOS RELACIONADOS</span><h3>Pedidos do CPF ${escapeHtml(formatarCampoCrmAr('cpf', modal.cpf))}</h3></div>
           <button class="secondary-btn" type="button" onclick="fecharPedidosRelacionadosCrmAr()">Fechar</button>
         </header>
-        ${modal.loading ? '<p class="quick-link-empty">Carregando pedidos...</p>' : modal.message ? `<p class="admin-message">${escapeHtml(modal.message)}</p>` : modal.items.length ? `
+        ${modal.loading ? renderHubLoading('Carregando pedidos...') : modal.message ? `<p class="admin-message">${escapeHtml(modal.message)}</p>` : modal.items.length ? `
           <div class="ar-crm-related-list">
             ${modal.items.map((registro) => {
               const campos = Array.isArray(registro.campos_personalizados) ? registro.campos_personalizados : [];
@@ -7876,7 +8631,7 @@ function renderTabelaValidacoesPendentesAr() {
   const todosSelecionados = pendentes.length > 0 && pendentes.every(item => selecionados.includes(item.id));
 
   if (loading) {
-    return '<p class="quick-link-empty">Carregando lançamentos pendentes...</p>';
+    return renderHubLoading('Carregando lançamentos pendentes...');
   }
 
   if (!pendentes.length) {
@@ -7969,7 +8724,7 @@ function renderConsultarRecibosAr() {
         </div>
       </div>
 
-      ${loading ? '<p class="quick-link-empty">Carregando recibos...</p>' : renderTabelaRecibosAr(recibos)}
+      ${loading ? renderHubLoading('Carregando recibos...') : renderTabelaRecibosAr(recibos)}
     </div>
   `;
 }
@@ -7997,7 +8752,7 @@ function renderTabelaRecibosAr(recibos) {
           <span>${escapeHtml(recibo.parceiro_nome || '-')}</span>
           <span>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</span>
           <span>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</span>
-          <span><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(recibo.status || '-')}</mark></span>
+          <span><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</mark></span>
           <span class="ar-recibos-actions">
             <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
             <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' || !podeCancelar ? 'disabled' : ''}>Cancelar</button>
@@ -8035,7 +8790,7 @@ function renderModalReciboValidacoesAr() {
 
           <dl>
             <div><dt>Emissão</dt><dd>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</dd></div>
-            <div><dt>Status</dt><dd>${escapeHtml(recibo.status || '-')}</dd></div>
+            <div><dt>Status</dt><dd>${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</dd></div>
             <div><dt>Total</dt><dd>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</dd></div>
             <div><dt>Código</dt><dd>${escapeHtml(recibo.codigo_entidade || '-')}</dd></div>
           </dl>
@@ -8302,12 +9057,12 @@ function renderParceiroSelecionadoCardAr(parceiro) {
       <div class="ar-compact-summary-line ar-compact-summary-primary">
         <strong>${escapeHtml(nome)}</strong>
         <span>Código: ${escapeHtml(codigo)}</span>
-        <span>Status: ${escapeHtml(status)}</span>
+        <span>Status: ${escapeHtml(obterRotuloStatusHub(status, 'Não informado'))}</span>
       </div>
       <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(contatos)}">
         ${escapeHtml(contatos)}
       </div>
-    </article>
+    </div>
   `;
 }
 function obterIniciaisAr(nome) {
@@ -8347,7 +9102,7 @@ function renderParceiroSelecionadoAr(parceiro) {
           <span>Parceiro selecionado</span>
           <strong>${escapeHtml(parceiro.nome_completo || parceiro.nome || 'Parceiro')}</strong>
         </div>
-        <em class="${statusAtivo ? 'is-active' : ''}">${escapeHtml(status)}</em>
+        <em class="${statusAtivo ? 'is-active' : ''}">${escapeHtml(obterRotuloStatusHub(status, 'Não informado'))}</em>
       </div>
       <div class="ar-partner-code">
         <span>Código do parceiro</span>
@@ -8413,7 +9168,7 @@ function renderProdutoSelecionadoResumoAr(produto) {
       <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(detalhes)}">
         ${escapeHtml(detalhes)}
       </div>
-    </article>
+    </div>
   `;
 }
 function alterarBuscaProdutoAr(valor) {
@@ -8569,9 +9324,7 @@ function renderListaProdutosAr() {
               aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
               title="${escapeAttr(rotuloBotaoFiltros)}"
             >
-              <svg class="ar-products-filter-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 4h18l-7 8v6l-4 2v-8L3 4Z"></path>
-              </svg>
+              <i class="ar-products-filter-icon" data-lucide="filter" aria-hidden="true"></i>
             </button>
             ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
           </div>
@@ -9335,7 +10088,7 @@ function renderSugestoesParceirosAr() {
       ${parceiros.map(parceiro => `
         <button type="button" onclick="selecionarParceiroAr('${escapeAttr(parceiro.id)}')">
           <strong>${escapeHtml(parceiro.nome_completo || parceiro.nome || 'Parceiro')}</strong>
-          <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', parceiro.status || '-'].join(' | '))}</span>
+          <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', obterRotuloStatusHub(parceiro.status, '—')].join(' | '))}</span>
         </button>
       `).join('')}
     </div>
@@ -9390,7 +10143,7 @@ function atualizarSugestoesParceiroDomAr() {
     ? parceiros.map(parceiro => `
       <button type="button" onclick="selecionarParceiroAr('${escapeAttr(parceiro.id)}')">
         <strong>${escapeHtml(parceiro.nome_completo || parceiro.nome || 'Parceiro')}</strong>
-        <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', parceiro.status || '-'].join(' | '))}</span>
+          <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', obterRotuloStatusHub(parceiro.status, '—')].join(' | '))}</span>
       </button>
     `).join('')
     : '<p>Nenhum parceiro encontrado.</p>';
@@ -9416,7 +10169,7 @@ function renderOpcoesParceirosAr() {
   return parceiros.map(parceiro => `
     <button class="ar-partner-option ${state.ar.parceiroId === parceiro.id ? 'selected' : ''}" type="button" onclick="selecionarParceiroAr('${escapeAttr(parceiro.id)}')">
       <strong>${escapeHtml(parceiro.nome_completo || parceiro.nome || 'Parceiro')}</strong>
-      <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', parceiro.status || '-'].join(' | '))}</span>
+      <span>${escapeHtml([parceiro.codigo_revendedor || 'sem código', obterRotuloStatusHub(parceiro.status, '—')].join(' | '))}</span>
       ${parceiro.nome_empresa || parceiro.email_cadastro_certificado ? `<small>${escapeHtml([parceiro.nome_empresa, parceiro.email_cadastro_certificado].filter(Boolean).join(' | '))}</small>` : ''}
     </button>
   `).join('');
@@ -9513,7 +10266,7 @@ function renderOrcamentoAr() {
         <pre>${escapeHtml(texto)}</pre>
       </div>
 
-      <button 
+      <button
         id="ar_copy_orcamento" 
         class="secondary-btn ar-copy-budget-btn" 
         type="button" 
@@ -10936,6 +11689,8 @@ function atualizarRotaAdminHub(aba = '', { replace = false } = {}) {
     usuarios: 'cadastros/usuarios',
     perfis: 'cadastros/perfis',
     'parceiros-indicacao': 'cadastros/parceiros-indicacao',
+    'logs-integracoes': 'sistema/logs-integracoes',
+    auditoria: 'sistema/logs-integracoes/auditoria',
     limites: 'parametros/limites',
     identidade: 'identidade',
     aparencia: 'aparencia',
@@ -10983,6 +11738,7 @@ const HUB_BREADCRUMB_LABELS = {
   usuarios: 'Usuários',
   perfis: 'Perfis',
   'parceiros-indicacao': 'Parceiros de Indicação',
+  'logs-integracoes': 'Logs de Integrações',
   limites: 'Limites',
   identidade: 'Identidade',
   aparencia: 'Aparência',
@@ -11005,6 +11761,8 @@ const HUB_BREADCRUMB_ADMIN_ROUTES = {
   usuarios: 'cadastros/usuarios',
   perfis: 'cadastros/perfis',
   'parceiros-indicacao': 'cadastros/parceiros-indicacao',
+  'logs-integracoes': 'sistema/logs-integracoes',
+  auditoria: 'sistema/logs-integracoes/auditoria',
   limites: 'parametros/limites',
   identidade: 'identidade',
   aparencia: 'aparencia',
@@ -11111,7 +11869,7 @@ function sincronizarContextoAdminPelaRota() {
   const { modulo, principal } = obterContextoRotaHub();
   if (modulo !== 'administracao' || !principal) return;
 
-  const abasValidas = ['identidade', 'aparencia', 'logo', 'limites', 'categorias', 'grupos', 'home-exibicao', 'usuarios', 'perfis', 'parceiros-indicacao'];
+  const abasValidas = ['identidade', 'aparencia', 'logo', 'limites', 'categorias', 'grupos', 'home-exibicao', 'usuarios', 'perfis', 'parceiros-indicacao', 'logs-integracoes', 'auditoria'];
   if (abasValidas.includes(principal)) {
     state.admin.aba = principal;
   }
@@ -11158,7 +11916,7 @@ function renderHubUserBox() {
       </div>
       <div class="hub-user-box-actions">
         <button class="theme-btn icon-only" onclick="alternarTema()" title="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}" aria-label="${state.temaAtual === 'escuro' ? 'Ativar modo claro' : 'Ativar modo escuro'}">
-          ${state.temaAtual === 'escuro' ? '☼' : '◐'}
+          <i data-lucide="${state.temaAtual === 'escuro' ? 'sun' : 'moon'}" aria-hidden="true"></i>
         </button>
         <button class="secondary-btn logout-btn" type="button" onclick="sair()">Sair</button>
       </div>
@@ -11177,9 +11935,11 @@ function renderHubTopbar() {
         type="button"
         onclick="alternarMenuSidebarHub()"
         aria-label="${state.sidebar.collapsed ? 'Abrir menu principal' : 'Fechar menu principal'}"
+        aria-expanded="${state.sidebar.collapsed ? 'false' : 'true'}"
+        aria-controls="hub-sidebar"
         title="${state.sidebar.collapsed ? 'Abrir menu principal' : 'Fechar menu principal'}"
       >
-        <span aria-hidden="true">&#9776;</span>
+        <i data-lucide="menu" aria-hidden="true"></i>
       </button>
       ${renderHeaderLogo()}
       <div class="brand">
@@ -11266,19 +12026,20 @@ function itemMenuTemAtivoHub(item = {}) {
 
 function obterIconeMenuHub(item = {}) {
   const mapa = {
-    inicio: 'IN',
-    dashboards: 'DB',
-    'central-senhas': 'CS',
-    operacoes: 'OP',
-    financeiro: 'FN',
-    'rh-dp': 'RH',
-    administracao: 'AD'
+    inicio: 'house',
+    dashboards: 'layout-dashboard',
+    'central-senhas': 'key-round',
+    operacoes: 'workflow',
+    financeiro: 'landmark',
+    'rh-dp': 'users-round',
+    administracao: 'settings'
   };
-  return mapa[item.id] || String(item.label || item.id || '?').slice(0, 2).toUpperCase();
+  return mapa[item.id] || 'circle-help';
 }
 
 function grupoMenuAbertoHub(item = {}) {
   if (state.sidebar.collapsed) return false;
+  if (state.sidebar.searchQuery.trim()) return true;
   if (itemMenuTemAtivoHub(item)) return true;
   if (state.sidebar.openGroups[item.id] === false) return false;
   return state.sidebar.openGroups[item.id] === true;
@@ -11298,10 +12059,10 @@ function renderHubSidebarRoute(item, nivel = 0) {
       type="button"
       ${planejado ? 'disabled' : `onclick="navegarMenuSidebarHub('${escapeAttr(caminho)}')"` }
       title="${escapeAttr(item.label || '')}"
-      data-tooltip="${escapeAttr(item.label || '')}"
+      ${state.sidebar.collapsed ? `data-tooltip="${escapeAttr(item.label || '')}"` : ''}
       aria-current="${ativo ? 'page' : 'false'}"
     >
-      ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true">${escapeHtml(obterIconeMenuHub(item))}</span>` : ''}
+      ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true"><i data-lucide="${obterIconeMenuHub(item)}"></i></span>` : ''}
       <span class="hub-sidebar-label">${escapeHtml(item.label || '')}</span>
       ${planejado ? '<span class="hub-sidebar-badge">Em breve</span>' : ''}
     </button>
@@ -11374,9 +12135,9 @@ function renderHubSidebarGroup(item, nivel = 0) {
         onclick="alternarGrupoSidebarHub('${escapeAttr(item.id)}')"
         aria-expanded="${aberto || floatingAberto ? 'true' : 'false'}"
         title="${escapeAttr(item.label || '')}"
-        data-tooltip="${escapeAttr(item.label || '')}"
+        ${state.sidebar.collapsed ? `data-tooltip="${escapeAttr(item.label || '')}"` : ''}
       >
-        ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true">${escapeHtml(obterIconeMenuHub(item))}</span>` : ''}
+        ${nivel === 0 ? `<span class="hub-sidebar-icon" aria-hidden="true"><i data-lucide="${obterIconeMenuHub(item)}"></i></span>` : ''}
         <span class="hub-sidebar-label">${escapeHtml(item.label || '')}</span>
         <span class="hub-sidebar-group-caret" aria-hidden="true">${aberto ? 'v' : '>'}</span>
       </button>
@@ -11396,24 +12157,57 @@ function renderHubSidebarItem(item, nivel = 0) {
   return renderHubSidebarRoute(item, nivel);
 }
 
+function normalizarTextoBuscaHub(valor = '') {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function filtrarItensMenuPorBuscaHub(items = [], consulta = '') {
+  const termo = normalizarTextoBuscaHub(consulta);
+  if (!termo) return items;
+
+  return items.reduce((resultado, item) => {
+    const filhos = filtrarItensMenuPorBuscaHub(item.children || [], consulta);
+    const corresponde = normalizarTextoBuscaHub(item.label).includes(termo);
+
+    if (corresponde || filhos.length) {
+      resultado.push({
+        ...item,
+        children: corresponde ? (item.children || []) : filhos
+      });
+    }
+
+    return resultado;
+  }, []);
+}
+
 function renderHubSidebar() {
-  const items = filtrarMenuHub();
+  const items = filtrarItensMenuPorBuscaHub(filtrarMenuHub(), state.sidebar.searchQuery);
   const collapsed = state.sidebar.collapsed;
 
   return `
-    <aside class="hub-sidebar ${collapsed ? 'is-collapsed' : ''}" aria-label="Menu lateral do Hub">
+    <aside id="hub-sidebar" class="hub-sidebar ${collapsed ? 'is-collapsed' : ''}" aria-label="Menu lateral do Hub">
       <div class="hub-sidebar-header">
-        <span class="hub-sidebar-eyebrow">${collapsed ? 'Hub' : 'Navega&ccedil;&atilde;o'}</span>
-        <button
-          class="hub-sidebar-pin-btn ${state.sidebar.pinned ? 'is-active' : ''}"
-          type="button"
-          onclick="alternarFixacaoSidebarHub()"
-          aria-label="${state.sidebar.pinned ? 'Desafixar menu lateral' : 'Fixar menu lateral'}"
-          aria-pressed="${state.sidebar.pinned ? 'true' : 'false'}"
-          title="${state.sidebar.pinned ? 'Desafixar menu' : 'Fixar menu'}"
-        >
-          <span aria-hidden="true">&#128204;</span>
-        </button>
+        <div class="hub-sidebar-search">
+          ${collapsed
+            ? `<button class="hub-sidebar-search-icon" type="button" onclick="abrirBuscaSidebarHub()" aria-label="Buscar no menu" title="Buscar no menu"><i data-lucide="search" aria-hidden="true"></i></button>`
+            : `<input class="hub-sidebar-search-input" type="search" value="${escapeAttr(state.sidebar.searchQuery)}" placeholder="Buscar no menu" aria-label="Buscar no menu" oninput="alterarBuscaSidebarHub(this.value)" autocomplete="off">`}
+        </div>
+        ${collapsed || sidebarMobileHub() ? '' : `
+          <button
+            class="hub-sidebar-pin-btn ${state.sidebar.pinned ? 'is-active' : ''}"
+            type="button"
+            onclick="alternarFixacaoSidebarHub()"
+            aria-label="${state.sidebar.pinned ? 'Desafixar menu lateral' : 'Fixar menu lateral'}"
+            aria-pressed="${state.sidebar.pinned ? 'true' : 'false'}"
+            title="${state.sidebar.pinned ? 'Desafixar menu' : 'Fixar menu'}"
+          >
+            <i data-lucide="pin" aria-hidden="true"></i>
+          </button>
+        `}
       </div>
       <nav class="hub-sidebar-nav" aria-label="M&oacute;dulos do Hub">
         ${items.map(item => renderHubSidebarItem(item)).join('')}
@@ -11422,15 +12216,41 @@ function renderHubSidebar() {
   `;
 }
 
-function alternarMenuSidebarHub() {
-  const experienciaCompacta = window.matchMedia('(max-width: 800px)').matches;
+function atualizarSidebarHub() {
+  const sidebar = document.querySelector('#app > main.hub-layout .hub-sidebar');
+  if (!sidebar) return;
 
-  if (experienciaCompacta) {
+  sidebar.outerHTML = renderHubSidebar();
+}
+
+function alterarBuscaSidebarHub(valor = '') {
+  state.sidebar.searchQuery = valor;
+  atualizarSidebarHub();
+
+  window.requestAnimationFrame(() => {
+    const campo = document.querySelector('.hub-sidebar-search-input');
+    if (!campo) return;
+    campo.focus();
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+  });
+}
+
+function abrirBuscaSidebarHub() {
+  state.sidebar.collapsed = false;
+  state.sidebar.floatingGroupId = '';
+  renderizarRotaAtual();
+
+  window.requestAnimationFrame(() => document.querySelector('.hub-sidebar-search-input')?.focus());
+}
+
+function alternarMenuSidebarHub() {
+  if (sidebarMobileHub() && state.sidebar.pinned) {
     state.sidebar.pinned = false;
-    state.sidebar.collapsed = !state.sidebar.collapsed;
-    state.sidebar.floatingGroupId = '';
-    renderizarRotaAtual();
-    return;
+    try {
+      window.localStorage.setItem(SIDEBAR_PINNED_STORAGE_KEY, 'false');
+    } catch {
+      // A preferência móvel permanece apenas na sessão.
+    }
   }
 
   if (state.sidebar.pinned) {
@@ -11455,6 +12275,8 @@ function alternarMenuSidebarHub() {
 }
 
 function alternarFixacaoSidebarHub() {
+  if (sidebarMobileHub()) return;
+
   state.sidebar.pinned = !state.sidebar.pinned;
   state.sidebar.collapsed = false;
   state.sidebar.floatingGroupId = '';
@@ -11510,6 +12332,203 @@ function fecharPainelFlutuanteSidebarHub() {
   renderizarRotaAtual();
 }
 
+let tooltipGlobalElemento = null;
+let tooltipGlobalAlvo = null;
+
+function esconderTooltipGlobal() {
+  tooltipGlobalAlvo = null;
+  tooltipGlobalElemento?.classList.remove('is-visible');
+}
+
+function posicionarTooltipGlobal() {
+  if (!tooltipGlobalElemento || !tooltipGlobalAlvo?.isConnected) {
+    esconderTooltipGlobal();
+    return;
+  }
+
+  const alvo = tooltipGlobalAlvo;
+  const tooltip = tooltipGlobalElemento;
+  const margem = 10;
+  const limite = 8;
+  const viewportLargura = document.documentElement.clientWidth;
+  const viewportAltura = document.documentElement.clientHeight;
+  const rect = alvo.getBoundingClientRect();
+  const largura = tooltip.offsetWidth;
+  const altura = tooltip.offsetHeight;
+
+  let left;
+  if (viewportLargura - rect.right >= largura + margem + limite) {
+    left = rect.right + margem;
+  } else if (rect.left >= largura + margem + limite) {
+    left = rect.left - largura - margem;
+  } else {
+    left = Math.max(limite, Math.min(rect.left, viewportLargura - largura - limite));
+  }
+
+  let top = rect.top + (rect.height - altura) / 2;
+  if (top < limite) {
+    top = rect.bottom + margem;
+  } else if (top + altura > viewportAltura - limite) {
+    top = rect.top - altura - margem;
+  }
+
+  top = Math.max(limite, Math.min(top, viewportAltura - altura - limite));
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function mostrarTooltipGlobal(alvo) {
+  if (alvo?.closest?.('.hub-sidebar:not(.is-collapsed)')) {
+    esconderTooltipGlobal();
+    return;
+  }
+
+  const texto = alvo?.getAttribute?.('data-tooltip')?.trim();
+  if (!texto) return;
+
+  if (!tooltipGlobalElemento) {
+    tooltipGlobalElemento = document.createElement('div');
+    tooltipGlobalElemento.className = 'hub-global-tooltip';
+    tooltipGlobalElemento.setAttribute('role', 'tooltip');
+    document.body.appendChild(tooltipGlobalElemento);
+  }
+
+  tooltipGlobalAlvo = alvo;
+  tooltipGlobalElemento.textContent = texto;
+  tooltipGlobalElemento.classList.add('is-visible');
+  posicionarTooltipGlobal();
+}
+
+function obterAlvoTooltipGlobal(event) {
+  return event.target?.closest?.('[data-tooltip]');
+}
+
+function iniciarTooltipVisualGlobal() {
+  document.addEventListener('pointerover', event => {
+    const alvo = obterAlvoTooltipGlobal(event);
+    if (!alvo || (event.relatedTarget && alvo.contains(event.relatedTarget))) return;
+    mostrarTooltipGlobal(alvo);
+  });
+
+  document.addEventListener('pointerout', event => {
+    const alvo = obterAlvoTooltipGlobal(event);
+    if (!alvo || (event.relatedTarget && alvo.contains(event.relatedTarget))) return;
+    if (alvo === tooltipGlobalAlvo) esconderTooltipGlobal();
+  });
+
+  document.addEventListener('focusin', event => {
+    const alvo = obterAlvoTooltipGlobal(event);
+    if (alvo) mostrarTooltipGlobal(alvo);
+  });
+
+  document.addEventListener('focusout', event => {
+    if (event.target === tooltipGlobalAlvo) esconderTooltipGlobal();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') esconderTooltipGlobal();
+  });
+
+  window.addEventListener('resize', posicionarTooltipGlobal);
+  window.addEventListener('scroll', posicionarTooltipGlobal, true);
+}
+
+function normalizarTooltipsGlobais(root = document) {
+  const elementos = [
+    ...(root.matches?.('[title]') ? [root] : []),
+    ...(root.querySelectorAll?.('[title]') || [])
+  ];
+
+  elementos.forEach(elemento => {
+    const texto = elemento.getAttribute('title')?.trim();
+    if (!texto) return;
+
+    if (!elemento.hasAttribute('data-tooltip')) {
+      elemento.setAttribute('data-tooltip', texto);
+    }
+
+    elemento.removeAttribute('title');
+  });
+}
+
+function aplicarIconesLucideHub(root = document) {
+  if (!root) return;
+  aplicarIconesDataHub(root);
+  createIcons({
+    icons: HUB_LUCIDE_ICONS,
+    root,
+    attrs: {
+      'stroke-width': 1.9
+    }
+  });
+}
+
+function aplicarIconesDataHub(root = document) {
+  const campos = [
+    ...(root.matches?.('input[type="date"]') ? [root] : []),
+    ...(root.querySelectorAll?.('input[type="date"]') || [])
+  ];
+
+  campos.forEach(campo => {
+    if (campo.closest('.hub-date-input')) return;
+
+    const wrapper = document.createElement('span');
+    wrapper.className = 'hub-date-input';
+    campo.parentNode?.insertBefore(wrapper, campo);
+    wrapper.appendChild(campo);
+
+    const icone = document.createElement('i');
+    icone.setAttribute('data-lucide', 'calendar');
+    icone.setAttribute('aria-hidden', 'true');
+    wrapper.insertBefore(icone, campo);
+  });
+}
+
+function iniciarIconesLucideHub() {
+  aplicarIconesLucideHub();
+
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          aplicarIconesLucideHub(node);
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+function iniciarTooltipsGlobais() {
+  normalizarTooltipsGlobais();
+  iniciarTooltipVisualGlobal();
+
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          normalizarTooltipsGlobais(node);
+        }
+      });
+
+      if (mutation.type === 'attributes' && mutation.target instanceof Element) {
+        normalizarTooltipsGlobais(mutation.target.parentElement || document);
+      }
+    });
+  });
+
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['title'],
+    childList: true,
+    subtree: true
+  });
+}
+
 function fecharMenusAoClicarForaHub(event) {
   const alvo = event.target;
   const dentroDoSidebar = alvo?.closest?.('.hub-sidebar');
@@ -11518,15 +12537,7 @@ function fecharMenusAoClicarForaHub(event) {
   if (!state.sidebar.collapsed && !state.sidebar.pinned && !dentroDoSidebar && !acionadorDoSidebar) {
     state.sidebar.collapsed = true;
     state.sidebar.floatingGroupId = '';
-
-    const layout = document.querySelector('.hub-layout');
-    const sidebar = layout?.querySelector('.hub-sidebar');
-    const acionador = document.querySelector('.hub-mobile-menu-toggle');
-
-    layout?.classList.add('is-sidebar-collapsed');
-    sidebar?.classList.add('is-collapsed');
-    acionador?.setAttribute('aria-label', 'Abrir menu principal');
-    acionador?.setAttribute('title', 'Abrir menu principal');
+    renderizarRotaAtual();
   }
 
   document.querySelectorAll('details.fin-section-more[open]').forEach(menu => {
@@ -11536,9 +12547,9 @@ function fecharMenusAoClicarForaHub(event) {
 
 function navegarMenuSidebarHub(caminho) {
   state.sidebar.floatingGroupId = '';
-  const experienciaCompacta = window.matchMedia('(max-width: 800px)').matches;
-  if (experienciaCompacta) state.sidebar.pinned = false;
-  state.sidebar.collapsed = experienciaCompacta || !state.sidebar.pinned;
+  if (sidebarMobileHub()) {
+    state.sidebar.collapsed = true;
+  }
   navegarParaRota(caminho);
 }
 
@@ -11689,6 +12700,7 @@ const renderizarRotaAtualHubPhase2 = async function() {
                 <p>Aguarde enquanto os dados da corretora são carregados.</p>
               </div>
             </div>
+            ${renderHubLoading('Carregando configurações da corretora...')}
           </section>
         `
       });
@@ -11784,7 +12796,7 @@ const renderLinksUteisHubPhase1 = function() {
 
         <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
         ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
-        ${state.links.loading ? '<p class="quick-link-empty">Carregando links...</p>' : renderListaLinksUteis(gestor)}
+        ${state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(gestor)}
         ${renderModalNovoLink()}
       </section>
     `
@@ -11817,7 +12829,7 @@ const renderCentralSenhasHubPhase1 = function() {
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? '<p class="quick-link-empty">Carregando acessos...</p>' : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
+        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
       </section>
     `
@@ -11843,9 +12855,7 @@ const renderPainelArHubPhase1 = function() {
           <div class="ar-panel-actions">
             <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
               <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M3 10.8 12 3l9 7.8v9.7a.5.5 0 0 1-.5.5h-5.2a.5.5 0 0 1-.5-.5v-5.2H9.2v5.2a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5v-9.7Z"></path>
-                </svg>
+                <i data-lucide="house" aria-hidden="true"></i>
               </button>
               ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
               ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
@@ -11858,7 +12868,7 @@ const renderPainelArHubPhase1 = function() {
         </div>
 
         ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-    ${state.ar.loading ? '<p class="quick-link-empty">Carregando produtos e parceiros...</p>' : renderConteudoAr()}
+    ${state.ar.loading ? renderHubLoading('Carregando produtos e parceiros...') : renderConteudoAr()}
       </section>
     `
   });
@@ -11893,6 +12903,11 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
 
   if (aba === 'perfis') {
     await carregarPerfisAdmin();
+    return;
+  }
+
+  if (aba === 'logs-integracoes') {
+    await carregarLogsIntegracoesAdmin();
     return;
   }
 
@@ -12050,6 +13065,8 @@ function obterMensagemApi(response, fallback) {
 Object.assign(window, {
   hubRenderizarTopbarPadrao: renderHubTopbar,
   hubRenderizarSidebarPadrao: renderHubSidebar,
+  hubRenderLoading: renderHubLoading,
+  navegarLogoParaHomeHub,
   hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
   hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
   hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
@@ -12114,6 +13131,8 @@ Object.assign(window, {
   alternarGrupoSidebarHub,
   alternarFixacaoSidebarHub,
   alternarMenuSidebarHub,
+  alterarBuscaSidebarHub,
+  abrirBuscaSidebarHub,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
   alternarValidacaoSelecionadaAr,
@@ -12183,6 +13202,13 @@ Object.assign(window, {
   salvarRegistroAdmin,
   salvarSenhaItem,
   salvarUsuarioAdmin,
+  carregarLogsIntegracoesAdmin,
+  alterarFiltroLogsIntegracoesAdmin,
+  abrirDropdownLogsAdmin,
+  selecionarDropdownLogsAdmin,
+  selecionarPaginaLogsIntegracoesAdmin,
+  abrirDetalheLogIntegracaoAdmin,
+  fecharDetalheLogIntegracaoAdmin,
   selecionarFiltroUsuariosAdmin,
   selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
@@ -12206,6 +13232,14 @@ Object.assign(window, {
   editarComentarioDetalheCrmAr,
   excluirComentarioDetalheCrmAr,
   adicionarAnexoDetalheCrmAr,
+  editarCamposCrmAr,
+  marcarAlteracaoCamposCrmAr,
+  avancarStatusCrmAr,
+  abrirDropdownCrmAr,
+  filtrarDropdownCrmAr,
+  selecionarDropdownCrmAr,
+  cancelarEdicaoCamposCrmAr,
+  salvarCamposCrmAr,
   visualizarCrmAr,
   fecharVisualizacaoCrmAr,
   selecionarAbaSenhas,
@@ -12223,10 +13257,9 @@ Object.assign(window, {
   visualizarReciboValidacoesAr
 });
 
-document.addEventListener('click', event => {
+document.addEventListener('pointerdown', event => {
   if (!state.admin.acoesParceirosAberto) return;
-  if (event.target?.closest?.('.admin-partners-main-actions')
-    || event.target?.closest?.('[data-hub-action-menu-portal]')) return;
+  if (event.target?.closest?.('.admin-partners-actions-btn, .admin-partners-actions-menu')) return;
 
   fecharMenuAcoesParceirosIndicacaoAdmin();
 }, true);
@@ -12239,6 +13272,18 @@ document.addEventListener('click', event => {
 }, true);
 
 document.addEventListener('click', fecharMenusAoClicarForaHub);
+
+function focarModalParceiroIndicacaoAdmin() {
+  window.requestAnimationFrame(() => {
+    const modal = document.querySelector('[data-partner-modal]');
+    modal?.querySelector('.partner-modal-tab, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])')?.focus();
+  });
+}
+
+function obterElementosFocaveisModalParceiro(modal) {
+  return Array.from(modal?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || [])
+    .filter(item => item.offsetParent !== null);
+}
 
 document.addEventListener('click', event => {
   const tab = event.target?.closest?.('[data-partner-tab]');
@@ -12256,6 +13301,9 @@ document.addEventListener('click', event => {
   modal.querySelectorAll('[data-partner-tab-panel]').forEach(panel => {
     panel.hidden = panel.dataset.partnerTabPanel !== aba;
   });
+  if (state.admin.parceiroModal?.aberto) {
+    state.admin.parceiroModal.aba = aba;
+  }
 });
 
 document.addEventListener('keydown', event => {
@@ -12266,8 +13314,62 @@ document.addEventListener('keydown', event => {
 });
 
 document.addEventListener('keydown', event => {
-  if (!state.sidebar.floatingGroupId || event.key !== 'Escape') return;
+  const modal = document.querySelector('[data-partner-modal]');
+  if (!modal) return;
+
+  const tab = event.target?.closest?.('[data-partner-tab]');
+  if (tab && ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    const tabs = Array.from(modal.querySelectorAll('[data-partner-tab]'));
+    const indice = tabs.indexOf(tab);
+    let proximo = indice;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') proximo = (indice + 1) % tabs.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') proximo = (indice - 1 + tabs.length) % tabs.length;
+    if (event.key === 'Home') proximo = 0;
+    if (event.key === 'End') proximo = tabs.length - 1;
+    event.preventDefault();
+    tabs[proximo]?.focus();
+    tabs[proximo]?.click();
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    fecharModalParceiroIndicacaoAdmin();
+    return;
+  }
+
+  if (event.key !== 'Tab') return;
+
+  const focaveis = obterElementosFocaveisModalParceiro(modal);
+  if (!focaveis.length) {
+    event.preventDefault();
+    modal.focus();
+    return;
+  }
+
+  const primeiro = focaveis[0];
+  const ultimo = focaveis[focaveis.length - 1];
+  if (event.shiftKey && document.activeElement === primeiro) {
+    event.preventDefault();
+    ultimo.focus();
+  } else if (!event.shiftKey && document.activeElement === ultimo) {
+    event.preventDefault();
+    primeiro.focus();
+  }
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
 
   event.preventDefault();
-  fecharPainelFlutuanteSidebarHub();
+  if (state.sidebar.floatingGroupId) {
+    fecharPainelFlutuanteSidebarHub();
+  }
+
+  if (!state.sidebar.collapsed && !state.sidebar.pinned) {
+    state.sidebar.collapsed = true;
+    state.sidebar.floatingGroupId = '';
+    renderizarRotaAtual();
+    window.requestAnimationFrame(() => document.querySelector('.hub-mobile-menu-toggle')?.focus());
+  }
 });

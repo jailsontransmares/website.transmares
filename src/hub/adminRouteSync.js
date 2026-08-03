@@ -6,7 +6,9 @@ const ADMIN_ABAS_ROTEAVEIS = new Set([
   'usuarios',
   'perfis',
   'permissoes',
-  'parceiros-indicacao'
+  'parceiros-indicacao',
+  'logs-integracoes',
+  'auditoria'
 ]);
 
 let ultimaSincronizacao = '';

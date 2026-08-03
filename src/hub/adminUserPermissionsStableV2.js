@@ -541,8 +541,8 @@ function renderTela() {
   if (carregando) {
     return `
       <section class="admin-user-permissions-v2" data-user-permissions-v2="true">
-        <div class="admin-user-permissions-v2-head"><h4>Permissões adicionais</h4><p>Carregando permissões do usuário...</p></div>
-        <div class="admin-user-permissions-v2-body"><p class="quick-link-empty">Carregando permissões adicionais...</p></div>
+        <div class="admin-user-permissions-v2-head"><h4>Permissões adicionais</h4></div>
+        <div class="admin-user-permissions-v2-body" role="status" aria-live="polite" aria-busy="true">${window.hubRenderLoading?.('Carregando permissões adicionais...') || '<p class="quick-link-empty">Carregando permissões adicionais...</p>'}</div>
       </section>
     `;
   }

@@ -22,8 +22,8 @@ const FILTROS_TIPO = {
   erros: 'erro'
 };
 
-function aplicarFiltro(query, filtro) {
-  const tipo = FILTROS_TIPO[filtro];
+function aplicarFiltro(query, filtro, tipoFiltro = 'todos') {
+  const tipo = FILTROS_TIPO[tipoFiltro];
 
   if (filtro === 'arquivadas') query = query.not('arquivada_em', 'is', null);
   if (filtro === 'nao-lidas') query = query.is('lida_em', null);
@@ -40,7 +40,7 @@ async function executar(query, mensagem) {
   return data;
 }
 
-export async function listarNotificacoes({ filtro = 'todas', limite = 20, pagina = 1 } = {}) {
+export async function listarNotificacoes({ filtro = 'todas', tipo = 'todos', limite = 20, pagina = 1 } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const inicio = Math.max(0, (pagina - 1) * limite);
   const fim = inicio + limite - 1;
@@ -52,7 +52,7 @@ export async function listarNotificacoes({ filtro = 'todas', limite = 20, pagina
 
   if (filtro !== 'arquivadas') query = query.is('arquivada_em', null);
 
-  query = aplicarFiltro(query, filtro);
+  query = aplicarFiltro(query, filtro, tipo);
 
   return executar(query, 'Não foi possível carregar as notificações.');
 }

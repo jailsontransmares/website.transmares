@@ -336,6 +336,130 @@ async function getRelatedByCpf(client: ReturnType<typeof createClient>, payload 
   return { cpf, items };
 }
 
+function dateToEpoch(value: unknown) {
+  const date = text(value);
+  if (!date) return null;
+  const timestamp = Date.parse(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(timestamp)) throw new Error("Data de vencimento inválida.");
+  return timestamp;
+}
+
+async function updateTaskFromHub(client: ReturnType<typeof createClient>, payload = {}) {
+  const taskId = text(payload.taskId);
+  const itemId = text(payload.itemId);
+  const changes = payload.changes as Record<string, unknown> | null;
+  if (!taskId || !changes || typeof changes !== "object") {
+    throw new Error("Informe a tarefa e as alterações.");
+  }
+
+  const { data: mapping, error: mappingError } = await client
+    .from("ar_crm_clickup_mapping")
+    .select("id,item_id,task_id")
+    .eq("task_id", taskId)
+    .maybeSingle();
+  if (mappingError) throw mappingError;
+  if (!mapping?.item_id || (itemId && mapping.item_id !== itemId)) {
+    throw new Error("A tarefa não pertence aos cadastros disponíveis no CRM AR.");
+  }
+
+  const { data: item, error: itemError } = await client
+    .from("ar_crm_items")
+    .select("id,nome,status,responsavel,data_vencimento,dados")
+    .eq("id", mapping.item_id)
+    .single();
+  if (itemError || !item) throw itemError || new Error("Cadastro do CRM não encontrado.");
+
+  const localChanges: Record<string, unknown> = {};
+  const clickupChanges: Record<string, unknown> = {};
+  const dados = { ...((item.dados || {}) as Record<string, unknown>) };
+
+  if (Object.prototype.hasOwnProperty.call(changes, "name")) {
+    const name = text(changes.name);
+    if (!name) throw new Error("O nome da tarefa não pode ficar vazio.");
+    localChanges.nome = name;
+    dados.nome = name;
+    clickupChanges.name = name;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "status")) {
+    const status = text(changes.status);
+    if (!status) throw new Error("O status da tarefa não pode ficar vazio.");
+    localChanges.status = status;
+    clickupChanges.status = status;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "due_date")) {
+    const dueDate = text(changes.due_date) || null;
+    localChanges.data_vencimento = dueDate;
+    clickupChanges.due_date = dateToEpoch(dueDate);
+    clickupChanges.due_date_time = false;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "description")) {
+    const description = text(changes.description);
+    dados.descricao = description || null;
+    clickupChanges.description = description || " ";
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, "priority")) {
+    const priority = changes.priority === null || changes.priority === "" ? null : Number(changes.priority);
+    if (priority !== null && !Number.isInteger(priority)) throw new Error("Prioridade inválida.");
+    dados.prioridade = priority;
+    clickupChanges.priority = priority;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(changes, "custom_fields")) {
+    const requestedFields = Array.isArray(changes.custom_fields) ? changes.custom_fields : [];
+    const currentFields = Array.isArray(dados.campos_personalizados) ? dados.campos_personalizados as Record<string, unknown>[] : [];
+    const customFields = requestedFields.flatMap((requested) => {
+      const change = requested as Record<string, unknown>;
+      const fieldId = text(change.id);
+      const current = currentFields.find((field) => text(field.id) === fieldId);
+      if (!fieldId || !current) throw new Error("Campo personalizado inválido para este cadastro.");
+      if (!Object.prototype.hasOwnProperty.call(change, "value")) throw new Error("Valor do campo personalizado não informado.");
+      const value = change.value;
+      const type = text(current.type).toLowerCase();
+      if (!["text", "short_text", "textarea", "date", "number", "currency", "dropdown", "drop_down", "url", "email", "phone"].includes(type)) {
+        throw new Error(`O tipo do campo "${text(current.name || current.field_name)}" ainda não é editável.`);
+      }
+      const isDropdown = type === "dropdown" || type === "drop_down";
+      const isEmptyDropdown = isDropdown && (value === null || value === undefined || text(value) === "");
+      const clickupValue = type === "date" && text(value)
+        ? dateToEpoch(value)
+        : isDropdown && typeof value === "string" && /^\d+$/.test(value.trim())
+          ? Number(value.trim())
+          : value;
+      const updated = { ...current, value, valor_original: value, display_value: text(value) || "—" };
+      currentFields[currentFields.indexOf(current)] = updated;
+      return isEmptyDropdown ? [{ id: fieldId, clear: true }] : [{ id: fieldId, value: clickupValue }];
+    });
+    dados.campos_personalizados = currentFields;
+    if (customFields.length) clickupChanges.custom_fields = customFields;
+  }
+
+  if (!Object.keys(clickupChanges).length) throw new Error("Nenhuma alteração suportada foi informada.");
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await client
+    .from("ar_crm_items")
+    .update({ ...localChanges, dados, sync_status: "pending", updated_at: now })
+    .eq("id", mapping.item_id);
+  if (updateError) throw updateError;
+
+  const { data: queued, error: queueError } = await client
+    .from("ar_crm_sync_outbox")
+    .insert({
+      item_id: mapping.item_id,
+      task_id: taskId,
+      action: "update",
+      payload: clickupChanges,
+      status: "pending",
+      available_at: now,
+      updated_at: now
+    })
+    .select("id")
+    .single();
+  if (queueError || !queued) throw queueError || new Error("Não foi possível enfileirar a atualização.");
+
+  return { queued: true, outboxId: queued.id, taskId, itemId: mapping.item_id };
+}
+
 async function carregarUsuariosAtivos(client: ReturnType<typeof createClient>) {
   const { data, error } = await client
     .from("usuarios")
@@ -660,11 +784,12 @@ Deno.serve(async (req: Request) => {
     const user = await requireUser(client, req.headers.get("Authorization") || "");
     const payload = await req.json().catch(() => ({}));
     const action = text(payload.action);
-    const actionRequiresExecution = action === "sync" || action === "createComment" || action === "replyComment" || action === "toggleReaction" || action === "updateComment" || action === "deleteComment" || action === "addAttachment";
+    const actionRequiresExecution = action === "sync" || action === "updateTask" || action === "createComment" || action === "replyComment" || action === "toggleReaction" || action === "updateComment" || action === "deleteComment" || action === "addAttachment";
     await requirePermission(client, user, actionRequiresExecution ? "execute" : "view");
 
     if (action === "getData") return jsonResponse({ ok: true, ...(await getData(client, payload)) });
     if (action === "getRelatedByCpf") return jsonResponse({ ok: true, ...(await getRelatedByCpf(client, payload)) });
+    if (action === "updateTask") return jsonResponse({ ok: true, data: await updateTaskFromHub(client, payload) });
     if (action === "getTaskActivity") return jsonResponse({ ok: true, ...(await getTaskActivity(client, payload, user)) });
     if (action === "createComment") return jsonResponse({ ok: true, data: await createTaskComment(client, payload, user) });
     if (action === "replyComment") return jsonResponse({ ok: true, data: await createThreadedComment(client, payload, user) });

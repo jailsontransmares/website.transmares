@@ -62,7 +62,7 @@ export const HUB_MENU_TREE = [
     id: 'financeiro',
     label: 'Financeiro',
     type: 'route',
-    route: '/financeiro',
+    route: '/financeiro/dashboard',
     moduleId: 'financeiro',
     permission: { resource: 'financeiro', action: 'view' },
     status: 'active',
@@ -72,7 +72,7 @@ export const HUB_MENU_TREE = [
     id: 'rh-dp',
     label: 'RH & DP',
     type: 'route',
-    route: '/rh-dp',
+    route: '/rh-dp/colaboradores',
     moduleId: 'rh-dp',
     permission: { resource: 'rh_dp', action: 'view' },
     status: 'active',
@@ -100,6 +100,32 @@ export const HUB_MENU_TREE = [
             permission: { resource: 'configuracoes.corretora', action: 'view' },
             status: 'alias-required',
             note: 'Absorve as antigas opções Identidade do Painel, Aparência, Logo e Marca e Home e Exibição.'
+          },
+          {
+            id: 'administracao-sistema-logs',
+            label: 'Logs',
+            type: 'group',
+            permission: { resource: 'admin.logs_integracoes', action: 'view' },
+            status: 'active',
+            children: [
+              {
+                id: 'administracao-sistema-logs-integracoes',
+                label: 'Logs',
+                type: 'route',
+                route: '/admin/sistema/logs-integracoes',
+                permission: { resource: 'admin.logs_integracoes', action: 'view' },
+                status: 'active'
+              },
+              {
+                id: 'administracao-sistema-logs-auditoria',
+                label: 'Auditoria',
+                type: 'route',
+                route: '/admin/sistema/logs-integracoes/auditoria',
+                permission: { resource: 'admin', action: 'view' },
+                status: 'planned',
+                note: 'Submódulo reservado para auditoria administrativa, separado dos logs operacionais.'
+              }
+            ]
           }
         ]
       },

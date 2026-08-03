@@ -1,3 +1,5 @@
+import { obterRotuloStatusHub } from './statusLabels.js';
+
 export const FINANCEIRO_SECOES = [
   {
     id: 'dashboard',
@@ -797,7 +799,7 @@ function renderCadastros({ state, escapeHtml, escapeAttr }) {
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${operacional.loading
-        ? '<div class="fin-loading" role="status">Carregando cadastros...</div>'
+        ? window.hubRenderLoading?.('Carregando cadastros...') || '<div class="fin-loading" role="status">Carregando cadastros...</div>'
         : `
           <div class="fin-operational-toolbar">
             <div>
@@ -977,7 +979,7 @@ function renderLancamentosTabela({ lancamentos, operacional, escapeHtml, escapeA
               <td>${item.natureza === 'saida' ? 'A pagar' : 'A receber'}</td>
               <td>${formatarData(item.data_vencimento)}</td>
               <td>${formatarMoeda(item.valor_total)}</td>
-              <td><span class="fin-status ${statusClasseFinanceiro(item.status)}">${escapeHtml(item.status)}</span></td>
+              <td><span class="fin-status ${statusClasseFinanceiro(item.status)}">${escapeHtml(obterRotuloStatusHub(item.status))}</span></td>
               <td>
                 <button
                   class="secondary-btn danger"
@@ -1028,7 +1030,7 @@ function renderParcelasTabela({ parcelas, operacional, escapeHtml, escapeAttr })
                 </td>
                 <td>${formatarData(item.data_vencimento)}</td>
                 <td>${formatarMoeda(item.valor)}</td>
-                <td><span class="fin-status ${statusClasseFinanceiro(item.status)}">${escapeHtml(item.status)}</span></td>
+                <td><span class="fin-status ${statusClasseFinanceiro(item.status)}">${escapeHtml(obterRotuloStatusHub(item.status))}</span></td>
                 <td>
                   ${baixavel ? `
                     <form class="fin-baixa-form" data-fin-form="baixa">
@@ -1159,9 +1161,7 @@ function renderLancamentos({ state, escapeHtml, escapeAttr }) {
             + Incluir
           </button>
           <button class="secondary-btn fin-refresh-btn" type="button" data-fin-action="refresh-lancamentos" aria-label="Atualizar lançamentos" title="Atualizar lançamentos" ${operacional.loading ? 'disabled' : ''}>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M20 11a8 8 0 0 0-14.9-3.8L3 9m0 0V4m0 5h5M4 13a8 8 0 0 0 14.9 3.8L21 15m0 0v5m0-5h-5"></path>
-            </svg>
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
           </button>
         </div>
       </div>
@@ -1169,7 +1169,7 @@ function renderLancamentos({ state, escapeHtml, escapeAttr }) {
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${operacional.loading
-        ? '<div class="fin-loading" role="status">Carregando lancamentos...</div>'
+        ? window.hubRenderLoading?.('Carregando lançamentos...') || '<div class="fin-loading" role="status">Carregando lançamentos...</div>'
         : renderLancamentosConteudoAba({ abaId: aba.id, operacional, escapeHtml, escapeAttr })}
       ${renderLancamentoModal({ operacional, escapeHtml, escapeAttr })}
     </div>
@@ -1290,21 +1290,21 @@ function renderConciliacao({ state, escapeHtml, escapeAttr }) {
       </div>
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
-      ${operacional.loading ? '<div class="fin-loading" role="status">Carregando conciliacao...</div>' : `
+      ${operacional.loading ? (window.hubRenderLoading?.('Carregando conciliação...') || '<div class="fin-loading" role="status">Carregando conciliação...</div>') : `
         <div class="fin-operational-grid">
           ${renderConciliacaoLista({
             titulo: 'Importacoes',
             itens: operacional.importacoes,
             vazio: 'Nenhuma importacao encontrada.',
             escapeHtml,
-            linhas: item => [item.nome_arquivo, `${item.formato?.toUpperCase() || 'OFX'} | ${item.status}`, item.conta?.nome || 'Conta']
+            linhas: item => [item.nome_arquivo, `${item.formato?.toUpperCase() || 'OFX'} | ${obterRotuloStatusHub(item.status)}`, item.conta?.nome || 'Conta']
           })}
           ${renderConciliacaoLista({
             titulo: 'Movimentos',
             itens: operacional.movimentos,
             vazio: 'Nenhum movimento bancario encontrado.',
             escapeHtml,
-            linhas: item => [item.descricao, `${formatarData(item.data_movimento)} | ${item.tipo} | ${item.status}`, `${item.conta?.nome || 'Conta'} - ${formatarMoeda(item.valor)}`]
+            linhas: item => [item.descricao, `${formatarData(item.data_movimento)} | ${item.tipo} | ${obterRotuloStatusHub(item.status)}`, `${item.conta?.nome || 'Conta'} - ${formatarMoeda(item.valor)}`]
           })}
           ${renderConciliacaoLista({
             titulo: 'Sugestoes',
@@ -1330,7 +1330,7 @@ function renderConciliacao({ state, escapeHtml, escapeAttr }) {
             escapeHtml,
             linhas: item => [
               item.movimento?.descricao || 'Movimento',
-              `${formatarData(item.data_conciliacao)} | ${item.tipo_vinculo} | ${item.status}`,
+              `${formatarData(item.data_conciliacao)} | ${item.tipo_vinculo} | ${obterRotuloStatusHub(item.status)}`,
               `${labelLancamentoConciliacao(item.lancamento)} - ${formatarMoeda(item.valor_conciliado)}`
             ],
             acoes: item => item.status === 'conciliada'
@@ -1459,14 +1459,14 @@ function renderCartoes({ state, escapeHtml, escapeAttr }) {
       </div>
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
-      ${operacional.loading ? '<div class="fin-loading" role="status">Carregando cartoes...</div>' : `
+      ${operacional.loading ? (window.hubRenderLoading?.('Carregando cartões...') || '<div class="fin-loading" role="status">Carregando cartões...</div>') : `
         <div class="fin-operational-grid">
           ${renderConfigLista({
             titulo: 'Cartoes',
             itens: operacional.cartoes,
             vazio: 'Nenhum cartao encontrado.',
             escapeHtml,
-            linhas: item => [item.nome, `${item.tipo} | ${item.status}`, `${item.conta?.nome || 'Conta'} - limite ${formatarMoeda(item.limite_credito)}`],
+            linhas: item => [item.nome, `${item.tipo} | ${obterRotuloStatusHub(item.status)}`, `${item.conta?.nome || 'Conta'} - limite ${formatarMoeda(item.limite_credito)}`],
             acoes: item => item.status === 'ativo'
               ? `<button class="secondary-btn danger" type="button" data-fin-cartao-action="cancelar" data-tipo="cartao" data-id="${escapeAttr(item.id)}" ${operacional.saving ? 'disabled' : ''}>Cancelar</button>`
               : ''
@@ -1476,7 +1476,7 @@ function renderCartoes({ state, escapeHtml, escapeAttr }) {
             itens: operacional.compras,
             vazio: 'Nenhuma compra encontrada.',
             escapeHtml,
-            linhas: item => [item.descricao, `${formatarData(item.data_compra)} | ${item.parcelas}x | ${item.status}`, `${item.cartao?.nome || 'Cartao'} - ${formatarMoeda(item.valor_total)}`],
+            linhas: item => [item.descricao, `${formatarData(item.data_compra)} | ${item.parcelas}x | ${obterRotuloStatusHub(item.status)}`, `${item.cartao?.nome || 'Cartao'} - ${formatarMoeda(item.valor_total)}`],
             acoes: item => ['ativa', 'faturada'].includes(item.status)
               ? `<button class="secondary-btn danger" type="button" data-fin-cartao-action="cancelar" data-tipo="compra" data-id="${escapeAttr(item.id)}" ${operacional.saving ? 'disabled' : ''}>Cancelar</button>`
               : ''
@@ -1488,7 +1488,7 @@ function renderCartoes({ state, escapeHtml, escapeAttr }) {
             escapeHtml,
             linhas: item => [
               item.cartao?.nome || 'Cartao',
-              `${formatarCompetencia(item.competencia)} | vence ${formatarData(item.data_vencimento)} | ${item.status}`,
+              `${formatarCompetencia(item.competencia)} | vence ${formatarData(item.data_vencimento)} | ${obterRotuloStatusHub(item.status)}`,
               `${formatarMoeda(item.valor_pago)} pago de ${formatarMoeda(item.valor_total)}`
             ],
             acoes: item => ['aberta', 'fechada', 'parcial'].includes(item.status)
@@ -1500,7 +1500,7 @@ function renderCartoes({ state, escapeHtml, escapeAttr }) {
             itens: operacional.pagamentos,
             vazio: 'Nenhum pagamento encontrado.',
             escapeHtml,
-            linhas: item => [item.fatura?.cartao?.nome || 'Fatura', `${formatarData(item.data_pagamento)} | ${item.status}`, `${item.conta?.nome || 'Conta'} - ${formatarMoeda(item.valor)}`],
+            linhas: item => [item.fatura?.cartao?.nome || 'Fatura', `${formatarData(item.data_pagamento)} | ${obterRotuloStatusHub(item.status)}`, `${item.conta?.nome || 'Conta'} - ${formatarMoeda(item.valor)}`],
             acoes: item => item.status === 'confirmado'
               ? `<button class="secondary-btn danger" type="button" data-fin-cartao-action="cancelar" data-tipo="pagamento" data-id="${escapeAttr(item.id)}" ${operacional.saving ? 'disabled' : ''}>Cancelar</button>`
               : ''
@@ -1714,14 +1714,14 @@ function renderRelatoriosFechamento({ state, pode, escapeHtml, escapeAttr }) {
       </div>
       ${operacional.mensagem ? `<p class="fin-operational-message success">${escapeHtml(operacional.mensagem)}</p>` : ''}
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
-      ${operacional.loading ? '<div class="fin-loading" role="status">Carregando relatorios...</div>' : `
+      ${operacional.loading ? (window.hubRenderLoading?.('Carregando relatórios...') || '<div class="fin-loading" role="status">Carregando relatórios...</div>') : `
         <div class="fin-operational-grid">
           ${renderConfigLista({
             titulo: 'Execucoes de relatorio',
             itens: operacional.relatorios,
             vazio: 'Nenhum relatorio gerado.',
             escapeHtml,
-            linhas: item => [labelRelatorioTipo(item.tipo_relatorio), `${formatarData(item.periodo_inicio)} ate ${formatarData(item.periodo_fim)} | ${item.status}`, item.exportado_em ? `Exportado em ${formatarData(item.exportado_em)}` : 'Pendente de exportacao'],
+            linhas: item => [labelRelatorioTipo(item.tipo_relatorio), `${formatarData(item.periodo_inicio)} até ${formatarData(item.periodo_fim)} | ${obterRotuloStatusHub(item.status)}`, item.exportado_em ? `Exportado em ${formatarData(item.exportado_em)}` : 'Pendente de exportação'],
             acoes: item => item.status === 'gerado'
               ? `<button class="secondary-btn" type="button" data-fin-relatorio-action="exportar-relatorio" data-id="${escapeAttr(item.id)}" ${operacional.saving || !podeExportar ? 'disabled' : ''}>Exportar</button>`
               : ''
@@ -1731,7 +1731,7 @@ function renderRelatoriosFechamento({ state, pode, escapeHtml, escapeAttr }) {
             itens: operacional.periodos,
             vazio: 'Nenhum periodo de fechamento encontrado.',
             escapeHtml,
-            linhas: item => [item.tipo, `${formatarData(item.periodo_inicio)} ate ${formatarData(item.periodo_fim)} | ${item.status}`, item.hash_snapshot || item.motivo_reabertura || 'Snapshot operacional'],
+            linhas: item => [item.tipo, `${formatarData(item.periodo_inicio)} até ${formatarData(item.periodo_fim)} | ${obterRotuloStatusHub(item.status)}`, item.hash_snapshot || item.motivo_reabertura || 'Snapshot operacional'],
             acoes: item => item.status !== 'fechado'
               ? `<button class="save-btn" type="button" data-fin-relatorio-action="fechar-periodo" data-id="${escapeAttr(item.id)}" ${operacional.saving || !podeFechamento ? 'disabled' : ''}>Fechar</button>`
               : `<button class="secondary-btn" type="button" data-fin-relatorio-action="reabrir-periodo" data-id="${escapeAttr(item.id)}" ${operacional.saving || !podeReabrir ? 'disabled' : ''}>Reabrir</button>`
@@ -1741,7 +1741,7 @@ function renderRelatoriosFechamento({ state, pode, escapeHtml, escapeAttr }) {
             itens: operacional.orcamentos,
             vazio: 'Nenhum orcamento cadastrado.',
             escapeHtml,
-            linhas: item => [formatarCompetencia(item.competencia), `${item.natureza} | ${item.status}`, `${item.categoria?.nome || 'Sem categoria'} - ${formatarMoeda(item.valor_previsto)}`],
+            linhas: item => [formatarCompetencia(item.competencia), `${item.natureza} | ${obterRotuloStatusHub(item.status)}`, `${item.categoria?.nome || 'Sem categoria'} - ${formatarMoeda(item.valor_previsto)}`],
             acoes: item => item.status === 'ativo'
               ? `<button class="secondary-btn danger" type="button" data-fin-relatorio-action="arquivar-orcamento" data-id="${escapeAttr(item.id)}" ${operacional.saving || !podeExportar ? 'disabled' : ''}>Arquivar</button>`
               : ''
@@ -2049,7 +2049,7 @@ function renderAlertasConfiguracoes({ operacional, escapeHtml, escapeAttr, podeE
         itens: operacional.alertas,
         vazio: 'Nenhum alerta encontrado.',
         escapeHtml,
-        linhas: item => [item.titulo, `${item.severidade} | ${item.status}`, item.mensagem],
+        linhas: item => [item.titulo, `${item.severidade} | ${obterRotuloStatusHub(item.status)}`, item.mensagem],
         acoes: item => item.status === 'aberto'
           ? `<button class="secondary-btn" type="button" data-fin-config-action="resolver-alerta" data-id="${escapeAttr(item.id)}" ${desabilitado}>Resolver</button>`
           : ''
@@ -2059,7 +2059,7 @@ function renderAlertasConfiguracoes({ operacional, escapeHtml, escapeAttr, podeE
         itens: operacional.agendamentos,
         vazio: 'Nenhum agendamento encontrado.',
         escapeHtml,
-        linhas: item => [item.titulo, `${item.recorrencia} | ${item.status}`, item.mensagem]
+        linhas: item => [item.titulo, `${item.recorrencia} | ${obterRotuloStatusHub(item.status)}`, item.mensagem]
       })}
       ${renderConfigModal({ operacional, tipo: operacional.modalConfigTipo, escapeHtml, escapeAttr, podeEditar })}
     </div>
@@ -2084,7 +2084,7 @@ function renderBackupsConfiguracoes({ operacional, escapeHtml, escapeAttr, podeE
         itens: operacional.backups,
         vazio: 'Nenhum backup encontrado.',
         escapeHtml,
-        linhas: item => [item.tipo, `${item.armazenamento} | ${item.status}`, item.drive_path || 'Sem caminho'],
+        linhas: item => [item.tipo, `${item.armazenamento} | ${obterRotuloStatusHub(item.status)}`, item.drive_path || 'Sem caminho'],
         acoes: item => ['agendado', 'executando', 'falhou'].includes(item.status)
           ? `<button class="secondary-btn danger" type="button" data-fin-config-action="cancelar-backup" data-id="${escapeAttr(item.id)}" ${desabilitado}>Cancelar</button>`
           : ''
@@ -2129,7 +2129,7 @@ function renderHomologacaoOperacional({ operacional, escapeHtml, escapeAttr, pod
         itens: operacional.ciclos,
         vazio: 'Nenhum ciclo encontrado.',
         escapeHtml,
-        linhas: item => [item.nome, item.status, formatarData(item.iniciado_em)],
+        linhas: item => [item.nome, obterRotuloStatusHub(item.status), formatarData(item.iniciado_em)],
         acoes: item => !['concluido', 'cancelado', 'bloqueado'].includes(item.status)
           ? `<button class="secondary-btn" type="button" data-fin-config-action="concluir-ciclo" data-id="${escapeAttr(item.id)}" ${desabilitado}>Concluir</button>`
           : ''
@@ -2139,7 +2139,7 @@ function renderHomologacaoOperacional({ operacional, escapeHtml, escapeAttr, pod
         itens: operacional.checklist,
         vazio: 'Nenhum checklist encontrado.',
         escapeHtml,
-        linhas: item => [item.item, `${item.grupo} | ${item.status}`, item.observacoes || ''],
+        linhas: item => [item.item, `${item.grupo} | ${obterRotuloStatusHub(item.status)}`, item.observacoes || ''],
         acoes: item => item.status === 'pendente'
           ? `<button class="secondary-btn" type="button" data-fin-config-action="validar-checklist" data-id="${escapeAttr(item.id)}" ${desabilitado}>Validar</button>`
           : ''
@@ -2149,7 +2149,7 @@ function renderHomologacaoOperacional({ operacional, escapeHtml, escapeAttr, pod
         itens: operacional.divergencias,
         vazio: 'Nenhuma divergencia encontrada.',
         escapeHtml,
-        linhas: item => [item.descricao, `${item.tipo} | ${item.severidade} | ${item.status}`, item.resolucao || ''],
+        linhas: item => [item.descricao, `${item.tipo} | ${item.severidade} | ${obterRotuloStatusHub(item.status)}`, item.resolucao || ''],
         acoes: item => ['aberta', 'em_analise'].includes(item.status)
           ? `<button class="secondary-btn" type="button" data-fin-config-action="resolver-divergencia" data-id="${escapeAttr(item.id)}" ${desabilitado}>Resolver</button>`
           : ''
@@ -2178,7 +2178,7 @@ function renderConfiguracoes({ state, escapeHtml, escapeAttr }) {
       ${operacional.erro ? `<p class="fin-operational-message error">${escapeHtml(operacional.erro)}</p>` : ''}
       ${!podeEditar && aba.id !== 'auditoria' ? '<p class="fin-operational-message error">Seu perfil pode visualizar, mas nao alterar configuracoes financeiras.</p>' : ''}
       ${operacional.loading
-        ? '<div class="fin-loading" role="status">Carregando configuracoes...</div>'
+        ? window.hubRenderLoading?.('Carregando configurações...') || '<div class="fin-loading" role="status">Carregando configurações...</div>'
         : `
           <div class="fin-subarea-header">
             <span class="ar-eyebrow">Configurações</span>
@@ -2260,7 +2260,7 @@ export function renderFinanceiroPagina({
       </section>
     `;
   } else if (state.loading) {
-    conteudoPrincipal = '<div class="fin-loading" role="status">Carregando estrutura financeira...</div>';
+    conteudoPrincipal = window.hubRenderLoading?.('Carregando estrutura financeira...') || '<div class="fin-loading" role="status">Carregando estrutura financeira...</div>';
   } else if (state.erro) {
     conteudoPrincipal = `
       <div class="fin-error-state" role="alert">

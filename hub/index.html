@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex, nofollow" />
 
   <title>PAINEL TRANSMARES</title>
+  <link rel="stylesheet" href="../src/hub/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -27,9 +28,12 @@
 </head>
 <body>
   <div id="app">
-    <section class="loading-card">
-      <h1>PAINEL TRANSMARES</h1>
-      <p>Carregando sistema...</p>
+    <section class="loading-card" aria-live="polite" aria-busy="true">
+      <h1>Hub Transmares</h1>
+      <div class="hub-loading" role="status" aria-live="polite" aria-busy="true">
+        <span class="hub-loading-spinner" aria-hidden="true"></span>
+        <span class="hub-loading-text">Carregando sistema...</span>
+      </div>
     </section>
   </div>
 

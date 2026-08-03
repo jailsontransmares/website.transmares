@@ -6,7 +6,6 @@
   "engines": {
     "node": "22.x"
   },
-
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -15,7 +14,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.0"
+    "@supabase/supabase-js": "^2.50.0",
+    "lucide": "^1.28.0"
   },
   "devDependencies": {
     "supabase": "^2.111.0",

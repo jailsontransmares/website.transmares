@@ -32,6 +32,7 @@ import {
   fecharMenuAcaoGlobal,
   limparMenusAcoesGlobais
 } from './actionMenuPortal.js';
+import { obterRotuloStatusHub } from './statusLabels.js';
 
 const LIMITE_POR_PAGINA = 10;
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
@@ -424,6 +425,9 @@ export function criarRhDpController({
     const partes = obterPartesRota?.() || [];
     if (partes[1] !== 'colaboradores' || !partes[2]) return null;
     if (partes[2] === 'novo') return { id: '', modo: 'create' };
+    if (['editar', 'visualizar'].includes(partes[2]) && partes[3]) {
+      return { id: partes[3], modo: partes[2] === 'editar' ? 'edit' : 'view' };
+    }
     return {
       id: partes[2],
       modo: partes[3] === 'editar' ? 'edit' : 'view'
@@ -436,7 +440,7 @@ export function criarRhDpController({
 
   function obterRotaCadastro(id = '', modo = 'view') {
     if (!id) return `${obterRotaColaboradores()}/novo`;
-    return `${obterRotaColaboradores()}/${id}/${modo === 'edit' ? 'editar' : 'visualizar'}`;
+    return `${obterRotaColaboradores()}/${modo === 'edit' ? 'editar' : 'visualizar'}/${id}`;
   }
 
   function renderMenuRhDp() {
@@ -481,8 +485,8 @@ export function criarRhDpController({
           { label: 'Confirmados', shortLabel: 'C', value: state.ferias.filter(item => item.status === 'confirmado_contabilidade').length, tone: 'success' }
         ], podeCriarFerias() ? '<button class="save-btn" type="button" data-rh-action="open-ferias-modal">+ Planejar férias</button>' : '')}
         ${state.controleLoading
-          ? '<p class="quick-link-empty">Carregando férias...</p>'
-          : `<div class="rh-control-list">${state.ferias.length ? state.ferias.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)} · ${item.dias_gozo} dia(s)</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum planejamento de férias registrado.</p>'}</div>`}
+          ? (window.hubRenderLoading?.('Carregando férias...') || '<p class="quick-link-empty" role="status">Carregando férias...</p>')
+          : `<div class="rh-control-list">${state.ferias.length ? state.ferias.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.inicio_gozo)} a ${formatarData(item.fim_gozo)} · ${item.dias_gozo} dia(s)</span></div><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum planejamento de férias registrado.</p>'}</div>`}
       </section>
       ${renderModalFerias()}
     `;
@@ -549,8 +553,8 @@ export function criarRhDpController({
           { label: 'Divergentes', shortLabel: 'D', value: state.afastamentos.filter(item => item.status === 'divergente').length, tone: 'danger' }
         ], podeCriarOcorrencias() ? '<div class="rh-row-actions"><button class="save-btn" type="button" data-rh-action="open-afastamento-modal">+ Afastamento</button><button class="secondary-btn" type="button" data-rh-action="open-ocorrencia-modal">+ Ocorrência</button></div>' : '')}
         <div class="rh-control-list">
-          ${state.afastamentos.length ? state.afastamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</strong><span>Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno previsto ${formatarData(item.previsao_retorno_em)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum afastamento registrado.</p>'}
-          ${state.ocorrencias.length ? state.ocorrencias.map(item => `<article><div><strong>${escapeHtml(item.titulo)} · ${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.data_ocorrencia)} · ${escapeHtml(item.categoria.replaceAll('_',' '))}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma ocorrência registrada.</p>'}
+          ${state.afastamentos.length ? state.afastamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</strong><span>Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno previsto ${formatarData(item.previsao_retorno_em)}` : ''}</span></div><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhum afastamento registrado.</p>'}
+          ${state.ocorrencias.length ? state.ocorrencias.map(item => `<article><div><strong>${escapeHtml(item.titulo)} · ${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${formatarData(item.data_ocorrencia)} · ${escapeHtml(item.categoria.replaceAll('_',' '))}</span></div><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma ocorrência registrada.</p>'}
         </div>
       </section>
       ${renderModalAfastamento()}
@@ -651,8 +655,8 @@ export function criarRhDpController({
           { label: 'Divergentes', shortLabel: 'D', value: state.demandas.filter(item => item.divergencia_descricao).length, tone: 'danger' }
         ], podeCriarDemandas() ? '<button class="save-btn" type="button" data-rh-action="open-demanda-modal">+ Nova demanda</button>' : '')}
         ${state.controleLoading
-          ? '<p class="quick-link-empty">Carregando demandas...</p>'
-          : `<div class="rh-control-list">${state.demandas.length ? state.demandas.map(item => `<article><div><strong>${escapeHtml(item.titulo)}</strong><span>${escapeHtml(item.rh_colaboradores?.nome_completo || formatarCategoriaArquivo(item.tipo))}${item.prazo ? ` · prazo ${formatarData(item.prazo)}` : ''}</span></div><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma demanda registrada.</p>'}</div>`}
+          ? (window.hubRenderLoading?.('Carregando demandas...') || '<p class="quick-link-empty" role="status">Carregando demandas...</p>')
+          : `<div class="rh-control-list">${state.demandas.length ? state.demandas.map(item => `<article><div><strong>${escapeHtml(item.titulo)}</strong><span>${escapeHtml(item.rh_colaboradores?.nome_completo || formatarCategoriaArquivo(item.tipo))}${item.prazo ? ` · prazo ${formatarData(item.prazo)}` : ''}</span></div><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span></article>`).join('') : '<p class="quick-link-empty">Nenhuma demanda registrada.</p>'}</div>`}
       </section>
       ${renderModalDemanda()}
     `;
@@ -715,8 +719,8 @@ export function criarRhDpController({
           { label: 'Divergentes', shortLabel: 'D', value: state.competencias.filter(item => item.status === 'com_divergencia').length, tone: 'danger' }
         ], podeCriarFechamentos() ? '<button class="save-btn" type="button" data-rh-action="open-competencia-modal">+ Nova competência</button>' : '')}
         ${state.controleLoading
-          ? '<p class="quick-link-empty">Carregando competências...</p>'
-          : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => { const eventos = item.rh_eventos_competencia || []; return `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${eventos.length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span>${eventos.length ? `<small>${eventos.map(evento => `${escapeHtml(evento.tipo.replaceAll('_',' '))}: ${escapeHtml(evento.rh_colaboradores?.nome_completo || evento.descricao)} (${escapeHtml(evento.status)})${podeEditarFechamentos() && !['confirmado','dispensado'].includes(evento.status) ? ` <button type="button" class="icon-action-btn" onclick="hubRhDpAtualizarEvento('${evento.id}')">Atualizar</button>` : ''}`).join(' · ')}</small>` : ''}</div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_', ' '))}</span>${podeEditarFechamentos() ? `<button type="button" class="icon-action-btn" data-rh-action="open-evento-modal" data-competencia-id="${escapeAttr(item.id)}">Evento</button><button type="button" class="icon-action-btn" ${eventos.some(evento => ['pendente','enviado','divergencia'].includes(evento.status)) ? 'disabled' : ''} onclick="hubRhDpConcluirCompetencia('${item.id}')">Concluir</button>` : ''}</div></article>`; }).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}
+          ? (window.hubRenderLoading?.('Carregando competências...') || '<p class="quick-link-empty" role="status">Carregando competências...</p>')
+          : `<div class="rh-control-list">${state.competencias.length ? state.competencias.map(item => { const eventos = item.rh_eventos_competencia || []; return `<article><div><strong>${formatarData(item.competencia).slice(3)}</strong><span>${eventos.length} evento(s) · ${item.prazo_envio ? `prazo ${formatarData(item.prazo_envio)}` : 'sem prazo informado'}</span>${eventos.length ? `<small>${eventos.map(evento => `${escapeHtml(evento.tipo.replaceAll('_',' '))}: ${escapeHtml(evento.rh_colaboradores?.nome_completo || evento.descricao)} (${escapeHtml(obterRotuloStatusHub(evento.status))})${podeEditarFechamentos() && !['confirmado','dispensado'].includes(evento.status) ? ` <button type="button" class="icon-action-btn" onclick="hubRhDpAtualizarEvento('${evento.id}')">Atualizar</button>` : ''}`).join(' · ')}</small>` : ''}</div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span>${podeEditarFechamentos() ? `<button type="button" class="icon-action-btn" data-rh-action="open-evento-modal" data-competencia-id="${escapeAttr(item.id)}">Evento</button><button type="button" class="icon-action-btn" ${eventos.some(evento => ['pendente','enviado','divergencia'].includes(evento.status)) ? 'disabled' : ''} onclick="hubRhDpConcluirCompetencia('${item.id}')">Concluir</button>` : ''}</div></article>`; }).join('') : '<p class="quick-link-empty">Nenhuma competência aberta.</p>'}</div>`}
       </section>
       ${renderModalCompetencia()}
       ${renderModalEvento()}
@@ -807,8 +811,8 @@ export function criarRhDpController({
           { label: 'Divergentes', shortLabel: 'D', value: state.desligamentos.filter(item => item.status === 'divergente').length, tone: 'danger' }
         ], podeCriarDesligamentos() ? '<button class="save-btn" type="button" data-rh-action="open-desligamento-modal">+ Novo desligamento</button>' : '')}
         ${state.controleLoading
-          ? '<p class="quick-link-empty">Carregando desligamentos...</p>'
-          : `<div class="rh-control-list">${state.desligamentos.length ? state.desligamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · competência ${formatarData(item.competencia).slice(3)}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}</span><small>${(item.rh_checklist_desligamento || []).filter(check => check.status === 'concluido').length}/6 itens da checklist concluídos</small></div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(item.status.replaceAll('_',' '))}</span>${podeEditarDesligamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpConcluirChecklistDesligamento('${item.id}')">Checklist</button>` : ''}</div></article>`).join('') : '<p class="quick-link-empty">Nenhum desligamento registrado.</p>'}</div>`}
+          ? (window.hubRenderLoading?.('Carregando desligamentos...') || '<p class="quick-link-empty" role="status">Carregando desligamentos...</p>')
+          : `<div class="rh-control-list">${state.desligamentos.length ? state.desligamentos.map(item => `<article><div><strong>${escapeHtml(item.rh_colaboradores?.nome_completo || nomeColaborador(item.colaborador_id))}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · competência ${formatarData(item.competencia).slice(3)}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}</span><small>${(item.rh_checklist_desligamento || []).filter(check => check.status === 'concluido').length}/6 itens da checklist concluídos</small></div><div class="rh-row-actions"><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status))}</span>${podeEditarDesligamentos() ? `<button type="button" class="icon-action-btn" onclick="hubRhDpConcluirChecklistDesligamento('${item.id}')">Checklist</button>` : ''}</div></article>`).join('') : '<p class="quick-link-empty">Nenhum desligamento registrado.</p>'}</div>`}
       </section>
       ${renderModalDesligamento()}
     `;
@@ -950,6 +954,7 @@ export function criarRhDpController({
     const contato = item.telefone_celular || item.email_contato || '-';
     const status = item.status === 'inativo' ? 'inativo' : 'ativo';
     const colaboradorId = escapeAttr(item.id);
+    const colaboradorCodigo = escapeAttr(item.codigo || item.id);
 
     return `
       <article class="rh-table rh-table-row" role="row">
@@ -965,8 +970,8 @@ export function criarRhDpController({
           <details class="rh-row-actions-menu">
             <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome_completo)}" title="Ações rápidas">⋮</summary>
             <div class="rh-row-actions-popover" role="menu">
-              <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorId}', 'view')">Visualizar</button>
-              ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorId}', 'edit')">Editar</button>` : ''}
+              <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">Visualizar</button>
+              ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'edit')">Editar</button>` : ''}
               ${status === 'ativo' && podeCriarFerias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-ferias" data-colaborador-id="${colaboradorId}">Incluir férias</button>` : ''}
               ${status === 'ativo' && podeCriarOcorrencias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-afastamento" data-colaborador-id="${colaboradorId}">Lançar afastamento</button>` : ''}
               ${status === 'ativo' && podeCriarDesligamentos() ? `<button type="button" role="menuitem" data-rh-action="quick-open-desligamento" data-colaborador-id="${colaboradorId}">Lançar desligamento</button>` : ''}
@@ -1045,7 +1050,7 @@ export function criarRhDpController({
 
           <div class="rh-collaborators-overview">${renderToolbar()}</div>
           ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
-          ${state.loading ? '<p class="quick-link-empty">Carregando colaboradores...</p>' : renderTabela()}
+          ${state.loading ? (window.hubRenderLoading?.('Carregando colaboradores...') || '<p class="quick-link-empty" role="status">Carregando colaboradores...</p>') : renderTabela()}
         </section>`}
       `;
 
@@ -1463,7 +1468,7 @@ export function criarRhDpController({
     if (!podeVerSensiveis()) return '';
     const itens = state.modal.beneficios;
     return `<section class="rh-form-section"><div class="rh-form-section-title rh-files-title"><div><strong>Benefícios</strong><span>Controle interno de concessões e coparticipações.</span></div></div>
-      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · ${escapeHtml(item.status)}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div></article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div>
+      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · ${escapeHtml(obterRotuloStatusHub(item.status))}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div></article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div>
       ${readonly || !state.modal.id ? '' : `<details class="rh-control-form"><summary>Adicionar benefício</summary><div class="rh-form-grid">${campoSelect('beneficio_tipo','Tipo','',['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'])}${campo('beneficio_nome','Nome do benefício','')}${campo('beneficio_operadora','Operadora/fornecedor','')}${campo('beneficio_valor_empresa','Valor empresa','',{placeholder:'0,00'})}${campo('beneficio_valor_colaborador','Valor colaborador','',{placeholder:'0,00'})}${campo('beneficio_inicio','Início','',{type:'date'})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarBeneficio()">Adicionar benefício</button></details>`}</section>`;
   }
 
@@ -1522,7 +1527,7 @@ export function criarRhDpController({
 
   function renderListaArquivos(readonly) {
     if (state.modal.arquivosLoading) {
-      return '<p class="quick-link-empty">Carregando arquivos...</p>';
+      return window.hubRenderLoading?.('Carregando arquivos...') || '<p class="quick-link-empty" role="status">Carregando arquivos...</p>';
     }
 
     if (!state.modal.arquivos.length) {
@@ -1612,7 +1617,7 @@ export function criarRhDpController({
         : tipo === 'afastamentos'
           ? `Início ${formatarData(item.inicio_em)}${item.previsao_retorno_em ? ` · retorno ${formatarData(item.previsao_retorno_em)}` : ''}`
           : `${item.competencia ? `Competência ${formatarData(item.competencia).slice(3)}` : ''}${item.ultimo_dia_trabalho ? ` · último dia ${formatarData(item.ultimo_dia_trabalho)}` : ''}`;
-      return `<article class="rh-operational-record"><div><strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(detalhe)}</span></div><span class="status-badge">${escapeHtml(String(item.status || 'sem status').replaceAll('_', ' '))}</span></article>`;
+      return `<article class="rh-operational-record"><div><strong>${escapeHtml(titulo)}</strong><span>${escapeHtml(detalhe)}</span></div><span class="status-badge">${escapeHtml(obterRotuloStatusHub(item.status, 'Sem status'))}</span></article>`;
     };
 
     const blocos = [
@@ -1735,7 +1740,7 @@ export function criarRhDpController({
           ${state.modal.loading ? '' : renderEtapasCadastro(etapas)}
 
           <div id="rh-modal-step-content" class="rh-modal-content rh-modal-phase-content" role="tabpanel">
-            ${state.modal.loading ? '<p class="quick-link-empty">Carregando cadastro...</p>' : state.modal.erros.carregamento ? `
+            ${state.modal.loading ? (window.hubRenderLoading?.('Carregando cadastro...') || '<p class="quick-link-empty" role="status">Carregando cadastro...</p>') : state.modal.erros.carregamento ? `
               <p class="admin-message error">${escapeHtml(state.modal.erros.carregamento)}</p>
             ` : `
               ${state.modal.mensagem ? `<p class="admin-message success">${escapeHtml(state.modal.mensagem)}</p>` : ''}
@@ -2334,7 +2339,8 @@ export function criarRhDpController({
     if (modo === 'edit' && !podeEditar()) return;
 
     if (atualizarRota && navegarParaRota && montarCaminhoModulo) {
-      return navegarParaRota(obterRotaCadastro(id, modo));
+      const cadastro = state.colaboradores.find(item => item.id === id || item.codigo === id);
+      return navegarParaRota(obterRotaCadastro(cadastro?.codigo || id, modo));
     }
 
     state.modal = criarEstadoModal({
@@ -2354,6 +2360,7 @@ export function criarRhDpController({
         id,
         incluirSensiveis: podeVerSensiveis()
       });
+      state.modal.id = dados.colaborador?.id || id;
       state.modal.colaborador = { ...novoColaborador(), ...(dados.colaborador || {}) };
       state.modal.documentos = { ...novosDocumentos(), ...(dados.documentos || {}) };
       state.modal.vinculo = { ...novoVinculo(), ...(dados.vinculo || {}) };
@@ -2367,11 +2374,11 @@ export function criarRhDpController({
         podeVerOcorrencias() ? listarAfastamentosRhDp() : Promise.resolve([]),
         podeVerDesligamentos() ? listarDesligamentosRhDp() : Promise.resolve([])
       ]);
-      state.modal.ferias = ferias.filter(item => item.colaborador_id === id);
-      state.modal.afastamentos = afastamentos.filter(item => item.colaborador_id === id);
-      state.modal.desligamentos = desligamentos.filter(item => item.colaborador_id === id);
+      state.modal.ferias = ferias.filter(item => item.colaborador_id === state.modal.id);
+      state.modal.afastamentos = afastamentos.filter(item => item.colaborador_id === state.modal.id);
+      state.modal.desligamentos = desligamentos.filter(item => item.colaborador_id === state.modal.id);
       state.modal.arquivos = podeVerArquivos()
-        ? await listarArquivosColaboradorRhDp({ colaboradorId: id })
+        ? await listarArquivosColaboradorRhDp({ colaboradorId: state.modal.id })
         : [];
       state.modal.loading = false;
       state.modal.arquivosLoading = false;
