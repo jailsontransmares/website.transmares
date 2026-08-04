@@ -82,7 +82,6 @@ const HUB_LUCIDE_ICONS = {
 };
 
 const CRM_STATUS_OPTIONS = ['em prospecção', 'cliente ativo', 'finalizado', 'lead perdido'];
-
 const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
 
 function sidebarMobileHub() {
@@ -323,6 +322,8 @@ const state = {
   crm: {
     aba: 'resumo',
     filtro: '',
+    statusFiltro: '',
+    syncFiltro: '',
     items: [],
     totalItens: 0,
     ultimaSincronizacao: null,
@@ -336,6 +337,13 @@ const state = {
     editando: false,
     edicaoAlterada: false,
     salvandoEdicao: false,
+    sincronizandoCadastro: false,
+    cadastro: {
+      aberto: false,
+      salvando: false,
+      message: '',
+      draft: {}
+    },
     pedidosRelacionados: {
       aberto: false,
       loading: false,
@@ -7074,7 +7082,10 @@ async function carregarCrmAr(pagina = state.ar.crm.pagina) {
   try {
     const response = await chamarApi('getArCrmData', {
       pagina,
-      limite: crm.itensPorPagina
+      limite: crm.itensPorPagina,
+      busca: crm.filtro,
+      status: crm.statusFiltro,
+      syncStatus: crm.syncFiltro
     });
 
     if (!response.ok) {
@@ -7268,6 +7279,7 @@ function obterRotuloStatusCrmAr(valor = '') {
 
 function renderCrmArPhase1() {
   const crm = state.ar.crm;
+  if (crm.cadastro?.aberto) return renderCadastroClienteCrmAr();
   if (crm.detalhe) return renderDetalheCrmAr(crm.detalhe);
   const podeSincronizar = pode('painel_ar.crm', 'execute');
   const items = crm.items || [];
@@ -7291,6 +7303,9 @@ function renderCrmArPhase1() {
         </div>
         <div class="ar-crm-phase1-actions">
           <span class="ar-crm-phase1-status">${statusIntegracao}</span>
+          <button class="save-btn" type="button" onclick="abrirCadastroClienteCrmAr()" ${!podeSincronizar || !crm.configurado || crm.sincronizando ? 'disabled' : ''}>
+            Novo cliente
+          </button>
           <button class="primary-btn" type="button" onclick="sincronizarCrmAr()" ${!podeSincronizar || crm.sincronizando ? 'disabled' : ''}>
             ${crm.sincronizando ? 'Sincronizando...' : 'Sincronizar agora'}
           </button>
@@ -7300,6 +7315,29 @@ function renderCrmArPhase1() {
       ${faltasConfiguracao.length ? `<p class="ar-crm-config-help">Secret(s) ausente(s): <code>${escapeHtml(faltasConfiguracao.join(', '))}</code></p>` : ''}
 
       ${crm.message ? `<p class="admin-message">${escapeHtml(crm.message)}</p>` : ''}
+
+      <form class="ar-crm-list-filters" onsubmit="aplicarFiltrosCrmAr(event)">
+        <label class="ar-crm-filter-search">
+          <span>Buscar cadastro</span>
+          <input class="config-input" type="search" value="${escapeAttr(crm.filtro || '')}" placeholder="Nome do cliente" oninput="atualizarFiltroCrmAr('busca', this.value)">
+        </label>
+        <label>
+          <span>Status</span>
+          <select class="config-input" onchange="atualizarFiltroCrmAr('status', this.value)">
+            <option value="">Todos os status</option>
+            ${CRM_STATUS_OPTIONS.map((status) => `<option value="${escapeAttr(status)}" ${crm.statusFiltro === status ? 'selected' : ''}>${escapeHtml(obterRotuloStatusCrmAr(status))}</option>`).join('')}
+          </select>
+        </label>
+        <label>
+          <span>Sincronização</span>
+          <select class="config-input" onchange="atualizarFiltroCrmAr('syncStatus', this.value)">
+            <option value="">Todos os estados</option>
+            ${['pending', 'synced', 'error', 'conflict'].map((status) => `<option value="${status}" ${crm.syncFiltro === status ? 'selected' : ''}>${escapeHtml(obterRotuloEstadoSincronizacaoCrmAr(status))}</option>`).join('')}
+          </select>
+        </label>
+        <button class="primary-btn" type="submit">Aplicar filtros</button>
+        ${(crm.filtro || crm.statusFiltro || crm.syncFiltro) ? '<button class="secondary-btn" type="button" onclick="limparFiltrosCrmAr()">Limpar</button>' : ''}
+      </form>
 
       <div class="ar-crm-phase1-grid">
         <article class="ar-crm-phase1-card">
@@ -7352,9 +7390,377 @@ function renderCrmArPhase1() {
   `;
 }
 
-function visualizarCrmAr(id) {
-  const item = state.ar.crm.items.find((registro) => registro.id === id);
-  if (!item) return;
+function aplicarFiltrosCrmAr(event) {
+  event?.preventDefault();
+  state.ar.crm.pagina = 1;
+  carregarCrmAr(1);
+}
+
+function atualizarFiltroCrmAr(tipo, valor) {
+  if (tipo === 'status') state.ar.crm.statusFiltro = String(valor || '');
+  else if (tipo === 'syncStatus') state.ar.crm.syncFiltro = String(valor || '');
+  else state.ar.crm.filtro = String(valor || '');
+}
+
+function limparFiltrosCrmAr() {
+  state.ar.crm.filtro = '';
+  state.ar.crm.statusFiltro = '';
+  state.ar.crm.syncFiltro = '';
+  state.ar.crm.pagina = 1;
+  carregarCrmAr(1);
+}
+
+function abrirCadastroClienteCrmAr() {
+  if (!pode('painel_ar.crm', 'execute')) {
+    state.ar.crm.message = 'Seu usuario nao possui permissao para adicionar clientes no CRM AR.';
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.crm.detalhe = null;
+  const produtosCarregando = !(state.ar.produtos || []).length;
+  const opcoesLocais = obterOpcoesCadastroCrmArLocais();
+  const opcoesLocaisDisponiveis = opcoesLocais.situacoesLead.length > 0 && opcoesLocais.origensCliente.length > 0;
+  state.ar.crm.cadastro = { aberto: true, salvando: false, produtosCarregando, opcoesCarregando: !opcoesLocaisDisponiveis, opcoes: opcoesLocais, message: '', draft: {} };
+  renderPainelAr();
+  if (produtosCarregando) carregarProdutosCadastroCrmAr();
+  carregarOpcoesCadastroCrmAr();
+}
+
+async function carregarProdutosCadastroCrmAr() {
+  try {
+    const response = await chamarApi('getArData');
+    if (!state.ar.crm.cadastro?.aberto) return;
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os produtos.'));
+    state.ar.produtos = response.data?.produtos || [];
+    state.ar.crm.cadastro.produtosCarregando = false;
+    renderPainelAr();
+  } catch (erro) {
+    if (!state.ar.crm.cadastro?.aberto) return;
+    state.ar.crm.cadastro.produtosCarregando = false;
+    state.ar.crm.cadastro.message = erro.message || 'Não foi possível carregar os produtos.';
+    renderPainelAr();
+  }
+}
+
+async function carregarOpcoesCadastroCrmAr() {
+  try {
+    const response = await chamarApi('getArCrmFormOptions');
+    if (!state.ar.crm.cadastro?.aberto) return;
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar as opções do CRM.'));
+    const opcoesRemotas = response.data || {};
+    const opcoesAtuais = state.ar.crm.cadastro.opcoes || {};
+    state.ar.crm.cadastro.opcoes = {
+      origensCliente: Array.isArray(opcoesRemotas.origensCliente) && opcoesRemotas.origensCliente.length ? opcoesRemotas.origensCliente : (opcoesAtuais.origensCliente || []),
+      situacoesLead: Array.isArray(opcoesRemotas.situacoesLead) && opcoesRemotas.situacoesLead.length ? opcoesRemotas.situacoesLead : (opcoesAtuais.situacoesLead || [])
+    };
+    state.ar.crm.cadastro.opcoesCarregando = false;
+    renderPainelAr();
+  } catch (erro) {
+    if (!state.ar.crm.cadastro?.aberto) return;
+    state.ar.crm.cadastro.opcoesCarregando = false;
+    state.ar.crm.cadastro.message = erro.message || 'Não foi possível carregar as opções do CRM.';
+    renderPainelAr();
+  }
+}
+
+function cancelarCadastroClienteCrmAr() {
+  state.ar.crm.cadastro = { aberto: false, salvando: false, message: '', draft: {} };
+  renderPainelAr();
+}
+
+function valorCampoCadastroCrmAr(id) {
+  return document.getElementById(id)?.value?.trim() || '';
+}
+
+function obterMascaraCampoCrmAr(nome = '') {
+  const chave = normalizarNomeCampoCrm(nome);
+  if (chave === 'cpf' || chave.includes('cpf')) return 'cpf';
+  if (chave === 'cnpj' || chave.includes('cnpj')) return 'cnpj';
+  if (chave.includes('telefone') || chave.includes('celular') || chave.includes('whatsapp')) return 'telefone';
+  return '';
+}
+
+function aplicarMascaraCrmAr(input) {
+  const mascara = input?.dataset?.crmMask;
+  if (!input || !mascara) return;
+  const posicao = input.selectionStart || 0;
+  const anterior = input.value;
+  input.value = formatarMascaraParceiro(input.value, mascara);
+  const diferenca = input.value.length - anterior.length;
+  input.setSelectionRange(Math.max(0, posicao + diferenca), Math.max(0, posicao + diferenca));
+}
+
+function obterOpcoesCadastroCrmArLocais() {
+  const campos = (state.ar.crm.items || []).flatMap((item) => Array.isArray(item?.dados?.campos_personalizados) ? item.dados.campos_personalizados : []);
+  const obterOpcoes = (nomes) => {
+    const campo = campos.find((item) => nomes.some((nome) => normalizarNomeCampoCrm(item?.name || item?.field_name) === normalizarNomeCampoCrm(nome)));
+    let config = campo?.type_config || {};
+    if (typeof config === 'string') {
+      try { config = JSON.parse(config); } catch (_error) { config = {}; }
+    }
+    return (Array.isArray(config?.options) ? config.options : []).map((option) => ({
+      value: String(option.id ?? option.orderindex ?? option.value ?? '').trim(),
+      label: String(option.name || option.label || option.value || option.id || '').trim()
+    })).filter((option) => option.value && option.label);
+  };
+  return {
+    origensCliente: obterOpcoes(['origem do cliente', 'origem']),
+    situacoesLead: obterOpcoes(['situação do lead', 'situacao do lead', 'status do lead'])
+  };
+}
+
+function produtosDisponiveisCadastroCrmAr() {
+  return (state.ar.produtos || [])
+    .filter((produto) => produto && (produto.descricao_comercial || produto.product_id))
+    .map((produto) => ({
+      value: String(produto.descricao_comercial || produto.product_id).trim(),
+      sku: String(produto.product_id || '').trim()
+    }))
+    .filter((produto, indice, lista) => produto.value && lista.findIndex((item) => item.value.toLowerCase() === produto.value.toLowerCase()) === indice);
+}
+
+function opcaoCadastroCrmArValida(opcoes, valor) {
+  const valorNormalizado = String(valor || '').trim().toLowerCase();
+  return (Array.isArray(opcoes) ? opcoes : []).some((opcao) => String(opcao?.value ?? opcao ?? '').trim().toLowerCase() === valorNormalizado);
+}
+
+function renderCadastroClienteCrmAr() {
+  const cadastro = state.ar.crm.cadastro || {};
+  const salvando = Boolean(cadastro.salvando);
+  const produtosCarregando = Boolean(cadastro.produtosCarregando);
+  const opcoesCarregando = Boolean(cadastro.opcoesCarregando);
+  const opcoes = cadastro.opcoes || {};
+  const situacoesLead = Array.isArray(opcoes.situacoesLead) ? opcoes.situacoesLead : [];
+  const origensCliente = Array.isArray(opcoes.origensCliente) ? opcoes.origensCliente : [];
+  const situacaoLeadDisponivel = situacoesLead.length > 0;
+  const origemClienteDisponivel = origensCliente.length > 0;
+  const draft = cadastro.draft || {};
+  const valor = (campo) => escapeAttr(draft[campo] || '');
+  const valorMascarado = (campo, mascara) => escapeAttr(formatarMascaraParceiro(draft[campo] || '', mascara));
+  return `
+    <section class="hub-form-screen ar-crm-client-screen" aria-labelledby="ar-crm-client-title">
+      <header class="hub-form-screen-header">
+        <div>
+          <button class="secondary-btn" type="button" onclick="cancelarCadastroClienteCrmAr()" ${salvando ? 'disabled' : ''}>Voltar para clientes</button>
+          <span class="ar-crm-phase1-kicker">NOVO CADASTRO</span>
+          <h2 id="ar-crm-client-title">Adicionar cliente</h2>
+          <p>O cadastro sera criado no ClickUp e vinculado ao CRM local automaticamente.</p>
+        </div>
+      </header>
+
+      ${cadastro.message ? `<p class="admin-message hub-form-screen-notice">${escapeHtml(cadastro.message)}</p>` : ''}
+
+      <form class="hub-form-screen-content ar-crm-client-form" onsubmit="salvarCadastroClienteCrmAr(event)">
+        <section class="hub-form-section">
+          <div class="hub-form-section-title"><strong>Dados do cliente</strong><span>Campos principais</span></div>
+          <div class="hub-form-grid">
+            <label class="ar-crm-edit-field hub-form-span-2">
+              <span>Nome do cliente</span>
+              <input id="ar-crm-new-nome" class="config-input" type="text" autocomplete="name" required maxlength="180" value="${valor('nome')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Status</span>
+              <select id="ar-crm-new-status" class="config-input" ${salvando ? 'disabled' : ''}>
+                <option value="">Padrao da lista</option>
+                ${CRM_STATUS_OPTIONS.map((status) => `<option value="${escapeAttr(status)}" ${draft.status === status ? 'selected' : ''}>${escapeHtml(obterRotuloStatusCrmAr(status))}</option>`).join('')}
+              </select>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Situação do Lead</span>
+              <select id="ar-crm-new-situacao-lead" class="config-input" ${salvando || opcoesCarregando || !situacaoLeadDisponivel ? 'disabled' : ''} ${situacaoLeadDisponivel ? 'required' : ''}>
+                <option value="">${opcoesCarregando ? 'Carregando opções...' : situacaoLeadDisponivel ? 'Selecione' : 'Campo sem opções no ClickUp'}</option>
+                ${situacoesLead.map((situacao) => `<option value="${escapeAttr(situacao.value ?? situacao)}" ${draft.situacao_lead === (situacao.value ?? situacao) ? 'selected' : ''}>${escapeHtml(situacao.label ?? situacao)}</option>`).join('')}
+              </select>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>CPF</span>
+              <input id="ar-crm-new-cpf" class="config-input" type="text" inputmode="numeric" autocomplete="off" maxlength="14" data-crm-mask="cpf" value="${valorMascarado('cpf', 'cpf')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>CNPJ</span>
+              <input id="ar-crm-new-cnpj" class="config-input" type="text" inputmode="numeric" autocomplete="off" maxlength="18" data-crm-mask="cnpj" value="${valorMascarado('cnpj', 'cnpj')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Razao social</span>
+              <input id="ar-crm-new-razao-social" class="config-input" type="text" maxlength="180" value="${valor('razao_social')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>E-mail</span>
+              <input id="ar-crm-new-email" class="config-input" type="email" autocomplete="email" maxlength="180" value="${valor('email')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Telefone</span>
+              <input id="ar-crm-new-telefone" class="config-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" data-crm-mask="telefone" value="${valorMascarado('telefone', 'telefone')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Nascimento</span>
+              <input id="ar-crm-new-nascimento" class="config-input" type="date" value="${valor('nascimento')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Profissao/Ramo de atividade</span>
+              <input id="ar-crm-new-profissao" class="config-input" type="text" maxlength="180" value="${valor('profissao_ramo')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Origem do cliente</span>
+              <select id="ar-crm-new-origem" class="config-input" ${salvando || opcoesCarregando || !origemClienteDisponivel ? 'disabled' : ''} ${origemClienteDisponivel ? 'required' : ''}>
+                <option value="">${opcoesCarregando ? 'Carregando opções...' : origemClienteDisponivel ? 'Selecione' : 'Campo sem opções no ClickUp'}</option>
+                ${origensCliente.map((origem) => `<option value="${escapeAttr(origem.value ?? origem)}" ${(draft.origem_cliente === (origem.value ?? origem)) ? 'selected' : ''}>${escapeHtml(origem.label ?? origem)}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="hub-form-section">
+          <div class="hub-form-section-title"><strong>Pedido e indicacao</strong><span>Contexto comercial</span></div>
+          <div class="hub-form-grid">
+            <label class="ar-crm-edit-field">
+              <span>Pedido atual</span>
+              <input id="ar-crm-new-pedido" class="config-input" type="text" maxlength="120" value="${valor('pedido_atual')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Produto</span>
+              <input id="ar-crm-new-produto" class="config-input" type="search" list="ar-crm-produtos-list" maxlength="160" autocomplete="off" placeholder="${produtosCarregando ? 'Carregando produtos...' : 'Buscar produto'}" value="${valor('produto')}" ${salvando || produtosCarregando ? 'disabled' : ''}>
+              <datalist id="ar-crm-produtos-list">
+                ${produtosDisponiveisCadastroCrmAr().map((produto) => `<option value="${escapeAttr(produto.value)}" label="${escapeAttr(produto.sku)}"></option>`).join('')}
+              </datalist>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Parceiro de indicacao</span>
+              <input id="ar-crm-new-parceiro" class="config-input" type="text" maxlength="160" value="${valor('parceiro_indicacao')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>E-mail CD/Parceiro</span>
+              <input id="ar-crm-new-email-parceiro" class="config-input" type="email" maxlength="180" value="${valor('email_parceiro')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Inicio de validade</span>
+              <input id="ar-crm-new-emissao" class="config-input" type="date" value="${valor('data_emissao')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field">
+              <span>Fim de validade</span>
+              <input id="ar-crm-new-vencimento" class="config-input" type="date" value="${valor('data_vencimento')}" ${salvando ? 'disabled' : ''}>
+            </label>
+            <label class="ar-crm-edit-field hub-form-span-2">
+              <span>Descricao</span>
+              <textarea id="ar-crm-new-descricao" class="config-input config-textarea" rows="4" maxlength="2000" ${salvando ? 'disabled' : ''}>${escapeHtml(draft.descricao || '')}</textarea>
+            </label>
+          </div>
+        </section>
+
+        <footer class="hub-form-screen-actions ar-crm-client-actions">
+          <button class="secondary-btn" type="button" onclick="cancelarCadastroClienteCrmAr()" ${salvando ? 'disabled' : ''}>Cancelar</button>
+          <button class="secondary-btn" type="button" onclick="salvarCadastroClienteCrmAr(null, true)" ${salvando ? 'disabled' : ''}>Salvar e sincronizar agora</button>
+          <button class="save-btn" type="submit" ${salvando ? 'disabled' : ''}>${salvando ? 'Enviando...' : 'Adicionar cliente'}</button>
+        </footer>
+      </form>
+    </section>
+  `;
+}
+
+async function salvarCadastroClienteCrmAr(event, sincronizarAgora = false) {
+  event?.preventDefault();
+  const cadastro = state.ar.crm.cadastro;
+  if (cadastro.salvando) return;
+  const formulario = document.querySelector('.ar-crm-client-form');
+  if (formulario && !formulario.reportValidity()) return;
+  const cliente = {
+    nome: valorCampoCadastroCrmAr('ar-crm-new-nome'),
+    status: valorCampoCadastroCrmAr('ar-crm-new-status'),
+    situacao_lead: valorCampoCadastroCrmAr('ar-crm-new-situacao-lead'),
+    cpf: valorCampoCadastroCrmAr('ar-crm-new-cpf'),
+    cnpj: valorCampoCadastroCrmAr('ar-crm-new-cnpj'),
+    razao_social: valorCampoCadastroCrmAr('ar-crm-new-razao-social'),
+    email: valorCampoCadastroCrmAr('ar-crm-new-email'),
+    telefone: valorCampoCadastroCrmAr('ar-crm-new-telefone'),
+    origem_cliente: valorCampoCadastroCrmAr('ar-crm-new-origem'),
+    pedido_atual: valorCampoCadastroCrmAr('ar-crm-new-pedido'),
+    produto: valorCampoCadastroCrmAr('ar-crm-new-produto'),
+    parceiro_indicacao: valorCampoCadastroCrmAr('ar-crm-new-parceiro'),
+    email_parceiro: valorCampoCadastroCrmAr('ar-crm-new-email-parceiro'),
+    nascimento: valorCampoCadastroCrmAr('ar-crm-new-nascimento'),
+    profissao_ramo: valorCampoCadastroCrmAr('ar-crm-new-profissao'),
+    data_emissao: valorCampoCadastroCrmAr('ar-crm-new-emissao'),
+    data_vencimento: valorCampoCadastroCrmAr('ar-crm-new-vencimento'),
+    descricao: document.getElementById('ar-crm-new-descricao')?.value?.trim() || ''
+  };
+
+  if (!cliente.nome) {
+    cadastro.message = 'Informe o nome do cliente.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+
+  if (cliente.data_emissao && cliente.data_vencimento && cliente.data_vencimento < cliente.data_emissao) {
+    cadastro.message = 'A data de fim de validade deve ser igual ou posterior ao início.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+
+  const opcoes = cadastro.opcoes || {};
+  if (cadastro.opcoesCarregando || !Array.isArray(opcoes.situacoesLead) || !opcoes.situacoesLead.length || !Array.isArray(opcoes.origensCliente) || !opcoes.origensCliente.length) {
+    cadastro.message = 'As opcoes oficiais de Situacao do Lead e Origem do cliente ainda nao estao disponiveis no ClickUp.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+  if (!opcaoCadastroCrmArValida(opcoes.situacoesLead, cliente.situacao_lead)) {
+    cadastro.message = 'Selecione uma Situacao do Lead valida do ClickUp.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+  if (!opcaoCadastroCrmArValida(opcoes.origensCliente, cliente.origem_cliente)) {
+    cadastro.message = 'Selecione uma Origem do cliente valida do ClickUp.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+  if (cliente.produto && !opcaoCadastroCrmArValida(produtosDisponiveisCadastroCrmAr(), cliente.produto)) {
+    cadastro.message = 'Selecione um produto ativo da relacao de produtos.';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    return;
+  }
+
+  try {
+    cadastro.salvando = true;
+    cadastro.message = '';
+    cadastro.draft = cliente;
+    renderPainelAr();
+    const response = await chamarApi('createArCrmClient', { cliente });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Nao foi possivel adicionar o cliente.'));
+    const item = response.data?.item || response.data?.data?.item || null;
+    state.ar.crm.cadastro = { aberto: false, salvando: false, message: '', draft: {} };
+    await carregarCrmAr(1);
+    const itemAtual = item?.id
+      ? state.ar.crm.items.find((registro) => registro.id === item.id) || item
+      : null;
+    if (itemAtual?.id) {
+      abrirDetalheCrmAr(itemAtual);
+      if (sincronizarAgora) await sincronizarCadastroCrmAr(itemAtual.id);
+      return;
+    }
+    state.ar.crm.message = 'Cliente adicionado e aguardando sincronização com o ClickUp.';
+    if (item?.id && item?.dados?.clickup_task_id) visualizarCrmAr(item.id);
+  } catch (erro) {
+    state.ar.crm.cadastro = {
+      aberto: true,
+      salvando: false,
+      produtosCarregando: false,
+      opcoesCarregando: false,
+      opcoes: cadastro.opcoes || {},
+      message: erro.message || 'Nao foi possivel adicionar o cliente.',
+      draft: cliente
+    };
+    renderPainelAr();
+  }
+}
+
+function abrirDetalheCrmAr(item) {
+  if (!item?.id) return;
   state.ar.crm.detalhe = item;
   state.ar.crm.editando = false;
   state.ar.crm.edicaoAlterada = false;
@@ -7363,6 +7769,44 @@ function visualizarCrmAr(id) {
   state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], message: '' };
   renderPainelAr();
   carregarAtividadeDetalheCrmAr(item, requestId);
+}
+
+async function sincronizarCadastroCrmAr(itemId = state.ar.crm.detalhe?.id) {
+  const item = state.ar.crm.detalhe;
+  if (!itemId || state.ar.crm.sincronizandoCadastro) return;
+  if (!pode('painel_ar.crm', 'execute')) {
+    state.ar.crm.atividade.message = 'Seu usuario nao possui permissao para sincronizar o CRM AR.';
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.crm.sincronizandoCadastro = true;
+  state.ar.crm.atividade.message = '';
+  renderPainelAr();
+  try {
+    const response = await chamarApi('syncPendingArCrm', { itemId });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Nao foi possivel sincronizar o cadastro.'));
+    await carregarCrmAr(state.ar.crm.pagina);
+    const atualizado = state.ar.crm.items.find((registro) => registro.id === itemId);
+    if (!atualizado) throw new Error('O cadastro sincronizado nao foi localizado no CRM.');
+    state.ar.crm.sincronizandoCadastro = false;
+    abrirDetalheCrmAr(atualizado);
+    if (!atualizado.dados?.clickup_task_id) {
+      state.ar.crm.atividade.message = 'A sincronizacao foi enfileirada, mas a tarefa ainda nao foi criada no ClickUp.';
+      state.ar.crm.atividade.loading = false;
+      renderPainelAr();
+    }
+  } catch (erro) {
+    state.ar.crm.sincronizandoCadastro = false;
+    state.ar.crm.atividade.message = erro.message || 'Nao foi possivel sincronizar o cadastro.';
+    renderPainelAr();
+  }
+}
+
+function visualizarCrmAr(id) {
+  const item = state.ar.crm.items.find((registro) => registro.id === id);
+  if (!item) return;
+  abrirDetalheCrmAr(item);
 }
 
 async function carregarAtividadeDetalheCrmAr(item, requestId = state.ar.crm.atividade.requestId) {
@@ -7384,6 +7828,7 @@ async function carregarAtividadeDetalheCrmAr(item, requestId = state.ar.crm.ativ
     atividade.attachments = dadosAtividade.attachments || [];
     atividade.activeUsers = dadosAtividade.activeUsers || [];
     atividade.viewerId = dadosAtividade.viewerId || '';
+    if (!taskId) atividade.message = 'Atividade local pronta. Comentários e anexos serão enviados após a criação da tarefa no ClickUp.';
   } catch (erro) {
     if (!isCurrentRequest()) return;
     atividade.message = erro.message || 'Não foi possível carregar comentários e anexos.';
@@ -7399,6 +7844,7 @@ function fecharVisualizacaoCrmAr() {
   state.ar.crm.editando = false;
   state.ar.crm.edicaoAlterada = false;
   state.ar.crm.salvandoEdicao = false;
+  state.ar.crm.sincronizandoCadastro = false;
   state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], message: '' };
   renderPainelAr();
 }
@@ -7409,6 +7855,11 @@ async function criarComentarioDetalheCrmAr() {
   const mentions = extrairMencoesEditorCrmAr(editor);
   const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id;
   if (state.ar.crm.atividade.saving) return;
+  if (!taskId) {
+    state.ar.crm.atividade.message = 'A tarefa ainda está aguardando sincronização com o ClickUp.';
+    renderPainelAr();
+    return;
+  }
   if (!texto) {
     state.ar.crm.atividade.message = 'Digite um comentário antes de enviar.';
     renderPainelAr();
@@ -7807,7 +8258,32 @@ async function adicionarAnexoDetalheCrmAr(input) {
 
 function renderDetalheCrmAr(item) {
   const dados = item.dados || {};
-  const campos = Array.isArray(dados.campos_personalizados) ? dados.campos_personalizados : [];
+  const campos = (Array.isArray(dados.campos_personalizados) ? dados.campos_personalizados : []).map((campo) => ({ ...campo }));
+  const cadastro = dados.cadastro && typeof dados.cadastro === 'object' ? dados.cadastro : dados;
+  const camposFallback = [
+    ['situacao_lead', 'Situação do Lead', ['situação do lead', 'situacao do lead', 'status do lead']],
+    ['produto', 'Produto', ['produto']],
+    ['cpf', 'CPF', ['cpf']],
+    ['origem_cliente', 'Origem do cliente', ['origem do cliente', 'origem']],
+    ['parceiro_indicacao', 'Parceiro de indicação', ['parceiro de indicação', 'parceiro de indicacao', 'parceiro']],
+    ['email_parceiro', 'E-mail CD/Parceiro', ['e-mail cd/parceiro', 'email cd/parceiro', 'email parceiro']],
+    ['nascimento', 'Nascimento', ['nascimento', 'data de nascimento']],
+    ['profissao_ramo', 'Profissão/Ramo de atividade', ['profissão/ramo de atividade', 'profissao/ramo de atividade', 'profissão', 'profissao']]
+  ];
+  camposFallback.forEach(([chave, nome, aliases]) => {
+    const valorFallback = cadastro?.[chave];
+    if (valorFallback === null || valorFallback === undefined || String(valorFallback).trim() === '') return;
+    const existente = selecionarCampoCrmAr(campos, aliases);
+    if (existente) {
+      if (obterValorCampoCrmAr(existente) === '—') {
+        existente.value = valorFallback;
+        existente.valor_original = valorFallback;
+        existente.display_value = valorFallback;
+      }
+      return;
+    }
+    campos.push({ id: `local-cadastro-${chave}`, name: nome, type: 'text', value: valorFallback, valor_original: valorFallback, display_value: valorFallback, local_only: true });
+  });
   const descricao = dados.descricao || 'Sem descrição.';
   const usados = new Set();
   const campoSituacaoLead = selecionarCampoCrmAr(campos, ['situação do lead', 'situacao do lead', 'status do lead']);
@@ -7842,13 +8318,15 @@ function renderDetalheCrmAr(item) {
   const outros = campos.filter((campo) => !usados.has(campo) && obterValorCampoCrmAr(campo) !== '—');
   const cpf = campoCpf ? formatarCampoCrmAr('cpf', obterValorCampoCrmAr(campoCpf)) : '';
   const podeEditar = pode('painel_ar.crm', 'execute');
+  const taskId = dados.clickup_task_id || '';
+  const cadastroPendente = !taskId || item.sync_status !== 'synced' || dados.cadastro_pendente_clickup;
 
   return `
     <section class="ar-crm-detail-screen" aria-labelledby="ar-crm-detail-title">
       <div class="ar-crm-detail-screen-header">
         <div>
           <button class="secondary-btn" type="button" onclick="fecharVisualizacaoCrmAr()">← Voltar para clientes</button>
-          <span class="ar-crm-phase1-kicker">CADASTRO IMPORTADO</span>
+          <span class="ar-crm-phase1-kicker">${cadastroPendente ? 'CADASTRO PENDENTE' : 'CADASTRO IMPORTADO'}</span>
           ${state.ar.crm.editando ? `<label class="ar-crm-edit-field ar-crm-edit-title-field"><span>Nome do cliente</span><input id="ar-crm-edit-name" class="config-input ar-crm-edit-input ar-crm-edit-title" type="text" value="${escapeAttr(nomeCliente)}" aria-label="Nome do cliente" required oninput="marcarAlteracaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}></label>` : `<h3 id="ar-crm-detail-title">${escapeHtml(nomeCliente)}</h3>`}
           <div class="ar-crm-header-pills" aria-label="Status do cadastro">
             ${state.ar.crm.editando ? renderEditorStatusCrmAr(item.status) : `<div class="ar-crm-header-status-item ar-crm-status-${escapeAttr(obterClasseStatusCrmAr(item.status))}"><span class="ar-crm-header-status-label">Status</span><span class="ar-crm-lead-pill">${escapeHtml(obterRotuloStatusCrmAr(item.status))}</span></div>`}
@@ -7856,7 +8334,7 @@ function renderDetalheCrmAr(item) {
           </div>
         </div>
         <div class="ar-crm-detail-header-actions">
-          ${state.ar.crm.editando ? `<button class="secondary-btn" type="button" onclick="cancelarEdicaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}>Cancelar</button><button id="ar-crm-save-fields" class="save-btn" type="button" onclick="salvarCamposCrmAr()" ${!state.ar.crm.edicaoAlterada || state.ar.crm.salvandoEdicao ? 'disabled' : ''}>${state.ar.crm.salvandoEdicao ? 'Salvando...' : 'Salvar'}</button>` : (podeEditar ? '<button class="secondary-btn" type="button" onclick="editarCamposCrmAr()">Editar campos</button>' : '')}
+          ${state.ar.crm.editando ? `<button class="secondary-btn" type="button" onclick="cancelarEdicaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}>Cancelar</button><button id="ar-crm-save-fields" class="save-btn" type="button" onclick="salvarCamposCrmAr()" ${!state.ar.crm.edicaoAlterada || state.ar.crm.salvandoEdicao ? 'disabled' : ''}>${state.ar.crm.salvandoEdicao ? 'Salvando...' : 'Salvar'}</button>` : `${podeEditar ? `<button class="save-btn" type="button" onclick="sincronizarCadastroCrmAr('${escapeAttr(item.id)}')" ${state.ar.crm.sincronizandoCadastro ? 'disabled' : ''}>${state.ar.crm.sincronizandoCadastro ? 'Sincronizando...' : 'Sincronizar agora'}</button>` : ''}${podeEditar && taskId ? '<button class="secondary-btn" type="button" onclick="editarCamposCrmAr()">Editar campos</button>' : ''}`}
           <span class="ar-crm-sync-badge ${escapeAttr(item.sync_status || 'pending')}">${escapeHtml(obterRotuloEstadoSincronizacaoCrmAr(item.sync_status))}</span>
           ${dados.clickup_url ? `<a class="secondary-btn" href="${escapeAttr(dados.clickup_url)}" target="_blank" rel="noopener">Abrir no ClickUp</a>` : ''}
         </div>
@@ -7969,11 +8447,12 @@ function renderComentarioCrmAr(comentario, nivel = 0) {
 function renderAtividadeCrmAr() {
   const atividade = state.ar.crm.atividade;
   const comentarios = atividade.comments || [];
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id || '';
   return `<aside class="ar-crm-comments-column" aria-label="Comentários">
     <div class="ar-crm-comments-header"><span>Comentários</span><small>${comentarios.length}</small></div>
     ${atividade.loading ? renderHubLoading('Carregando atividade...') : `
       ${atividade.message ? `<p class="admin-message">${escapeHtml(atividade.message)}</p>` : ''}
-      <div class="ar-crm-comment-compose">
+      ${!taskId ? '<p class="ar-crm-detail-muted">Este cadastro ainda não possui uma tarefa no ClickUp. A atividade será liberada após a sincronização.</p>' : `<div class="ar-crm-comment-compose">
         <div class="ar-crm-comment-toolbar" aria-label="Formatação do comentário">
           <button type="button" title="Negrito" onclick="formatarTextoComentarioCrmAr('negrito')"><strong>B</strong></button>
           <button type="button" title="Itálico" onclick="formatarTextoComentarioCrmAr('italico')"><em>I</em></button>
@@ -7987,7 +8466,7 @@ function renderAtividadeCrmAr() {
         </div>
         <div class="ar-crm-comment-editor-wrap"><div id="ar-crm-new-comment" class="ar-crm-comment-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Adicionar comentário" oninput="aoDigitarComentarioCrmAr(this)" onkeydown="acionarAtalhoComentarioCrmAr(event)"></div><div class="ar-crm-mention-menu" data-for="ar-crm-new-comment" hidden></div><span class="ar-crm-comment-resize-handle" title="Redimensionar" onmousedown="iniciarRedimensionamentoComentarioCrmAr(event)"></span></div>
         <div class="ar-crm-comment-submit"><button class="save-btn" type="button" onclick="criarComentarioDetalheCrmAr()" ${atividade.saving ? 'disabled' : ''}>${atividade.saving ? atividade.savingAction : 'Adicionar comentário'}</button></div>
-      </div>
+      </div>`}
       <div class="ar-crm-comments-list">
         ${comentarios.length ? comentarios.map((comentario) => renderComentarioCrmAr(comentario)).join('') : '<p class="ar-crm-detail-muted">Nenhum comentário encontrado.</p>'}
       </div>
@@ -7997,9 +8476,10 @@ function renderAtividadeCrmAr() {
 
 function renderAnexosCrmAr() {
   const anexos = state.ar.crm.atividade.attachments || [];
+  const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id || '';
   return `<section class="ar-crm-attachments-fixed" aria-label="Anexos">
     <div><span>Anexos</span>${anexos.length ? `<div class="ar-crm-attachments-list">${anexos.map((anexo) => { const url = anexo.url || anexo.thumbnail || ''; const nome = anexo.title || anexo.filename || 'Anexo sem nome'; return url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`; }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}</div>
-    <label class="secondary-btn ar-crm-attachment-upload">Adicionar anexo<input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>
+    ${taskId ? '<label class="secondary-btn ar-crm-attachment-upload">Adicionar anexo<input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>' : '<span class="ar-crm-detail-muted">Disponível após a sincronização</span>'}
   </section>`;
 }
 
@@ -8115,9 +8595,10 @@ function renderDropdownCrmAr(id, valorAtual, options, rotulo, tipo = 'custom', c
   const optionButtons = options.map((option) => {
     const label = typeof option === 'string' ? option : option.label;
     const value = typeof option === 'string' ? option : option.value;
-    return `<button class="ar-crm-dropdown-option" type="button" role="option" data-value="${escapeAttr(value)}" data-label="${escapeAttr(label)}" onclick="selecionarDropdownCrmAr(this)">${escapeHtml(label)}</button>`;
+    const selecionada = String(value) === String(valorAtual);
+    return `<button class="ar-crm-dropdown-option hub-filter-dropdown-option ${selecionada ? 'is-selected' : ''}" type="button" role="option" aria-selected="${selecionada ? 'true' : 'false'}" data-value="${escapeAttr(value)}" data-label="${escapeAttr(label)}" onclick="selecionarDropdownCrmAr(this)">${escapeHtml(label)}</button>`;
   }).join('');
-  return `<div class="ar-crm-combobox" style="--crm-dropdown-width:${larguraDropdown}px" data-dropdown-type="${escapeAttr(tipo)}"><input id="${escapeAttr(id)}" class="config-input ar-crm-edit-input ${tipo === 'custom' ? 'ar-crm-edit-custom-field' : ''}" type="text" value="${escapeAttr(valor)}" data-field-id="${tipo === 'custom' ? escapeAttr(id) : ''}" data-field-type="${escapeAttr(campoTipo)}" data-selected-value="${escapeAttr(valor)}" data-status-presentation="${statusVisual ? 'true' : 'false'}" data-dropdown-menu-id="${escapeAttr(menuId)}" aria-label="${escapeAttr(rotulo)}" autocomplete="off" required onfocus="abrirDropdownCrmAr(this, event)" oninput="filtrarDropdownCrmAr(this, event)" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}><div id="${escapeAttr(menuId)}" class="ar-crm-dropdown-menu" data-dropdown-input-id="${escapeAttr(id)}" role="listbox" aria-label="${escapeAttr(rotulo)}" hidden>${optionButtons}</div></div>`;
+  return `<div class="ar-crm-combobox hub-filter-combobox" style="--crm-dropdown-width:${larguraDropdown}px" data-dropdown-type="${escapeAttr(tipo)}"><input id="${escapeAttr(id)}" class="config-input ar-crm-edit-input ${tipo === 'custom' ? 'ar-crm-edit-custom-field' : ''}" type="text" value="${escapeAttr(valor)}" data-field-id="${tipo === 'custom' ? escapeAttr(id) : ''}" data-field-type="${escapeAttr(campoTipo)}" data-selected-value="${escapeAttr(valor)}" data-status-presentation="${statusVisual ? 'true' : 'false'}" data-dropdown-menu-id="${escapeAttr(menuId)}" aria-label="${escapeAttr(rotulo)}" aria-expanded="false" autocomplete="off" required onfocus="abrirDropdownCrmAr(this, event)" oninput="filtrarDropdownCrmAr(this, event)" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}><div id="${escapeAttr(menuId)}" class="ar-crm-dropdown-menu hub-filter-dropdown-menu" data-dropdown-input-id="${escapeAttr(id)}" role="listbox" aria-label="${escapeAttr(rotulo)}" hidden>${optionButtons}</div></div>`;
 }
 
 function posicionarDropdownCrmAr(input, menu) {
@@ -8158,10 +8639,14 @@ function atualizarClasseStatusCrmAr(valor, campo = document.querySelector('.ar-c
 
 function abrirDropdownCrmAr(input, event) {
   event?.stopPropagation();
-  document.querySelectorAll('.ar-crm-dropdown-menu:not([hidden])').forEach((menu) => { menu.hidden = true; });
+  document.querySelectorAll('.ar-crm-dropdown-menu:not([hidden])').forEach((menu) => {
+    menu.hidden = true;
+    document.getElementById(menu.dataset.dropdownInputId || '')?.setAttribute('aria-expanded', 'false');
+  });
   const menu = document.getElementById(input?.dataset?.dropdownMenuId || '');
   if (!menu) return;
   if (menu.parentElement !== document.body) document.body.appendChild(menu);
+  input.setAttribute('aria-expanded', 'true');
   posicionarDropdownCrmAr(input, menu);
 }
 
@@ -8185,7 +8670,13 @@ function selecionarDropdownCrmAr(option) {
   if (!input) return;
   input.value = option.dataset.label || '';
   input.dataset.selectedValue = option.dataset.value || '';
+  menu.querySelectorAll('.ar-crm-dropdown-option').forEach((item) => {
+    const selecionada = item === option;
+    item.classList.toggle('is-selected', selecionada);
+    item.setAttribute('aria-selected', selecionada ? 'true' : 'false');
+  });
   if (menu) menu.hidden = true;
+  input.setAttribute('aria-expanded', 'false');
   if (input.dataset.statusPresentation === 'true') atualizarClasseStatusCrmAr(input.value, input.closest('.ar-crm-status-edit'));
   marcarAlteracaoCamposCrmAr();
 }
@@ -8195,6 +8686,7 @@ function fecharDropdownCrmAr(event) {
   document.querySelectorAll('.ar-crm-dropdown-menu').forEach((menu) => {
     menu.hidden = true;
     const input = document.getElementById(menu.dataset.dropdownInputId || '');
+    input?.setAttribute('aria-expanded', 'false');
     const combo = input?.closest('.ar-crm-combobox');
     if (input && combo && menu.parentElement === document.body) combo.appendChild(menu);
   });
@@ -8229,11 +8721,18 @@ function valorCampoEdicaoCrmAr(campo) {
   return typeof valor === 'object' ? '' : String(valor);
 }
 
+function valorCampoEdicaoFormatadoCrmAr(campo) {
+  const valor = valorCampoEdicaoCrmAr(campo);
+  const mascara = obterMascaraCampoCrmAr(obterNomeCampoCrm(campo));
+  return mascara ? formatarMascaraParceiro(valor, mascara) : valor;
+}
+
 function renderControleCampoCrmAr(campo, rotulo) {
   if (!campoCrmArEditavel(campo)) return `<div class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(formatarCampoCrmAr(obterNomeCampoCrm(campo), obterValorCampoCrmAr(campo)))} <small>(somente leitura)</small></strong></div>`;
   const tipo = String(campo.type || '').toLowerCase();
   const id = escapeAttr(campo.id || '');
-  const valor = escapeAttr(valorCampoEdicaoCrmAr(campo));
+  const mascara = obterMascaraCampoCrmAr(rotulo || obterNomeCampoCrm(campo));
+  const valor = escapeAttr(valorCampoEdicaoFormatadoCrmAr(campo));
   if ((tipo === 'dropdown' || tipo === 'drop_down') && Array.isArray(campo.type_config?.options)) {
     const options = campo.type_config.options.map((option) => ({
       value: String(option.id ?? option.orderindex ?? option.value ?? ''),
@@ -8243,7 +8742,8 @@ function renderControleCampoCrmAr(campo, rotulo) {
     return `<label class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span>${input}</label>`;
   }
   const inputType = tipo === 'date' ? 'date' : tipo === 'number' || tipo === 'currency' ? 'number' : 'text';
-  return `<label class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span><input class="config-input ar-crm-edit-input ar-crm-edit-custom-field" data-field-id="${id}" data-field-type="${escapeAttr(tipo)}" type="${inputType}" value="${valor}" aria-label="${escapeAttr(rotulo)}" oninput="marcarAlteracaoCamposCrmAr()" ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}></label>`;
+  const maskAttribute = mascara ? ` data-crm-mask="${escapeAttr(mascara)}" oninput="aplicarMascaraCrmAr(this); marcarAlteracaoCamposCrmAr()"` : ' oninput="marcarAlteracaoCamposCrmAr()"';
+  return `<label class="ar-crm-edit-field"><span>${escapeHtml(rotulo)}</span><input class="config-input ar-crm-edit-input ar-crm-edit-custom-field" data-field-id="${id}" data-field-type="${escapeAttr(tipo)}" type="${inputType}" value="${valor}" aria-label="${escapeAttr(rotulo)}"${maskAttribute} ${state.ar.crm.salvandoEdicao ? 'disabled' : ''}></label>`;
 }
 
 function editarCamposCrmAr() {
@@ -8270,7 +8770,7 @@ function marcarAlteracaoCamposCrmAr() {
     const original = (item.dados?.campos_personalizados || []).find((campo) => String(campo.id) === String(input.dataset.fieldId));
     if (!original) return false;
     const tipo = String(original.type || '').toLowerCase();
-    const originalValue = ['dropdown', 'drop_down'].includes(tipo) ? obterValorCampoCrmAr(original) : valorCampoEdicaoCrmAr(original);
+    const originalValue = ['dropdown', 'drop_down'].includes(tipo) ? obterValorCampoCrmAr(original) : valorCampoEdicaoFormatadoCrmAr(original);
     return String(input.value) !== String(originalValue ?? '');
   });
   state.ar.crm.edicaoAlterada = nome !== String(item.nome || '').trim()
@@ -8328,7 +8828,9 @@ async function salvarCamposCrmAr() {
       const original = (item.dados?.campos_personalizados || []).find((campo) => String(campo.id) === String(field.id));
       if (!field.id || !original) return false;
       const tipo = String(original.type || '').toLowerCase();
-      const originalValue = tipo === 'date' ? valorCampoEdicaoCrmAr(original) : original.value;
+      const originalValue = ['dropdown', 'drop_down'].includes(tipo)
+        ? obterValorCampoCrmAr(original)
+        : valorCampoEdicaoFormatadoCrmAr(original);
       return String(field.value ?? '') !== String(originalValue ?? '');
     });
   if (customFields.length) changes.custom_fields = customFields;
@@ -13209,12 +13711,19 @@ Object.assign(window, {
   selecionarPaginaLogsIntegracoesAdmin,
   abrirDetalheLogIntegracaoAdmin,
   fecharDetalheLogIntegracaoAdmin,
+  abrirCadastroClienteCrmAr,
+  aplicarFiltrosCrmAr,
+  cancelarCadastroClienteCrmAr,
+  limparFiltrosCrmAr,
+  atualizarFiltroCrmAr,
+  salvarCadastroClienteCrmAr,
   selecionarFiltroUsuariosAdmin,
   selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
   selecionarPaginaCrmAr,
   sincronizarCrmAr,
+  sincronizarCadastroCrmAr,
   abrirPedidosRelacionadosCrmAr,
   fecharPedidosRelacionadosCrmAr,
   criarComentarioDetalheCrmAr,

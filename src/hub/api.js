@@ -1,5 +1,5 @@
 import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
-import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarPedidosRelacionadosCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr } from './services/arCrmService.js';
+import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarOpcoesCadastroCrmAr, carregarPedidosRelacionadosCrmAr, criarClienteCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr, sincronizarPendenciaCrmAr } from './services/arCrmService.js';
 import {
   cancelarReciboAR,
   carregarDadosValidacoesAR,
@@ -102,8 +102,23 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'getArCrmFormOptions') {
+      const dados = await carregarOpcoesCadastroCrmAr();
+      return { ok: true, data: dados };
+    }
+
     if (action === 'syncArCrm') {
       const dados = await sincronizarCrmAr();
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'syncPendingArCrm') {
+      const dados = await sincronizarPendenciaCrmAr(payload.itemId);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'createArCrmClient') {
+      const dados = await criarClienteCrmAr(payload.cliente || payload);
       return { ok: true, data: dados };
     }
 
@@ -117,7 +132,7 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
-    if (action === 'getArCrmActivity') return { ok: true, data: await carregarAtividadeCrmAr(payload.taskId) };
+    if (action === 'getArCrmActivity') return { ok: true, data: await carregarAtividadeCrmAr(payload.taskId, payload.itemId) };
     if (action === 'createArCrmComment') return { ok: true, data: await criarComentarioCrmAr(payload.taskId, payload.commentText, payload.mentions) };
     if (action === 'replyArCrmComment') return { ok: true, data: await responderComentarioCrmAr(payload.taskId, payload.commentId, payload.commentText, payload.mentions) };
     if (action === 'toggleArCrmReaction') return { ok: true, data: await alternarReacaoComentarioCrmAr(payload.taskId, payload.commentId, payload.emoji) };

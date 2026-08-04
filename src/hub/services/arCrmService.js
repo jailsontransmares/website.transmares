@@ -7,6 +7,16 @@ async function invocarCrmAr(action, payload = {}) {
   });
 
   if (error) {
+    let responseMessage = data?.message || data?.error?.message || '';
+    const context = error.context;
+    if (!responseMessage && context && typeof context.clone === 'function') {
+      const body = await context.clone().json().catch(() => null);
+      responseMessage = body?.message || body?.error?.message || '';
+    }
+    throw new Error(responseMessage || error.message || 'Falha ao acessar o CRM AR.');
+  }
+
+  if (error) {
     throw new Error(error.message || 'Não foi possível acessar o CRM AR.');
   }
 
@@ -21,8 +31,39 @@ export async function carregarDadosCrmAr(pagina = 1, limite = 20) {
   return invocarCrmAr('getData', { pagina, limite });
 }
 
+export async function carregarOpcoesCadastroCrmAr() {
+  return invocarCrmAr('getFormOptions');
+}
+
 export async function sincronizarCrmAr() {
   return invocarCrmAr('sync');
+}
+
+export async function sincronizarPendenciaCrmAr(itemId) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('clickup-sync-worker', {
+    body: { itemId }
+  });
+
+  if (error) {
+    let responseMessage = data?.message || data?.error?.message || '';
+    const context = error.context;
+    if (!responseMessage && context && typeof context.clone === 'function') {
+      const body = await context.clone().json().catch(() => null);
+      responseMessage = body?.message || body?.error?.message || '';
+    }
+    throw new Error(responseMessage || error.message || 'Falha ao sincronizar o cadastro com o ClickUp.');
+  }
+
+  if (data?.ok === false) {
+    throw new Error(data.message || 'NÃ£o foi possÃ­vel sincronizar o cadastro com o ClickUp.');
+  }
+
+  return data || {};
+}
+
+export async function criarClienteCrmAr(cliente) {
+  return invocarCrmAr('createTask', { cliente });
 }
 
 export async function atualizarTarefaCrmAr(taskId, itemId, changes) {
@@ -33,8 +74,8 @@ export async function carregarPedidosRelacionadosCrmAr(cpf) {
   return invocarCrmAr('getRelatedByCpf', { cpf });
 }
 
-export async function carregarAtividadeCrmAr(taskId) {
-  return invocarCrmAr('getTaskActivity', { taskId });
+export async function carregarAtividadeCrmAr(taskId, itemId = '') {
+  return invocarCrmAr('getTaskActivity', { taskId, itemId });
 }
 
 export async function criarComentarioCrmAr(taskId, commentText, mentions = []) {

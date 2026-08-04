@@ -223,6 +223,399 @@ async function clickupFetch(path: string) {
   return clickupRequest(path);
 }
 
+function normalizeFieldName(value: unknown) {
+  return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const CRM_FIELD_IDS = {
+  situacao_lead: "22877d12-92ab-414d-a17f-c83684de0d1a",
+  origem_cliente: "0a506c63-b007-4d90-915f-9da932661ba3",
+  produto: "8dbd16d9-e8e5-4a5a-b1c7-4ee8dfa23e85",
+  pedido_atual: "15b92e7b-1d27-4997-83b1-014e826a33dc",
+  cpf: "9ca3a82d-df03-4d2d-8c95-046a024de759",
+  cnpj: "bc0a5011-785f-4465-ac76-dd0f7028ceda",
+  razao_social: "8db1e9d3-fca6-48a7-9716-2505c7594197",
+  email: "c713936e-e9a4-4bab-beb0-f2d460583710",
+  telefone: "74cdebc0-e8c2-4c24-af21-b09573d7e5ed",
+  profissao_ramo: "6c398007-49e8-43a3-b604-0cd84d383951",
+  nascimento: "f9a147e5-ad6d-4cd0-a4f3-0e88b6b0dded",
+  data_emissao: "af0b4437-0a0d-4a64-aec5-2c88dfae85e5",
+  data_vencimento: "8c26c347-c07e-41cc-8f43-1d3eb88aeb9b",
+  parceiro_nome: "ab4110e4-224b-4c44-8044-eee5deaa31c5",
+  parceiro_email: "f2052cdc-30c6-4000-8177-a45acc5b82ec"
+};
+
+const CRM_FIELD_ALIASES = {
+  situacao_lead: ["situacao do lead", "status do lead"],
+  origem_cliente: ["origem do cliente", "origem"],
+  produto: ["produto"],
+  pedido_atual: ["pedido atual"],
+  cpf: ["cpf"],
+  cnpj: ["cnpj"],
+  razao_social: ["razao social"],
+  email: ["email", "e-mail"],
+  telefone: ["telefone", "celular", "whatsapp"],
+  profissao_ramo: ["profissao/ramo de atividade", "profissao", "ramo de atividade"],
+  nascimento: ["nascimento", "data de nascimento"],
+  data_emissao: ["data de emissao", "emissao"],
+  data_vencimento: ["data de vencimento/renovacao", "data de vencimento", "vencimento", "renovacao"],
+  parceiro_nome: ["parceiro de indicacao", "parceiro"],
+  parceiro_email: ["e-mail cd/parceiro", "email cd/parceiro", "email parceiro"]
+};
+
+function encontrarCampoContratoClickUp(fields: Record<string, unknown>[], nomes: string[], strict = false) {
+  const normalizedNames = nomes.map(normalizeFieldName);
+  const contractKey = Object.keys(CRM_FIELD_ALIASES).find((key) => {
+    const aliases = CRM_FIELD_ALIASES[key as keyof typeof CRM_FIELD_ALIASES];
+    return aliases.some((alias) => normalizedNames.includes(normalizeFieldName(alias)));
+  }) as keyof typeof CRM_FIELD_IDS | undefined;
+  const contractId = contractKey ? CRM_FIELD_IDS[contractKey] : "";
+  return fields.find((field) => text(field.id) === contractId)
+    || (strict ? encontrarCampoClickUpExato(fields, nomes) : encontrarCampoClickUp(fields, nomes));
+}
+
+function firstListId() {
+  const [listId] = listIds();
+  if (!listId) throw new Error("Nenhuma lista do ClickUp configurada para o CRM AR.");
+  return listId;
+}
+
+async function carregarCamposListaClickUp(listId: string) {
+  const result = await clickupFetch(`list/${encodeURIComponent(listId)}/field`);
+  return Array.isArray(result?.fields) ? result.fields as Record<string, unknown>[] : [];
+}
+
+function opcoesCampoClickUp(fields: Record<string, unknown>[], nomes: string[]) {
+  const normalizedNames = nomes.map(normalizeFieldName);
+  const candidatos = fields.filter((field) => normalizedNames.includes(normalizeFieldName(field.name || field.field_name)));
+  const field = candidatos.find((candidate) => Array.isArray(configCampoClickUp(candidate).options)) || candidatos[0];
+  const config = configCampoClickUp(field);
+  const options = Array.isArray(config?.options) ? config.options as Record<string, unknown>[] : [];
+  return options.map((option) => ({
+    value: text(option.id ?? option.orderindex ?? option.value ?? option.name),
+    label: text(option.name ?? option.label ?? option.value ?? option.id)
+  })).filter((option) => option.value && option.label);
+}
+
+async function getFormOptions(client: ReturnType<typeof createClient>) {
+  const clickupDisponivel = clickUpConfigured();
+  const nomesOrigem = ["origem do cliente", "origem"];
+  const nomesSituacao = ["situacao do lead", "situaÃ§Ã£o do lead", "status do lead"];
+  let fields: Record<string, unknown>[] = [];
+  try {
+    const { data } = await client.from("ar_crm_items").select("dados").order("updated_at", { ascending: false }).limit(100);
+    fields = (data || []).flatMap((item) => {
+      const dados = item.dados as Record<string, unknown> | null;
+      return Array.isArray(dados?.campos_personalizados) ? dados.campos_personalizados as Record<string, unknown>[] : [];
+    });
+  } catch (_error) {
+    fields = [];
+  }
+  if (clickupDisponivel && (!opcoesCampoClickUp(fields, nomesOrigem).length || !opcoesCampoClickUp(fields, nomesSituacao).length)) {
+    try {
+      const tasks = await carregarTarefasClickUp();
+      const camposDasTarefas = tasks.flatMap((task) => Array.isArray(task.custom_fields) ? task.custom_fields as Record<string, unknown>[] : []);
+      fields = [...fields, ...camposDasTarefas];
+    } catch (_error) {
+      // O formulário permanece disponível mesmo sem opções recuperáveis.
+    }
+  }
+  if (clickupDisponivel && (!opcoesCampoClickUp(fields, nomesOrigem).length || !opcoesCampoClickUp(fields, nomesSituacao).length)) {
+    try {
+      fields = [...fields, ...await carregarCamposListaClickUp(firstListId())];
+    } catch (_error) {
+      // Fallback final quando nenhum metadata de task esta disponivel.
+    }
+  }
+  return {
+    origensCliente: opcoesCampoClickUp(fields, ["origem do cliente", "origem"]),
+    situacoesLead: opcoesCampoClickUp(fields, ["situacao do lead", "situação do lead", "status do lead"])
+  };
+}
+
+function encontrarCampoClickUp(fields: Record<string, unknown>[], nomes: string[]) {
+  const normalizedNames = nomes.map(normalizeFieldName);
+  return fields.find((field) => normalizedNames.includes(normalizeFieldName(field.name || field.field_name)))
+    || fields.find((field) => normalizedNames.some((name) => normalizeFieldName(field.name || field.field_name).includes(name)));
+}
+
+function encontrarCampoClickUpExato(fields: Record<string, unknown>[], nomes: string[]) {
+  const normalizedNames = nomes.map(normalizeFieldName);
+  const candidatos = fields.filter((field) => normalizedNames.includes(normalizeFieldName(field.name || field.field_name)));
+  return candidatos.find((field) => {
+    const options = configCampoClickUp(field).options;
+    return Array.isArray(options) && options.length > 0;
+  }) || candidatos[0];
+}
+
+function configCampoClickUp(field: Record<string, unknown> | undefined) {
+  if (!field) return {};
+  if (field.type_config && typeof field.type_config === "object") return field.type_config as Record<string, unknown>;
+  if (typeof field.type_config === "string") {
+    try {
+      const parsed = JSON.parse(field.type_config);
+      return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+  return {};
+}
+
+function valorCampoClickUp(field: Record<string, unknown>, value: unknown) {
+  const raw = text(value);
+  if (!raw) return null;
+  const type = text(field.type).toLowerCase();
+  if (type === "date") return dateToEpoch(raw);
+  if (type === "number" || type === "currency") {
+    const numberValue = Number(String(raw).replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(numberValue) ? numberValue : raw;
+  }
+  if (type === "dropdown" || type === "drop_down") {
+    const config = configCampoClickUp(field);
+    const options = Array.isArray(config?.options) ? config.options as Record<string, unknown>[] : [];
+    const option = options.find((candidate) => [candidate.name, candidate.label, candidate.value, candidate.id, candidate.orderindex]
+      .some((optionValue) => normalizeFieldName(optionValue) === normalizeFieldName(raw)));
+    return option ? (option.id ?? option.orderindex ?? option.value) : null;
+  }
+  return raw;
+}
+
+async function atualizarCampoPersonalizadoClickUp(taskId: string, fieldId: string, value: unknown) {
+  return clickupRequest(`task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(fieldId)}`, {
+    method: "POST",
+    body: JSON.stringify({ value })
+  });
+}
+
+async function enqueueClickUpTask(client: ReturnType<typeof createClient>, payload = {}) {
+  const cliente = (payload.cliente || payload) as Record<string, unknown>;
+  const nome = text(cliente.nome || cliente.name);
+  if (!nome) throw new Error("Informe o nome do cliente.");
+  if (!clickUpConfigured()) throw new Error("A integracao com o ClickUp nao esta configurada para criar clientes.");
+
+  const listId = firstListId();
+  const descriptionParts = [
+    text(cliente.descricao),
+    text(cliente.situacao_lead) ? `Situacao do Lead: ${text(cliente.situacao_lead)}` : "",
+    text(cliente.pedido_atual) ? `Pedido atual: ${text(cliente.pedido_atual)}` : "",
+    text(cliente.produto) ? `Produto: ${text(cliente.produto)}` : "",
+    text(cliente.parceiro_indicacao) ? `Parceiro de indicacao: ${text(cliente.parceiro_indicacao)}` : "",
+    text(cliente.email_parceiro) ? `E-mail CD/Parceiro: ${text(cliente.email_parceiro)}` : "",
+    text(cliente.nascimento) ? `Nascimento: ${text(cliente.nascimento)}` : "",
+    text(cliente.profissao_ramo) ? `Profissao/Ramo de atividade: ${text(cliente.profissao_ramo)}` : "",
+    text(cliente.cpf) ? `CPF: ${text(cliente.cpf)}` : "",
+    text(cliente.cnpj) ? `CNPJ: ${text(cliente.cnpj)}` : "",
+    text(cliente.razao_social) ? `Razao social: ${text(cliente.razao_social)}` : "",
+    text(cliente.email) ? `E-mail: ${text(cliente.email)}` : "",
+    text(cliente.telefone) ? `Telefone: ${text(cliente.telefone)}` : "",
+    text(cliente.origem_cliente) ? `Origem do cliente: ${text(cliente.origem_cliente)}` : ""
+  ].filter(Boolean);
+  const status = text(cliente.status);
+  const dueDate = text(cliente.data_vencimento);
+  let fields: Record<string, unknown>[] = [];
+  try {
+    fields = await carregarCamposListaClickUp(listId);
+  } catch (_error) {
+    fields = [];
+  }
+  if (!opcoesCampoClickUp(fields, ["origem do cliente", "origem"]).length || !opcoesCampoClickUp(fields, ["situacao do lead", "situaÃ§Ã£o do lead", "status do lead"]).length) {
+    try {
+      const { data } = await client.from("ar_crm_items").select("dados").order("updated_at", { ascending: false }).limit(100);
+      const camposSincronizados = (data || []).flatMap((item) => {
+        const dados = item.dados as Record<string, unknown> | null;
+        return Array.isArray(dados?.campos_personalizados) ? dados.campos_personalizados as Record<string, unknown>[] : [];
+      });
+      fields = [...fields, ...camposSincronizados];
+    } catch (_error) {
+      // A validacao abaixo retornara uma mensagem clara se os campos nao forem encontrados.
+    }
+  }
+  const origemField = encontrarCampoClickUpExato(fields, ["origem do cliente", "origem"]);
+  const situacaoField = encontrarCampoClickUpExato(fields, ["situacao do lead", "situaÃ§Ã£o do lead", "status do lead"]);
+  for (const [label, field, value] of [
+    ["Origem do cliente", origemField, cliente.origem_cliente],
+    ["Situacao do Lead", situacaoField, cliente.situacao_lead]
+  ] as [string, Record<string, unknown> | undefined, unknown][]) {
+    const options = configCampoClickUp(field).options;
+    if (!field || !Array.isArray(options) || !options.length) {
+      throw new Error(`O campo "${label}" nao possui opcoes configuradas no ClickUp.`);
+    }
+    if (valorCampoClickUp(field, value) === null) {
+      throw new Error(`O valor informado para "${label}" nao pertence as opcoes do ClickUp.`);
+    }
+  }
+  const produto = text(cliente.produto);
+  if (produto) {
+    const { data: produtos, error: produtosError } = await client
+      .from("produtos_ar")
+      .select("product_id,descricao_comercial")
+      .eq("status", "ativo")
+      .limit(5000);
+    if (produtosError) throw produtosError;
+    const produtoEncontrado = (produtos || []).some((item) => [item.product_id, item.descricao_comercial]
+      .some((value) => normalizeFieldName(value) === normalizeFieldName(produto)));
+    if (!produtoEncontrado) throw new Error("Selecione um produto ativo da relacao de produtos.");
+  }
+  const fieldMap: Array<[string[], unknown]> = [
+    [["cpf"], cliente.cpf],
+    [["cnpj"], cliente.cnpj],
+    [["razao social", "razÃ£o social"], cliente.razao_social],
+    [["e-mail", "email"], cliente.email],
+    [["telefone", "celular", "whatsapp"], cliente.telefone],
+    [["origem do cliente", "origem"], cliente.origem_cliente],
+    [["situacao do lead", "situaÃ§Ã£o do lead", "status do lead"], cliente.situacao_lead],
+    [["pedido atual"], cliente.pedido_atual],
+    [["produto"], cliente.produto],
+    [["e-mail cd/parceiro", "email cd/parceiro", "email parceiro"], cliente.email_parceiro],
+    [["nascimento", "data de nascimento"], cliente.nascimento],
+    [["profissao/ramo de atividade", "profissao", "ramo de atividade"], cliente.profissao_ramo],
+    [["parceiro de indicacao", "parceiro de indicação", "parceiro"], cliente.parceiro_indicacao],
+    [["data de emissao", "data de emissão", "emissao"], cliente.data_emissao],
+    [["data de vencimento", "vencimento", "renovacao", "renovação"], cliente.data_vencimento]
+  ];
+  const customFields = fieldMap.flatMap(([names, value]) => {
+    const strictField = names.some((name) => ["origem do cliente", "origem", "situacao do lead", "situação do lead", "status do lead"].includes(name));
+    const field = encontrarCampoContratoClickUp(fields, names, strictField);
+    const fieldId = text(field?.id);
+    const clickupValue = field ? valorCampoClickUp(field, value) : null;
+    return fieldId && clickupValue !== null ? [{ ...(field || {}), id: fieldId, value: clickupValue }] : [];
+  });
+  const now = new Date().toISOString();
+  const cadastro = {
+    nome,
+    status: status || null,
+    situacao_lead: text(cliente.situacao_lead) || null,
+    cpf: text(cliente.cpf) || null,
+    cnpj: text(cliente.cnpj) || null,
+    razao_social: text(cliente.razao_social) || null,
+    email: text(cliente.email) || null,
+    telefone: text(cliente.telefone) || null,
+    origem_cliente: text(cliente.origem_cliente) || null,
+    pedido_atual: text(cliente.pedido_atual) || null,
+    produto: text(cliente.produto) || null,
+    parceiro_indicacao: text(cliente.parceiro_indicacao) || null,
+    email_parceiro: text(cliente.email_parceiro) || null,
+    nascimento: text(cliente.nascimento) || null,
+    profissao_ramo: text(cliente.profissao_ramo) || null,
+    data_emissao: text(cliente.data_emissao) || null,
+    data_vencimento: dueDate || null,
+    descricao: text(cliente.descricao) || null
+  };
+  const dados = {
+    ...cadastro,
+    cadastro,
+    campos_personalizados: customFields.map((field) => ({ ...field, valor_original: field.value, display_value: field.value || "—" })),
+    cadastro_pendente_clickup: true,
+    cadastro_criado_localmente_em: now
+  };
+  const taskPayload: Record<string, unknown> = {
+    list_id: listId,
+    name: nome,
+    description: descriptionParts.join("\n") || "Cadastro criado pelo Hub Transmares.",
+    custom_fields: customFields
+  };
+  if (status) taskPayload.status = status;
+  if (dueDate) {
+    taskPayload.due_date = dateToEpoch(dueDate);
+    taskPayload.due_date_time = false;
+  }
+  const { data: queued, error: queueError } = await client.rpc("ar_crm_enqueue_create", {
+    p_item: { nome, status: status || null, data_vencimento: dueDate || null, dados, updated_at: now },
+    p_outbox: { payload: taskPayload, available_at: now, updated_at: now }
+  });
+  if (queueError || !queued?.item) throw queueError || new Error("Nao foi possivel enfileirar a criacao no ClickUp.");
+  return queued;
+}
+
+async function createClickUpTask(client: ReturnType<typeof createClient>, payload = {}) {
+  const cliente = (payload.cliente || payload) as Record<string, unknown>;
+  const nome = text(cliente.nome || cliente.name);
+  if (!nome) throw new Error("Informe o nome do cliente.");
+  if (!clickUpConfigured()) throw new Error("A integracao com o ClickUp nao esta configurada para criar clientes.");
+
+  const listId = firstListId();
+  const descriptionParts = [
+    text(cliente.descricao),
+    text(cliente.situacao_lead) ? `Situacao do Lead: ${text(cliente.situacao_lead)}` : "",
+    text(cliente.pedido_atual) ? `Pedido atual: ${text(cliente.pedido_atual)}` : "",
+    text(cliente.produto) ? `Produto: ${text(cliente.produto)}` : "",
+    text(cliente.parceiro_indicacao) ? `Parceiro de indicacao: ${text(cliente.parceiro_indicacao)}` : "",
+    text(cliente.cpf) ? `CPF: ${text(cliente.cpf)}` : "",
+    text(cliente.cnpj) ? `CNPJ: ${text(cliente.cnpj)}` : "",
+    text(cliente.razao_social) ? `Razao social: ${text(cliente.razao_social)}` : "",
+    text(cliente.email) ? `E-mail: ${text(cliente.email)}` : "",
+    text(cliente.telefone) ? `Telefone: ${text(cliente.telefone)}` : "",
+    text(cliente.origem_cliente) ? `Origem do cliente: ${text(cliente.origem_cliente)}` : ""
+  ].filter(Boolean);
+
+  const taskPayload: Record<string, unknown> = {
+    name: nome,
+    description: descriptionParts.join("\n") || "Cadastro criado pelo Hub Transmares."
+  };
+  const status = text(cliente.status);
+  if (status) taskPayload.status = status;
+  const dueDate = text(cliente.data_vencimento);
+  if (dueDate) {
+    taskPayload.due_date = dateToEpoch(dueDate);
+    taskPayload.due_date_time = false;
+  }
+
+  const created = await clickupRequest(`list/${encodeURIComponent(listId)}/task`, {
+    method: "POST",
+    body: JSON.stringify(taskPayload)
+  }) as Record<string, unknown>;
+  const taskId = text(created.id);
+  if (!taskId) throw new Error("O ClickUp nao retornou o ID da tarefa criada.");
+
+  const fields = await carregarCamposListaClickUp(listId);
+  const fieldMap: Array<[string[], unknown]> = [
+    [["cpf"], cliente.cpf],
+    [["cnpj"], cliente.cnpj],
+    [["razao social", "razão social"], cliente.razao_social],
+    [["e-mail", "email"], cliente.email],
+    [["telefone", "celular", "whatsapp"], cliente.telefone],
+    [["origem do cliente", "origem"], cliente.origem_cliente],
+    [["situacao do lead", "situação do lead", "status do lead"], cliente.situacao_lead],
+    [["pedido atual"], cliente.pedido_atual],
+    [["produto"], cliente.produto],
+    [["e-mail cd/parceiro", "email cd/parceiro", "email parceiro"], cliente.email_parceiro],
+    [["nascimento", "data de nascimento"], cliente.nascimento],
+    [["profissao/ramo de atividade", "profissao", "ramo de atividade"], cliente.profissao_ramo],
+    [["parceiro de indicacao", "parceiro de indicação", "parceiro"], cliente.parceiro_indicacao],
+    [["data de emissao", "data de emissão", "emissao"], cliente.data_emissao],
+    [["data de vencimento", "vencimento", "renovacao", "renovação"], cliente.data_vencimento]
+  ];
+
+  for (const [names, value] of fieldMap) {
+    const strictField = names.some((name) => ["origem do cliente", "origem", "situacao do lead", "situação do lead", "status do lead"].includes(name));
+    const field = encontrarCampoContratoClickUp(fields, names, strictField);
+    const fieldId = text(field?.id);
+    const clickupValue = field ? valorCampoClickUp(field, value) : null;
+    if (fieldId && clickupValue !== null) await atualizarCampoPersonalizadoClickUp(taskId, fieldId, clickupValue);
+  }
+
+  const task = await clickupFetch(`task/${encodeURIComponent(taskId)}`) as Record<string, unknown>;
+  const now = new Date().toISOString();
+  await upsertTask(client, task, now);
+
+  const { data: mapping, error: mappingError } = await client
+    .from("ar_crm_clickup_mapping")
+    .select("item_id")
+    .eq("task_id", taskId)
+    .maybeSingle();
+  if (mappingError) throw mappingError;
+  if (!mapping?.item_id) throw new Error("Nao foi possivel localizar o cadastro criado no CRM local.");
+
+  const { data: item, error: itemError } = await client
+    .from("ar_crm_items")
+    .select("id,nome,status,responsavel,data_vencimento,sync_status,last_synced_at,dados")
+    .eq("id", mapping.item_id)
+    .single();
+  if (itemError || !item) throw itemError || new Error("Nao foi possivel carregar o cadastro criado.");
+  return { item, taskId, clickupUrl: text(task.url || created.url) || null };
+}
+
 async function carregarTarefasClickUp() {
   const tasks: Record<string, unknown>[] = [];
 
@@ -281,15 +674,21 @@ async function upsertTask(client: ReturnType<typeof createClient>, task: Record<
   return "created";
 }
 
-async function carregarItensCrm(client: ReturnType<typeof createClient>, pagina = 1, limite = 20) {
+async function carregarItensCrm(client: ReturnType<typeof createClient>, pagina = 1, limite = 20, filtros: Record<string, unknown> = {}) {
   const pageSize = Math.max(1, Math.min(Number(limite) || 20, 20));
   const pageNumber = Math.max(1, Number(pagina) || 1);
   const offset = (pageNumber - 1) * pageSize;
-  const { data, count, error } = await client
+  let query = client
     .from("ar_crm_items")
     .select("id,nome,status,responsavel,data_vencimento,sync_status,last_synced_at,dados", { count: "exact" })
-    .order("updated_at", { ascending: false })
-    .range(offset, offset + pageSize - 1);
+    .order("updated_at", { ascending: false });
+  const busca = text(filtros.busca);
+  const status = text(filtros.status);
+  const syncStatus = text(filtros.syncStatus);
+  if (busca) query = query.ilike("nome", `%${busca}%`);
+  if (status) query = query.eq("status", status);
+  if (syncStatus) query = query.eq("sync_status", syncStatus);
+  const { data, count, error } = await query.range(offset, offset + pageSize - 1);
 
   if (error) throw error;
   return { items: data || [], totalItens: count || 0, pagina: pageNumber };
@@ -298,7 +697,7 @@ async function carregarItensCrm(client: ReturnType<typeof createClient>, pagina 
 async function getData(client: ReturnType<typeof createClient>, payload = {}) {
   const [{ data: runs, error: runsError }, paginacao] = await Promise.all([
     client.from("ar_crm_sync_runs").select("finished_at,status").in("status", ["success", "partial"]).order("created_at", { ascending: false }).limit(1),
-    carregarItensCrm(client, payload.pagina, payload.limite)
+    carregarItensCrm(client, payload.pagina, payload.limite, payload)
   ]);
 
   if (runsError) throw runsError;
@@ -477,7 +876,16 @@ async function carregarUsuariosAtivos(client: ReturnType<typeof createClient>) {
 async function getTaskActivity(_client: ReturnType<typeof createClient>, payload = {}, user: AppUser) {
   const taskId = text(payload.taskId);
   const itemId = text(payload.itemId);
-  if (!taskId) throw new Error("Cadastro sem tarefa do ClickUp vinculada.");
+  if (!taskId) {
+    return {
+      comments: [],
+      attachments: [],
+      activeUsers: [],
+      viewerId: user.id,
+      taskId: "",
+      itemId
+    };
+  }
   await requireMappedTask(_client, taskId, itemId);
   const [task, comments, activeUsers] = await Promise.all([
     clickupFetch(`task/${encodeURIComponent(taskId)}`),
@@ -784,11 +1192,13 @@ Deno.serve(async (req: Request) => {
     const user = await requireUser(client, req.headers.get("Authorization") || "");
     const payload = await req.json().catch(() => ({}));
     const action = text(payload.action);
-    const actionRequiresExecution = action === "sync" || action === "updateTask" || action === "createComment" || action === "replyComment" || action === "toggleReaction" || action === "updateComment" || action === "deleteComment" || action === "addAttachment";
+    const actionRequiresExecution = action === "sync" || action === "createTask" || action === "updateTask" || action === "createComment" || action === "replyComment" || action === "toggleReaction" || action === "updateComment" || action === "deleteComment" || action === "addAttachment";
     await requirePermission(client, user, actionRequiresExecution ? "execute" : "view");
 
     if (action === "getData") return jsonResponse({ ok: true, ...(await getData(client, payload)) });
+    if (action === "getFormOptions") return jsonResponse({ ok: true, data: await getFormOptions(client) });
     if (action === "getRelatedByCpf") return jsonResponse({ ok: true, ...(await getRelatedByCpf(client, payload)) });
+    if (action === "createTask") return jsonResponse({ ok: true, data: await enqueueClickUpTask(client, payload) });
     if (action === "updateTask") return jsonResponse({ ok: true, data: await updateTaskFromHub(client, payload) });
     if (action === "getTaskActivity") return jsonResponse({ ok: true, ...(await getTaskActivity(client, payload, user)) });
     if (action === "createComment") return jsonResponse({ ok: true, data: await createTaskComment(client, payload, user) });
