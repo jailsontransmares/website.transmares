@@ -1,4 +1,9 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import {
+  canAccessModule,
+  montarPermissoesLegadas,
+  normalizarPermissoes
+} from './permissionService.js';
 
 const DEFAULT_CONFIG = {
   nome_sistema: 'PAINEL TRANSMARES',
@@ -60,6 +65,23 @@ async function selecionarTabelaOpcional(nomeTabela, consulta) {
   return data || [];
 }
 
+async function selecionarTabelaObrigatoria(nomeTabela, consulta) {
+  const supabase = exigirSupabaseConfigurado();
+  let query = supabase.from(nomeTabela).select('*');
+
+  if (consulta) {
+    query = consulta(query);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || `Não foi possível carregar a tabela ${nomeTabela}.`);
+  }
+
+  return data || [];
+}
+
 function normalizarConfiguracoes(registros) {
   if (!Array.isArray(registros) || !registros.length) {
     return { ...DEFAULT_CONFIG };
@@ -92,12 +114,17 @@ function normalizarPerfil(usuarioEncontrado, perfis) {
 
 function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
   const emailAuth = authUser?.email || '';
+  const authUserId = authUser?.id || '';
 
   if (!authUser || !emailAuth) {
     throw new Error('Sessão inválida. Entre novamente.');
   }
 
   const usuarioEncontrado = registros.find(item => {
+    if (authUserId && item.auth_user_id === authUserId) {
+      return true;
+    }
+
     const email = item.email || item.e_mail || item.login || '';
     return emailAuth && String(email).toLowerCase() === emailAuth.toLowerCase();
   });
@@ -124,22 +151,63 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
   };
 }
 
-function normalizarCards(registros, usuario) {
-  const ativos = registros.filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo');
-  const cards = ativos
-    .map(item => ({
-      id: item.id_modulo || item.modulo_id || item.slug || item.id,
-      titulo: item.titulo || item.nome || item.label
-    }))
-    .filter(item => item.id && item.titulo);
+function obterDadosItem(item) {
+  return item?.dados && typeof item.dados === 'object' ? item.dados : {};
+}
 
-  const lista = cards.length ? cards : DEFAULT_CARDS;
+function normalizarSlugModulo(valor = '') {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function deveExibirModuloNaHome(item) {
+  const dados = obterDadosItem(item);
+  const visibilidade = dados.exibir_home;
+  const ocultoNaHome = visibilidade === false || String(visibilidade).trim().toLowerCase() === 'false';
+
+  return normalizarStatus(item.status || 'ativo') !== 'inativo' && !ocultoNaHome;
+}
+
+function normalizarCards(registros, usuario, permissoes) {
+  const ativos = registros.filter(deveExibirModuloNaHome);
+  const cards = ativos
+    .map(item => {
+      const dados = obterDadosItem(item);
+      const ordem = Number(dados.ordem);
+      const slugFonte = dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.titulo || item.nome || item.label || item.id;
+
+      return {
+        id: normalizarSlugModulo(slugFonte),
+        titulo: item.titulo || item.nome || item.label,
+        ordem: Number.isFinite(ordem) ? ordem : 9999
+      };
+    })
+    .filter(item => item.id && item.titulo);
+  cards.sort((a, b) => {
+    if (a.ordem !== b.ordem) {
+      return a.ordem - b.ordem;
+    }
+
+    return String(a.titulo || '').localeCompare(String(b.titulo || ''), 'pt-BR');
+  });
+
+  const lista = registros.length ? cards : DEFAULT_CARDS;
 
   if (usuario?.perfil === 'gestor') {
-    return lista;
+    return lista
+      .map(({ ordem, ...card }) => card)
+      .filter(card => canAccessModule(permissoes, card.id));
   }
 
-  return lista.filter(card => card.id !== 'administracao');
+  return lista
+    .filter(card => card.id !== 'administracao')
+    .filter(card => canAccessModule(permissoes, card.id))
+    .map(({ ordem, ...card }) => card);
 }
 
 function normalizarAvisos(registros, limite) {
@@ -172,18 +240,24 @@ function calcularDiasAteAniversario(dataNascimento) {
   return Math.round((aniversario - hojeInicio) / 86400000);
 }
 
-function normalizarAniversariantes(registros, limite) {
+function normalizarAniversariantes(registros, { limite, janelaDias } = {}) {
   const limiteNumerico = Number(limite) || DEFAULT_CONFIG.limite_aniversariantes;
+  const janelaNumerica = Number(janelaDias) || DEFAULT_CONFIG.janela_aniversarios_dias;
 
   return registros
-    .filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo')
-    .map(item => ({
-      id: item.id,
-      nome: item.nome || '',
-      data: item.data_nascimento || '',
-      dias_ate: calcularDiasAteAniversario(item.data_nascimento)
-    }))
-    .filter(item => item.nome && item.dias_ate !== null && item.dias_ate <= limiteNumerico)
+    .filter(item => !['inativo', 'arquivado'].includes(normalizarStatus(item.status || 'ativo')))
+    .map(item => {
+      const dataAniversario = item.data_aniversario || item.data_nascimento || '';
+
+      return {
+        id: item.id,
+        nome: item.nome_completo || item.nome || '',
+        data: dataAniversario,
+        dias_ate: calcularDiasAteAniversario(dataAniversario),
+        origem: item.origem_cadastro || (item.data_aniversario ? 'parceiros_indicacao' : 'aniversarios')
+      };
+    })
+    .filter(item => item.nome && item.dias_ate !== null && item.dias_ate <= janelaNumerica)
     .sort((a, b) => a.dias_ate - b.dias_ate)
     .slice(0, limiteNumerico);
 }
@@ -201,39 +275,72 @@ function normalizarFavoritos(registros, limite) {
 }
 
 function obterTipoItem(item) {
-  const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
+  const dados = obterDadosItem(item);
   return normalizarStatus(item.tipo || item.categoria_tipo || dados.tipo);
+}
+
+async function carregarPermissoesEfetivas(supabase, usuario) {
+  const { data, error } = await supabase.rpc('app_permissoes_efetivas');
+
+  if (error) {
+    const rpcNaoExiste = error.code === 'PGRST202' || /app_permissoes_efetivas/i.test(error.message || '');
+
+    if (rpcNaoExiste) {
+      return normalizarPermissoes(montarPermissoesLegadas(usuario));
+    }
+
+    throw new Error(error.message || 'Não foi possível carregar suas permissões.');
+  }
+
+  return normalizarPermissoes(data || []);
 }
 
 export async function carregarDadosIniciaisSupabase() {
   const supabase = exigirSupabaseConfigurado();
   const { data: authData } = await supabase.auth.getUser();
 
-  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios] = await Promise.all([
-    selecionarTabelaOpcional('usuarios'),
+  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
+    selecionarTabelaObrigatoria('usuarios'),
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
     selecionarTabelaOpcional('itens'),
     selecionarTabelaOpcional('avisos_internos'),
-    selecionarTabelaOpcional('aniversarios')
+    selecionarTabelaOpcional('aniversarios'),
+    selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
+    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status'))
   ]);
 
   const config = normalizarConfiguracoes(configuracoes);
   const usuario = normalizarUsuario(usuarios, authData?.user, perfis, grupos);
-  const moduloItens = itens.filter(item => ['modulo', 'card'].includes(obterTipoItem(item)));
+  const permissions = await carregarPermissoesEfetivas(supabase, usuario);
+  const modulosCadastrados = itens.filter(item => obterTipoItem(item) === 'modulo');
+  const moduloItens = modulosCadastrados.length
+    ? modulosCadastrados
+    : itens.filter(item => obterTipoItem(item) === 'card');
   const linkItens = itens.filter(item => {
     const dados = item.dados && typeof item.dados === 'object' ? item.dados : {};
     const favoritos = Array.isArray(dados.favoritos) ? dados.favoritos : [];
     return ['link', 'links'].includes(obterTipoItem(item)) && favoritos.includes(usuario.id);
   });
+  const aniversariantesCadastros = [
+    ...parceirosIndicacao.map(item => ({ ...item, origem_cadastro: 'parceiros_indicacao' })),
+    ...colaboradoresRhDp.map(item => ({ ...item, origem_cadastro: 'rh_colaboradores' }))
+  ];
 
   return {
     usuario,
     config,
-    cards: normalizarCards(moduloItens, usuario),
+    permissions,
+    cards: normalizarCards(moduloItens, usuario, permissions),
     avisos: normalizarAvisos(avisosInternos, config.limite_avisos),
-    aniversariantes: normalizarAniversariantes(aniversarios, config.limite_aniversariantes),
+    aniversariantes: normalizarAniversariantes(
+      aniversariantesCadastros.length ? aniversariantesCadastros : aniversarios,
+      {
+        limite: config.limite_aniversariantes,
+        janelaDias: config.janela_aniversarios_dias
+      }
+    ),
     favoritos: normalizarFavoritos(linkItens, config.limite_favoritos),
     meta: {
       modo_visual_efetivo: usuario.preferencia_modo_visual || config.modo_visual_padrao || 'claro',

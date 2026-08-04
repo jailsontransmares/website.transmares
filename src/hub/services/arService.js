@@ -84,6 +84,24 @@ export async function carregarDadosAR() {
   return { produtos, parceiros, historico };
 }
 
+export async function atualizarProdutosGrupoAR({ grupo, produtos }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.rpc('ar_atualizar_produtos_grupo', {
+    p_grupo: grupo,
+    p_produtos: produtos
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível atualizar os produtos do grupo.');
+  }
+
+  return data || {
+    grupo,
+    total: 0,
+    produtos: []
+  };
+}
+
 export async function gerarLinksAR({ produto_id, parceiro_id }) {
   const supabase = exigirSupabaseConfigurado();
   const [{ data: produto, error: erroProduto }, { data: parceiro, error: erroParceiro }] = await Promise.all([

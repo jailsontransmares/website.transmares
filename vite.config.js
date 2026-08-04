@@ -4,8 +4,10 @@ import { resolve } from 'node:path';
 export default defineConfig({
   appType: 'mpa',
   build: {
+    chunkSizeWarningLimit: 650,
     rollupOptions: {
       input: {
+        hub: resolve(__dirname, 'hub/index.html'),
         home: resolve(__dirname, 'index.html'),
         blog: resolve(__dirname, 'blog.html'),
         contato: resolve(__dirname, 'contato.html'),

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: hub-transmares
+    runtime: static
+    buildCommand: npm install --global npm@12.0.2 && npm ci && npm run build:hub
+    staticPublishPath: ./dist-hub
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow

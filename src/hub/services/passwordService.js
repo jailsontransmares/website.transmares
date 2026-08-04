@@ -63,7 +63,23 @@ async function carregarTaxonomias() {
   };
 }
 
-function mapearAcesso(item) {
+async function usuarioPodeVerSenha() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.rpc('app_tem_permissao', {
+    p_recurso: 'central_senhas',
+    p_acao: 'view_secret'
+  });
+
+  if (error) {
+    const usuario = await carregarUsuarioAtual().catch(() => null);
+    const perfil = String(usuario?.perfil || '').toLowerCase();
+    return perfil === 'gestor' || perfil === 'admin' || Boolean(usuario?.is_master);
+  }
+
+  return Boolean(data);
+}
+
+function mapearAcesso(item, revelarSenha = false) {
   const dados = parseDescricao(item.descricao);
 
   return {
@@ -72,13 +88,90 @@ function mapearAcesso(item) {
     descricao: dados.descricao || '',
     url: dados.url || '',
     login: dados.login || '',
-    senha: item.chave || '',
+    senha: revelarSenha ? (item.chave || '') : '',
     categoria: dados.categoria || '',
     grupo: dados.grupo || '',
     status: item.status || 'ativo',
     data_inicio: item.data_inicio || '',
     data_fim: item.data_fim || ''
   };
+}
+
+function erroRpcAusente(error, nomeFuncao) {
+  return error?.code === 'PGRST202'
+    || String(error?.message || '').includes(nomeFuncao);
+}
+
+async function listarAcessosCompatibilidade(supabase) {
+  const revelarSenha = await usuarioPodeVerSenha();
+  const { data, error } = await supabase
+    .from('chaves_acesso')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar acessos.');
+  }
+
+  return (data || []).map(item => mapearAcesso(item, revelarSenha));
+}
+
+async function listarAcessosSanitizados(supabase) {
+  const { data, error } = await supabase.rpc('app_listar_chaves_acesso');
+
+  if (error) {
+    if (erroRpcAusente(error, 'app_listar_chaves_acesso')) {
+      return listarAcessosCompatibilidade(supabase);
+    }
+
+    throw new Error(error.message || 'Não foi possível carregar acessos.');
+  }
+
+  return (data || []).map(item => mapearAcesso(item, true));
+}
+
+async function salvarAcessoCompatibilidade(supabase, payload, item) {
+  const query = payload.id
+    ? supabase.from('chaves_acesso').update(item).eq('id', payload.id).select('*').single()
+    : supabase.from('chaves_acesso').insert(item).select('*').single();
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível salvar o acesso.');
+  }
+
+  return data;
+}
+
+async function salvarAcessoControlado(supabase, payload, item) {
+  const { data, error } = await supabase.rpc('app_salvar_chave_acesso', {
+    p_id: payload.id || null,
+    p_descricao: item.descricao,
+    p_chave: item.chave,
+    p_status: item.status
+  });
+
+  if (error) {
+    if (erroRpcAusente(error, 'app_salvar_chave_acesso')) {
+      return salvarAcessoCompatibilidade(supabase, payload, item);
+    }
+
+    throw new Error(error.message || 'Não foi possível salvar o acesso.');
+  }
+
+  return Array.isArray(data) ? data[0] : data;
+}
+
+async function excluirAcessoCompatibilidade(supabase, id) {
+  const { error } = await supabase
+    .from('chaves_acesso')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível excluir o acesso.');
+  }
 }
 
 function filtrarAcessos(acessos, filtros = {}) {
@@ -101,17 +194,10 @@ function montarResumo(acessos) {
 
 export async function carregarPasswordsData(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
-  const taxonomias = await carregarTaxonomias();
-  const { data, error } = await supabase
-    .from('chaves_acesso')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(error.message || 'Não foi possível carregar acessos.');
-  }
-
-  const acessos = (data || []).map(mapearAcesso);
+  const [taxonomias, acessos] = await Promise.all([
+    carregarTaxonomias(),
+    listarAcessosSanitizados(supabase)
+  ]);
 
   return {
     ...taxonomias,
@@ -135,15 +221,31 @@ export async function salvarPasswordItem(payload = {}) {
     throw new Error('Informe título, login e senha.');
   }
 
-  const query = payload.id
-    ? supabase.from('chaves_acesso').update(item).eq('id', payload.id).select('*').single()
-    : supabase.from('chaves_acesso').insert(item).select('*').single();
+  const data = await salvarAcessoControlado(supabase, payload, item);
 
-  const { data, error } = await query;
+  return { acesso: mapearAcesso(data, true) };
+}
 
-  if (error) {
-    throw new Error(error.message || 'Não foi possível salvar o acesso.');
+export async function excluirPasswordItem(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const id = String(payload.id || '').trim();
+
+  if (!id) {
+    throw new Error('Acesso inválido para exclusão.');
   }
 
-  return { acesso: mapearAcesso(data) };
+  const { error } = await supabase.rpc('app_excluir_chave_acesso', {
+    p_id: id
+  });
+
+  if (error) {
+    if (erroRpcAusente(error, 'app_excluir_chave_acesso')) {
+      await excluirAcessoCompatibilidade(supabase, id);
+      return { id };
+    }
+
+    throw new Error(error.message || 'Não foi possível excluir o acesso.');
+  }
+
+  return { id };
 }

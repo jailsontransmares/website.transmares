@@ -3,3 +3,5 @@
 !.env.example
 node_modules/
 dist/
+dist-hub/
+supabase/.temp/

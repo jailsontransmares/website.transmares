@@ -6,19 +6,50 @@
   <meta name="robots" content="noindex, nofollow" />
 
   <title>PAINEL TRANSMARES</title>
+  <link rel="stylesheet" href="../src/hub/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style id="admin-user-permissions-clean-visual-style">
+    .admin-user-permissions-v2-head p,
+    .admin-user-permissions-v2-effect {
+      display: none !important;
+    }
+
+    .admin-user-permissions-v2-check {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 0 !important;
+      min-height: 24px !important;
+    }
+  </style>
 
 </head>
 <body>
   <div id="app">
-    <section class="loading-card">
-      <h1>PAINEL TRANSMARES</h1>
-      <p>Carregando sistema...</p>
+    <section class="loading-card" aria-live="polite" aria-busy="true">
+      <h1>Hub Transmares</h1>
+      <div class="hub-loading" role="status" aria-live="polite" aria-busy="true">
+        <span class="hub-loading-spinner" aria-hidden="true"></span>
+        <span class="hub-loading-text">Carregando sistema...</span>
+      </div>
     </section>
   </div>
 
-  <script type="module" src="/src/hub/app.js"></script>
+  <script type="module" src="../src/hub/routeAliases.js"></script>
+  <script type="module" src="../src/hub/branding.js"></script>
+  <script type="module" src="../src/hub/app.js"></script>
+  <script type="module" src="../src/hub/modalAccessibility.js"></script>
+  <script type="module" src="../src/hub/operationsCorretoraPlaceholder.js"></script>
+  <script type="module" src="../src/hub/adminRouteSync.js"></script>
+  <script type="module" src="../src/hub/userMenu.js"></script>
+  <script type="module" src="../src/hub/profilePage.js"></script>
+  <script type="module" src="../src/hub/avatarUpload.js"></script>
+  <script type="module" src="../src/hub/profileMasks.js"></script>
+  <script type="module" src="../src/hub/companySettingsPage.js"></script>
+  <script type="module" src="../src/hub/companySettingsSaveRpcFix.js"></script>
+  <script type="module" src="../src/hub/companySettingsMasks.js"></script>
+  <script type="module" src="../src/hub/specialRouteStableRecovery.js"></script>
 </body>
 </html>

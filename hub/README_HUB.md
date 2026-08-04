@@ -1,27 +1,37 @@
 # Hub Transmares
 
-Este diretório contém o Painel Operacional TRS migrado para dentro do mesmo projeto Netlify do site institucional.
+Este diretório contém o HTML de entrada do Painel Operacional TRS. O código da aplicação fica em `src/hub`.
 
-## Acesso de teste
+## Acesso
 
-Enquanto o domínio oficial não estiver configurado:
+O Hub deve ser publicado como aplicação estática própria em:
 
-- `/hub/` no domínio temporário do Netlify
+- `https://hub.transmares.com.br`
 
-Exemplo:
+Durante desenvolvimento local ou no build completo do site, ele também pode ser acessado pela pasta:
 
-- `https://transmares.netlify.app/hub/`
+- `/hub/`
 
-## Acesso futuro
+## Build exclusivo
 
-Após configurar DNS/domínio no Netlify:
+O build dedicado do Hub é:
 
-- `https://hub.transmaresseguros.com.br`
+- `npm run build:hub`
+
+Saída esperada:
+
+- `dist-hub/index.html`
+- `dist-hub/assets/`
+
+No Render, configurar o Static Site com:
+
+- Build Command: `npm ci && npm run build:hub`
+- Publish Directory: `dist-hub`
+- Rewrite SPA: `/*` para `/index.html`
 
 ## Observações
 
 - O hub é uma aplicação estática em HTML/CSS/JS.
-- A integração atual usa Google Apps Script via `config.js`.
-- O código do Apps Script (`Code.gs`) não foi publicado aqui para evitar exposição desnecessária de backend.
-- A pasta `.git`, scripts locais e arquivos de handoff não foram incluídos na versão pública.
-- O hub recebeu `noindex,nofollow` para reduzir risco de indexação em mecanismos de busca.
+- A integração principal usa Supabase via variáveis de ambiente Vite.
+- `VITE_LEGACY_APPS_SCRIPT_URL` deve ser mantida apenas enquanto houver módulos usando fallback legado.
+- O Hub recebeu `noindex,nofollow` para reduzir risco de indexação em mecanismos de busca.

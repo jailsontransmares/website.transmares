@@ -1,11 +1,42 @@
-import { carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarOpcoesCadastroCrmAr, carregarPedidosRelacionadosCrmAr, criarClienteCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr, sincronizarPendenciaCrmAr } from './services/arCrmService.js';
+import {
+  cancelarReciboAR,
+  carregarDadosValidacoesAR,
+  criarValidacaoManual,
+  emitirReciboAR,
+  excluirImportacaoRepasseAR,
+  importarRepasseAR,
+  verificarImportacaoRepasseAR
+} from './services/arValidacoesService.js';
 import {
   carregarAdminData,
+  listarPerfisAdmin,
+  listarModulosAdmin,
+  obterParceiroIndicacaoAdmin,
+  listarPermissoesAdmin,
+  listarPermissoesUsuarioAdmin,
+  listarParceirosIndicacaoAdmin,
   listarRegistrosAdmin,
+  listarLogsIntegracoesAdmin,
+  salvarParceiroIndicacaoAdmin,
+  arquivarParceiroIndicacaoAdmin,
+  atualizarStatusParceirosIndicacaoAdmin,
+  arquivarParceirosIndicacaoAdminLote,
+  excluirPerfilAdmin,
+  listarUsuariosAdmin,
   restaurarCoresPadrao,
   salvarConfig,
+  salvarPerfilAdmin,
+  salvarPermissaoPerfilAdmin,
+  salvarPermissoesPerfilAdminLote,
+  salvarPermissaoUsuarioAdmin,
+  salvarPermissoesUsuarioAdminLote,
   salvarRegistroAdmin,
-  salvarTemaUsuario
+  salvarUsuarioAdmin,
+  salvarStatusModuloAdmin,
+  salvarTemaUsuario,
+  salvarVisibilidadeModulosHomeAdmin
 } from './services/adminService.js';
 import { carregarDadosIniciaisSupabase } from './services/hubService.js';
 import {
@@ -15,9 +46,31 @@ import {
 } from './services/linksService.js';
 import {
   carregarPasswordsData,
+  excluirPasswordItem,
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
+
+const ACOES_QUE_INVALIDAM_ACESSO = new Set([
+  'saveAdminUser',
+  'saveAdminProfile',
+  'deleteAdminProfile',
+  'saveAdminProfilePermission',
+  'saveAdminProfilePermissionsBatch',
+  'saveAdminUserPermission',
+  'saveAdminUserPermissionsBatch'
+]);
+
+function solicitarAtualizacaoContextoAcesso(action, payload) {
+  if (!ACOES_QUE_INVALIDAM_ACESSO.has(action) || typeof window === 'undefined') return;
+
+  window.dispatchEvent(new CustomEvent('hubAccessContextRefreshRequested', {
+    detail: {
+      motivo: action,
+      alvoId: payload?.usuario_id || payload?.perfil_id || payload?.id || ''
+    }
+  }));
+}
 
 async function testarConexaoSupabase() {
   try {
@@ -44,15 +97,119 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'getArCrmData') {
+      const dados = await carregarDadosCrmAr(payload.pagina, payload.limite);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'getArCrmFormOptions') {
+      const dados = await carregarOpcoesCadastroCrmAr();
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'syncArCrm') {
+      const dados = await sincronizarCrmAr();
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'syncPendingArCrm') {
+      const dados = await sincronizarPendenciaCrmAr(payload.itemId);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'createArCrmClient') {
+      const dados = await criarClienteCrmAr(payload.cliente || payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'updateArCrmTask') {
+      const dados = await atualizarTarefaCrmAr(payload.taskId, payload.itemId, payload.changes);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'getArCrmRelated') {
+      const dados = await carregarPedidosRelacionadosCrmAr(payload.cpf);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'getArCrmActivity') return { ok: true, data: await carregarAtividadeCrmAr(payload.taskId, payload.itemId) };
+    if (action === 'createArCrmComment') return { ok: true, data: await criarComentarioCrmAr(payload.taskId, payload.commentText, payload.mentions) };
+    if (action === 'replyArCrmComment') return { ok: true, data: await responderComentarioCrmAr(payload.taskId, payload.commentId, payload.commentText, payload.mentions) };
+    if (action === 'toggleArCrmReaction') return { ok: true, data: await alternarReacaoComentarioCrmAr(payload.taskId, payload.commentId, payload.emoji) };
+    if (action === 'updateArCrmComment') return { ok: true, data: await atualizarComentarioCrmAr(payload.taskId, payload.commentId, payload.commentText) };
+    if (action === 'deleteArCrmComment') return { ok: true, data: await excluirComentarioCrmAr(payload.taskId, payload.commentId) };
+    if (action === 'addArCrmAttachment') return { ok: true, data: await adicionarAnexoCrmAr(payload.taskId, payload.file) };
+
     if (action === 'generateArLinks') {
       const resultado = await gerarLinksAR(payload);
       return { ok: true, data: resultado };
     }
 
+    if (action === 'updateArProductsGroup') {
+      const resultado = await atualizarProdutosGrupoAR(payload);
+      return { ok: true, data: resultado };
+    }
+
+    if (action === 'getArValidacoesData') {
+      const dados = await carregarDadosValidacoesAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'createArValidacaoManual') {
+      const dados = await criarValidacaoManual(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'checkArRepasseImportado') {
+      const dados = await verificarImportacaoRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'importArRepasse') {
+      const dados = await importarRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'deleteArRepasseImportado') {
+      const dados = await excluirImportacaoRepasseAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'emitirArRecibo') {
+      const dados = await emitirReciboAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'cancelarArRecibo') {
+      const dados = await cancelarReciboAR(payload);
+      return { ok: true, data: dados };
+    }
+
     const acoes = {
       getAdminData: () => carregarAdminData(),
+      listAdminModules: () => listarModulosAdmin(),
+      listAdminUsers: () => listarUsuariosAdmin(),
+      listAdminProfiles: () => listarPerfisAdmin(),
+      listAdminPartners: () => listarParceirosIndicacaoAdmin(),
+      getAdminPartner: () => obterParceiroIndicacaoAdmin(payload),
+      saveAdminPartner: () => salvarParceiroIndicacaoAdmin(payload),
+      archiveAdminPartner: () => arquivarParceiroIndicacaoAdmin(payload),
+      updateAdminPartnersStatusBatch: () => atualizarStatusParceirosIndicacaoAdmin(payload),
+      archiveAdminPartnersBatch: () => arquivarParceirosIndicacaoAdminLote(payload),
+      listAdminPermissions: () => listarPermissoesAdmin(),
+      listAdminUserPermissions: () => listarPermissoesUsuarioAdmin(payload),
       listAdminRecords: () => listarRegistrosAdmin(payload),
+      listAdminIntegrationLogs: () => listarLogsIntegracoesAdmin(payload),
+      saveAdminUser: () => salvarUsuarioAdmin(payload),
+      saveAdminProfile: () => salvarPerfilAdmin(payload),
+      deleteAdminProfile: () => excluirPerfilAdmin(payload),
+      saveAdminProfilePermission: () => salvarPermissaoPerfilAdmin(payload),
+      saveAdminProfilePermissionsBatch: () => salvarPermissoesPerfilAdminLote(payload),
+      saveAdminUserPermission: () => salvarPermissaoUsuarioAdmin(payload),
+      saveAdminUserPermissionsBatch: () => salvarPermissoesUsuarioAdminLote(payload),
       saveAdminRecord: () => salvarRegistroAdmin(payload),
+      updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
+      saveAdminModuleHomeVisibilityBatch: () => salvarVisibilidadeModulosHomeAdmin(payload),
       saveConfig: () => salvarConfig(payload),
       restoreDefaultColors: () => restaurarCoresPadrao(),
       saveUserTheme: () => salvarTemaUsuario(payload),
@@ -60,6 +217,7 @@ export async function chamarApi(action, payload = {}) {
       saveLinkItem: () => salvarLinkItem(payload),
       toggleFavoriteLink: () => alternarFavoritoLink(payload),
       getPasswordsData: () => carregarPasswordsData(payload),
+      deletePasswordItem: () => excluirPasswordItem(payload),
       savePasswordItem: () => salvarPasswordItem(payload)
     };
 
@@ -71,6 +229,7 @@ export async function chamarApi(action, payload = {}) {
     }
 
     const dados = await acoes[action]();
+    solicitarAtualizacaoContextoAcesso(action, payload);
     return { ok: true, data: dados };
   } catch (erro) {
     console.error(`Erro ao executar ação ${action}:`, erro);
