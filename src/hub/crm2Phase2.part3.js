@@ -21,7 +21,12 @@ function renderCpfVerificationCrm2(values = {}) {
         </label>
         ${showPersonalFields ? formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true, formId: 'crm2-pf-form' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date', formId: 'crm2-pf-form' }) : ''}
-        ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form', className: 'crm2-pf-grid-cei' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"', formId: 'crm2-pf-form', className: 'crm2-pf-grid-phone crm2-pf-grid-row-2' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', formId: 'crm2-pf-form', className: 'crm2-pf-grid-email crm2-pf-grid-row-2' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], formId: 'crm2-pf-form', className: 'crm2-pf-grid-origin' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), formId: 'crm2-pf-form', className: 'crm2-pf-grid-partner' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', formId: 'crm2-pf-form', className: 'crm2-pf-grid-notes' }) : ''}
         ${gate.status === 'found' ? `
           <div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF">
             <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro</button>
@@ -84,17 +89,16 @@ function renderPersonFormCrm2() {
           </div>
         </section>` : ''}
 
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
+        ${editing ? `<section class="hub-form-section" aria-labelledby="crm2-pf-contact-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong></div>
-          <div class="hub-form-grid crm2-pf-contact-grid">
-            <div class="crm2-pf-contact-subcontainer" aria-hidden="true"></div>
-            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-contact-phone' })}
-            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', className: 'crm2-pf-contact-email' })}
-            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], className: 'crm2-pf-contact-origin' })}
-            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-contact-partner' })}
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', className: 'crm2-pf-contact-notes' })}
+          <div class="hub-form-grid">
+            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
+            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
           </div>
-        </section>
+        </section>` : ''}
 
         <section class="hub-form-section crm2-pf-attachments-mock ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-attachments-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong></div>
