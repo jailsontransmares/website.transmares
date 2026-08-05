@@ -1,7 +1,7 @@
+import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
+import { hasPermission } from './services/permissionService.js';
+
 (() => {
-  const scriptUrl = document.currentScript?.src || window.location.href;
-  const contextModuleUrl = new URL('./services/hubAccessContext.js', scriptUrl).href;
-  const permissionModuleUrl = new URL('./services/permissionService.js', scriptUrl).href;
 
   crm2PfState.canView = false;
   crm2PfState.canEdit = false;
@@ -123,20 +123,18 @@
     }
   }
 
-  Promise.all([
-    import(contextModuleUrl),
-    import(permissionModuleUrl)
-  ]).then(([contextModule, permissionModule]) => {
-    const syncPermissions = (context = contextModule.obterContextoAcessoHub()) => {
-      applyPermissionsCrm2(context, permissionModule.hasPermission);
-    };
+  const syncPermissions = (context = obterContextoAcessoHub()) => {
+    applyPermissionsCrm2(context, hasPermission);
+  };
 
-    contextModule.observarContextoAcessoHub(syncPermissions);
-    syncPermissions();
-  }).catch((error) => {
+  observarContextoAcessoHub(syncPermissions);
+  syncPermissions();
+  /* legacy async error fallback removed */
+  /*
     console.error('Não foi possível carregar as permissões do CRM 2.0.', error);
     crm2PfState.canView = true;
     crm2PfState.canEdit = false;
     crm2PfState.canDelete = false;
   });
+  */
 })();
