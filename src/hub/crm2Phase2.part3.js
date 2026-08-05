@@ -72,14 +72,8 @@ function renderPersonFormCrm2() {
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
-          </div>
-        </section>
-
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-origin-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-origin-title">Origem e indicação</strong></div>
-          <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem })}
-            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro })}
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: [{ value: 'Rede Transmares', label: 'Rede Transmares' }, { value: 'Contabilidade Rocha', label: 'Contabilidade Rocha' }, { value: 'Outro', label: 'Outro' }] })}
           </div>
         </section>
 
@@ -91,8 +85,7 @@ function renderPersonFormCrm2() {
         </section>
 
         <section class="hub-form-section crm2-pf-attachments-mock ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-attachments-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong><span>Arquivos mockados e validade.</span></div>
-          <p>A seleção valida o fluxo visual, mas o arquivo não é enviado.</p>
+          <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong></div>
           <div class="crm2-pf-form-attachment-fields">
             <label><span>Arquivo</span><input class="config-input" type="file" name="anexoArquivo" ${verified ? '' : 'disabled'}></label>
             <label><span>Validade</span><input class="config-input" type="date" name="anexoValidade" ${verified ? '' : 'disabled'}></label>
