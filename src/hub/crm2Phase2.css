@@ -35,6 +35,8 @@
 
 .crm2-pessoas-table-wrap {
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -274,6 +276,17 @@
 .crm2-pessoas-page.hub-form-screen {
   display: grid;
   gap: 18px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.crm2-pessoas-page.hub-form-screen > *,
+.crm2-pessoas-page .hub-form-screen-content {
+  min-width: 0;
+}
+
+.crm2-pessoas-page .hub-form-screen-content {
+  overflow: visible;
 }
 
 .crm2-pf-cpf-verification {
@@ -351,6 +364,22 @@
 
   .crm2-pf-cpf-found-actions {
     padding-top: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .crm2-pf-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-form-header-actions,
+  .crm2-pf-cpf-found-actions {
+    width: 100%;
+  }
+
+  .crm2-pf-form-header-actions > *,
+  .crm2-pf-cpf-found-actions > .secondary-btn {
+    flex: 1 1 100%;
   }
 }
 
