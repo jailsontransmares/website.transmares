@@ -641,7 +641,6 @@ function renderCpfVerificationCrm2() {
   const verified = gate.status === 'not-found';
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
-      <div class="hub-form-section-title"><strong id="crm2-pf-cpf-title">Consultar CPF</strong></div>
       <form class="hub-form-grid" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
