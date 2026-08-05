@@ -49,7 +49,7 @@ function renderPersonFormCrm2() {
 
       ${!editing ? renderCpfVerificationCrm2() : ''}
 
-      <form class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate>
+      <form class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate ${verified ? '' : 'hidden'}>
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-personal-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>
           <div class="hub-form-grid">
