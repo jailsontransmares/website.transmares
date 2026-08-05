@@ -640,6 +640,10 @@ function renderCpfVerificationCrm2() {
   const verified = gate.status === 'not-found';
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
+      <div class="hub-form-section-title">
+        <strong id="crm2-pf-cpf-title">Dados pessoais</strong>
+        <span>Identificação da pessoa física.</span>
+      </div>
       <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
@@ -689,7 +693,7 @@ function renderPersonFormCrm2() {
 
       <form class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate ${verified ? '' : 'hidden'}>
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-personal-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>
+          ${editing ? '<div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>' : ''}
           <div class="hub-form-grid">
             <label class="crm2-pf-status-automatico">
               <span>Status automático</span>
@@ -697,7 +701,7 @@ function renderPersonFormCrm2() {
               <small>Calculado com base nos pedidos e vínculos existentes.</small>
             </label>
             ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
-            ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
+            ${editing ? formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' }) : ''}
             ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
             ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
           </div>
