@@ -12591,6 +12591,15 @@ function obterBreadcrumbHub() {
       label: obterLabelBreadcrumbHub(contexto.principal),
       path: `${pathModulo.replace(/\/+$/g, '')}/${rotaAdmin}`
     });
+  } else if (contexto.modulo === 'painel-ar' && contexto.principal === '201') {
+    itens.push({
+      label: 'CRM 2.0',
+      path: `${pathModulo.replace(/\/+$/g, '')}/200`
+    });
+    itens.push({
+      label: 'Pessoas físicas',
+      path: `${pathModulo.replace(/\/+$/g, '')}/201`
+    });
   } else if (contexto.principal) {
     itens.push({
       label: obterLabelBreadcrumbHub(contexto.principal),

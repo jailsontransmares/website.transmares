@@ -3,10 +3,7 @@ function renderCpfVerificationCrm2() {
   const verified = gate.status === 'not-found';
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
-      <div class="hub-form-section-title">
-        <h4 id="crm2-pf-cpf-title">Verificação de CPF</h4>
-        <span>Consulte o CPF antes de liberar o cadastro.</span>
-      </div>
+      <div class="hub-form-section-title"><strong id="crm2-pf-cpf-title">Verificação de CPF</strong><span>Consulte o CPF antes de liberar o cadastro.</span></div>
       <form class="hub-form-grid" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
@@ -42,7 +39,6 @@ function renderPersonFormCrm2() {
 
   return `
     <section class="hub-form-screen crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
-      <nav class="hub-breadcrumb" aria-label="Breadcrumb">Hub <span>›</span> Painel AR <span>›</span> CRM 2.0 <span>›</span> Pessoas físicas <span>›</span> ${editing ? 'Editar' : 'Adicionar'}</nav>
       <header class="hub-form-screen-header">
         <div>
           <span class="ar-crm-phase1-kicker">${editing ? 'EDIÇÃO' : 'NOVO CADASTRO'} · MOCK</span>
@@ -56,9 +52,9 @@ function renderPersonFormCrm2() {
 
       ${!editing ? renderCpfVerificationCrm2() : ''}
 
-      <form class="crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate>
-        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
-          <legend class="hub-form-section-title">Dados pessoais</legend>
+      <form class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-personal-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>
           <div class="hub-form-grid">
             <label class="crm2-pf-status-automatico">
               <span>Status automático</span>
@@ -70,40 +66,40 @@ function renderPersonFormCrm2() {
             ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
             ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
-          <legend class="hub-form-section-title">Contato</legend>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong><span>Telefone e comunicação.</span></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
-          <legend class="hub-form-section-title">Origem e indicação</legend>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-origin-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-origin-title">Origem e indicação</strong><span>Contexto de acompanhamento.</span></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro })}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
-          <legend class="hub-form-section-title">Observações</legend>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-notes-title">Observações</strong><span>Informações complementares.</span></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
           </div>
-        </fieldset>
+        </section>
 
-        <fieldset class="hub-form-section crm2-pf-attachments-mock" ${verified ? '' : 'disabled'}>
-          <legend class="hub-form-section-title">Anexos</legend>
+        <section class="hub-form-section crm2-pf-attachments-mock ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-attachments-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong><span>Arquivos mockados e validade.</span></div>
           <p>A seleção valida o fluxo visual, mas o arquivo não é enviado.</p>
           <div class="crm2-pf-form-attachment-fields">
-            <label><span>Arquivo</span><input class="config-input" type="file" name="anexoArquivo"></label>
-            <label><span>Validade</span><input class="config-input" type="date" name="anexoValidade"></label>
+            <label><span>Arquivo</span><input class="config-input" type="file" name="anexoArquivo" ${verified ? '' : 'disabled'}></label>
+            <label><span>Validade</span><input class="config-input" type="date" name="anexoValidade" ${verified ? '' : 'disabled'}></label>
           </div>
           ${editing && (person?.anexos || []).length ? `<div class="crm2-pf-form-existing-attachments"><strong>Anexos atuais</strong>${person.anexos.map((attachment) => `<span>${escapeHtmlCrm2(attachment.nome)}</span>`).join('')}</div>` : ''}
-        </fieldset>
+        </section>
 
         <div class="hub-form-screen-actions">
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>

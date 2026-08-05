@@ -313,9 +313,10 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
   const errorId = `${fieldId}-error`;
   const describedBy = error ? `aria-describedby="${errorId}"` : '';
   const invalid = error ? 'true' : 'false';
+  const locked = crm2PfState.formMode === 'create' && crm2PfState.cpfGate.status !== 'not-found';
   const input = type === 'textarea'
-    ? `<textarea id="${fieldId}" class="config-input" name="${name}" rows="4" autocomplete="off" placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
-    : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} oninput="crm2PfTrackChange(this)">`;
+    ? `<textarea id="${fieldId}" class="config-input" name="${name}" rows="4" autocomplete="off" placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
+    : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
   return `
     <label class="${wide ? 'is-wide' : ''} ${changed}">
       <span for="${fieldId}">${escapeHtmlCrm2(label)}${required ? ' *' : ''}</span>
