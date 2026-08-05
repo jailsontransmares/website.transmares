@@ -641,12 +641,13 @@ function renderCpfVerificationCrm2() {
   const verified = gate.status === 'not-found';
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
-      <div class="hub-form-section-title"><strong id="crm2-pf-cpf-title">Verificação de CPF</strong><span>Consulte o CPF antes de liberar o cadastro.</span></div>
+      <div class="hub-form-section-title"><strong id="crm2-pf-cpf-title">Consultar CPF</strong></div>
       <form class="hub-form-grid" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
-          <input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" value="${escapeAttrCrm2(maskCpfCrm2(gate.value))}" oninput="crm2PfMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}" aria-describedby="crm2-pf-cpf-message">
-          ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : '<small id="crm2-pf-cpf-message">O CPF será mantido no cadastro após a validação.</small>'}
+          <input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" value="${escapeAttrCrm2(maskCpfCrm2(gate.value))}" oninput="crm2PfMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}" aria-describedby="crm2-pf-cpf-support crm2-pf-cpf-message">
+          <small id="crm2-pf-cpf-support">Consulte o CPF antes de iniciar o cadastro.</small>
+          ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}
         </label>
         <div class="hub-form-screen-actions">
           ${verified ? '<button class="secondary-btn" type="button" onclick="crm2PfChangeCpf()">Alterar CPF</button>' : '<button class="save-btn" type="submit">Consultar</button>'}
@@ -679,9 +680,7 @@ function renderPersonFormCrm2() {
     <section class="hub-form-screen crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
       <header class="hub-form-screen-header">
         <div>
-          <span class="ar-crm-phase1-kicker">${editing ? 'EDIÇÃO' : 'NOVO CADASTRO'} · MOCK</span>
           <h2 id="crm2-pessoa-form-title">${editing ? 'Editar cadastro' : 'Incluir cadastro de Pessoa Física'}</h2>
-          <p>O salvamento acontece somente no estado local da página.</p>
         </div>
         <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
       </header>
