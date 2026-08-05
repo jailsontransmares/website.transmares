@@ -66,7 +66,7 @@ function renderPersonFormCrm2() {
     <section class="hub-form-screen crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
       <header class="hub-form-screen-header">
         <div>
-          <h2 id="crm2-pessoa-form-title">${editing ? 'Editar cadastro' : 'Incluir cadastro de Pessoa Física'}</h2>
+          <h2 id="crm2-pessoa-form-title">${editing ? 'Editar cadastro' : 'Novo cadastro PF'}</h2>
         </div>
         <div class="crm2-pf-form-header-actions">
           ${!editing && crm2PfState.cpfGate.status === 'not-found' ? '<span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span>' : ''}
