@@ -361,6 +361,21 @@
   width: 17px;
 }
 
+.crm2-pf-select-trigger {
+  min-height: 38px;
+  width: 100%;
+}
+
+.crm2-pf-form-footer {
+  background: var(--surface-glass-strong);
+  border-top: var(--glass-border-subtle);
+  bottom: 0;
+  margin: 8px -4px -10px;
+  padding: 12px 4px 4px;
+  position: sticky;
+  z-index: 3;
+}
+
 @media (max-width: 700px) {
   .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-found-actions {
     grid-template-columns: minmax(0, 1fr);
@@ -390,6 +405,15 @@
   .crm2-pf-form-header-actions > *,
   .crm2-pf-cpf-found-actions > .secondary-btn {
     flex: 1 1 100%;
+  }
+
+  .crm2-pf-form-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .crm2-pf-form-footer > button {
+    width: 100%;
   }
 }
 

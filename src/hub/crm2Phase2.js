@@ -625,7 +625,7 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
   const input = type === 'textarea'
     ? `<textarea id="${fieldId}" class="config-input" name="${name}" rows="4" autocomplete="off" placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
     : type === 'select'
-      ? `<select id="${fieldId}" class="config-input" name="${name}" autocomplete="off" aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''} ${extra} ${locked ? 'disabled' : ''} onchange="crm2PfTrackChange(this)"><option value="">Selecione</option>${options.map((option) => `<option value="${escapeAttrCrm2(option.value)}" ${String(option.value) === String(value) ? 'selected' : ''}>${escapeHtmlCrm2(option.label)}</option>`).join('')}</select>`
+      ? `<div class="hub-filter-combobox crm2-pf-select"><input id="${fieldId}" type="hidden" name="${name}" value="${escapeAttrCrm2(value)}" ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''}><button class="config-input hub-filter-trigger crm2-pf-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="${fieldId}-menu" aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} onclick="crm2PfToggleDropdown(this, event)" onkeydown="crm2PfDropdownKeydown(event, this)"><span class="crm2-pf-select-label">${escapeHtmlCrm2(options.find((option) => String(option.value) === String(value))?.label || 'Selecione')}</span><span class="hub-filter-chevron" aria-hidden="true">⌄</span></button><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${escapeAttrCrm2(label)}" hidden>${options.map((option) => `<button class="hub-filter-dropdown-option ${String(option.value) === String(value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${String(option.value) === String(value) ? 'true' : 'false'}" data-value="${escapeAttrCrm2(option.value)}" data-label="${escapeAttrCrm2(option.label)}" onclick="crm2PfSelectDropdown(this)" onkeydown="crm2PfDropdownKeydown(event, this)">${escapeHtmlCrm2(option.label)}</button>`).join('')}</div></div>`
     : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
   return `
     <label class="${wide ? 'is-wide' : ''} ${changed}">
@@ -716,8 +716,7 @@ function renderPersonFormCrm2() {
           </div>
         </section>
 
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-notes-title">Observações</strong></div>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}">
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
           </div>
@@ -732,7 +731,7 @@ function renderPersonFormCrm2() {
           ${editing && (person?.anexos || []).length ? `<div class="crm2-pf-form-existing-attachments"><strong>Anexos atuais</strong>${person.anexos.map((attachment) => `<span>${escapeHtmlCrm2(attachment.nome)}</span>`).join('')}</div>` : ''}
         </section>
 
-        <div class="hub-form-screen-actions">
+        <div class="hub-form-screen-actions crm2-pf-form-footer">
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
@@ -1052,6 +1051,73 @@ Object.assign(window, {
   crm2PfMaskPhone(input) {
     input.value = maskPhoneCrm2(input.value);
   },
+  crm2PfToggleDropdown(trigger, event) {
+    event?.stopPropagation();
+    const menu = document.getElementById(trigger?.getAttribute('aria-controls') || '');
+    if (!menu || trigger.disabled) return;
+    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((openMenu) => {
+      if (openMenu !== menu) {
+        openMenu.hidden = true;
+        document.querySelector(`[aria-controls="${openMenu.id}"]`)?.setAttribute('aria-expanded', 'false');
+      }
+    });
+    const opening = menu.hidden;
+    menu.hidden = !opening;
+    trigger.setAttribute('aria-expanded', String(opening));
+    if (!opening) return;
+    const rect = trigger.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, rect.left)}px`;
+    menu.style.top = `${Math.min(window.innerHeight - 8, rect.bottom + 6)}px`;
+    menu.style.width = `${Math.min(Math.max(rect.width, 220), window.innerWidth - 16)}px`;
+    menu.querySelector('.is-selected')?.focus();
+  },
+  crm2PfSelectDropdown(option) {
+    const menu = option?.closest('.crm2-pf-select .hub-filter-dropdown-menu');
+    const combo = option?.closest('.crm2-pf-select');
+    const hidden = combo?.querySelector('input[type="hidden"]');
+    const trigger = combo?.querySelector('.crm2-pf-select-trigger');
+    if (!menu || !combo || !hidden || !trigger) return;
+    hidden.value = option.dataset.value || '';
+    combo.querySelector('.crm2-pf-select-label').textContent = option.dataset.label || 'Selecione';
+    menu.querySelectorAll('[role="option"]').forEach((item) => {
+      const selected = item === option;
+      item.classList.toggle('is-selected', selected);
+      item.setAttribute('aria-selected', String(selected));
+    });
+    menu.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    crm2PfTrackChange(hidden);
+    trigger.focus();
+  },
+  crm2PfDropdownKeydown(event, element) {
+    if (!['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'Escape') {
+      const menu = element?.closest('.crm2-pf-select')?.querySelector('.hub-filter-dropdown-menu');
+      const trigger = element?.closest('.crm2-pf-select')?.querySelector('.crm2-pf-select-trigger');
+      if (menu) menu.hidden = true;
+      trigger?.setAttribute('aria-expanded', 'false');
+      trigger?.focus();
+      return;
+    }
+    if (element?.classList.contains('crm2-pf-select-trigger')) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') crm2PfToggleDropdown(element, event);
+      return;
+    }
+    const options = [...(element?.parentElement?.querySelectorAll('[role="option"]') || [])];
+    const index = options.indexOf(element);
+    if (event.key === 'Enter' || event.key === ' ') return crm2PfSelectDropdown(element);
+    if (!options.length) return;
+    const next = event.key === 'ArrowUp' ? (index - 1 + options.length) % options.length : (index + 1) % options.length;
+    options[next].focus();
+  },
+  crm2PfCloseDropdowns(event) {
+    if (event?.target?.closest('.crm2-pf-select')) return;
+    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((menu) => {
+      menu.hidden = true;
+      document.querySelector(`[aria-controls="${menu.id}"]`)?.setAttribute('aria-expanded', 'false');
+    });
+  },
   crm2PfTrackChange(input) {
     if (!input?.name) return;
     crm2PfState.draft[input.name] = input.value;
@@ -1178,6 +1244,8 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   }
 });
+
+document.addEventListener('click', (event) => window.crm2PfCloseDropdowns?.(event));
 
 const crm2Observer = new MutationObserver(() => {
   if (!currentRouteCodeCrm2()) return;

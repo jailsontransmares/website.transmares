@@ -77,8 +77,7 @@ function renderPersonFormCrm2() {
           </div>
         </section>
 
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-notes-title">Observações</strong></div>
+        <section class="hub-form-section ${verified ? '' : 'is-disabled'}">
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
           </div>
@@ -93,7 +92,7 @@ function renderPersonFormCrm2() {
           ${editing && (person?.anexos || []).length ? `<div class="crm2-pf-form-existing-attachments"><strong>Anexos atuais</strong>${person.anexos.map((attachment) => `<span>${escapeHtmlCrm2(attachment.nome)}</span>`).join('')}</div>` : ''}
         </section>
 
-        <div class="hub-form-screen-actions">
+        <div class="hub-form-screen-actions crm2-pf-form-footer">
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
