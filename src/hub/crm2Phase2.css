@@ -297,6 +297,27 @@
   grid-template-columns: minmax(220px, 360px);
 }
 
+.crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-found-actions {
+  align-items: start;
+  grid-template-columns: minmax(220px, 360px) auto;
+}
+
+.crm2-pf-cpf-found-message {
+  color: var(--color-danger, #b42318);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+
+.crm2-pf-cpf-found-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 22px;
+}
+
 .crm2-pf-cpf-input-wrap {
   display: block;
   position: relative;
@@ -334,6 +355,16 @@
 .crm2-pf-cpf-icon svg {
   height: 17px;
   width: 17px;
+}
+
+@media (max-width: 700px) {
+  .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-found-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .crm2-pf-cpf-found-actions {
+    padding-top: 0;
+  }
 }
 
 .crm2-pf-status-pill {

@@ -3,7 +3,7 @@ function renderCpfVerificationCrm2() {
   const verified = gate.status === 'not-found';
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
-      <form class="hub-form-grid" onsubmit="crm2PfSearchCpf(event)" novalidate>
+      <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
           <span class="crm2-pf-cpf-input-wrap">
@@ -13,18 +13,15 @@ function renderCpfVerificationCrm2() {
               : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CPF" title="Consultar CPF"><i data-lucide="search" aria-hidden="true"></i></button>'}
           </span>
           ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}
+          ${gate.status === 'found' ? '<small id="crm2-pf-cpf-found-message" class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}
         </label>
-      </form>
-      ${gate.status === 'found' ? `
-        <div class="crm2-pf-cpf-result is-found" role="alert">
-          <strong>Este CPF já possui cadastro.</strong>
-          <div class="hub-form-screen-actions">
+        ${gate.status === 'found' ? `
+          <div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF">
             <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro</button>
             <button class="secondary-btn" type="button" onclick="crm2PfChangeCpf()">Consultar outro CPF</button>
-            <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
           </div>
-        </div>
-      ` : ''}
+        ` : ''}
+      </form>
       ${gate.status === 'not-found' ? '<p class="crm2-pf-cpf-result is-not-found" role="status"><strong>CPF não encontrado. Iniciar novo cadastro.</strong></p>' : ''}
     </section>
   `;
