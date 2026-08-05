@@ -1,13 +1,14 @@
-function renderCpfVerificationCrm2() {
+function renderCpfVerificationCrm2(values = {}) {
   const gate = crm2PfState.cpfGate;
   const verified = gate.status === 'not-found';
+  const showPersonalFields = verified;
   return `
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
       <div class="hub-form-section-title">
         <strong id="crm2-pf-cpf-title">Dados pessoais</strong>
         <span>Identificação da pessoa física.</span>
       </div>
-      <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2PfSearchCpf(event)" novalidate>
+      <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''} ${showPersonalFields ? 'crm2-pf-cpf-has-personal-fields' : ''}" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
           <span>CPF *</span>
           <span class="crm2-pf-cpf-input-wrap">
@@ -19,6 +20,9 @@ function renderCpfVerificationCrm2() {
           ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}
           ${gate.status === 'found' ? '<small id="crm2-pf-cpf-found-message" class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}
         </label>
+        ${showPersonalFields ? formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true, formId: 'crm2-pf-form' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date', formId: 'crm2-pf-form' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form' }) : ''}
         ${gate.status === 'found' ? `
           <div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF">
             <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro</button>
@@ -35,7 +39,6 @@ function renderPersonFormCrm2() {
   const editing = route.view === 'edit' || crm2PfState.formMode === 'edit';
   const person = editing ? getPersonCrm2(route.id || crm2PfState.detailId) : null;
   const values = { ...(person || {}), ...crm2PfState.draft };
-  const statusLabel = personStatusLabelCrm2(person || { pedidos: [] });
   const verified = editing || crm2PfState.cpfGate.status === 'not-found';
 
   return `
@@ -52,23 +55,18 @@ function renderPersonFormCrm2() {
 
       ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
 
-      ${!editing ? renderCpfVerificationCrm2() : ''}
+      ${!editing ? renderCpfVerificationCrm2(values) : ''}
 
-      <form class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate ${verified ? '' : 'hidden'}>
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-personal-title">
-          ${editing ? '<div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>' : ''}
+      <form id="crm2-pf-form" class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate ${verified ? '' : 'hidden'}>
+        ${editing ? `<section class="hub-form-section" aria-labelledby="crm2-pf-personal-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>
           <div class="hub-form-grid">
-            <label class="crm2-pf-status-automatico">
-              <span>Status automático</span>
-              <span class="crm2-pf-status-pill is-${escapeAttrCrm2(normalizeSearchCrm2(statusLabel).replace(/\s+/g, '-'))}" role="status">${escapeHtmlCrm2(statusLabel)}</span>
-              <small>Calculado com base nos pedidos e vínculos existentes.</small>
-            </label>
             ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
-            ${editing ? formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' }) : ''}
+            ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
             ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
             ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
           </div>
-        </section>
+        </section>` : ''}
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong><span>Telefone e comunicação.</span></div>
@@ -313,7 +311,7 @@ function savePersonCrm2(event) {
   data.delete('anexoValidade');
   const values = Object.fromEntries(data.entries());
   values.nome = String(values.nome || '').trim();
-  values.cpf = String(values.cpf || '').replace(/\D/g, '');
+  values.cpf = String(values.cpf || crm2PfState.cpfGate.value || '').replace(/\D/g, '');
   values.telefone = maskPhoneCrm2(values.telefone || '');
   values.email = String(values.email || '').trim();
 

@@ -302,6 +302,10 @@
   grid-template-columns: minmax(220px, 360px) auto;
 }
 
+.crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-personal-fields {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .crm2-pf-cpf-found-message {
   color: var(--color-danger, #b42318);
   display: block;
@@ -364,6 +368,12 @@
 
   .crm2-pf-cpf-found-actions {
     padding-top: 0;
+  }
+}
+
+@media (max-width: 800px) {
+  .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-personal-fields {
+    grid-template-columns: 1fr;
   }
 }
 
