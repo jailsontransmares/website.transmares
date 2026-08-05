@@ -35,6 +35,15 @@ Object.assign(window, {
   },
   crm2PfMaskCpf(input) {
     input.value = maskCpfCrm2(input.value);
+    if (!input.value && ['found', 'not-found'].includes(crm2PfState.cpfGate.status)) {
+      crm2PfChangeCpf();
+    }
+  },
+  crm2PfCpfKeydown(event) {
+    if (!event?.currentTarget || !['Backspace', 'Delete'].includes(event.key)) return;
+    if (crm2PfState.cpfGate.status !== 'not-found') return;
+    event.preventDefault();
+    crm2PfChangeCpf();
   },
   crm2PfMaskPhone(input) {
     input.value = maskPhoneCrm2(input.value);
