@@ -643,7 +643,6 @@ function renderCpfVerificationCrm2(values = {}) {
     <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
       <div class="hub-form-section-title">
         <strong id="crm2-pf-cpf-title">Dados pessoais</strong>
-        <span>Identificação da pessoa física.</span>
       </div>
       <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''} ${showPersonalFields ? 'crm2-pf-cpf-has-personal-fields' : ''}" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
@@ -696,7 +695,7 @@ function renderPersonFormCrm2() {
 
       <form id="crm2-pf-form" class="hub-form-screen-content crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate ${verified ? '' : 'hidden'}>
         ${editing ? `<section class="hub-form-section" aria-labelledby="crm2-pf-personal-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong><span>Identificação da pessoa física.</span></div>
+          <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
             ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
@@ -706,7 +705,7 @@ function renderPersonFormCrm2() {
         </section>` : ''}
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong><span>Telefone e comunicação.</span></div>
+          <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
@@ -714,7 +713,7 @@ function renderPersonFormCrm2() {
         </section>
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-origin-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-origin-title">Origem e indicação</strong><span>Contexto de acompanhamento.</span></div>
+          <div class="hub-form-section-title"><strong id="crm2-pf-origin-title">Origem e indicação</strong></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro })}
@@ -722,7 +721,7 @@ function renderPersonFormCrm2() {
         </section>
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-notes-title">Observações</strong><span>Informações complementares.</span></div>
+          <div class="hub-form-section-title"><strong id="crm2-pf-notes-title">Observações</strong></div>
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
           </div>
