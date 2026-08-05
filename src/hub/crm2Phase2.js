@@ -614,7 +614,7 @@ function renderPersonDetailCrm2(person) {
   `;
 }
 
-function formFieldCrm2({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '', formId = '', options = [] }) {
+function formFieldCrm2({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '', formId = '', options = [], className = '' }) {
   const changed = crm2PfState.changedFields.includes(name) ? 'is-changed' : '';
   const error = crm2PfState.errors[name] || '';
   const fieldId = `crm2-pf-${name}`;
@@ -628,7 +628,7 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
       ? `<div class="hub-filter-combobox crm2-pf-select"><input id="${fieldId}" class="config-input crm2-pf-select-trigger" type="text" name="${name}" value="${escapeAttrCrm2(value)}" data-dropdown-menu-id="${fieldId}-menu" data-selected-value="${escapeAttrCrm2(value)}" aria-label="${escapeAttrCrm2(label)}" aria-controls="${fieldId}-menu" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} onfocus="crm2PfToggleDropdown(this, event)" oninput="crm2PfFilterDropdown(this, event)" onkeydown="crm2PfDropdownKeydown(event, this)"><span class="hub-filter-chevron crm2-pf-select-chevron" aria-hidden="true">⌄</span><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${escapeAttrCrm2(label)}" data-dropdown-input-id="${fieldId}" hidden>${options.map((option) => `<button class="hub-filter-dropdown-option ${String(option.value) === String(value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${String(option.value) === String(value) ? 'true' : 'false'}" data-value="${escapeAttrCrm2(option.value)}" data-label="${escapeAttrCrm2(option.label)}" onclick="crm2PfSelectDropdown(this)" onkeydown="crm2PfDropdownKeydown(event, this)">${escapeHtmlCrm2(option.label)}</button>`).join('')}</div></div>`
     : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
   return `
-    <label class="${wide ? 'is-wide' : ''} ${changed}">
+    <label class="${wide ? 'is-wide' : ''} ${changed} ${className}">
       <span for="${fieldId}">${escapeHtmlCrm2(label)}${required ? ' *' : ''}</span>
       ${input}
       ${error ? `<small id="${errorId}" class="crm2-field-error">${escapeHtmlCrm2(error)}</small>` : ''}
@@ -725,12 +725,13 @@ function renderPersonFormCrm2() {
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong></div>
-          <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
-            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
-            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
-            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+          <div class="hub-form-grid crm2-pf-contact-grid">
+            <div class="crm2-pf-contact-subcontainer" aria-hidden="true"></div>
+            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-contact-phone' })}
+            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', className: 'crm2-pf-contact-email' })}
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], className: 'crm2-pf-contact-origin' })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-contact-partner' })}
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', className: 'crm2-pf-contact-notes' })}
           </div>
         </section>
 

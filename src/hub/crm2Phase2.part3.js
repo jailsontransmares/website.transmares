@@ -86,12 +86,13 @@ function renderPersonFormCrm2() {
 
         <section class="hub-form-section ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-contact-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong></div>
-          <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
-            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
-            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
-            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+          <div class="hub-form-grid crm2-pf-contact-grid">
+            <div class="crm2-pf-contact-subcontainer" aria-hidden="true"></div>
+            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-contact-phone' })}
+            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', className: 'crm2-pf-contact-email' })}
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], className: 'crm2-pf-contact-origin' })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-contact-partner' })}
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', className: 'crm2-pf-contact-notes' })}
           </div>
         </section>
 

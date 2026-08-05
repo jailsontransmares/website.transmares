@@ -375,6 +375,41 @@
   transform: translateY(-50%);
 }
 
+.crm2-pf-contact-grid {
+  grid-template-rows: auto auto auto;
+}
+
+.crm2-pf-contact-subcontainer {
+  border-bottom: 1px solid color-mix(in srgb, var(--borda) 72%, transparent);
+  grid-column: 1 / -1;
+  min-height: 1px;
+}
+
+.crm2-pf-contact-phone {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.crm2-pf-contact-email {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.crm2-pf-contact-origin {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.crm2-pf-contact-partner {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.crm2-pf-contact-notes {
+  grid-column: 3;
+  grid-row: 3;
+}
+
 .crm2-pf-form-footer {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
@@ -398,6 +433,16 @@
 @media (max-width: 800px) {
   .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-personal-fields {
     grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-contact-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+  }
+
+  .crm2-pf-contact-grid > * {
+    grid-column: 1;
+    grid-row: auto;
   }
 }
 
