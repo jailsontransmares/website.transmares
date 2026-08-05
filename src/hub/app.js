@@ -28,6 +28,7 @@ import {
   Clock3,
   createIcons,
   ExternalLink,
+  Eraser,
   Filter,
   House,
   KeyRound,
@@ -76,7 +77,8 @@ const HUB_LUCIDE_ICONS = {
   UsersRound,
   Workflow,
   X,
-  ExternalLink
+  ExternalLink,
+  Eraser
 };
 
 const CRM_STATUS_OPTIONS = ['em prospecção', 'cliente ativo', 'finalizado', 'lead perdido'];
