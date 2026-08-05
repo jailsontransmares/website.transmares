@@ -372,78 +372,6 @@ const state = {
     codigoRota: '200',
     mensagem: '',
     acaoMockada: '',
-    pessoasFisicas: {
-      busca: '',
-      statusFiltro: '',
-      origemFiltro: '',
-      detalheId: '',
-      modoFormulario: '',
-      mensagem: '',
-      erros: {},
-      draft: {},
-      items: [
-        {
-          id: 'pf-001',
-          nome: 'Mariana Alves de Souza',
-          cpf: '12345678901',
-          cei: '123.456.789/0001',
-          nascimento: '1987-04-18',
-          telefone: '(85) 99876-1204',
-          email: 'mariana.souza@example.com',
-          origem: 'Indicação',
-          parceiro: 'Rede Transmares',
-          status: 'cliente ativo',
-          observacoes: 'Cliente com acompanhamento de renovação.',
-          cadastroEm: '2026-07-18T10:30:00',
-          atualizadoEm: '2026-08-03T15:42:00',
-          anexos: [{ nome: 'Documento de identificação.pdf', validade: '2027-07-18', status: 'válido' }],
-          empresas: [{ nome: 'Alves Consultoria Ltda.', vinculo: 'Representante legal', status: 'ativo' }],
-          pedidos: [{ numero: 'PED-2401', produto: 'e-CNPJ A3', status: 'Ativo', vencimento: '2027-07-18' }],
-          timeline: [
-            { data: '2026-07-18T10:30:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' },
-            { data: '2026-08-03T15:42:00', usuario: 'Equipe AR', descricao: 'Dados atualizados.', tipo: 'Atualização' }
-          ]
-        },
-        {
-          id: 'pf-002',
-          nome: 'Rafael Nogueira Lima',
-          cpf: '98765432100',
-          cei: '',
-          nascimento: '1979-11-02',
-          telefone: '(81) 98812-4300',
-          email: 'rafael.lima@example.com',
-          origem: 'Site',
-          parceiro: '',
-          status: 'cliente inativo',
-          observacoes: 'Sem pedidos ativos no momento.',
-          cadastroEm: '2026-05-11T09:15:00',
-          atualizadoEm: '2026-07-29T11:08:00',
-          anexos: [],
-          empresas: [],
-          pedidos: [],
-          timeline: [{ data: '2026-05-11T09:15:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
-        },
-        {
-          id: 'pf-003',
-          nome: 'Camila Ferreira Rocha',
-          cpf: '45678912300',
-          cei: '987.654.321/0001',
-          nascimento: '1992-08-25',
-          telefone: '(88) 99654-7821',
-          email: 'camila.rocha@example.com',
-          origem: 'Parceiro',
-          parceiro: 'Contabilidade Rocha',
-          status: 'cliente ativo',
-          observacoes: '',
-          cadastroEm: '2026-06-20T14:20:00',
-          atualizadoEm: '2026-08-01T16:25:00',
-          anexos: [{ nome: 'Comprovante de endereço.pdf', validade: '2026-12-20', status: 'válido' }],
-          empresas: [{ nome: 'Rocha Serviços Digitais', vinculo: 'Titular do pedido', status: 'ativo' }],
-          pedidos: [{ numero: 'PED-2389', produto: 'e-CPF A3', status: 'Em validação', vencimento: '2026-12-20' }],
-          timeline: [{ data: '2026-06-20T14:20:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
-        }
-      ]
-    }
   },
   produtoBusca: '',
   filtros: {
@@ -7536,6 +7464,20 @@ function renderCrm2Phase1() {
   `;
 }
 
+function renderCrm2PessoasFisicasPhase2() {
+  if (typeof window !== 'undefined' && typeof window.crm2PfRender === 'function') {
+    return window.crm2PfRender();
+  }
+
+  return `
+    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+      <div class="hub-loading" role="status">Carregando Pessoas físicas...</div>
+    </section>
+  `;
+}
+
+/* Legacy CRM 2.0 PF implementation is retained only as historical source and is not executable. */
+if (false) {
 function navegarParaCrm2Rota(codigo) {
   const rota = String(codigo || '').trim();
   if (!/^\d+$/.test(rota)) return;
@@ -7977,6 +7919,8 @@ function salvarPessoaFisicaCrm2(event) {
   pf.draft = {};
   pf.abaDetalhe = 'dados';
   renderPainelAr();
+}
+
 }
 
 function acionarMockCrm2(acao) {
