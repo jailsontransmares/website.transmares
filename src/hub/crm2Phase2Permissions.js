@@ -98,9 +98,7 @@ import { hasPermission } from './services/permissionService.js';
 
   function applyPermissionsCrm2(context, hasPermission) {
     const permissions = context?.permissions || {};
-    const resolvePermission = (action) => typeof window.hubPode === 'function'
-      ? window.hubPode('painel_ar', action)
-      : hasPermission(permissions, 'painel_ar', action);
+    const resolvePermission = (action) => hasPermission(permissions, 'painel_ar', action);
     crm2PfState.canView = resolvePermission('view');
     crm2PfState.canEdit = resolvePermission('update');
     crm2PfState.canDelete = resolvePermission('delete');

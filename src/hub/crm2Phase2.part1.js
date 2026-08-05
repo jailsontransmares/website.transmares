@@ -123,9 +123,7 @@ const crm2PfState = {
 };
 
 function crm2CanEdit() {
-  return typeof window.hubPode === 'function'
-    ? window.hubPode('painel_ar', 'update')
-    : crm2PfState.canEdit;
+  return crm2PfState.canEdit === true;
 }
 
 function escapeHtmlCrm2(value = '') {
