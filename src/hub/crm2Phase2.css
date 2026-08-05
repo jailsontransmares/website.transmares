@@ -293,9 +293,47 @@
   margin: 0;
 }
 
-.crm2-pf-cpf-verification .hub-form-screen-actions {
-  align-items: end;
-  justify-content: flex-end;
+.crm2-pf-cpf-verification > .hub-form-grid {
+  grid-template-columns: minmax(220px, 360px);
+}
+
+.crm2-pf-cpf-input-wrap {
+  display: block;
+  position: relative;
+}
+
+.crm2-pf-cpf-input-wrap .config-input {
+  padding-right: 42px;
+}
+
+.crm2-pf-cpf-icon {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--texto-suave);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+}
+
+.crm2-pf-cpf-icon:hover,
+.crm2-pf-cpf-icon:focus-visible {
+  background: var(--surface-glass-strong);
+  color: var(--color-primary);
+  outline: none;
+}
+
+.crm2-pf-cpf-icon svg {
+  height: 17px;
+  width: 17px;
 }
 
 .crm2-pf-status-pill {
