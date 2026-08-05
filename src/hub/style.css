@@ -3480,29 +3480,6 @@ body.dark .admin-partners-actions-menu {
   justify-content: flex-end;
 }
 
-.crm2-pessoas-filters {
-  align-items: end;
-  background: var(--surface-glass-strong);
-  border: var(--glass-border-subtle);
-  border-radius: var(--radius-card);
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(240px, 1.6fr) minmax(160px, .8fr) minmax(160px, .8fr) auto;
-  padding: 14px;
-}
-
-.crm2-pessoas-filters label {
-  display: grid;
-  gap: 6px;
-}
-
-.crm2-pessoas-filters label > span {
-  color: var(--texto-suave);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .crm2-pessoas-summary {
   color: var(--texto-suave);
   font-size: 13px;
@@ -3518,17 +3495,6 @@ body.dark .admin-partners-actions-menu {
   display: block;
   font-size: 11px;
   margin-top: 3px;
-}
-
-.crm2-pessoas-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.crm2-pessoas-row-actions .secondary-btn {
-  min-height: 32px;
-  padding: 6px 10px;
 }
 
 .crm2-pessoas-empty {
@@ -4904,7 +4870,7 @@ body.dark .admin-partners-actions-menu {
     flex-direction: column;
   }
 
-  .crm2-pessoas-filters,
+  .ar-crm-list-filters,
   .crm2-pf-form-grid {
     grid-template-columns: 1fr;
   }
@@ -8354,18 +8320,18 @@ body.dark .ar-products-edit-feedback.is-error {
   white-space: nowrap;
 }
 
-.rh-row-actions {
+.hub-row-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
 }
 
-.rh-row-actions-menu {
+.hub-row-actions-menu {
   position: relative;
 }
 
-.rh-row-actions-menu > summary {
+.hub-row-actions-menu > summary {
   align-items: center;
   cursor: pointer;
   display: inline-flex;
@@ -8375,17 +8341,17 @@ body.dark .ar-products-edit-feedback.is-error {
   padding: 5px 8px;
 }
 
-.rh-row-actions-menu > summary::-webkit-details-marker {
+.hub-row-actions-menu > summary::-webkit-details-marker {
   display: none;
 }
 
-.rh-row-actions-menu[open] > summary {
+.hub-row-actions-menu[open] > summary {
   background: color-mix(in srgb, var(--cor-principal) 10%, transparent);
   border-color: color-mix(in srgb, var(--cor-principal) 28%, var(--borda));
   color: var(--cor-principal);
 }
 
-.rh-row-actions-popover {
+.hub-row-actions-popover {
   background: var(--surface-glass-strong);
   border: var(--glass-border-subtle);
   border-radius: 12px;
@@ -8402,7 +8368,7 @@ body.dark .ar-products-edit-feedback.is-error {
   z-index: 1400;
 }
 
-.rh-row-actions-popover button {
+.hub-row-actions-popover button {
   background: transparent;
   border: 0;
   border-radius: 8px;
@@ -8415,13 +8381,13 @@ body.dark .ar-products-edit-feedback.is-error {
   white-space: nowrap;
 }
 
-.rh-row-actions-popover button:hover,
-.rh-row-actions-popover button:focus-visible {
+.hub-row-actions-popover button:hover,
+.hub-row-actions-popover button:focus-visible {
   background: color-mix(in srgb, var(--cor-principal) 10%, transparent);
   outline: 0;
 }
 
-.rh-row-actions-popover .danger-text {
+.hub-row-actions-popover .danger-text {
   color: #b42318;
 }
 
@@ -11835,15 +11801,24 @@ body.modal-is-open {
   outline-offset: 3px;
 }
 
+.hub-layout {
+  --hub-modal-bottom-gap: 36px;
+  --hub-modal-sidebar-offset: 280px;
+}
+
+.hub-layout.is-sidebar-collapsed {
+  --hub-modal-sidebar-offset: 76px;
+}
+
 .hub-layout .modal-backdrop,
 .hub-layout .fin-modal-backdrop {
   bottom: 0;
   box-sizing: border-box;
   left: 0;
-  padding-left: max(24px, calc((100vw - 1480px) / 2));
+  padding-left: calc(var(--hub-modal-sidebar-offset) + max(24px, calc((100vw - 1480px) / 2)));
   padding-right: max(24px, calc((100vw - 1480px) / 2));
   right: 0;
-  top: 134px;
+  top: var(--hub-content-offset);
   z-index: 1300;
 }
 
@@ -11874,7 +11849,7 @@ body.dark .hub-layout .modal-backdrop {
 .hub-layout .small-modal {
   border-radius: var(--radius-modal);
   box-sizing: border-box;
-  max-height: calc(100dvh - 170px);
+  max-height: calc(100dvh - var(--hub-content-offset) - var(--hub-modal-bottom-gap));
 }
 
 .hub-layout .small-modal:not(.admin-user-modal):not(.partner-modal):not(.rh-modal) {
@@ -11910,12 +11885,12 @@ body.dark .hub-layout .partner-modal-backdrop .partner-modal {
 
 .hub-layout .modal-backdrop,
 .hub-layout .fin-modal-backdrop {
-  padding-left: max(24px, calc((100vw - 1480px) / 2));
+  padding-left: calc(var(--hub-modal-sidebar-offset) + max(24px, calc((100vw - 1480px) / 2)));
 }
 
 .hub-layout .small-modal,
 .hub-layout .fin-modal {
-  max-height: calc(100dvh - 170px);
+  max-height: calc(100dvh - var(--hub-content-offset) - var(--hub-modal-bottom-gap));
 }
 
 .hub-layout .fin-modal-backdrop {
@@ -11977,7 +11952,7 @@ body.dark .hub-layout .fin-modal-backdrop {
   .hub-layout .fin-modal-backdrop {
     left: 0;
     right: 0;
-    top: 86px;
+    top: var(--hub-content-offset);
   }
 
   .hub-layout .modal-backdrop > .rh-modal,
@@ -11994,7 +11969,7 @@ body.dark .hub-layout .fin-modal-backdrop {
 
   .hub-layout .small-modal,
   .hub-layout .fin-modal {
-    max-height: calc(100dvh - 102px);
+    max-height: calc(100dvh - var(--hub-content-offset) - var(--hub-modal-bottom-gap));
   }
 
   .hub-layout .admin-user-modal.is-permissions-stage,
@@ -12015,11 +11990,47 @@ body.dark .hub-layout .fin-modal-backdrop {
 .hub-layout .fin-modal-backdrop > .fin-modal {
   box-sizing: border-box;
   min-height: 0;
-  max-height: calc(100dvh - 170px);
+  max-height: calc(100dvh - var(--hub-content-offset) - var(--hub-modal-bottom-gap));
 }
 
 .hub-layout .modal-backdrop > .small-modal:not(.admin-user-modal):not(.partner-modal):not(.rh-modal) {
   width: min(720px, 100%);
+}
+
+/* Modal contido: o desfoque fica restrito ao container da tela que o abriu. */
+.hub-modal-scope {
+  isolation: isolate;
+  min-height: 0;
+  position: relative;
+}
+
+.hub-layout .modal-backdrop.hub-modal-backdrop--contained,
+.hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained {
+  bottom: 0;
+  inset: 0;
+  left: 0;
+  padding: 18px;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.hub-layout .modal-backdrop.hub-modal-backdrop--contained > .small-modal,
+.hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained > .fin-modal {
+  max-height: calc(100% - 36px);
+  width: min(720px, 100%);
+}
+
+@media (max-width: 800px) {
+  .hub-layout .modal-backdrop.hub-modal-backdrop--contained,
+  .hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained {
+    padding: 8px;
+  }
+
+  .hub-layout .modal-backdrop.hub-modal-backdrop--contained > .small-modal,
+  .hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained > .fin-modal {
+    max-height: calc(100% - 16px);
+  }
 }
 
 .hub-layout .fin-modal-backdrop > .fin-modal {
@@ -12180,6 +12191,10 @@ body.dark .hub-layout .fin-modal-backdrop {
 }
 
 @media (max-width: 800px) {
+  .hub-layout {
+    --hub-modal-bottom-gap: 16px;
+  }
+
   .hub-layout .modal-backdrop > .small-modal,
   .hub-layout .fin-modal-backdrop > .fin-modal,
   .hub-layout .rh-modal,
@@ -12188,7 +12203,7 @@ body.dark .hub-layout .fin-modal-backdrop {
   .hub-layout .admin-profile-modal,
   .hub-layout .ar-recibo-modal,
   .hub-layout .ar-products-preview-modal {
-    max-height: calc(100dvh - 102px);
+    max-height: calc(100dvh - var(--hub-content-offset) - var(--hub-modal-bottom-gap));
     width: 100%;
   }
 

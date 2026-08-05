@@ -1,4 +1,5 @@
 Object.assign(window, {
+  crm2PfRender: renderCrm2Phase2,
   navegarParaCrm2Rota: navigateCrm2Route,
   crm2PfOpenForm: openFormCrm2,
   crm2PfCloseForm() {
@@ -23,7 +24,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfContinueCpf() {
-    if (!crm2PfState.canExecute || crm2PfState.cpfGate.status !== 'not-found') return;
+    if (!crm2CanEdit() || crm2PfState.cpfGate.status !== 'not-found') return;
     crm2PfState.formMode = 'create';
     crm2PfState.draft = { cpf: crm2PfState.cpfGate.value };
     crm2PfState.errors = {};
@@ -74,11 +75,16 @@ Object.assign(window, {
     crm2PfState.page = 1;
     rerenderCrm2Phase2();
     window.requestAnimationFrame(() => {
-      const input = document.querySelector('.crm2-pessoas-filter-search input');
+      const input = document.querySelector('.ar-crm-list-filters input[type="search"]');
       if (!input) return;
       input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
     });
+  },
+  crm2PfApplyFilters(event) {
+    event?.preventDefault();
+    crm2PfState.page = 1;
+    rerenderCrm2Phase2();
   },
   crm2PfSetFilter(type, value) {
     if (type === 'status') crm2PfState.statusFilter = String(value || '');
@@ -92,7 +98,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfSetListState(value) {
-    if (!crm2PfState.canExecute) return;
+    if (!crm2CanEdit()) return;
     crm2PfState.listState = ['normal', 'loading', 'error', 'empty'].includes(value) ? value : 'normal';
     rerenderCrm2Phase2();
   },
@@ -102,7 +108,7 @@ Object.assign(window, {
   },
   crm2PfAddNote(event, personId) {
     event.preventDefault();
-    if (!crm2PfState.canExecute) return;
+    if (!crm2CanEdit()) return;
     const person = getPersonCrm2(personId);
     const note = String(new FormData(event.currentTarget).get('observacao') || '').trim();
     if (!person || !note) return;
@@ -112,7 +118,7 @@ Object.assign(window, {
   },
   crm2PfAddAttachment(event, personId) {
     event.preventDefault();
-    if (!crm2PfState.canExecute) return;
+    if (!crm2CanEdit()) return;
     const person = getPersonCrm2(personId);
     const file = event.currentTarget.elements.arquivo?.files?.[0];
     const expiration = String(event.currentTarget.elements.validade?.value || '');
@@ -124,7 +130,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfReplaceAttachment(input, personId, index) {
-    if (!crm2PfState.canExecute) return;
+    if (!crm2CanEdit()) return;
     const person = getPersonCrm2(personId);
     const file = input?.files?.[0];
     const previous = person?.anexos?.[index];
@@ -136,7 +142,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfRemoveAttachment(personId, index) {
-    if (!crm2PfState.canExecute) return;
+    if (!crm2CanEdit()) return;
     const person = getPersonCrm2(personId);
     const attachment = person?.anexos?.[index];
     if (!person || !attachment) return;

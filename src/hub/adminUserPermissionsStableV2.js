@@ -36,6 +36,15 @@ function escapeAttr(valor) {
   return escapeHtml(valor);
 }
 
+function normalizarRecursoPermissao(recurso, acao = 'view') {
+  const chave = String(recurso || '').trim();
+  const acaoNormalizada = chave === 'painel_ar.crm' && acao === 'execute' ? 'update' : acao;
+  return {
+    recurso: ['painel_ar.crm', 'painel_ar.crm_2'].includes(chave) ? 'painel_ar' : chave,
+    acao: acaoNormalizada
+  };
+}
+
 function obterEstadoTelaUsuario() {
   if (typeof window.hubObterEstadoUsuarioTelaAdmin !== 'function') {
     return { modo: '', id: '', etapa: 'dados' };
@@ -269,12 +278,11 @@ function acoesDisponiveis(recurso) {
     links_corretora: ['view'],
     links_ar: ['view'],
     links_gestao: ['view'],
-    painel_ar: ['view'],
+    painel_ar: ['view', 'update', 'delete'],
     'painel_ar.gerar_links': ['view', 'execute'],
     'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
-    'painel_ar.crm': ['view', 'execute'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
@@ -350,7 +358,10 @@ function construirModulos() {
       .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
 
     const funcionais = relacionados.filter(recurso => recurso.chave !== modulo.chave);
-    const linhas = (funcionais.length ? funcionais : [modulo]).map(recurso => ({
+    const linhasBase = modulo.chave === 'painel_ar'
+      ? [modulo]
+      : (funcionais.length ? funcionais : [modulo]);
+    const linhas = linhasBase.map(recurso => ({
       ...recurso,
       modulo_chave: modulo.chave,
       modulo_nome: modulo.nome || modulo.chave,
@@ -371,7 +382,8 @@ function construirModulos() {
 
 function mapearPermissoesUsuario(lista) {
   return (lista || []).reduce((acc, item) => {
-    acc[`${item.recurso_chave}:${item.acao}`] = item.efeito || '';
+    const normalizado = normalizarRecursoPermissao(item.recurso_chave, item.acao);
+    acc[`${normalizado.recurso}:${normalizado.acao}`] = item.efeito || '';
     return acc;
   }, {});
 }
@@ -379,7 +391,8 @@ function mapearPermissoesUsuario(lista) {
 function mapearPermissoesPerfil(perfilId) {
   return (permissoesPerfil || []).reduce((acc, item) => {
     if (item.perfil_id === perfilId && item.permitido !== false) {
-      acc[`${item.recurso_chave}:${item.acao}`] = true;
+      const normalizado = normalizarRecursoPermissao(item.recurso_chave, item.acao);
+      acc[`${normalizado.recurso}:${normalizado.acao}`] = true;
     }
     return acc;
   }, {});
@@ -435,7 +448,8 @@ async function carregarPermissoes(usuarioId, forcar = false) {
     if (!permissoesAdminResponse.ok) throw new Error(permissoesAdminResponse.message || 'Não foi possível carregar permissões-base.');
 
     usuarios = usuariosResponse.data?.records || [];
-    recursos = permissoesUsuarioResponse.data?.recursos || permissoesAdminResponse.data?.recursos || [];
+    const recursosOriginais = permissoesUsuarioResponse.data?.recursos || permissoesAdminResponse.data?.recursos || [];
+    recursos = recursosOriginais.filter(recurso => !['painel_ar.crm', 'painel_ar.crm_2'].includes(recurso?.chave));
     perfis = permissoesAdminResponse.data?.perfis || [];
     permissoesPerfil = permissoesAdminResponse.data?.permissoes || [];
 

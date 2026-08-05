@@ -42,8 +42,8 @@ async function authorizeHubUser(client: ReturnType<typeof createClient>, authori
     .from("usuario_permissoes")
     .select("efeito")
     .eq("usuario_id", user.id)
-    .eq("recurso_chave", "painel_ar.crm")
-    .eq("acao", "execute")
+    .eq("recurso_chave", "painel_ar")
+    .eq("acao", "update")
     .maybeSingle();
   if (override?.efeito === "negar") throw new Error("Seu usuario nao possui permissao para sincronizar o CRM AR.");
   if (override?.efeito === "permitir") return;
@@ -53,8 +53,8 @@ async function authorizeHubUser(client: ReturnType<typeof createClient>, authori
     .from("perfil_permissoes")
     .select("permitido")
     .eq("perfil_id", user.perfil_id)
-    .eq("recurso_chave", "painel_ar.crm")
-    .eq("acao", "execute")
+    .eq("recurso_chave", "painel_ar")
+    .eq("acao", "update")
     .maybeSingle();
   if (!permission?.permitido) throw new Error("Seu perfil nao possui permissao para sincronizar o CRM AR.");
 }

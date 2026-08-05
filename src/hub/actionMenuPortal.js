@@ -1,6 +1,7 @@
 const PORTAL_ATTRIBUTE = 'data-hub-action-menu-portal';
 const SPACER_ATTRIBUTE = 'data-hub-action-menu-spacer';
 const registros = new Map();
+const MENU_BOUND_ATTRIBUTE = 'data-hub-action-menu-bound';
 
 let listenersAtivos = false;
 
@@ -117,6 +118,64 @@ export function fecharMenuAcaoGlobal(menu) {
   });
   registros.delete(menu);
 }
+
+window.__hubFecharMenuAcaoGlobal = fecharMenuAcaoGlobal;
+
+export function inicializarMenusAcoesGlobais(root = document) {
+  root.querySelectorAll?.('[data-hub-action-menu]').forEach((menu) => {
+    if (menu.getAttribute(MENU_BOUND_ATTRIBUTE) === 'true') return;
+    const popover = menu.querySelector('[data-hub-action-popover], .hub-row-actions-popover');
+    const trigger = menu.querySelector('summary, [data-hub-action-trigger]');
+    if (!popover || !trigger) return;
+
+    const options = {
+      minWidth: Number(menu.dataset.hubActionMinWidth) || 120,
+      maxWidth: Number(menu.dataset.hubActionMaxWidth) || 190,
+      gap: Number(menu.dataset.hubActionGap) || 6,
+      flipVertical: menu.dataset.hubActionFlipVertical === 'true'
+    };
+
+    const abrir = () => {
+      if (menu.open) abrirMenuAcaoGlobal(trigger, popover, options);
+    };
+
+    menu.addEventListener('toggle', () => {
+      if (menu.open) abrir();
+      else fecharMenuAcaoGlobal(popover);
+    });
+    popover.addEventListener('click', (event) => {
+      if (!event.target.closest?.('[role="menuitem"]')) return;
+      menu.open = false;
+      fecharMenuAcaoGlobal(popover);
+    }, true);
+    document.addEventListener('pointerdown', (event) => {
+      if (!menu.open) return;
+      if (menu.contains(event.target) || popover.contains(event.target)) return;
+      menu.open = false;
+      fecharMenuAcaoGlobal(popover);
+    }, true);
+    trigger.addEventListener('click', () => window.requestAnimationFrame(abrir));
+    menu.setAttribute(MENU_BOUND_ATTRIBUTE, 'true');
+  });
+}
+
+function observarMenusAcoesGlobais() {
+  const iniciar = () => {
+    inicializarMenusAcoesGlobais();
+    new MutationObserver((mutations) => {
+      mutations.forEach(({ addedNodes }) => {
+        addedNodes.forEach((node) => {
+          if (node.nodeType === 1) inicializarMenusAcoesGlobais(node);
+        });
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar, { once: true });
+  else iniciar();
+}
+
+observarMenusAcoesGlobais();
 
 export function limparMenusAcoesGlobais() {
   Array.from(registros.keys()).forEach(menu => fecharMenuAcaoGlobal(menu));

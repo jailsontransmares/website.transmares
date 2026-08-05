@@ -37,12 +37,11 @@ function renderPeopleListCrm2() {
     crm2PfState.search
     || crm2PfState.statusFilter
     || crm2PfState.originFilter
-    || crm2PfState.registrationDateFilter
   );
   const specialState = crm2PfState.listState !== 'normal';
 
   return `
-    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+    <section class="admin-panel crm2-pessoas-page hub-modal-scope" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
       <div class="admin-panel-header">
         <div>
           <span class="ar-crm-phase1-kicker">ROTA 201 · CRM 2.0</span>
@@ -51,14 +50,14 @@ function renderPeopleListCrm2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="primary-btn" type="button" onclick="crm2PfOpenForm('create')" ${!crm2PfState.canExecute ? 'disabled' : ''}>Nova pessoa física</button>
+          <button class="save-btn" type="button" onclick="crm2PfOpenForm('create')" ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa física</button>
         </div>
       </div>
 
       ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
 
-      <div class="crm2-pessoas-filters" role="search">
-        <label class="crm2-pessoas-filter-search">
+      <form class="ar-crm-list-filters" role="search" onsubmit="crm2PfApplyFilters(event)">
+        <label>
           <span>Buscar</span>
           <input class="config-input" type="search" placeholder="Nome, CPF, telefone ou e-mail" value="${escapeAttrCrm2(crm2PfState.search)}" oninput="crm2PfSetSearch(this.value)">
         </label>
@@ -77,21 +76,9 @@ function renderPeopleListCrm2() {
             ${origins.map((origin) => `<option value="${escapeAttrCrm2(origin)}" ${crm2PfState.originFilter === origin ? 'selected' : ''}>${escapeHtmlCrm2(origin)}</option>`).join('')}
           </select>
         </label>
-        <label>
-          <span>Data de cadastro</span>
-          <input class="config-input" type="date" value="${escapeAttrCrm2(crm2PfState.registrationDateFilter)}" onchange="crm2PfSetFilter('date', this.value)">
-        </label>
-        <label>
-          <span>Estado de homologação</span>
-          <select class="config-input" onchange="crm2PfSetListState(this.value)" ${!crm2PfState.canExecute ? 'disabled' : ''}>
-            <option value="normal" ${crm2PfState.listState === 'normal' ? 'selected' : ''}>Lista normal</option>
-            <option value="loading" ${crm2PfState.listState === 'loading' ? 'selected' : ''}>Carregamento simulado</option>
-            <option value="error" ${crm2PfState.listState === 'error' ? 'selected' : ''}>Erro simulado</option>
-            <option value="empty" ${crm2PfState.listState === 'empty' ? 'selected' : ''}>Lista vazia simulada</option>
-          </select>
-        </label>
-        ${hasFilters ? '<button class="secondary-btn" type="button" onclick="crm2PfClearFilters()">Limpar filtros</button>' : ''}
-      </div>
+        <button class="save-btn" type="submit">Aplicar filtros</button>
+        <button class="secondary-btn" type="button" onclick="crm2PfClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
+      </form>
 
       <div class="crm2-pessoas-summary" aria-live="polite">
         <strong>${specialState ? 0 : items.length}</strong>
@@ -100,13 +87,14 @@ function renderPeopleListCrm2() {
 
       ${specialState ? renderListStateCrm2() : pageItems.length ? `
         <div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap">
-          <table class="ar-crm-phase1-table crm2-pessoas-table">
+          <table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pessoas-table-caption">
+            <caption id="crm2-pessoas-table-caption" class="crm2-pessoas-table-caption">Pessoas fisicas cadastradas no CRM 2.0</caption>
             <thead>
               <tr>
                 <th>Nome completo/nome social</th>
-                <th>CPF</th>
-                <th>Telefone</th>
-                <th>E-mail</th>
+                <th id="crm2-pf-col-cpf" scope="col">CPF</th>
+                <th id="crm2-pf-col-phone" scope="col">Telefone</th>
+                <th id="crm2-pf-col-email" scope="col">E-mail</th>
                 <th>Última atualização</th>
                 <th>Ações</th>
               </tr>
@@ -115,14 +103,19 @@ function renderPeopleListCrm2() {
               ${pageItems.map((item) => `
                 <tr>
                   <td><strong>${escapeHtmlCrm2(item.nome)}</strong><small>${escapeHtmlCrm2(personStatusLabelCrm2(item))}</small></td>
-                  <td>${escapeHtmlCrm2(maskCpfCrm2(item.cpf))}</td>
+                  <td headers="crm2-pf-col-cpf">${escapeHtmlCrm2(maskCpfCrm2(item.cpf))}</td>
                   <td>${escapeHtmlCrm2(maskPhoneCrm2(item.telefone) || '—')}</td>
                   <td>${escapeHtmlCrm2(item.email || '—')}</td>
                   <td>${escapeHtmlCrm2(formatDateTimeCrm2(item.atualizadoEm))}</td>
                   <td>
-                    <div class="crm2-pessoas-row-actions">
-                      <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(item.id)}')">Ver</button>
-                      <button class="secondary-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(item.id)}')" ${!crm2PfState.canExecute ? 'disabled' : ''}>Editar</button>
+                    <div class="hub-row-actions">
+                      <details class="hub-row-actions-menu" data-hub-action-menu data-hub-action-min-width="120" data-hub-action-max-width="190" data-hub-action-gap="6">
+                        <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttrCrm2(item.nome)}" title="Ações rápidas">⋮</summary>
+                        <div class="hub-row-actions-popover" data-hub-action-popover role="menu">
+                          <button type="button" role="menuitem" onclick="crm2PfOpenDetail('${escapeAttrCrm2(item.id)}')">Visualizar</button>
+                          <button type="button" role="menuitem" onclick="crm2PfEdit('${escapeAttrCrm2(item.id)}')" ${!crm2CanEdit() ? 'disabled' : ''}>Editar</button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>
@@ -132,10 +125,10 @@ function renderPeopleListCrm2() {
         </div>
         ${renderPaginationCrm2(totalPages, items.length)}
       ` : `
-        <div class="crm2-pessoas-state">
-          <strong>Nenhum resultado encontrado.</strong>
-          <span>Ajuste os filtros ou limpe a busca para visualizar os registros mockados.</span>
-          <button class="secondary-btn" type="button" onclick="crm2PfClearFilters()">Limpar filtros</button>
+        <div class="crm2-pessoas-state" role="status" aria-live="polite">
+          <strong>${crm2PfState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa física cadastrada.'}</strong>
+          <span>${crm2PfState.items.length ? 'Ajuste os filtros ou limpe a busca para visualizar os registros mockados.' : 'A lista mockada ainda não possui pessoas físicas cadastradas.'}</span>
+          <button class="secondary-btn" type="button" onclick="crm2PfClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
         </div>
       `}
     </section>
@@ -170,7 +163,7 @@ function renderPersonDataCrm2(person) {
         </div>
       </div>
 
-      ${crm2PfState.canExecute ? `
+      ${crm2CanEdit() ? `
         <form class="crm2-pf-attachment-add" onsubmit="crm2PfAddAttachment(event, '${escapeAttrCrm2(person.id)}')">
           <label><span>Arquivo</span><input class="config-input" type="file" name="arquivo" required></label>
           <label><span>Validade opcional</span><input class="config-input" type="date" name="validade"></label>
@@ -189,7 +182,7 @@ function renderPersonDataCrm2(person) {
                 <span>Validade: ${escapeHtmlCrm2(formatDateCrm2(attachment.validade))}</span>
               </div>
               <span class="crm2-pf-attachment-status is-${escapeAttrCrm2(attachmentStatusClassCrm2(status))}">${escapeHtmlCrm2(status)}</span>
-              ${crm2PfState.canExecute ? `
+              ${crm2CanEdit() ? `
                 <div class="crm2-pf-attachment-actions">
                   <label class="secondary-btn crm2-pf-replace-label">
                     Substituir
@@ -209,7 +202,7 @@ function renderPersonDataCrm2(person) {
 function renderTimelineCrm2(person) {
   const events = [...(person.timeline || [])].sort((a, b) => new Date(b.data) - new Date(a.data));
   return `
-    ${crm2PfState.canExecute ? `
+              ${crm2CanEdit() ? `
       <form class="crm2-pf-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeAttrCrm2(person.id)}')">
         <label>
           <span>Observação interna</span>
@@ -290,7 +283,7 @@ function renderPersonDetailCrm2(person) {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="crm2PfCloseDetail()">Voltar à lista</button>
-          <button class="primary-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')" ${!crm2PfState.canExecute ? 'disabled' : ''}>Editar</button>
+          <button class="save-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')" ${!crm2CanEdit() ? 'disabled' : ''}>Editar</button>
         </div>
       </div>
 

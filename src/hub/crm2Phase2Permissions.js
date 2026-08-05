@@ -13,11 +13,11 @@
 
   function injectRowPermissionsCrm2(html = '') {
     return String(html).replace(
-      /<button class="secondary-btn" type="button" onclick="crm2PfEdit\('([^']+)'\)"[^>]*>Editar<\/button>/g,
+      /<button type="button" role="menuitem" onclick="crm2PfEdit\('([^']+)'\)"[^>]*>Editar<\/button>/g,
       (button, personId) => {
         const editButton = crm2PfState.canEdit ? button : '';
         const deleteButton = crm2PfState.canDelete
-          ? `<button class="secondary-btn" type="button" onclick="crm2PfDelete('${escapeAttrCrm2(personId)}')">Excluir</button>`
+          ? `<button class="danger-text" type="button" role="menuitem" onclick="crm2PfDelete('${escapeAttrCrm2(personId)}')">Excluir</button>`
           : '';
         return `${editButton}${deleteButton}`;
       }
@@ -25,7 +25,7 @@
   }
 
   function injectDetailPermissionsCrm2(html = '', person = {}) {
-    const editPattern = /<button class="primary-btn" type="button" onclick="crm2PfEdit\('[^']+'\)"[^>]*>Editar<\/button>/;
+    const editPattern = /<button class="save-btn" type="button" onclick="crm2PfEdit\('[^']+'\)"[^>]*>Editar<\/button>/;
     return String(html).replace(editPattern, (button) => {
       const editButton = crm2PfState.canEdit ? button : '';
       const deleteButton = crm2PfState.canDelete
@@ -98,13 +98,15 @@
 
   function applyPermissionsCrm2(context, hasPermission) {
     const permissions = context?.permissions || {};
-    crm2PfState.canView = hasPermission(permissions, 'painel_ar.crm_2', 'view');
-    crm2PfState.canEdit = hasPermission(permissions, 'painel_ar.crm_2', 'update');
-    crm2PfState.canDelete = hasPermission(permissions, 'painel_ar.crm_2', 'delete');
+    const resolvePermission = (action) => typeof window.hubPode === 'function'
+      ? window.hubPode('painel_ar', action)
+      : hasPermission(permissions, 'painel_ar', action);
+    crm2PfState.canView = resolvePermission('view');
+    crm2PfState.canEdit = resolvePermission('update');
+    crm2PfState.canDelete = resolvePermission('delete');
 
     // Compatibilidade interna com os componentes existentes da Fase 2.
     // A origem desta capacidade passa a ser exclusivamente a permissão Editar (update).
-    crm2PfState.canExecute = crm2PfState.canEdit;
 
     if (currentRouteCodeCrm2() !== '201') return;
     if (!crm2PfState.canView) {
@@ -136,6 +138,5 @@
     crm2PfState.canView = true;
     crm2PfState.canEdit = false;
     crm2PfState.canDelete = false;
-    crm2PfState.canExecute = false;
   });
 })();

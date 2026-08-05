@@ -9,10 +9,7 @@ import {
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
-import {
-  abrirMenuAcaoGlobal,
-  limparMenusAcoesGlobais
-} from './actionMenuPortal.js';
+import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
   renderHubNotificationBell,
@@ -647,7 +644,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.aniversariantes = response.data.aniversariantes || [];
     state.favoritos = response.data.favoritos || [];
     state.meta = response.data.meta || null;
-    state.permissions = response.data.permissions || normalizarPermissoes([]);
+    state.permissions = normalizarPermissoes(response.data.permissions || []);
     sincronizarContextoInicialHub();
     inicializarNotificacoesHub();
 
@@ -1464,9 +1461,9 @@ function podeAcessarAbaAr(aba) {
     produtos: ['painel_ar.gerar_links', 'view'],
     validacoes: ['painel_ar.validacoes', 'view'],
     historico: ['painel_ar.validacoes', 'view'],
-    crm: ['painel_ar.crm', 'view'],
-    crm2: ['painel_ar.crm_2', 'view'],
-    'crm2-pf': ['painel_ar.crm_2', 'view']
+    crm: ['painel_ar', 'view'],
+    crm2: ['painel_ar', 'view'],
+    'crm2-pf': ['painel_ar', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -3974,13 +3971,11 @@ function obterAcoesDisponiveisRecurso(recurso) {
     links_corretora: ['view'],
     links_ar: ['view'],
     links_gestao: ['view'],
-    painel_ar: ['view'],
+    painel_ar: ['view', 'update', 'delete'],
     'painel_ar.gerar_links': ['view', 'execute'],
     'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
-    'painel_ar.crm': ['view', 'execute'],
-    'painel_ar.crm_2': ['view', 'update', 'delete'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
@@ -4112,7 +4107,10 @@ function construirEstruturaPermissoesUsuario(recursos) {
       .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
 
     const recursosFuncionais = itensRelacionados.filter(recurso => recurso.chave !== modulo.chave);
-    const linhas = (recursosFuncionais.length ? recursosFuncionais : [modulo]).map(recurso => ({
+    const linhasBase = modulo.chave === 'painel_ar'
+      ? [modulo]
+      : (recursosFuncionais.length ? recursosFuncionais : [modulo]);
+    const linhas = linhasBase.map(recurso => ({
       ...recurso,
       modulo_chave: modulo.chave,
       modulo_nome: modulo.nome || modulo.chave,
@@ -6678,7 +6676,7 @@ async function carregarDadosIniciaisSilencioso({ usuarioEsperadoId = '' } = {}) 
   state.aniversariantes = response.data.aniversariantes || [];
   state.favoritos = response.data.favoritos || [];
   state.meta = response.data.meta || null;
-  state.permissions = response.data.permissions || normalizarPermissoes([]);
+  state.permissions = normalizarPermissoes(response.data.permissions || []);
   sincronizarContextoInicialHub();
   return { ok: true };
 }
@@ -7214,7 +7212,7 @@ async function carregarCrmAr(pagina = state.ar.crm.pagina) {
 }
 
 async function sincronizarCrmAr() {
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.message = 'Seu usuário não possui permissão para sincronizar o CRM AR.';
     renderPainelAr();
     return;
@@ -7464,7 +7462,7 @@ function renderConteudoAr() {
 
 function renderCrm2Phase1() {
   const crm2 = state.ar.crm2;
-  const podeExecutar = pode('painel_ar.crm_2', 'update');
+  const podeExecutar = pode('painel_ar', 'update');
   const etapas = [
     ['201', 'Pessoas físicas', 'Cadastro, busca, dados cadastrais e timeline.'],
     ['202', 'Pessoas jurídicas', 'Empresas, documentos e pessoas vinculadas.'],
@@ -7580,8 +7578,16 @@ function obterPessoasFisicasFiltradasCrm2() {
 }
 
 function renderCrm2PessoasFisicasPhase2() {
+  if (typeof window !== 'undefined' && typeof window.crm2PfRender === 'function') {
+    return window.crm2PfRender();
+  }
+
+  return `
+    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+      <div class="hub-loading" role="status" aria-live="polite">Carregando Pessoas físicas...</div>
+    </section>
+  `;
   const pf = state.ar.crm2.pessoasFisicas;
-  if (pf.modoFormulario) return renderFormularioPessoaFisicaCrm2();
   if (pf.detalheId) return renderDetalhePessoaFisicaCrm2(obterPessoaFisicaCrm2(pf.detalheId));
 
   const items = obterPessoasFisicasFiltradasCrm2();
@@ -7598,13 +7604,13 @@ function renderCrm2PessoasFisicasPhase2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="primary-btn" type="button" onclick="abrirFormularioPessoaFisicaCrm2('create')" ${!pode('painel_ar.crm_2', 'update') ? 'disabled' : ''}>Nova pessoa física</button>
+          <button class="primary-btn" type="button" onclick="crm2PfOpenForm('create')" ${!pode('painel_ar', 'update') ? 'disabled' : ''}>Nova pessoa física</button>
         </div>
       </div>
 
       ${pf.mensagem ? `<p class="admin-message" role="status">${escapeHtml(pf.mensagem)}</p>` : ''}
 
-      <div class="crm2-pessoas-filters" role="search">
+      <div class="ar-crm-list-filters" role="search">
         <label>
           <span>Buscar</span>
           <input class="config-input" type="search" placeholder="Nome, CPF, telefone ou e-mail" value="${escapeAttr(pf.busca)}" oninput="atualizarBuscaPessoasFisicasCrm2(this.value)">
@@ -7623,7 +7629,8 @@ function renderCrm2PessoasFisicasPhase2() {
             ${origens.map(item => `<option value="${escapeAttr(item)}" ${pf.origemFiltro === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}
           </select>
         </label>
-        ${(pf.busca || pf.statusFiltro || pf.origemFiltro) ? '<button class="secondary-btn" type="button" onclick="limparFiltrosPessoasFisicasCrm2()">Limpar filtros</button>' : ''}
+        <button class="save-btn" type="button" onclick="aplicarFiltrosPessoasFisicasCrm2(event)">Aplicar filtros</button>
+        ${(pf.busca || pf.statusFiltro || pf.origemFiltro) ? '<button class="secondary-btn" type="button" onclick="limparFiltrosPessoasFisicasCrm2()">Limpar filtros</button>' : '<button class="secondary-btn" type="button" onclick="limparFiltrosPessoasFisicasCrm2()" disabled>Limpar filtros</button>'}
       </div>
 
       <div class="crm2-pessoas-summary"><strong>${items.length}</strong> pessoa(s) física(s) encontrada(s)</div>
@@ -7650,9 +7657,14 @@ function renderCrm2PessoasFisicasPhase2() {
                   <td>${escapeHtml(item.email || '—')}</td>
                   <td>${escapeHtml(formatarDataCrm2(item.atualizadoEm))}</td>
                   <td>
-                    <div class="crm2-pessoas-row-actions">
-                      <button class="secondary-btn" type="button" onclick="abrirPessoaFisicaCrm2('${escapeAttr(item.id)}')">Ver</button>
-                      <button class="secondary-btn" type="button" onclick="editarPessoaFisicaCrm2('${escapeAttr(item.id)}')" ${!pode('painel_ar.crm_2', 'update') ? 'disabled' : ''}>Editar</button>
+                    <div class="hub-row-actions">
+                      <details class="hub-row-actions-menu" data-hub-action-menu data-hub-action-min-width="120" data-hub-action-max-width="190" data-hub-action-gap="6">
+                        <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome)}" title="Ações rápidas">⋮</summary>
+                        <div class="hub-row-actions-popover" data-hub-action-popover role="menu">
+                          <button type="button" role="menuitem" onclick="crm2PfOpenDetail('${escapeAttr(item.id)}')">Visualizar</button>
+                          <button type="button" role="menuitem" onclick="crm2PfEdit('${escapeAttr(item.id)}')" ${!pode('painel_ar', 'update') ? 'disabled' : ''}>Editar</button>
+                        </div>
+                      </details>
                     </div>
                   </td>
                 </tr>
@@ -7674,7 +7686,7 @@ function renderDetalhePessoaFisicaCrm2(pessoa) {
   }
 
   const aba = pf.abaDetalhe || 'dados';
-  const podeEditar = pode('painel_ar.crm_2', 'update');
+  const podeEditar = pode('painel_ar', 'update');
   const abas = [
     ['dados', 'Dados cadastrais'],
     ['timeline', 'Timeline'],
@@ -7692,7 +7704,7 @@ function renderDetalhePessoaFisicaCrm2(pessoa) {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="fecharPessoaFisicaCrm2()">Voltar para a lista</button>
-          <button class="primary-btn" type="button" onclick="editarPessoaFisicaCrm2('${escapeAttr(pessoa.id)}')" ${!podeEditar ? 'disabled' : ''}>Editar</button>
+          <button class="primary-btn" type="button" onclick="crm2PfEdit('${escapeAttr(pessoa.id)}')" ${!podeEditar ? 'disabled' : ''}>Editar</button>
         </div>
       </div>
 
@@ -7756,7 +7768,63 @@ function renderPedidosPessoaFisicaCrm2(pessoa) {
   ` : '<div class="quick-link-empty">Nenhum pedido vinculado.</div>';
 }
 
+/* Legacy PF form renderers removed in Phase 1. The official renderer lives in crm2Phase2.part3.js.
+function renderFormularioPessoaFisicaCrm2Global() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  const draft = pf.draft || {};
+  const valor = campo => escapeAttr(draft[campo] || '');
+  const erro = campo => pf.erros?.[campo] ? `<small class="crm2-pf-field-error">${escapeHtml(pf.erros[campo])}</small>` : '';
+  const titulo = pf.modoFormulario === 'edit' ? 'Editar pessoa f&iacute;sica' : 'Nova pessoa f&iacute;sica';
+
+  return `
+    <section class="hub-form-screen crm2-pf-form" aria-labelledby="crm2-pf-form-title">
+      <header class="hub-form-screen-header">
+        <div>
+          <span class="ar-crm-phase1-kicker">ROTA 201 - CRM 2.0</span>
+          <h2 id="crm2-pf-form-title">${titulo}</h2>
+          <p>Cadastro mockado. Nenhum dado ser&aacute; enviado ou salvo no backend.</p>
+        </div>
+        <button class="secondary-btn" type="button" onclick="fecharFormularioPessoaFisicaCrm2()">Voltar para pessoas f&iacute;sicas</button>
+      </header>
+
+      ${pf.mensagem ? `<p class="admin-message hub-form-screen-notice" role="alert">${escapeHtml(pf.mensagem)}</p>` : ''}
+
+      <form class="hub-form-screen-content crm2-pf-form-grid" onsubmit="salvarPessoaFisicaCrm2(event)">
+        <section class="hub-form-section hub-form-span-2">
+          <div class="hub-form-section-title"><strong>Dados pessoais</strong><span>Identifica&ccedil;&atilde;o e contato</span></div>
+          <div class="hub-form-grid">
+            <label class="ar-crm-edit-field hub-form-span-2"><span>Nome completo/nome social *</span><input class="config-input" name="nome" required maxlength="180" value="${valor('nome')}" autofocus aria-invalid="${pf.erros?.nome ? 'true' : 'false'}">${erro('nome')}</label>
+            <label class="ar-crm-edit-field"><span>CPF *</span><input class="config-input" name="cpf" inputmode="numeric" maxlength="14" required value="${escapeAttr(formatarCpfCrm2(draft.cpf))}" oninput="aplicarMascaraCpfCrm2(this)" aria-invalid="${pf.erros?.cpf ? 'true' : 'false'}">${erro('cpf')}</label>
+            <label class="ar-crm-edit-field"><span>CEI/CAEPF</span><input class="config-input" name="cei" maxlength="30" value="${valor('cei')}"></label>
+            <label class="ar-crm-edit-field"><span>Data de nascimento</span><input class="config-input" type="date" name="nascimento" value="${valor('nascimento')}" aria-invalid="${pf.erros?.nascimento ? 'true' : 'false'}">${erro('nascimento')}</label>
+            <label class="ar-crm-edit-field"><span>Telefone</span><input class="config-input" type="tel" name="telefone" autocomplete="tel" maxlength="20" value="${valor('telefone')}"></label>
+            <label class="ar-crm-edit-field"><span>E-mail</span><input class="config-input" type="email" name="email" autocomplete="email" maxlength="180" value="${valor('email')}" aria-invalid="${pf.erros?.email ? 'true' : 'false'}">${erro('email')}</label>
+          </div>
+        </section>
+
+        <section class="hub-form-section hub-form-span-2">
+          <div class="hub-form-section-title"><strong>Origem e acompanhamento</strong><span>Informa&ccedil;&otilde;es operacionais</span></div>
+          <div class="hub-form-grid">
+            <label class="ar-crm-edit-field"><span>Origem</span><select class="config-input" name="origem"><option value="">Selecione</option>${['Indicacao', 'Site', 'Parceiro', 'Outro'].map(item => `<option value="${escapeAttr(item)}" ${draft.origem === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}</select></label>
+            <label class="ar-crm-edit-field"><span>Parceiro de indica&ccedil;&atilde;o</span><input class="config-input" name="parceiro" maxlength="180" value="${valor('parceiro')}"></label>
+            <label class="ar-crm-edit-field"><span>Status</span><select class="config-input" name="status">${['cliente ativo', 'cliente inativo'].map(item => `<option value="${escapeAttr(item)}" ${draft.status === item ? 'selected' : ''}>${escapeHtml(item === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo')}</option>`).join('')}</select></label>
+            <label class="ar-crm-edit-field hub-form-span-2"><span>Observa&ccedil;&otilde;es</span><textarea class="config-input config-textarea" name="observacoes" rows="4" maxlength="1000">${escapeHtml(draft.observacoes || '')}</textarea></label>
+          </div>
+        </section>
+
+        <section class="hub-form-section hub-form-span-2 crm2-pf-attachments-mock" aria-labelledby="crm2-pf-attachments-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong><span>Dispon&iacute;vel ap&oacute;s a homologa&ccedil;&atilde;o</span></div>
+          <span>O upload ser&aacute; habilitado na etapa de integra&ccedil;&atilde;o.</span>
+        </section>
+
+        <footer class="hub-form-screen-actions hub-form-span-2"><button class="secondary-btn" type="button" onclick="fecharFormularioPessoaFisicaCrm2()">Cancelar</button><button class="save-btn" type="submit">Salvar cadastro</button></footer>
+      </form>
+    </section>
+  `;
+}
+
 function renderFormularioPessoaFisicaCrm2() {
+  return renderFormularioPessoaFisicaCrm2Global();
   const pf = state.ar.crm2.pessoasFisicas;
   const draft = pf.draft || {};
   const valor = campo => escapeAttr(draft[campo] || '');
@@ -7793,6 +7861,7 @@ function renderFormularioPessoaFisicaCrm2() {
     </section>
   `;
 }
+*/
 
 function atualizarBuscaPessoasFisicasCrm2(valor) {
   state.ar.crm2.pessoasFisicas.busca = String(valor || '');
@@ -7803,6 +7872,12 @@ function atualizarFiltroPessoasFisicasCrm2(tipo, valor) {
   const pf = state.ar.crm2.pessoasFisicas;
   if (tipo === 'status') pf.statusFiltro = String(valor || '');
   if (tipo === 'origem') pf.origemFiltro = String(valor || '');
+  renderPainelAr();
+}
+
+function aplicarFiltrosPessoasFisicasCrm2(event) {
+  event?.preventDefault();
+  state.ar.crm2.pessoasFisicas.pagina = 1;
   renderPainelAr();
 }
 
@@ -7837,7 +7912,7 @@ function selecionarAbaDetalhePessoaFisicaCrm2(aba) {
 }
 
 function abrirFormularioPessoaFisicaCrm2(modo = 'create', id = '') {
-  if (!pode('painel_ar.crm_2', 'update')) return;
+  if (!pode('painel_ar', 'update')) return;
   const pf = state.ar.crm2.pessoasFisicas;
   const pessoa = id ? obterPessoaFisicaCrm2(id) : null;
   pf.modoFormulario = modo;
@@ -7867,7 +7942,7 @@ function aplicarMascaraCpfCrm2(input) {
 
 function salvarPessoaFisicaCrm2(event) {
   event.preventDefault();
-  if (!pode('painel_ar.crm_2', 'update')) return;
+  if (!pode('painel_ar', 'update')) return;
 
   const pf = state.ar.crm2.pessoasFisicas;
   const dados = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -7905,7 +7980,7 @@ function salvarPessoaFisicaCrm2(event) {
 }
 
 function acionarMockCrm2(acao) {
-  if (!pode('painel_ar.crm_2', 'update')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm2.mensagem = 'Seu usuário não possui permissão para executar ações no CRM 2.0.';
     renderPainelAr();
     return;
@@ -7958,7 +8033,7 @@ function renderCrmArPhase1() {
   const crm = state.ar.crm;
   if (crm.cadastro?.aberto) return renderCadastroClienteCrmAr();
   if (crm.detalhe) return renderDetalheCrmAr(crm.detalhe);
-  const podeSincronizar = pode('painel_ar.crm', 'execute');
+  const podeSincronizar = pode('painel_ar', 'update');
   const items = crm.items || [];
   const totalItens = crm.totalItens || 0;
   const totalPaginas = Math.max(1, Math.ceil(totalItens / crm.itensPorPagina));
@@ -8088,7 +8163,7 @@ function limparFiltrosCrmAr() {
 }
 
 function abrirCadastroClienteCrmAr() {
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.message = 'Seu usuario nao possui permissao para adicionar clientes no CRM AR.';
     renderPainelAr();
     return;
@@ -8451,7 +8526,7 @@ function abrirDetalheCrmAr(item) {
 async function sincronizarCadastroCrmAr(itemId = state.ar.crm.detalhe?.id) {
   const item = state.ar.crm.detalhe;
   if (!itemId || state.ar.crm.sincronizandoCadastro) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuario nao possui permissao para sincronizar o CRM AR.';
     renderPainelAr();
     return;
@@ -8994,7 +9069,7 @@ function renderDetalheCrmAr(item) {
   }
   const outros = campos.filter((campo) => !usados.has(campo) && obterValorCampoCrmAr(campo) !== '—');
   const cpf = campoCpf ? formatarCampoCrmAr('cpf', obterValorCampoCrmAr(campoCpf)) : '';
-  const podeEditar = pode('painel_ar.crm', 'execute');
+  const podeEditar = pode('painel_ar', 'update');
   const taskId = dados.clickup_task_id || '';
   const cadastroPendente = !taskId || item.sync_status !== 'synced' || dados.cadastro_pendente_clickup;
 
@@ -9427,7 +9502,7 @@ function editarCamposCrmAr() {
   const item = state.ar.crm.detalhe;
   const taskId = item?.dados?.clickup_task_id;
   if (!item || !taskId) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
     renderPainelAr();
     return;
@@ -9480,7 +9555,7 @@ async function salvarCamposCrmAr() {
   const nome = document.getElementById('ar-crm-edit-name')?.value?.trim();
   const descricao = document.getElementById('ar-crm-edit-description')?.value ?? '';
   if (!item || !taskId || !nome || state.ar.crm.salvandoEdicao) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
     renderPainelAr();
     return;
@@ -14222,7 +14297,7 @@ const abrirPainelArHubPhase2 = async function() {
   const contextoRota = obterContextoRotaHub();
   sincronizarContextoArPelaRota();
   const abaDaRota = contextoRota.modulo === 'painel-ar'
-    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf'].includes(contextoRota.principal)
+    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', '200', '201'].includes(contextoRota.principal)
     ? state.ar.aba
     : 'inicio';
 
@@ -14309,6 +14384,7 @@ Object.assign(window, {
   hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
   hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
   hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
+  hubPode: pode,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,

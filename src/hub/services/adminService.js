@@ -537,6 +537,7 @@ export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
     supabase
       .from('recursos_acesso')
       .select('*')
+      .eq('status', 'ativo')
       .order('ordem', { ascending: true }),
     supabase
       .from('usuario_permissoes')
@@ -698,6 +699,7 @@ export async function listarPermissoesAdmin() {
     supabase
       .from('recursos_acesso')
       .select('*')
+      .eq('status', 'ativo')
       .order('ordem', { ascending: true }),
     supabase
       .from('perfis')

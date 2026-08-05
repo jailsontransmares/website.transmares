@@ -1,35 +1,39 @@
 function renderCpfGateCrm2() {
   const gate = crm2PfState.cpfGate;
   return `
-    <section class="admin-panel crm2-pessoas-page crm2-pf-cpf-check" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-cpf-check-title">
-      <div class="admin-panel-header">
+    <div class="modal-backdrop crm2-pf-cpf-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-cpf-check-title" aria-describedby="crm2-cpf-check-description" onclick="if(event.target === this) crm2PfCloseForm()">
+      <section class="small-modal">
+        <div class="small-modal-header">
         <div>
           <span class="ar-crm-phase1-kicker">NOVO CADASTRO · ETAPA PRÉVIA</span>
           <h3 id="crm2-cpf-check-title">Buscar CPF</h3>
-          <p>Consulte os registros mockados antes de iniciar um novo cadastro.</p>
+          <p id="crm2-cpf-check-description">Consulte os registros mockados antes de iniciar um novo cadastro.</p>
         </div>
-        <button class="secondary-btn" type="button" onclick="crm2PfCloseForm()">Cancelar</button>
-      </div>
-      <form class="crm2-pf-cpf-search" onsubmit="crm2PfSearchCpf(event)">
+        <button class="icon-btn" type="button" onclick="crm2PfCloseForm()" aria-label="Fechar" title="Fechar">×</button>
+        </div>
+      <form class="crm2-pf-cpf-search" onsubmit="crm2PfSearchCpf(event)" novalidate>
         <label>
           <span>CPF</span>
           <input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" value="${escapeAttrCrm2(maskCpfCrm2(gate.value))}" oninput="crm2PfMaskCpf(this)" required autofocus>
         </label>
-        <button class="primary-btn" type="submit">Buscar CPF</button>
+        <div class="small-modal-actions">
+          <button class="secondary-btn" type="button" onclick="crm2PfCloseForm()">Cancelar</button>
+          <button class="save-btn" type="submit">Buscar CPF</button>
+        </div>
       </form>
       ${gate.status ? `
         <div class="crm2-pf-cpf-result is-${escapeAttrCrm2(gate.status)}" role="status">
           <strong>${escapeHtmlCrm2(gate.message)}</strong>
           ${gate.status === 'found' ? `<button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro existente</button>` : ''}
-          ${gate.status === 'not-found' ? '<button class="primary-btn" type="button" onclick="crm2PfContinueCpf()">Cadastrar nova pessoa</button>' : ''}
+          ${gate.status === 'not-found' ? '<button class="save-btn" type="button" onclick="crm2PfContinueCpf()">Cadastrar nova pessoa</button>' : ''}
         </div>
       ` : ''}
-    </section>
+      </section>
+    </div>
   `;
 }
 
 function renderPersonFormCrm2() {
-  if (crm2PfState.formMode === 'cpf-check') return renderCpfGateCrm2();
   const editing = crm2PfState.formMode === 'edit';
   const person = editing ? getPersonCrm2(crm2PfState.detailId) : null;
   const values = { ...(person || {}), ...crm2PfState.draft };
@@ -86,6 +90,12 @@ function renderPersonFormCrm2() {
 }
 
 function renderCrm2Phase2() {
+  if (crm2PfState.formMode === 'cpf-check') {
+    const list = renderPeopleListCrm2();
+    const modal = renderCpfGateCrm2().replace('modal-backdrop crm2-pf-cpf-modal', 'modal-backdrop hub-modal-backdrop--contained crm2-pf-cpf-modal');
+    const closingTag = list.lastIndexOf('</section>');
+    return `${list.slice(0, closingTag)}${modal}${list.slice(closingTag)}`;
+  }
   if (crm2PfState.formMode) return renderPersonFormCrm2();
   if (crm2PfState.detailId) return renderPersonDetailCrm2(getPersonCrm2(crm2PfState.detailId));
   return renderPeopleListCrm2();
@@ -95,12 +105,55 @@ function renderIntoCurrentCrm2Target() {
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return false;
   if (!crm2PfState.mounted) {
-    const createButton = target.querySelector('button[onclick*="abrirFormularioPessoaFisicaCrm2"]');
-    crm2PfState.canExecute = createButton ? !createButton.disabled : false;
+    const createButton = target.querySelector('button[onclick*="crm2PfOpenForm"], button[onclick*="abrirFormularioPessoaFisicaCrm2"]');
+    if (createButton) crm2PfState.canEdit = !createButton.disabled;
     crm2PfState.mounted = true;
   }
   target.outerHTML = renderCrm2Phase2();
+  enhancePeopleTableCrm2();
   return true;
+}
+
+function enhancePeopleTableCrm2() {
+  const table = document.querySelector('.crm2-pessoas-table');
+  if (!table) return;
+
+  const columnIds = [
+    'crm2-pf-col-name',
+    'crm2-pf-col-cpf',
+    'crm2-pf-col-phone',
+    'crm2-pf-col-email',
+    'crm2-pf-col-updated',
+    'crm2-pf-col-actions'
+  ];
+  const columnLabels = [
+    'Nome completo/nome social',
+    'CPF',
+    'Telefone',
+    'E-mail',
+    'Última atualização',
+    'Ações'
+  ];
+  const caption = table.querySelector('caption');
+  if (caption) caption.textContent = 'Pessoas físicas cadastradas no CRM 2.0';
+
+  table.querySelectorAll('thead th').forEach((header, index) => {
+    header.scope = 'col';
+    if (columnIds[index]) header.id = columnIds[index];
+    if (columnLabels[index]) header.textContent = columnLabels[index];
+  });
+
+  table.querySelectorAll('tbody tr').forEach((row) => {
+    row.querySelectorAll('td').forEach((cell, index) => {
+      if (columnIds[index]) cell.setAttribute('headers', columnIds[index]);
+    });
+    const status = row.querySelector('td:first-child small');
+    if (status) {
+      status.classList.add('crm2-pessoas-status');
+      status.classList.add(`is-${normalizeSearchCrm2(status.textContent).replace(/\s+/g, '-')}`);
+      status.setAttribute('role', 'status');
+    }
+  });
 }
 
 function enhanceCrm2Overview() {
@@ -135,6 +188,8 @@ function enhanceCrm2Overview() {
 function mountCrm2Phase2() {
   const code = currentRouteCodeCrm2();
   if (code === '200') {
+    resetFormCrm2();
+    setMessageCrm2('');
     enhanceCrm2Overview();
     return;
   }
@@ -149,6 +204,7 @@ function rerenderCrm2Phase2() {
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return;
   target.outerHTML = renderCrm2Phase2();
+  enhancePeopleTableCrm2();
 }
 
 function setMessageCrm2(message = '') {
@@ -164,7 +220,7 @@ function resetFormCrm2() {
 }
 
 function openFormCrm2(mode, id = '') {
-  if (!crm2PfState.canExecute) return;
+  if (!crm2CanEdit()) return;
   crm2PfState.errors = {};
   crm2PfState.changedFields = [];
   crm2PfState.message = '';
@@ -217,7 +273,7 @@ function fileToAttachmentCrm2(file, expiration = '') {
 
 function savePersonCrm2(event) {
   event.preventDefault();
-  if (!crm2PfState.canExecute) return;
+  if (!crm2CanEdit()) return;
   const form = event.currentTarget;
   const data = new FormData(form);
   const file = form.elements.anexoArquivo?.files?.[0] || null;

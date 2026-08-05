@@ -2,10 +2,6 @@
   color: var(--color-success, #067647);
 }
 
-.crm2-pessoas-filter-search {
-  grid-column: span 2;
-}
-
 .crm2-pessoas-state {
   align-items: center;
   background: var(--surface-glass-strong);
@@ -37,6 +33,38 @@
   font-size: 12px;
 }
 
+.crm2-pessoas-table-wrap {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+}
+
+.crm2-pessoas-table {
+  min-width: 960px;
+}
+
+.crm2-pessoas-table-caption {
+  color: var(--texto-suave);
+  font-size: 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.crm2-pessoas-status {
+  color: var(--texto-suave);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+
+.crm2-pessoas-status.is-cliente-ativo {
+  color: var(--color-success, #067647);
+}
+
+.crm2-pessoas-status.is-cliente-inativo {
+  color: var(--texto-suave);
+}
+
 .crm2-pessoas-pagination {
   align-items: center;
   color: var(--texto-suave);
@@ -47,7 +75,6 @@
 }
 
 .crm2-pessoas-pagination > div,
-.crm2-pessoas-row-actions,
 .crm2-pessoas-header-actions,
 .crm2-pf-attachment-actions {
   display: flex;
@@ -186,15 +213,19 @@
   gap: 5px;
 }
 
-.crm2-pf-cpf-check {
-  max-width: 760px;
-}
-
 .crm2-pf-cpf-search {
   align-items: end;
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(240px, 1fr) auto;
+}
+
+.crm2-pf-cpf-modal .crm2-pf-cpf-search {
+  grid-template-columns: 1fr;
+}
+
+.crm2-pf-cpf-modal .crm2-pf-cpf-result {
+  margin: 0;
 }
 
 .crm2-pf-cpf-result {
@@ -269,10 +300,6 @@
 }
 
 @media (max-width: 900px) {
-  .crm2-pessoas-filter-search {
-    grid-column: auto;
-  }
-
   .crm2-pessoas-pagination,
   .crm2-pf-timeline-composer {
     align-items: stretch;

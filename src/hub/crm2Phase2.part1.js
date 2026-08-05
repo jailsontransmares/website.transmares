@@ -101,7 +101,9 @@ const CRM2_PF_INITIAL_ITEMS = [
 
 const crm2PfState = {
   mounted: false,
-  canExecute: false,
+  canView: false,
+  canEdit: false,
+  canDelete: false,
   items: structuredClone(CRM2_PF_INITIAL_ITEMS),
   search: '',
   statusFilter: '',
@@ -119,6 +121,12 @@ const crm2PfState = {
   cpfGate: { value: '', status: '', personId: '', message: '' },
   message: ''
 };
+
+function crm2CanEdit() {
+  return typeof window.hubPode === 'function'
+    ? window.hubPode('painel_ar', 'update')
+    : crm2PfState.canEdit;
+}
 
 function escapeHtmlCrm2(value = '') {
   return String(value)

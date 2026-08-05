@@ -69,7 +69,34 @@ export function canAccessModule(permissoes, idModulo) {
 }
 
 export function normalizarPermissoes(permissoes = []) {
-  const lista = Array.isArray(permissoes) ? permissoes : [];
+  const listaOriginal = Array.isArray(permissoes)
+    ? permissoes
+    : (Array.isArray(permissoes?.lista)
+      ? permissoes.lista
+      : Object.entries(permissoes?.map || {}).map(([chave, permitido]) => {
+        const separador = chave.lastIndexOf(':');
+        return {
+          recurso_chave: separador > 0 ? chave.slice(0, separador) : chave,
+          acao: separador > 0 ? chave.slice(separador + 1) : 'view',
+          permitido
+        };
+      }));
+
+  const listaMapeada = listaOriginal.map((item) => {
+    const recurso = String(item.recurso_chave || item.recurso || '').trim();
+    const acaoOriginal = String(item.acao || 'view').trim();
+    const recursoChave = ['painel_ar.crm', 'painel_ar.crm_2'].includes(recurso)
+      ? 'painel_ar'
+      : recurso;
+    const acao = recurso === 'painel_ar.crm' && acaoOriginal === 'execute'
+      ? 'update'
+      : acaoOriginal;
+
+    return { ...item, recurso_chave: recursoChave, acao };
+  });
+  const lista = [...new Map(
+    listaMapeada.map((item) => [`${item.recurso_chave}:${item.acao}`, item])
+  ).values()];
 
   return {
     lista,
@@ -89,7 +116,6 @@ export function montarPermissoesLegadas(usuario) {
     'painel_ar.gerar_links',
     'painel_ar.produtos',
     'painel_ar.validacoes',
-    'painel_ar.crm_2',
     'perfil'
   ];
   const modulos = gestor
@@ -120,8 +146,8 @@ export function montarPermissoesLegadas(usuario) {
       { recurso_chave: 'configuracoes.identidade_visual', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'central_senhas', acao: 'view_secret', permitido: true, origem: 'legacy' },
       { recurso_chave: 'painel_ar.produtos', acao: 'update', permitido: true, origem: 'legacy' },
-      { recurso_chave: 'painel_ar.crm_2', acao: 'update', permitido: true, origem: 'legacy' },
-      { recurso_chave: 'painel_ar.crm_2', acao: 'delete', permitido: true, origem: 'legacy' }
+      { recurso_chave: 'painel_ar', acao: 'update', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'painel_ar', acao: 'delete', permitido: true, origem: 'legacy' }
     );
   }
 

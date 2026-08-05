@@ -1056,10 +1056,10 @@ export function criarRhDpController({
         <span>${escapeHtml(formatarData(item.data_nascimento))}${idade == null ? '' : `<small>${idade} anos</small>`}</span>
         <span><span class="status-badge ${status}">${status}</span></span>
         <span>${escapeHtml(formatarDataHora(item.updated_at))}</span>
-        <div class="rh-row-actions">
-          <details class="rh-row-actions-menu">
+        <div class="hub-row-actions">
+          <details class="hub-row-actions-menu" data-hub-action-menu data-hub-action-min-width="120" data-hub-action-max-width="190" data-hub-action-gap="6">
             <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome_completo)}" title="Ações rápidas">⋮</summary>
-            <div class="rh-row-actions-popover" role="menu">
+            <div class="hub-row-actions-popover" data-hub-action-popover role="menu">
               <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">Visualizar</button>
               ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'edit')">Editar</button>` : ''}
               ${status === 'ativo' && podeCriarFerias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-ferias" data-colaborador-id="${colaboradorId}">Incluir férias</button>` : ''}
@@ -1173,34 +1173,6 @@ export function criarRhDpController({
     document.querySelector('[data-rh-action="quick-open-modal-ferias"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('ferias'));
     document.querySelector('[data-rh-action="quick-open-modal-afastamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('afastamento'));
     document.querySelector('[data-rh-action="quick-open-modal-desligamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('desligamento'));
-    document.querySelectorAll('.rh-row-actions-menu').forEach(menu => {
-      const popover = menu.querySelector('.rh-row-actions-popover');
-      const trigger = menu.querySelector('summary');
-      if (!popover || !trigger) return;
-
-      menu.addEventListener('toggle', () => {
-        if (!menu.open) {
-          fecharMenuAcaoGlobal(popover);
-          return;
-        }
-
-        abrirMenuAcaoGlobal(trigger, popover, {
-          minWidth: 120,
-          maxWidth: 190,
-          gap: 6
-        });
-      });
-
-      trigger.addEventListener('click', () => window.requestAnimationFrame(() => {
-        if (menu.open) {
-          abrirMenuAcaoGlobal(trigger, popover, {
-            minWidth: 120,
-            maxWidth: 190,
-            gap: 6
-          });
-        }
-      }));
-    });
     document.querySelectorAll('[data-rh-action="close-modal"]').forEach(botao => {
       botao.addEventListener('click', () => {
         fecharCadastro();
