@@ -50,7 +50,7 @@ function renderPeopleListCrm2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="save-btn" type="button" onclick="crm2PfOpenForm('create')" ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa física</button>
+          <button class="save-btn" type="button" data-crm2-pf-create ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa física</button>
         </div>
       </div>
 

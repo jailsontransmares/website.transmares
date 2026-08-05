@@ -105,7 +105,7 @@ function renderIntoCurrentCrm2Target() {
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return false;
   if (!crm2PfState.mounted) {
-    const createButton = target.querySelector('button[onclick*="crm2PfOpenForm"], button[onclick*="abrirFormularioPessoaFisicaCrm2"]');
+    const createButton = target.querySelector('[data-crm2-pf-create]');
     if (createButton) crm2PfState.canEdit = !createButton.disabled;
     crm2PfState.mounted = true;
   }

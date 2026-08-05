@@ -1,4 +1,5 @@
 import './style.css';
+import './crm2Phase2.js';
 import { chamarApi } from './api.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
