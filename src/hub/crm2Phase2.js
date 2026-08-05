@@ -1330,6 +1330,10 @@ Object.assign(window, {
 });
 
 document.addEventListener('click', (event) => window.crm2PfCloseDropdowns?.(event));
+window.addEventListener('focusin', (event) => {
+  if (event.target?.closest('.crm2-pf-select, .hub-filter-dropdown-menu')) return;
+  window.crm2PfCloseDropdowns?.();
+});
 document.addEventListener('scroll', () => window.crm2PfRepositionOpenDropdowns?.(), true);
 window.addEventListener('resize', () => window.crm2PfRepositionOpenDropdowns?.());
 window.addEventListener('hub-parceiros-indicacao-atualizados', () => {
