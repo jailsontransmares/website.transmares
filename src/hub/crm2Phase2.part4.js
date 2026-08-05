@@ -62,11 +62,35 @@ Object.assign(window, {
     menu.hidden = !opening;
     trigger.setAttribute('aria-expanded', String(opening));
     if (!opening) return;
-    const rect = trigger.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, rect.left)}px`;
-    menu.style.top = `${Math.min(window.innerHeight - 8, rect.bottom + 6)}px`;
-    menu.style.width = `${Math.min(Math.max(rect.width, 220), window.innerWidth - 16)}px`;
+    crm2PfPositionDropdown(menu, trigger);
     menu.querySelector('.is-selected')?.focus();
+  },
+  crm2PfPositionDropdown(menu, trigger) {
+    if (!menu || !trigger || menu.hidden) return;
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 6;
+    const menuWidth = Math.min(Math.max(rect.width, 220), Math.max(160, window.innerWidth - (viewportPadding * 2)));
+    const menuMaxHeight = Math.max(120, window.innerHeight - (viewportPadding * 2));
+    menu.style.width = `${menuWidth}px`;
+    menu.style.maxHeight = `${menuMaxHeight}px`;
+    menu.style.overflowY = 'auto';
+    const menuHeight = Math.min(menu.scrollHeight, menuMaxHeight);
+    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPadding;
+    const spaceAbove = rect.top - gap - viewportPadding;
+    const openAbove = menuHeight > spaceBelow && spaceAbove > spaceBelow;
+    const top = openAbove
+      ? Math.max(viewportPadding, rect.top - menuHeight - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - menuHeight - viewportPadding);
+    const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - menuWidth - viewportPadding);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(viewportPadding, top)}px`;
+  },
+  crm2PfRepositionOpenDropdowns() {
+    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((menu) => {
+      const trigger = document.querySelector(`[aria-controls="${menu.id}"]`);
+      crm2PfPositionDropdown(menu, trigger);
+    });
   },
   crm2PfSelectDropdown(option) {
     const menu = option?.closest('.crm2-pf-select .hub-filter-dropdown-menu');
@@ -98,14 +122,25 @@ Object.assign(window, {
       return;
     }
     if (element?.classList.contains('crm2-pf-select-trigger')) {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') crm2PfToggleDropdown(element, event);
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        crm2PfToggleDropdown(element, event);
+        const menu = document.getElementById(element.getAttribute('aria-controls') || '');
+        const options = [...(menu?.querySelectorAll('[role="option"]') || [])];
+        options[event.key === 'ArrowUp' ? options.length - 1 : 0]?.focus();
+      }
       return;
     }
     const options = [...(element?.parentElement?.querySelectorAll('[role="option"]') || [])];
     const index = options.indexOf(element);
     if (event.key === 'Enter' || event.key === ' ') return crm2PfSelectDropdown(element);
     if (!options.length) return;
-    const next = event.key === 'ArrowUp' ? (index - 1 + options.length) % options.length : (index + 1) % options.length;
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? options.length - 1
+        : event.key === 'ArrowUp'
+          ? (index - 1 + options.length) % options.length
+          : (index + 1) % options.length;
     options[next].focus();
   },
   crm2PfCloseDropdowns(event) {
@@ -243,6 +278,8 @@ Object.assign(window, {
 });
 
 document.addEventListener('click', (event) => window.crm2PfCloseDropdowns?.(event));
+document.addEventListener('scroll', () => window.crm2PfRepositionOpenDropdowns?.(), true);
+window.addEventListener('resize', () => window.crm2PfRepositionOpenDropdowns?.());
 
 const crm2Observer = new MutationObserver(() => {
   if (!currentRouteCodeCrm2()) return;
