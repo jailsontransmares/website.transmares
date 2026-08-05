@@ -7605,7 +7605,6 @@ function renderCrm2PessoasFisicasPhase2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="primary-btn" type="button" onclick="crm2PfOpenForm('create')" ${!pode('painel_ar', 'update') ? 'disabled' : ''}>Nova pessoa física</button>
         </div>
       </div>
 

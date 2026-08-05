@@ -105,8 +105,6 @@ function renderIntoCurrentCrm2Target() {
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return false;
   if (!crm2PfState.mounted) {
-    const createButton = target.querySelector('[data-crm2-pf-create]');
-    if (createButton) crm2PfState.canEdit = !createButton.disabled;
     crm2PfState.mounted = true;
   }
   target.outerHTML = renderCrm2Phase2();
