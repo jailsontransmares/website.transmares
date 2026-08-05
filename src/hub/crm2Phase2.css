@@ -213,24 +213,11 @@
   gap: 5px;
 }
 
-.crm2-pf-cpf-result {
-  align-items: flex-start;
-  background: var(--surface-glass-strong);
-  border: var(--glass-border-subtle);
-  border-radius: var(--radius-card);
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 16px;
-}
-
-.crm2-pf-cpf-result.is-invalid,
-.crm2-pf-cpf-result.is-found {
-  border-color: color-mix(in srgb, var(--color-danger, #b42318) 30%, var(--borda));
-}
-
-.crm2-pf-cpf-result.is-not-found {
-  border-color: color-mix(in srgb, var(--color-success, #067647) 30%, var(--borda));
+.crm2-pf-form-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .crm2-pf-form-grid label.is-changed {

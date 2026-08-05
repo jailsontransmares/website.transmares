@@ -659,7 +659,6 @@ function renderCpfVerificationCrm2() {
           </div>
         ` : ''}
       </form>
-      ${gate.status === 'not-found' ? '<p class="crm2-pf-cpf-result is-not-found" role="status"><strong>CPF não encontrado. Iniciar novo cadastro.</strong></p>' : ''}
     </section>
   `;
 }
@@ -678,7 +677,10 @@ function renderPersonFormCrm2() {
         <div>
           <h2 id="crm2-pessoa-form-title">${editing ? 'Editar cadastro' : 'Incluir cadastro de Pessoa Física'}</h2>
         </div>
-        <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
+        <div class="crm2-pf-form-header-actions">
+          ${!editing && crm2PfState.cpfGate.status === 'not-found' ? '<span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span>' : ''}
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
+        </div>
       </header>
 
       ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
