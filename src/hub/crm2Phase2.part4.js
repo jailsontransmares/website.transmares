@@ -161,14 +161,6 @@ Object.assign(window, {
   }
 });
 
-document.addEventListener('click', (event) => {
-  const action = event.target.closest('[data-crm2-pf-action]')?.dataset.crm2PfAction;
-  if (action !== 'open-create') return;
-  event.preventDefault();
-  if (event.target.closest('button')?.disabled) return;
-  openFormCrm2('create');
-});
-
 const crm2Observer = new MutationObserver(() => {
   if (!currentRouteCodeCrm2()) return;
   window.requestAnimationFrame(mountCrm2Phase2);

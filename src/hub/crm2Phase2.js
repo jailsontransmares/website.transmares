@@ -348,7 +348,7 @@ function renderPeopleListCrm2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="save-btn" type="button" data-crm2-pf-action="open-create" ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa fÃ­sica</button>
+          <button class="save-btn" type="button" onclick="window.crm2PfOpenForm('create')" ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa fÃ­sica</button>
         </div>
       </div>
 
@@ -1122,14 +1122,6 @@ Object.assign(window, {
     setMessageCrm2(`A visualizaÃ§Ã£o de ${company.nome} serÃ¡ habilitada na Fase 3 â€” Pessoa JurÃ­dica.`);
     rerenderCrm2Phase2();
   }
-});
-
-document.addEventListener('click', (event) => {
-  const action = event.target.closest('[data-crm2-pf-action]')?.dataset.crm2PfAction;
-  if (action !== 'open-create') return;
-  event.preventDefault();
-  if (event.target.closest('button')?.disabled) return;
-  openFormCrm2('create');
 });
 
 const crm2Observer = new MutationObserver(() => {
