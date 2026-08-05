@@ -1,77 +1,102 @@
-function renderCpfGateCrm2() {
+function renderCpfVerificationCrm2() {
   const gate = crm2PfState.cpfGate;
+  const verified = gate.status === 'not-found';
   return `
-    <div class="modal-backdrop crm2-pf-cpf-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-cpf-check-title" aria-describedby="crm2-cpf-check-description" onclick="if(event.target === this) crm2PfCloseForm()">
-      <section class="small-modal">
-        <div class="small-modal-header">
-        <div>
-          <span class="ar-crm-phase1-kicker">NOVO CADASTRO · ETAPA PRÉVIA</span>
-          <h3 id="crm2-cpf-check-title">Buscar CPF</h3>
-          <p id="crm2-cpf-check-description">Consulte os registros mockados antes de iniciar um novo cadastro.</p>
-        </div>
-        <button class="icon-btn" type="button" onclick="crm2PfCloseForm()" aria-label="Fechar" title="Fechar">×</button>
-        </div>
-      <form class="crm2-pf-cpf-search" onsubmit="crm2PfSearchCpf(event)" novalidate>
-        <label>
-          <span>CPF</span>
-          <input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" value="${escapeAttrCrm2(maskCpfCrm2(gate.value))}" oninput="crm2PfMaskCpf(this)" required autofocus>
+    <section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-pf-cpf-title">
+      <div class="hub-form-section-title">
+        <h4 id="crm2-pf-cpf-title">Verificação de CPF</h4>
+        <span>Consulte o CPF antes de liberar o cadastro.</span>
+      </div>
+      <form class="hub-form-grid" onsubmit="crm2PfSearchCpf(event)" novalidate>
+        <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
+          <span>CPF *</span>
+          <input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" value="${escapeAttrCrm2(maskCpfCrm2(gate.value))}" oninput="crm2PfMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}" aria-describedby="crm2-pf-cpf-message">
+          ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : '<small id="crm2-pf-cpf-message">O CPF será mantido no cadastro após a validação.</small>'}
         </label>
-        <div class="small-modal-actions">
-          <button class="secondary-btn" type="button" onclick="crm2PfCloseForm()">Cancelar</button>
-          <button class="save-btn" type="submit">Buscar CPF</button>
+        <div class="hub-form-screen-actions">
+          ${verified ? '<button class="secondary-btn" type="button" onclick="crm2PfChangeCpf()">Alterar CPF</button>' : '<button class="save-btn" type="submit">Consultar</button>'}
         </div>
       </form>
-      ${gate.status ? `
-        <div class="crm2-pf-cpf-result is-${escapeAttrCrm2(gate.status)}" role="status">
-          <strong>${escapeHtmlCrm2(gate.message)}</strong>
-          ${gate.status === 'found' ? `<button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro existente</button>` : ''}
-          ${gate.status === 'not-found' ? '<button class="save-btn" type="button" onclick="crm2PfContinueCpf()">Cadastrar nova pessoa</button>' : ''}
+      ${gate.status === 'found' ? `
+        <div class="crm2-pf-cpf-result is-found" role="alert">
+          <strong>Este CPF já possui cadastro.</strong>
+          <div class="hub-form-screen-actions">
+            <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro</button>
+            <button class="secondary-btn" type="button" onclick="crm2PfChangeCpf()">Consultar outro CPF</button>
+            <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
+          </div>
         </div>
       ` : ''}
-      </section>
-    </div>
+      ${gate.status === 'not-found' ? '<p class="crm2-pf-cpf-result is-not-found" role="status"><strong>CPF não encontrado. Iniciar novo cadastro.</strong></p>' : ''}
+    </section>
   `;
 }
 
 function renderPersonFormCrm2() {
-  const editing = crm2PfState.formMode === 'edit';
-  const person = editing ? getPersonCrm2(crm2PfState.detailId) : null;
+  const route = currentPfRouteCrm2();
+  const editing = route.view === 'edit' || crm2PfState.formMode === 'edit';
+  const person = editing ? getPersonCrm2(route.id || crm2PfState.detailId) : null;
   const values = { ...(person || {}), ...crm2PfState.draft };
   const statusLabel = personStatusLabelCrm2(person || { pedidos: [] });
+  const verified = editing || crm2PfState.cpfGate.status === 'not-found';
 
   return `
-    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
-      <div class="admin-panel-header">
+    <section class="hub-form-screen crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
+      <nav class="hub-breadcrumb" aria-label="Breadcrumb">Hub <span>›</span> Painel AR <span>›</span> CRM 2.0 <span>›</span> Pessoas físicas <span>›</span> ${editing ? 'Editar' : 'Adicionar'}</nav>
+      <header class="hub-form-screen-header">
         <div>
           <span class="ar-crm-phase1-kicker">${editing ? 'EDIÇÃO' : 'NOVO CADASTRO'} · MOCK</span>
-          <h3 id="crm2-pessoa-form-title">${editing ? 'Editar pessoa física' : 'Nova pessoa física'}</h3>
+          <h2 id="crm2-pessoa-form-title">${editing ? 'Editar cadastro' : 'Incluir cadastro de Pessoa Física'}</h2>
           <p>O salvamento acontece somente no estado local da página.</p>
         </div>
-        <button class="secondary-btn" type="button" onclick="crm2PfCloseForm()">Cancelar</button>
-      </div>
+        <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
+      </header>
 
       ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
 
-      <form class="crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate>
-        <div class="crm2-pf-form-grid">
-          <label class="crm2-pf-status-automatico">
-            <span>Status automático</span>
-            <input class="config-input" type="text" value="${escapeAttrCrm2(statusLabel)}" disabled>
-            <small>Calculado de acordo com os pedidos ativos e vencidos.</small>
-          </label>
-          ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
-          ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf), required: true, extra: 'inputmode="numeric" maxlength="14" onkeyup="crm2PfMaskCpf(this)"' })}
-          ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
-          ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
-          ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
-          ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
-          ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem })}
-          ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro })}
-          ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
-        </div>
+      ${!editing ? renderCpfVerificationCrm2() : ''}
 
-        <fieldset class="crm2-pf-attachments-mock">
-          <legend>Anexo opcional</legend>
+      <form class="crm2-pf-form" onsubmit="crm2PfSave(event)" novalidate>
+        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
+          <legend class="hub-form-section-title">Dados pessoais</legend>
+          <div class="hub-form-grid">
+            <label class="crm2-pf-status-automatico">
+              <span>Status automático</span>
+              <span class="crm2-pf-status-pill is-${escapeAttrCrm2(normalizeSearchCrm2(statusLabel).replace(/\s+/g, '-'))}" role="status">${escapeHtmlCrm2(statusLabel)}</span>
+              <small>Calculado com base nos pedidos e vínculos existentes.</small>
+            </label>
+            ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
+            ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
+            ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
+            ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
+          </div>
+        </fieldset>
+
+        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
+          <legend class="hub-form-section-title">Contato</legend>
+          <div class="hub-form-grid">
+            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
+            ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
+          </div>
+        </fieldset>
+
+        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
+          <legend class="hub-form-section-title">Origem e indicação</legend>
+          <div class="hub-form-grid">
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro })}
+          </div>
+        </fieldset>
+
+        <fieldset class="hub-form-section" ${verified ? '' : 'disabled'}>
+          <legend class="hub-form-section-title">Observações</legend>
+          <div class="hub-form-grid">
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
+          </div>
+        </fieldset>
+
+        <fieldset class="hub-form-section crm2-pf-attachments-mock" ${verified ? '' : 'disabled'}>
+          <legend class="hub-form-section-title">Anexos</legend>
           <p>A seleção valida o fluxo visual, mas o arquivo não é enviado.</p>
           <div class="crm2-pf-form-attachment-fields">
             <label><span>Arquivo</span><input class="config-input" type="file" name="anexoArquivo"></label>
@@ -80,9 +105,9 @@ function renderPersonFormCrm2() {
           ${editing && (person?.anexos || []).length ? `<div class="crm2-pf-form-existing-attachments"><strong>Anexos atuais</strong>${person.anexos.map((attachment) => `<span>${escapeHtmlCrm2(attachment.nome)}</span>`).join('')}</div>` : ''}
         </fieldset>
 
-        <div class="admin-panel-actions">
-          <button class="secondary-btn" type="button" onclick="crm2PfCloseForm()">Cancelar</button>
-          <button class="primary-btn" type="submit">Salvar apenas em memória</button>
+        <div class="hub-form-screen-actions">
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
+          <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
       </form>
     </section>
@@ -90,14 +115,23 @@ function renderPersonFormCrm2() {
 }
 
 function renderCrm2Phase2() {
-  if (crm2PfState.formMode === 'cpf-check') {
-    const list = renderPeopleListCrm2();
-    const modal = renderCpfGateCrm2().replace('modal-backdrop crm2-pf-cpf-modal', 'modal-backdrop hub-modal-backdrop--contained crm2-pf-cpf-modal');
-    const closingTag = list.lastIndexOf('</section>');
-    return `${list.slice(0, closingTag)}${modal}${list.slice(closingTag)}`;
+  const route = currentPfRouteCrm2();
+  if (route.view === 'new') {
+    crm2PfState.formMode = 'create';
+    return renderPersonFormCrm2();
   }
-  if (crm2PfState.formMode) return renderPersonFormCrm2();
-  if (crm2PfState.detailId) return renderPersonDetailCrm2(getPersonCrm2(crm2PfState.detailId));
+  if (route.view === 'edit') {
+    crm2PfState.formMode = 'edit';
+    crm2PfState.detailId = route.id;
+    return renderPersonFormCrm2();
+  }
+  if (route.view === 'detail') {
+    crm2PfState.formMode = '';
+    crm2PfState.detailId = route.id;
+    return renderPersonDetailCrm2(getPersonCrm2(route.id));
+  }
+  crm2PfState.formMode = '';
+  crm2PfState.detailId = '';
   return renderPeopleListCrm2();
 }
 
@@ -228,13 +262,14 @@ function openFormCrm2(mode, id = '') {
     crm2PfState.detailId = person.id;
     crm2PfState.formMode = 'edit';
     crm2PfState.draft = {};
+    navigateCrm2Route('201', `${person.id}/editar`);
   } else {
     crm2PfState.detailId = '';
-    crm2PfState.formMode = 'cpf-check';
+    crm2PfState.formMode = 'create';
     crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
     crm2PfState.draft = {};
+    navigateCrm2Route('201', 'novo');
   }
-  rerenderCrm2Phase2();
 }
 
 function normalizeComparableCrm2(field, value) {
@@ -333,7 +368,8 @@ function savePersonCrm2(event) {
     setMessageCrm2('Pessoa física criada no estado mockado. Nenhum dado foi persistido.');
   }
 
+  const savedId = crm2PfState.detailId;
   resetFormCrm2();
   crm2PfState.detailTab = 'dados';
-  rerenderCrm2Phase2();
+  navigateCrm2Route('201', savedId);
 }

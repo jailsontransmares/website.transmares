@@ -150,20 +150,32 @@ function normalizeSearchCrm2(value = '') {
 
 function currentRouteCodeCrm2() {
   const segments = window.location.pathname.split('/').filter(Boolean);
-  const last = segments.at(-1) || '';
-  return CRM2_PF_ROUTE_CODES.has(last) ? last : '';
+  const routeIndex = segments.findIndex((segment, index) => segment === 'painel-ar' && CRM2_PF_ROUTE_CODES.has(segments[index + 1]));
+  return routeIndex >= 0 ? segments[routeIndex + 1] : '';
 }
 
-function routePathCrm2(code) {
+function currentPfRouteCrm2() {
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  const routeIndex = segments.findIndex((segment, index) => segment === 'painel-ar' && segments[index + 1] === '201');
+  if (routeIndex < 0) return { code: '', view: 'list', id: '' };
+
+  const tail = segments.slice(routeIndex + 2);
+  if (tail[0] === 'novo') return { code: '201', view: 'new', id: '' };
+  if (tail[1] === 'editar') return { code: '201', view: 'edit', id: tail[0] || '' };
+  if (tail[0]) return { code: '201', view: 'detail', id: tail[0] };
+  return { code: '201', view: 'list', id: '' };
+}
+
+function routePathCrm2(code, suffix = '') {
   const segments = window.location.pathname.split('/').filter(Boolean);
   const hasHub = segments[0] === 'hub';
-  return `${hasHub ? '/hub' : ''}/painel-ar/${code}`;
+  return `${hasHub ? '/hub' : ''}/painel-ar/${code}${suffix ? `/${suffix}` : ''}`;
 }
 
-function navigateCrm2Route(code) {
+function navigateCrm2Route(code, suffix = '') {
   const normalized = String(code || '').trim();
   if (!CRM2_PF_ROUTE_CODES.has(normalized)) return;
-  window.history.pushState({}, '', routePathCrm2(normalized));
+  window.history.pushState({}, '', routePathCrm2(normalized, suffix));
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.setTimeout(mountCrm2Phase2, 0);
 }

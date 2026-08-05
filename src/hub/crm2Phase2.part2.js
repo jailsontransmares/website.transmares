@@ -41,7 +41,7 @@ function renderPeopleListCrm2() {
   const specialState = crm2PfState.listState !== 'normal';
 
   return `
-    <section class="admin-panel crm2-pessoas-page hub-modal-scope" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
       <div class="admin-panel-header">
         <div>
           <span class="ar-crm-phase1-kicker">ROTA 201 · CRM 2.0</span>
@@ -50,7 +50,7 @@ function renderPeopleListCrm2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          <button class="save-btn" type="button" onclick="window.crm2PfOpenForm('create')" ${!crm2CanEdit() ? 'disabled' : ''}>Nova pessoa física</button>
+          ${crm2CanEdit() ? '<button class="save-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')">+Incluir</button>' : ''}
         </div>
       </div>
 
@@ -282,8 +282,8 @@ function renderPersonDetailCrm2(person) {
           <p>${escapeHtmlCrm2(maskCpfCrm2(person.cpf))} · ${escapeHtmlCrm2(personStatusLabelCrm2(person))}</p>
         </div>
         <div class="crm2-pessoas-header-actions">
-          <button class="secondary-btn" type="button" onclick="crm2PfCloseDetail()">Voltar à lista</button>
-          <button class="save-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')" ${!crm2CanEdit() ? 'disabled' : ''}>Editar</button>
+          <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar à lista</button>
+          ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="navegarParaCrm2Rota('201', '${escapeAttrCrm2(person.id)}/editar')">Editar</button>` : ''}
         </div>
       </div>
 
@@ -309,14 +309,18 @@ function renderPersonDetailCrm2(person) {
 function formFieldCrm2({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '' }) {
   const changed = crm2PfState.changedFields.includes(name) ? 'is-changed' : '';
   const error = crm2PfState.errors[name] || '';
+  const fieldId = `crm2-pf-${name}`;
+  const errorId = `${fieldId}-error`;
+  const describedBy = error ? `aria-describedby="${errorId}"` : '';
+  const invalid = error ? 'true' : 'false';
   const input = type === 'textarea'
-    ? `<textarea class="config-input" name="${name}" rows="4" placeholder="${escapeAttrCrm2(placeholder)}" oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
-    : `<input class="config-input" type="${type}" name="${name}" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} oninput="crm2PfTrackChange(this)">`;
+    ? `<textarea id="${fieldId}" class="config-input" name="${name}" rows="4" autocomplete="off" placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
+    : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} oninput="crm2PfTrackChange(this)">`;
   return `
     <label class="${wide ? 'is-wide' : ''} ${changed}">
-      <span>${escapeHtmlCrm2(label)}${required ? ' *' : ''}</span>
+      <span for="${fieldId}">${escapeHtmlCrm2(label)}${required ? ' *' : ''}</span>
       ${input}
-      ${error ? `<small class="crm2-field-error">${escapeHtmlCrm2(error)}</small>` : ''}
+      ${error ? `<small id="${errorId}" class="crm2-field-error">${escapeHtmlCrm2(error)}</small>` : ''}
     </label>
   `;
 }

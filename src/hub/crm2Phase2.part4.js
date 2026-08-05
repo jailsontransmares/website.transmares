@@ -2,10 +2,12 @@ Object.assign(window, {
   crm2PfRender: renderCrm2Phase2,
   navegarParaCrm2Rota: navigateCrm2Route,
   crm2PfOpenForm: openFormCrm2,
-  crm2PfCloseForm() {
+  crm2PfCancelForm() {
+    const hasDraft = Object.values(crm2PfState.draft || {}).some((value) => String(value || '').trim());
+    if (hasDraft && !window.confirm('Descartar os dados preenchidos?')) return;
     resetFormCrm2();
     setMessageCrm2('');
-    rerenderCrm2Phase2();
+    navigateCrm2Route('201');
   },
   crm2PfSearchCpf(event) {
     event.preventDefault();
@@ -21,14 +23,15 @@ Object.assign(window, {
         Object.assign(crm2PfState.cpfGate, { status: 'not-found', personId: '', message: 'CPF não encontrado. O novo cadastro pode ser iniciado.' });
       }
     }
+    crm2PfState.draft = { cpf: value };
     rerenderCrm2Phase2();
   },
-  crm2PfContinueCpf() {
-    if (!crm2CanEdit() || crm2PfState.cpfGate.status !== 'not-found') return;
-    crm2PfState.formMode = 'create';
-    crm2PfState.draft = { cpf: crm2PfState.cpfGate.value };
+  crm2PfChangeCpf() {
+    crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
+    crm2PfState.draft = {};
     crm2PfState.errors = {};
     rerenderCrm2Phase2();
+    window.requestAnimationFrame(() => document.querySelector('.crm2-pf-cpf-verification input[name="cpf"]')?.focus());
   },
   crm2PfMaskCpf(input) {
     input.value = maskCpfCrm2(input.value);
@@ -37,7 +40,9 @@ Object.assign(window, {
     input.value = maskPhoneCrm2(input.value);
   },
   crm2PfTrackChange(input) {
-    if (crm2PfState.formMode !== 'edit' || !input?.name) return;
+    if (!input?.name) return;
+    crm2PfState.draft[input.name] = input.value;
+    if (crm2PfState.formMode !== 'edit') return;
     const person = getPersonCrm2(crm2PfState.detailId);
     if (!person) return;
     const changed = normalizeComparableCrm2(input.name, input.value) !== normalizeComparableCrm2(input.name, person[input.name]);
@@ -53,13 +58,13 @@ Object.assign(window, {
     crm2PfState.detailId = id;
     crm2PfState.detailTab = 'dados';
     setMessageCrm2('');
-    rerenderCrm2Phase2();
+    navigateCrm2Route('201', id);
   },
   crm2PfCloseDetail() {
     crm2PfState.detailId = '';
     crm2PfState.detailTab = 'dados';
     setMessageCrm2('');
-    rerenderCrm2Phase2();
+    navigateCrm2Route('201');
   },
   crm2PfEdit(id) {
     openFormCrm2('edit', id);
