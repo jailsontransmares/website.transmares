@@ -191,6 +191,53 @@ function renderSeletorEmpresa({ empresas, empresaId, escapeHtml, escapeAttr }) {
   `;
 }
 
+function obterFaixaNavegacaoFinanceiro() {
+  const largura = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  if (largura <= 480) return 'compact';
+  if (largura <= 760) return 'mobile';
+  if (largura <= 1000) return 'tablet';
+  return 'desktop';
+}
+
+const LIMITES_SUBNAVEGACAO_FINANCEIRO = {
+  compact: 2,
+  mobile: 3,
+  tablet: 4
+};
+
+function distribuirNavegacaoFinanceiro(itens, limites = {}) {
+  const faixa = obterFaixaNavegacaoFinanceiro();
+  const limite = limites[faixa] || itens.length;
+  return {
+    principais: itens.slice(0, limite),
+    secundarias: itens.slice(limite)
+  };
+}
+
+function renderMaisFinanceiro({ itens, ativoId, renderItem, id }) {
+  if (!itens.length) return '';
+
+  const ativo = itens.some(item => item.id === ativoId);
+
+  return `
+      <div class="hub-responsive-more">
+      <button
+        class="hub-responsive-more-trigger ${ativo ? 'is-active' : ''}"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-controls="${id}"
+        data-fin-more-trigger
+      >
+        <span>Mais</span><span aria-hidden="true">⌄</span>
+      </button>
+      <div id="${id}" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>
+        ${itens.map(item => renderItem(item, 'hub-responsive-more-item').replace('<button ', '<button role="menuitem" ')).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function renderNavegacao({ secoes, secaoAtiva, escapeHtml, escapeAttr }) {
   const abreviacoes = {
     dashboard: 'Resumo',
@@ -201,36 +248,28 @@ function renderNavegacao({ secoes, secaoAtiva, escapeHtml, escapeAttr }) {
     cadastros: 'Cadastros',
     configuracoes: 'Ajustes'
   };
-  const idsMais = new Set(['cadastros', 'configuracoes']);
-  const secundarias = secoes.filter(secao => idsMais.has(secao.id));
   const renderTab = (secao, classe = '') => `
     <button
-      class="fin-section-tab ${classe} ${secao.id === secaoAtiva ? 'is-active' : ''}"
+      class="fin-section-tab hub-module-nav-item ${classe} ${secao.id === secaoAtiva ? 'is-active' : ''}"
       type="button"
       data-fin-route="${escapeAttr(secao.id)}"
       aria-label="${escapeAttr(secao.nome)}"
       title="${escapeAttr(secao.nome)}"
       ${secao.id === secaoAtiva ? 'aria-current="page"' : ''}
     >
-      <span class="fin-section-tab-label">${escapeHtml(secao.nome)}</span>
-      <span class="fin-section-tab-short" aria-hidden="true">${escapeHtml(abreviacoes[secao.id] || secao.nome)}</span>
+      <span class="fin-section-tab-label hub-module-nav-label">${escapeHtml(secao.nome)}</span>
+      <span class="fin-section-tab-short hub-module-nav-short" aria-hidden="true">${escapeHtml(abreviacoes[secao.id] || secao.nome)}</span>
     </button>
   `;
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(secoes, {
+    ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
+    desktop: secoes.length
+  });
 
   return `
-    <nav class="fin-section-tabs" aria-label="Navegação do Financeiro">
-      ${secoes.filter(secao => !idsMais.has(secao.id)).map(secao => renderTab(secao)).join('')}
-      ${secundarias.map(secao => renderTab(secao, 'fin-section-tab-secondary')).join('')}
-      ${secundarias.length ? `
-        <details class="fin-section-more" ${secundarias.some(secao => secao.id === secaoAtiva) ? 'open' : ''}>
-          <summary class="fin-section-more-trigger ${secundarias.some(secao => secao.id === secaoAtiva) ? 'is-active' : ''}" aria-label="Mais áreas do Financeiro" title="Mais áreas do Financeiro">
-            <span>Mais</span><span aria-hidden="true">⌄</span>
-          </summary>
-          <div class="fin-section-more-menu" role="menu" aria-label="Mais áreas do Financeiro">
-            ${secundarias.map(secao => renderTab(secao, 'fin-section-more-item')).join('')}
-          </div>
-        </details>
-      ` : ''}
+    <nav class="fin-section-tabs hub-module-nav" aria-label="Navegação do Financeiro">
+      ${principais.map(secao => renderTab(secao)).join('')}
+      ${renderMaisFinanceiro({ itens: secundarias, ativoId: secaoAtiva, renderItem: renderTab, id: 'fin-section-more-menu' })}
     </nav>
   `;
 }
@@ -354,19 +393,26 @@ function renderLinhaResumo(label, valor, detalhe = '') {
 }
 
 function renderCadastrosTabs({ state }) {
+  const renderTab = (aba, classe = '') => `
+    <button
+      class="fin-subtab hub-subnav-item ${classe} ${state.cadastroAba === aba.id ? 'is-active active' : ''}"
+      role="tab"
+      type="button"
+      data-fin-cadastro-tab="${aba.id}"
+      aria-selected="${state.cadastroAba === aba.id}"
+    >
+      ${aba.nome}
+    </button>
+  `;
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_CADASTRO_ABAS, {
+    ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
+    desktop: FINANCEIRO_CADASTRO_ABAS.length
+  });
+
   return `
-    <nav class="fin-subtabs ar-validacoes-subnav" role="tablist" aria-label="Cadastros financeiros">
-      ${FINANCEIRO_CADASTRO_ABAS.map(aba => `
-        <button
-          class="fin-subtab ${state.cadastroAba === aba.id ? 'is-active active' : ''}"
-          role="tab"
-          type="button"
-          data-fin-cadastro-tab="${aba.id}"
-          aria-selected="${state.cadastroAba === aba.id}"
-        >
-          ${aba.nome}
-        </button>
-      `).join('')}
+    <nav class="fin-subtabs hub-subnav hub-responsive-subnav" role="tablist" aria-label="Cadastros financeiros">
+      ${principais.map(aba => renderTab(aba)).join('')}
+      ${renderMaisFinanceiro({ itens: secundarias, ativoId: state.cadastroAba, renderItem: renderTab, id: 'fin-cadastros-more-menu' })}
     </nav>
   `;
 }
@@ -382,40 +428,54 @@ function renderLancamentosTabs({ state }) {
     baixas: 'Baixas'
   };
 
+  const renderTab = (aba, classe = '') => `
+    <button
+      class="fin-lancamento-tab hub-subnav-item ${classe} ${state.lancamentoAba === aba.id ? 'is-active' : ''}"
+      role="tab"
+      type="button"
+      data-fin-lancamento-tab="${aba.id}"
+      aria-selected="${state.lancamentoAba === aba.id}"
+      aria-label="${aba.nome}"
+      title="${aba.nome}"
+    >
+      <span class="fin-lancamento-tab-label">${aba.nome}</span>
+      <span class="fin-lancamento-tab-short" aria-hidden="true">${abreviacoes[aba.id] || aba.nome}</span>
+    </button>
+  `;
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_LANCAMENTO_ABAS, {
+    ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
+    desktop: FINANCEIRO_LANCAMENTO_ABAS.length
+  });
+
   return `
-    <nav class="fin-lancamento-tabs" role="tablist" aria-label="Lançamentos financeiros">
-      ${FINANCEIRO_LANCAMENTO_ABAS.map(aba => `
-        <button
-          class="fin-lancamento-tab ${state.lancamentoAba === aba.id ? 'is-active' : ''}"
-          role="tab"
-          type="button"
-          data-fin-lancamento-tab="${aba.id}"
-          aria-selected="${state.lancamentoAba === aba.id}"
-          aria-label="${aba.nome}"
-          title="${aba.nome}"
-        >
-          <span class="fin-lancamento-tab-label">${aba.nome}</span>
-          <span class="fin-lancamento-tab-short" aria-hidden="true">${abreviacoes[aba.id] || aba.nome}</span>
-        </button>
-      `).join('')}
+    <nav class="fin-lancamento-tabs hub-subnav hub-responsive-subnav" role="tablist" aria-label="Lançamentos financeiros">
+      ${principais.map(aba => renderTab(aba)).join('')}
+      ${renderMaisFinanceiro({ itens: secundarias, ativoId: state.lancamentoAba, renderItem: renderTab, id: 'fin-lancamentos-more-menu' })}
     </nav>
   `;
 }
 
 function renderConfiguracoesTabs({ state }) {
+  const renderTab = (aba, classe = '') => `
+    <button
+      class="fin-subtab hub-subnav-item ${classe} ${state.configuracaoAba === aba.id ? 'is-active active' : ''}"
+      role="tab"
+      type="button"
+      data-fin-config-tab="${aba.id}"
+      aria-selected="${state.configuracaoAba === aba.id}"
+    >
+      ${aba.nome}
+    </button>
+  `;
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_CONFIG_ABAS, {
+    ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
+    desktop: FINANCEIRO_CONFIG_ABAS.length
+  });
+
   return `
-    <nav class="fin-subtabs ar-validacoes-subnav" role="tablist" aria-label="Configuracoes financeiras">
-      ${FINANCEIRO_CONFIG_ABAS.map(aba => `
-        <button
-          class="fin-subtab ${state.configuracaoAba === aba.id ? 'is-active active' : ''}"
-          role="tab"
-          type="button"
-          data-fin-config-tab="${aba.id}"
-          aria-selected="${state.configuracaoAba === aba.id}"
-        >
-          ${aba.nome}
-        </button>
-      `).join('')}
+    <nav class="fin-subtabs hub-subnav hub-responsive-subnav" role="tablist" aria-label="Configuracoes financeiras">
+      ${principais.map(aba => renderTab(aba)).join('')}
+      ${renderMaisFinanceiro({ itens: secundarias, ativoId: state.configuracaoAba, renderItem: renderTab, id: 'fin-configuracoes-more-menu' })}
     </nav>
   `;
 }

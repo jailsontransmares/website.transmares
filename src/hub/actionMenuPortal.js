@@ -59,7 +59,12 @@ function posicionarMenuAcao(menu, opcoes = registros.get(menu)) {
   const left = espacoDireita >= largura
     ? rect.left
     : Math.max(margem, rect.right - largura);
-  const top = rect.bottom + gap;
+  const altura = menu.offsetHeight;
+  const espacoAbaixo = window.innerHeight - rect.bottom - margem;
+  const podeAbrirAcima = opcoes.flipVertical === true
+    && espacoAbaixo < altura
+    && rect.top - margem >= altura;
+  const top = podeAbrirAcima ? rect.top - altura - gap : rect.bottom + gap;
 
   menu.style.position = 'absolute';
   menu.style.left = `${left + window.scrollX}px`;

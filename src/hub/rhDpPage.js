@@ -309,6 +309,11 @@ export function criarRhDpController({
     modal: criarEstadoModal()
   };
 
+  let menuMaisRhDpAberto = null;
+  let faixaNavegacaoRhDp = '';
+  let listenersMenuRhDpConfigurados = false;
+  let resizeNavegacaoRhDpConfigurado = false;
+
   function criarEstadoModal({
     aberto = false,
     modo = 'view',
@@ -443,6 +448,87 @@ export function criarRhDpController({
     return `${obterRotaColaboradores()}/${modo === 'edit' ? 'editar' : 'visualizar'}/${id}`;
   }
 
+  function obterFaixaNavegacaoRhDp() {
+    const largura = typeof window === 'undefined' ? 1280 : window.innerWidth;
+    if (largura <= 480) return 'compact';
+    if (largura <= 760) return 'mobile';
+    if (largura <= 1000) return 'tablet';
+    return 'desktop';
+  }
+
+  function fecharMenuMaisRhDp() {
+    if (!menuMaisRhDpAberto) return;
+    fecharMenuAcaoGlobal(menuMaisRhDpAberto.menu);
+    menuMaisRhDpAberto.menu.hidden = true;
+    menuMaisRhDpAberto.trigger.setAttribute('aria-expanded', 'false');
+    menuMaisRhDpAberto = null;
+  }
+
+  function renderMaisRhDp(itens, ativo) {
+    if (!itens.length) return '';
+    return `
+      <div class="hub-responsive-more">
+        <button class="hub-responsive-more-trigger ${ativo ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-module-more-menu" data-rh-more-trigger>
+          <span>Mais</span><span aria-hidden="true">⌄</span>
+        </button>
+        <div id="rh-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>
+          ${itens.map(([id, nome]) => `<button class="hub-responsive-more-item" role="menuitem" type="button" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function configurarMenusMaisRhDp() {
+    if (listenersMenuRhDpConfigurados) return;
+    document.addEventListener('click', event => {
+      if (!menuMaisRhDpAberto) return;
+      if (menuMaisRhDpAberto.trigger.contains(event.target) || menuMaisRhDpAberto.menu.contains(event.target)) return;
+      fecharMenuMaisRhDp();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !menuMaisRhDpAberto) return;
+      event.preventDefault();
+      const trigger = menuMaisRhDpAberto.trigger;
+      fecharMenuMaisRhDp();
+      trigger.focus();
+    });
+    listenersMenuRhDpConfigurados = true;
+  }
+
+  function conectarMenuMaisRhDp() {
+    configurarMenusMaisRhDp();
+    document.querySelectorAll('[data-rh-more-trigger]').forEach(trigger => {
+      trigger.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+        if (!menu) return;
+        const abrir = menu.hidden;
+        fecharMenuMaisRhDp();
+        if (!abrir) return;
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        menuMaisRhDpAberto = { menu, trigger };
+        abrirMenuAcaoGlobal(trigger, menu, { minWidth: 190, maxWidth: 320, gap: 6, flipVertical: true });
+      });
+      const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+      menu?.querySelectorAll('[role="menuitem"]').forEach(item => item.addEventListener('click', fecharMenuMaisRhDp));
+    });
+  }
+
+  function configurarResizeNavegacaoRhDp() {
+    if (resizeNavegacaoRhDpConfigurado || typeof window === 'undefined') return;
+    faixaNavegacaoRhDp = obterFaixaNavegacaoRhDp();
+    window.addEventListener('resize', () => {
+      const novaFaixa = obterFaixaNavegacaoRhDp();
+      if (novaFaixa === faixaNavegacaoRhDp) return;
+      faixaNavegacaoRhDp = novaFaixa;
+      fecharMenuMaisRhDp();
+      render();
+    });
+    resizeNavegacaoRhDpConfigurado = true;
+  }
+
   function renderMenuRhDp() {
     const itens = [
       ['dashboard', 'Dashboard', podeVerDashboard()],
@@ -450,7 +536,11 @@ export function criarRhDpController({
       ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
       ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
     ].filter(([, , permitido]) => permitido);
-    return `<nav class="module-tabs rh-module-tabs" role="group" aria-label="Menu do RH e DP">${itens.map(([id, nome]) => `<button type="button" class="${state.secao === id ? 'active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}</nav>`;
+    const faixa = obterFaixaNavegacaoRhDp();
+    const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+    const principais = itens.slice(0, limite);
+    const secundarias = itens.slice(limite);
+    return `<nav class="module-tabs rh-module-tabs hub-module-nav" role="group" aria-label="Menu do RH e DP">${principais.map(([id, nome]) => `<button type="button" class="hub-module-nav-item ${state.secao === id ? 'active is-active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}${renderMaisRhDp(secundarias, secundarias.some(([id]) => id === state.secao))}</nav>`;
   }
 
   function renderMetricasRhDp(itens, acoes = '') {
@@ -1054,6 +1144,7 @@ export function criarRhDpController({
         </section>`}
       `;
 
+    fecharMenuMaisRhDp();
     limparMenusAcoesGlobais();
     document.getElementById('app').innerHTML = renderShell({
       tituloPagina: 'RH & DP',
@@ -1062,6 +1153,8 @@ export function criarRhDpController({
       conteudo
     });
     conectarEventos();
+    conectarMenuMaisRhDp();
+    configurarResizeNavegacaoRhDp();
   }
 
   function conectarEventos() {
@@ -1694,10 +1787,10 @@ export function criarRhDpController({
 
   function renderEtapasCadastro(etapas) {
     return `
-      <nav class="rh-modal-steps" aria-label="Etapas do cadastro" role="tablist">
+      <nav class="rh-modal-steps hub-subnav hub-responsive-subnav" aria-label="Etapas do cadastro" role="tablist">
         ${etapas.map((etapa, indice) => `
           <button
-            class="rh-modal-step ${indice === state.modal.etapa ? 'is-active' : ''}"
+            class="rh-modal-step hub-subnav-item ${indice === state.modal.etapa ? 'is-active' : ''}"
             type="button"
             role="tab"
             aria-selected="${indice === state.modal.etapa}"

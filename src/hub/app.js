@@ -7300,7 +7300,90 @@ function restaurarEstadoInteracaoAr(snapshot) {
   });
 }
 
+let menuMaisArAberto = null;
+
+function obterFaixaMenuAr() {
+  const largura = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  if (largura <= 480) return 'compact';
+  if (largura <= 760) return 'mobile';
+  if (largura <= 1000) return 'tablet';
+  return 'desktop';
+}
+
+let faixaMenuArAtual = obterFaixaMenuAr();
+
+function fecharMenuMaisAr() {
+  if (!menuMaisArAberto) return;
+  limparMenusAcoesGlobais();
+  menuMaisArAberto.menu.hidden = true;
+  menuMaisArAberto.trigger.setAttribute('aria-expanded', 'false');
+  menuMaisArAberto = null;
+}
+
+function renderMenuPrincipalAr({ podeHistorico, incluirCrm = false, incluirCrm2 = false }) {
+  const itens = [
+    ['inicio', 'Início', true],
+    ['gerar', 'Gerar links', podeAcessarAbaAr('gerar')],
+    ['produtos', 'Lista de produtos', podeAcessarAbaAr('produtos')],
+    ['validacoes', 'Validações', podeAcessarAbaAr('validacoes')],
+    ['historico', 'Histórico', podeHistorico],
+    ['crm', 'CRM', incluirCrm && podeAcessarAbaAr('crm')],
+    ['crm2', 'CRM 2.0', incluirCrm2 && podeAcessarAbaAr('crm2')]
+  ].filter(([, , permitido]) => permitido);
+  const faixa = obterFaixaMenuAr();
+  const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+  const principais = itens.slice(0, limite);
+  const secundarias = itens.slice(limite);
+  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-pf'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
+
+  return `<div class="module-tabs hub-module-nav" role="group" aria-label="Visualização do Painel AR">${principais.map(renderItem).join('')}${secundarias.length ? `
+    <div class="hub-responsive-more">
+      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-pf'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
+      <div id="ar-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('<button ', '<button role="menuitem" ')).join('')}</div>
+    </div>` : ''}</div>`;
+}
+
+document.addEventListener('click', event => {
+  const trigger = event.target.closest?.('[data-ar-more-trigger]');
+  if (trigger) {
+    event.preventDefault();
+    event.stopPropagation();
+    const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+    if (!menu) return;
+    const abrir = menu.hidden;
+    fecharMenuMaisAr();
+    if (!abrir) return;
+    menu.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    menuMaisArAberto = { menu, trigger };
+    abrirMenuAcaoGlobal(trigger, menu, { minWidth: 190, maxWidth: 320, gap: 6, flipVertical: true });
+    return;
+  }
+  if (menuMaisArAberto && event.target.closest?.('[role="menuitem"]')) {
+    fecharMenuMaisAr();
+    return;
+  }
+  if (menuMaisArAberto && !menuMaisArAberto.menu.contains(event.target)) fecharMenuMaisAr();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !menuMaisArAberto) return;
+  event.preventDefault();
+  const trigger = menuMaisArAberto.trigger;
+  fecharMenuMaisAr();
+  trigger.focus();
+});
+
+window.addEventListener('resize', () => {
+  const faixaAtual = obterFaixaMenuAr();
+  if (faixaAtual === faixaMenuArAtual || !document.querySelector('.ar-panel-header .hub-module-nav')) return;
+  faixaMenuArAtual = faixaAtual;
+  fecharMenuMaisAr();
+  renderPainelAr();
+});
+
 function renderPainelAr() {
+  fecharMenuMaisAr();
   const snapshotInteracao = capturarEstadoInteracaoAr();
   fecharDropdownCrmAr();
   const podeHistorico = podeAcessarAbaAr('historico');
@@ -7331,15 +7414,7 @@ function renderPainelAr() {
             </button>
             <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
           </div>
-          <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
-            <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-              <i data-lucide="house" aria-hidden="true"></i>
-            </button>
-            ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
-            ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
-            ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
-          </div>
+          ${renderMenuPrincipalAr({ podeHistorico })}
         </div>
 
         ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
@@ -7623,8 +7698,8 @@ function renderDetalhePessoaFisicaCrm2(pessoa) {
 
       ${pf.mensagem ? `<p class="admin-message" role="status">${escapeHtml(pf.mensagem)}</p>` : ''}
 
-      <div class="module-tabs crm2-detail-tabs" role="tablist" aria-label="Detalhes da pessoa física">
-        ${abas.map(([chave, rotulo]) => `<button type="button" role="tab" aria-selected="${aba === chave ? 'true' : 'false'}" class="${aba === chave ? 'active' : ''}" onclick="selecionarAbaDetalhePessoaFisicaCrm2('${chave}')">${escapeHtml(rotulo)}</button>`).join('')}
+      <div class="module-tabs crm2-detail-tabs hub-subnav hub-responsive-subnav" role="tablist" aria-label="Detalhes da pessoa física">
+        ${abas.map(([chave, rotulo]) => `<button type="button" role="tab" aria-selected="${aba === chave ? 'true' : 'false'}" class="hub-subnav-item ${aba === chave ? 'active is-active' : ''}" onclick="selecionarAbaDetalhePessoaFisicaCrm2('${chave}')">${escapeHtml(rotulo)}</button>`).join('')}
       </div>
 
       ${aba === 'dados' ? renderDadosPessoaFisicaCrm2(pessoa) : ''}
@@ -9621,12 +9696,21 @@ function renderSubnavValidacoesAr() {
   const validacoes = state.ar.validacoes;
   const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
   const podeImportar = pode('painel_ar.validacoes', 'importar');
+  const itens = [
+    ['emitir', 'Emitir recibo', podeEmitir],
+    ['consultar', 'Consultar recibos', true],
+    ['importacao', 'Importar recibos', podeImportar]
+  ].filter(([, , permitido]) => permitido);
+  const faixa = obterFaixaMenuAr();
+  const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+  const principais = itens.slice(0, limite);
+  const secundarias = itens.slice(limite);
+  const renderItem = ([id, nome]) => `<button class="hub-subnav-item ${validacoes.aba === id ? 'active is-active' : ''}" role="tab" aria-selected="${validacoes.aba === id}" type="button" onclick="selecionarSubabaValidacoesAr('${id}')">${nome}</button>`;
 
   return `
-    <div class="ar-validacoes-subnav" role="tablist" aria-label="Paginas internas de Validacoes">
-      ${podeEmitir ? `<button class="${validacoes.aba === 'emitir' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'emitir'}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>` : ''}
-      <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'consultar'}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
-      ${podeImportar ? `<button class="${validacoes.aba === 'importacao' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'importacao'}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importar recibos</button>` : ''}
+    <div class="hub-subnav hub-responsive-subnav" role="tablist" aria-label="Paginas internas de Validacoes">
+      ${principais.map(renderItem).join('')}
+      ${secundarias.length ? `<div class="hub-responsive-more"><button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === validacoes.aba) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-validacoes-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button><div id="ar-validacoes-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('role="tab"', 'role="menuitem"')).join('')}</div></div>` : ''}
     </div>
   `;
 }
@@ -13978,6 +14062,7 @@ const renderCentralSenhasHubPhase1 = function() {
 };
 
 const renderPainelArHubPhase1 = function() {
+  fecharMenuMaisAr();
   const podeHistorico = podeAcessarAbaAr('historico');
   const podeGerenciarParceiros = pode('admin', 'view') && pode('admin.parceiros_indicacao', 'view');
 
@@ -13994,17 +14079,7 @@ const renderPainelArHubPhase1 = function() {
             <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
           </div>
           <div class="ar-panel-actions">
-            <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
-              <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-                <i data-lucide="house" aria-hidden="true"></i>
-              </button>
-              ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-              ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
-              ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
-              ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
-              ${podeAcessarAbaAr('crm') ? `<button class="${state.ar.aba === 'crm' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm')">CRM</button>` : ''}
-              ${podeAcessarAbaAr('crm2') ? `<button class="${['crm2', 'crm2-pf'].includes(state.ar.aba) ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm2')">CRM 2.0</button>` : ''}
-            </div>
+            ${renderMenuPrincipalAr({ podeHistorico, incluirCrm: true, incluirCrm2: true })}
             ${podeGerenciarParceiros ? `<button class="secondary-btn ar-manage-partners-btn" type="button" onclick="navegarParaModulo('administracao', 'parceiros-indicacao')">Gerenciar parceiros</button>` : ''}
           </div>
         </div>

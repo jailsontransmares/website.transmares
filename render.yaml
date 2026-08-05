@@ -2,6 +2,9 @@ services:
   - type: web
     name: hub-transmares
     runtime: static
+    envVars:
+      - key: NODE_VERSION
+        value: 26.5.0
     buildCommand: npm install --global npm@12.0.2 && npm ci && npm run build:hub
     staticPublishPath: ./dist-hub
     routes:
