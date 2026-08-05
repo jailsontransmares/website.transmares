@@ -70,8 +70,8 @@ Object.assign(window, {
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 8;
     const gap = 6;
-    const menuWidth = Math.min(Math.max(rect.width, 220), Math.max(160, window.innerWidth - (viewportPadding * 2)));
-    const menuMaxHeight = Math.max(120, window.innerHeight - (viewportPadding * 2));
+    const menuWidth = Math.min(rect.width, window.innerWidth - (viewportPadding * 2));
+    const menuMaxHeight = Math.min(280, window.innerHeight - (viewportPadding * 2));
     menu.style.width = `${menuWidth}px`;
     menu.style.maxHeight = `${menuMaxHeight}px`;
     menu.style.overflowY = 'auto';
