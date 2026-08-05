@@ -5484,6 +5484,26 @@ async function carregarParceirosIndicacaoAdmin(preservarMensagem = false) {
   }
 }
 
+let parceirosIndicacaoCompartilhadoPromise = null;
+
+async function carregarParceirosIndicacaoCompartilhado() {
+  if (state.admin.parceirosIndicacao?.length) return state.admin.parceirosIndicacao;
+  if (parceirosIndicacaoCompartilhadoPromise) return parceirosIndicacaoCompartilhadoPromise;
+
+  parceirosIndicacaoCompartilhadoPromise = chamarApi('listAdminPartners')
+    .then(response => {
+      if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar parceiros.'));
+      state.admin.parceirosIndicacao = response.data.records || [];
+      window.dispatchEvent(new CustomEvent('hub-parceiros-indicacao-atualizados'));
+      return state.admin.parceirosIndicacao;
+    })
+    .finally(() => {
+      parceirosIndicacaoCompartilhadoPromise = null;
+    });
+
+  return parceirosIndicacaoCompartilhadoPromise;
+}
+
 async function carregarModulosAdmin(preservarMensagem = false) {
   state.admin.loading = true;
   state.admin.moduloAtualizando = '';
@@ -13890,6 +13910,8 @@ Object.assign(window, {
   navegarLogoParaHomeHub,
   hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
   hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
+  hubObterParceirosIndicacao: () => state.admin.parceirosIndicacao || [],
+  hubCarregarParceirosIndicacao: carregarParceirosIndicacaoCompartilhado,
   hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
   hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
   hubPode: pode,

@@ -309,6 +309,9 @@ Object.assign(window, {
 document.addEventListener('click', (event) => window.crm2PfCloseDropdowns?.(event));
 document.addEventListener('scroll', () => window.crm2PfRepositionOpenDropdowns?.(), true);
 window.addEventListener('resize', () => window.crm2PfRepositionOpenDropdowns?.());
+window.addEventListener('hub-parceiros-indicacao-atualizados', () => {
+  if (currentRouteCodeCrm2()) rerenderCrm2Phase2();
+});
 
 const crm2Observer = new MutationObserver(() => {
   if (!currentRouteCodeCrm2()) return;

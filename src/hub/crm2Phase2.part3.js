@@ -33,12 +33,29 @@ function renderCpfVerificationCrm2(values = {}) {
   `;
 }
 
+function crm2PfPartnerOptions() {
+  const records = typeof window.hubObterParceirosIndicacao === 'function'
+    ? window.hubObterParceirosIndicacao()
+    : [];
+  const options = records
+    .filter((record) => !['inativo', 'arquivado'].includes(record.status))
+    .map((record) => String(record.nome_completo || record.nome || '').trim())
+    .filter(Boolean)
+    .filter((value, index, valuesList) => valuesList.indexOf(value) === index)
+    .map((value) => ({ value, label: value }));
+  return options;
+}
+
 function renderPersonFormCrm2() {
   const route = currentPfRouteCrm2();
   const editing = route.view === 'edit' || crm2PfState.formMode === 'edit';
   const person = editing ? getPersonCrm2(route.id || crm2PfState.detailId) : null;
   const values = { ...(person || {}), ...crm2PfState.draft };
   const verified = editing || crm2PfState.cpfGate.status === 'not-found';
+
+  if (typeof window.hubCarregarParceirosIndicacao === 'function' && !window.hubObterParceirosIndicacao?.().length) {
+    window.hubCarregarParceirosIndicacao().catch(() => {});
+  }
 
   return `
     <section class="hub-form-screen crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-form-title">
@@ -73,7 +90,7 @@ function renderPersonFormCrm2() {
             ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
-            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: [{ value: 'Rede Transmares', label: 'Rede Transmares' }, { value: 'Contabilidade Rocha', label: 'Contabilidade Rocha' }, { value: 'Outro', label: 'Outro' }] })}
+            ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
           </div>
         </section>
 
