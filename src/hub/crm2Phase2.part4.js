@@ -62,8 +62,8 @@ Object.assign(window, {
     menu.hidden = !opening;
     trigger.setAttribute('aria-expanded', String(opening));
     if (!opening) return;
+    if (menu.parentElement !== document.body) document.body.appendChild(menu);
     crm2PfPositionDropdown(menu, trigger);
-    menu.querySelector('.is-selected')?.focus();
   },
   crm2PfPositionDropdown(menu, trigger) {
     if (!menu || !trigger || menu.hidden) return;
@@ -88,18 +88,37 @@ Object.assign(window, {
   },
   crm2PfRepositionOpenDropdowns() {
     document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((menu) => {
-      const trigger = document.querySelector(`[aria-controls="${menu.id}"]`);
+      const trigger = document.getElementById(menu.dataset.dropdownInputId || '');
+      crm2PfPositionDropdown(menu, trigger);
+    });
+    document.querySelectorAll('body > .hub-filter-dropdown-menu[data-dropdown-input-id]:not([hidden])').forEach((menu) => {
+      const trigger = document.getElementById(menu.dataset.dropdownInputId || '');
       crm2PfPositionDropdown(menu, trigger);
     });
   },
+  crm2PfFilterDropdown(input, event) {
+    event?.stopPropagation();
+    const menu = document.getElementById(input?.dataset?.dropdownMenuId || '');
+    if (!menu) return;
+    input.dataset.selectedValue = '';
+    const normalized = String(input.value || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    menu.querySelectorAll('[role="option"]').forEach((option) => {
+      const label = String(option.dataset.label || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      option.hidden = Boolean(normalized) && !label.includes(normalized);
+    });
+    if (menu.hidden) {
+      if (menu.parentElement !== document.body) document.body.appendChild(menu);
+      menu.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+    crm2PfPositionDropdown(menu, input);
+  },
   crm2PfSelectDropdown(option) {
-    const menu = option?.closest('.crm2-pf-select .hub-filter-dropdown-menu');
-    const combo = option?.closest('.crm2-pf-select');
-    const hidden = combo?.querySelector('input[type="hidden"]');
-    const trigger = combo?.querySelector('.crm2-pf-select-trigger');
-    if (!menu || !combo || !hidden || !trigger) return;
-    hidden.value = option.dataset.value || '';
-    combo.querySelector('.crm2-pf-select-label').textContent = option.dataset.label || 'Selecione';
+    const menu = option?.closest('.hub-filter-dropdown-menu');
+    const trigger = document.getElementById(menu?.dataset?.dropdownInputId || '');
+    if (!menu || !trigger) return;
+    trigger.value = option.dataset.label || '';
+    trigger.dataset.selectedValue = option.dataset.value || '';
     menu.querySelectorAll('[role="option"]').forEach((item) => {
       const selected = item === option;
       item.classList.toggle('is-selected', selected);
@@ -107,15 +126,19 @@ Object.assign(window, {
     });
     menu.hidden = true;
     trigger.setAttribute('aria-expanded', 'false');
-    crm2PfTrackChange(hidden);
+    const combo = trigger.closest('.crm2-pf-select');
+    if (combo && menu.parentElement === document.body) combo.appendChild(menu);
+    crm2PfTrackChange(trigger);
     trigger.focus();
   },
   crm2PfDropdownKeydown(event, element) {
     if (!['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return;
     event.preventDefault();
     if (event.key === 'Escape') {
-      const menu = element?.closest('.crm2-pf-select')?.querySelector('.hub-filter-dropdown-menu');
-      const trigger = element?.closest('.crm2-pf-select')?.querySelector('.crm2-pf-select-trigger');
+      const trigger = element?.classList.contains('crm2-pf-select-trigger')
+        ? element
+        : document.getElementById(element?.closest('.hub-filter-dropdown-menu')?.dataset?.dropdownInputId || '');
+      const menu = document.getElementById(trigger?.dataset?.dropdownMenuId || trigger?.getAttribute('aria-controls') || '');
       if (menu) menu.hidden = true;
       trigger?.setAttribute('aria-expanded', 'false');
       trigger?.focus();
@@ -123,14 +146,17 @@ Object.assign(window, {
     }
     if (element?.classList.contains('crm2-pf-select-trigger')) {
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        crm2PfToggleDropdown(element, event);
-        const menu = document.getElementById(element.getAttribute('aria-controls') || '');
+        const menu = document.getElementById(element.getAttribute('aria-controls') || element.dataset.dropdownMenuId || '');
+        if (menu?.hidden) crm2PfToggleDropdown(element, event);
         const options = [...(menu?.querySelectorAll('[role="option"]') || [])];
-        options[event.key === 'ArrowUp' ? options.length - 1 : 0]?.focus();
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') options[event.key === 'ArrowUp' ? options.length - 1 : 0]?.focus();
       }
       return;
     }
-    const options = [...(element?.parentElement?.querySelectorAll('[role="option"]') || [])];
+    const menu = element?.classList.contains('crm2-pf-select-trigger')
+      ? document.getElementById(element.getAttribute('aria-controls') || element.dataset.dropdownMenuId || '')
+      : element?.closest('.hub-filter-dropdown-menu');
+    const options = [...(menu?.querySelectorAll('[role="option"]') || [])];
     const index = options.indexOf(element);
     if (event.key === 'Enter' || event.key === ' ') return crm2PfSelectDropdown(element);
     if (!options.length) return;
@@ -144,10 +170,13 @@ Object.assign(window, {
     options[next].focus();
   },
   crm2PfCloseDropdowns(event) {
-    if (event?.target?.closest('.crm2-pf-select')) return;
-    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((menu) => {
+    if (event?.target?.closest('.crm2-pf-select') && event.target.closest('.crm2-pf-select').contains(event.target)) return;
+    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden]), body > .hub-filter-dropdown-menu[data-dropdown-input-id]:not([hidden])').forEach((menu) => {
       menu.hidden = true;
-      document.querySelector(`[aria-controls="${menu.id}"]`)?.setAttribute('aria-expanded', 'false');
+      const trigger = document.getElementById(menu.dataset.dropdownInputId || '');
+      trigger?.setAttribute('aria-expanded', 'false');
+      const combo = trigger?.closest('.crm2-pf-select');
+      if (combo && menu.parentElement === document.body) combo.appendChild(menu);
     });
   },
   crm2PfTrackChange(input) {

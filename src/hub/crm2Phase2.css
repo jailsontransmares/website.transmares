@@ -363,7 +363,16 @@
 
 .crm2-pf-select-trigger {
   min-height: 38px;
+  padding-right: 34px;
   width: 100%;
+}
+
+.crm2-pf-select-chevron {
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .crm2-pf-form-footer {
