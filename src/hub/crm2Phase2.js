@@ -730,12 +730,7 @@ function renderPersonFormCrm2() {
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
-          </div>
-        </section>
-
-        <section class="hub-form-section ${verified ? '' : 'is-disabled'}">
-          <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
           </div>
         </section>
 
