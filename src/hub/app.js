@@ -370,6 +370,83 @@ const state = {
     loading: false,
     message: ''
   },
+  crm2: {
+    codigoRota: '200',
+    mensagem: '',
+    acaoMockada: '',
+    pessoasFisicas: {
+      busca: '',
+      statusFiltro: '',
+      origemFiltro: '',
+      detalheId: '',
+      modoFormulario: '',
+      mensagem: '',
+      erros: {},
+      draft: {},
+      items: [
+        {
+          id: 'pf-001',
+          nome: 'Mariana Alves de Souza',
+          cpf: '12345678901',
+          cei: '123.456.789/0001',
+          nascimento: '1987-04-18',
+          telefone: '(85) 99876-1204',
+          email: 'mariana.souza@example.com',
+          origem: 'Indicação',
+          parceiro: 'Rede Transmares',
+          status: 'cliente ativo',
+          observacoes: 'Cliente com acompanhamento de renovação.',
+          cadastroEm: '2026-07-18T10:30:00',
+          atualizadoEm: '2026-08-03T15:42:00',
+          anexos: [{ nome: 'Documento de identificação.pdf', validade: '2027-07-18', status: 'válido' }],
+          empresas: [{ nome: 'Alves Consultoria Ltda.', vinculo: 'Representante legal', status: 'ativo' }],
+          pedidos: [{ numero: 'PED-2401', produto: 'e-CNPJ A3', status: 'Ativo', vencimento: '2027-07-18' }],
+          timeline: [
+            { data: '2026-07-18T10:30:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' },
+            { data: '2026-08-03T15:42:00', usuario: 'Equipe AR', descricao: 'Dados atualizados.', tipo: 'Atualização' }
+          ]
+        },
+        {
+          id: 'pf-002',
+          nome: 'Rafael Nogueira Lima',
+          cpf: '98765432100',
+          cei: '',
+          nascimento: '1979-11-02',
+          telefone: '(81) 98812-4300',
+          email: 'rafael.lima@example.com',
+          origem: 'Site',
+          parceiro: '',
+          status: 'cliente inativo',
+          observacoes: 'Sem pedidos ativos no momento.',
+          cadastroEm: '2026-05-11T09:15:00',
+          atualizadoEm: '2026-07-29T11:08:00',
+          anexos: [],
+          empresas: [],
+          pedidos: [],
+          timeline: [{ data: '2026-05-11T09:15:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
+        },
+        {
+          id: 'pf-003',
+          nome: 'Camila Ferreira Rocha',
+          cpf: '45678912300',
+          cei: '987.654.321/0001',
+          nascimento: '1992-08-25',
+          telefone: '(88) 99654-7821',
+          email: 'camila.rocha@example.com',
+          origem: 'Parceiro',
+          parceiro: 'Contabilidade Rocha',
+          status: 'cliente ativo',
+          observacoes: '',
+          cadastroEm: '2026-06-20T14:20:00',
+          atualizadoEm: '2026-08-01T16:25:00',
+          anexos: [{ nome: 'Comprovante de endereço.pdf', validade: '2026-12-20', status: 'válido' }],
+          empresas: [{ nome: 'Rocha Serviços Digitais', vinculo: 'Titular do pedido', status: 'ativo' }],
+          pedidos: [{ numero: 'PED-2389', produto: 'e-CPF A3', status: 'Em validação', vencimento: '2026-12-20' }],
+          timeline: [{ data: '2026-06-20T14:20:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
+        }
+      ]
+    }
+  },
   produtoBusca: '',
   filtros: {
     ac: '',
@@ -388,6 +465,7 @@ const state = {
   campoProdutoAtivo: '',
   loading: false,
   gerando: false,
+  geracaoLinksToken: 0,
   message: ''
 },
   temaAtual: 'claro'
@@ -1386,7 +1464,9 @@ function podeAcessarAbaAr(aba) {
     produtos: ['painel_ar.gerar_links', 'view'],
     validacoes: ['painel_ar.validacoes', 'view'],
     historico: ['painel_ar.validacoes', 'view'],
-    crm: ['painel_ar.crm', 'view']
+    crm: ['painel_ar.crm', 'view'],
+    crm2: ['painel_ar.crm_2', 'view'],
+    'crm2-pf': ['painel_ar.crm_2', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -3900,6 +3980,7 @@ function obterAcoesDisponiveisRecurso(recurso) {
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.crm': ['view', 'execute'],
+    'painel_ar.crm_2': ['view', 'update', 'delete'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
@@ -7042,11 +7123,33 @@ function validarSenhaPayload(payload) {
   return erros;
 }
 
-async function abrirPainelAr() {
-  state.ar.message = '';
+function invalidarGeracaoLinksAr() {
+  state.ar.geracaoLinksToken += 1;
+  state.ar.gerando = false;
+}
+
+function resetarEstadoGerarLinksAr() {
+  invalidarGeracaoLinksAr();
+  state.ar.produtoBusca = '';
+  state.ar.filtros = {
+    ac: '',
+    produto: '',
+    midia: '',
+    modelo: '',
+    validade: ''
+  };
+  state.ar.produtoId = '';
+  state.ar.parceiroId = '';
+  state.ar.parceiroBusca = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
   state.ar.aba = 'inicio';
+  state.ar.campoProdutoAtivo = '';
+  state.ar.message = '';
+}
+
+async function abrirPainelAr() {
+  resetarEstadoGerarLinksAr();
   await carregarPainelAr();
 }
 
@@ -7164,7 +7267,41 @@ function fecharPedidosRelacionadosCrmAr() {
   renderPainelAr();
 }
 
+function capturarEstadoInteracaoAr() {
+  const ativo = document.activeElement;
+  const campo = ativo?.matches?.('input, textarea, select')
+    ? ativo
+    : ativo?.closest?.('.ar-autocomplete-field')?.querySelector('input');
+
+  return {
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    campoId: campo?.id || '',
+    selecaoInicio: typeof campo?.selectionStart === 'number' ? campo.selectionStart : null,
+    selecaoFim: typeof campo?.selectionEnd === 'number' ? campo.selectionEnd : null
+  };
+}
+
+function restaurarEstadoInteracaoAr(snapshot) {
+  if (!snapshot) return;
+
+  requestAnimationFrame(() => {
+    window.scrollTo(snapshot.scrollX, snapshot.scrollY);
+
+    if (!snapshot.campoId) return;
+
+    const campo = document.getElementById(snapshot.campoId);
+    if (!campo) return;
+
+    campo.focus({ preventScroll: true });
+    if (snapshot.selecaoInicio !== null && typeof campo.setSelectionRange === 'function') {
+      campo.setSelectionRange(snapshot.selecaoInicio, snapshot.selecaoFim);
+    }
+  });
+}
+
 function renderPainelAr() {
+  const snapshotInteracao = capturarEstadoInteracaoAr();
   fecharDropdownCrmAr();
   const podeHistorico = podeAcessarAbaAr('historico');
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
@@ -7210,6 +7347,8 @@ function renderPainelAr() {
       </section>
     </main>
   `;
+
+  restaurarEstadoInteracaoAr(snapshotInteracao);
 }
 
 function renderConteudoAr() {
@@ -7237,7 +7376,470 @@ function renderConteudoAr() {
     return renderCrmArPhase1();
   }
 
+  if (state.ar.aba === 'crm2') {
+    return renderCrm2Phase1();
+  }
+
+  if (state.ar.aba === 'crm2-pf') {
+    return renderCrm2PessoasFisicasPhase2();
+  }
+
   return renderGeradorLinksAr();
+}
+
+function renderCrm2Phase1() {
+  const crm2 = state.ar.crm2;
+  const podeExecutar = pode('painel_ar.crm_2', 'update');
+  const etapas = [
+    ['201', 'Pessoas físicas', 'Cadastro, busca, dados cadastrais e timeline.'],
+    ['202', 'Pessoas jurídicas', 'Empresas, documentos e pessoas vinculadas.'],
+    ['203', 'Vínculos', 'Relacionamentos entre PF e PJ, com histórico de inativação.'],
+    ['204', 'Pedidos', 'Cadastro, detalhe, status, vencimento e histórico.'],
+    ['205', 'Oportunidades', 'Leads, negociações, itens e conversão.'],
+    ['206', 'Configurações', 'Comunicação, modelos e automações mockadas.']
+  ];
+
+  return `
+    <section class="admin-panel" aria-labelledby="crm2-title">
+      <div class="admin-panel-header">
+        <div>
+          <span class="ar-crm-phase1-kicker">FASE 1 · FUNDAÇÃO MOCKADA</span>
+          <h3 id="crm2-title">CRM 2.0</h3>
+          <p>Nova estrutura de relacionamento do AR Transmares, independente do CRM atual.</p>
+        </div>
+        <span class="ar-crm-phase1-status">Rota ${escapeHtml(crm2.codigoRota)}</span>
+      </div>
+
+      ${crm2.mensagem ? `<p class="admin-message" role="status">${escapeHtml(crm2.mensagem)}</p>` : ''}
+
+      <div class="ar-crm-phase1-grid" aria-label="Resumo do CRM 2.0">
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Escopo atual</span>
+          <strong>Telas mockadas</strong>
+          <p>Validação visual e funcional antes de qualquer integração.</p>
+        </article>
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Base do relacionamento</span>
+          <strong>Pessoa Física</strong>
+          <p>PF será o centro dos próximos cadastros, pedidos e timelines.</p>
+        </article>
+        <article class="ar-crm-phase1-card">
+          <span class="ar-crm-phase1-card-label">Integrações</span>
+          <strong>Desativadas</strong>
+          <p>Supabase, ClickUp, Brevo e automações entram somente após a homologação.</p>
+        </article>
+      </div>
+
+      <div class="admin-panel-header crm2-phase1-section-header">
+        <div>
+          <h4>Estrutura reservada</h4>
+          <p>As próximas telas serão liberadas nesta sequência:</p>
+        </div>
+      </div>
+
+      <div class="crm2-phase1-roadmap" role="list" aria-label="Próximas telas do CRM 2.0">
+        ${etapas.map(([codigo, titulo, descricao]) => `
+          <article class="crm2-phase1-roadmap-item ${codigo === '201' ? 'is-actionable' : ''}" role="${codigo === '201' ? 'button' : 'listitem'}" ${codigo === '201' ? `tabindex="0" onclick="navegarParaCrm2Rota('${codigo}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('${codigo}'); }"` : ''}>
+            <span class="crm2-phase1-roadmap-code">${escapeHtml(codigo)}</span>
+            <div>
+              <strong>${escapeHtml(titulo)}</strong>
+              <p>${escapeHtml(descricao)}</p>
+            </div>
+            <span class="crm2-phase1-roadmap-status">Planejada</span>
+          </article>
+        `).join('')}
+      </div>
+
+      <div class="admin-panel-actions crm2-phase1-actions">
+        <button class="primary-btn" type="button" onclick="acionarMockCrm2('cadastro')" ${!podeExecutar ? 'disabled' : ''}>
+          Iniciar validação mockada
+        </button>
+        <button class="secondary-btn" type="button" onclick="acionarMockCrm2('reset')" ${!podeExecutar ? 'disabled' : ''}>
+          Limpar estado
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function navegarParaCrm2Rota(codigo) {
+  const rota = String(codigo || '').trim();
+  if (!/^\d+$/.test(rota)) return;
+
+  const caminho = `${montarCaminhoHub('painel-ar').replace(/\/+$/g, '')}/${rota}`;
+  const url = new URL(window.location.href);
+  url.pathname = caminho;
+  url.hash = '';
+  window.history.pushState({}, '', url);
+  renderizarRotaAtual();
+}
+
+function formatarCpfCrm2(valor = '') {
+  const numeros = String(valor || '').replace(/\D/g, '').slice(0, 11);
+  if (numeros.length !== 11) return numeros;
+  return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function formatarDataCrm2(valor = '') {
+  if (!valor) return '—';
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return String(valor);
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(data);
+}
+
+function obterPessoaFisicaCrm2(id) {
+  return state.ar.crm2.pessoasFisicas.items.find(item => item.id === id) || null;
+}
+
+function obterPessoasFisicasFiltradasCrm2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  const busca = normalizarBuscaAr(pf.busca);
+
+  return pf.items.filter(item => {
+    const correspondeBusca = !busca || [item.nome, item.cpf, item.email, item.telefone]
+      .some(valor => normalizarBuscaAr(valor).includes(busca));
+    const correspondeStatus = !pf.statusFiltro || item.status === pf.statusFiltro;
+    const correspondeOrigem = !pf.origemFiltro || item.origem === pf.origemFiltro;
+    return correspondeBusca && correspondeStatus && correspondeOrigem;
+  });
+}
+
+function renderCrm2PessoasFisicasPhase2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  if (pf.modoFormulario) return renderFormularioPessoaFisicaCrm2();
+  if (pf.detalheId) return renderDetalhePessoaFisicaCrm2(obterPessoaFisicaCrm2(pf.detalheId));
+
+  const items = obterPessoasFisicasFiltradasCrm2();
+  const origens = Array.from(new Set(state.ar.crm2.pessoasFisicas.items.map(item => item.origem).filter(Boolean)));
+  const status = ['cliente ativo', 'cliente inativo'];
+
+  return `
+    <section class="admin-panel crm2-pessoas-page" aria-labelledby="crm2-pessoas-title">
+      <div class="admin-panel-header">
+        <div>
+          <span class="ar-crm-phase1-kicker">ROTA 201 · CRM 2.0</span>
+          <h3 id="crm2-pessoas-title">Pessoas físicas</h3>
+          <p>Cadastro central do relacionamento do AR Transmares.</p>
+        </div>
+        <div class="crm2-pessoas-header-actions">
+          <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
+          <button class="primary-btn" type="button" onclick="abrirFormularioPessoaFisicaCrm2('create')" ${!pode('painel_ar.crm_2', 'update') ? 'disabled' : ''}>Nova pessoa física</button>
+        </div>
+      </div>
+
+      ${pf.mensagem ? `<p class="admin-message" role="status">${escapeHtml(pf.mensagem)}</p>` : ''}
+
+      <div class="crm2-pessoas-filters" role="search">
+        <label>
+          <span>Buscar</span>
+          <input class="config-input" type="search" placeholder="Nome, CPF, telefone ou e-mail" value="${escapeAttr(pf.busca)}" oninput="atualizarBuscaPessoasFisicasCrm2(this.value)">
+        </label>
+        <label>
+          <span>Status</span>
+          <select class="config-input" onchange="atualizarFiltroPessoasFisicasCrm2('status', this.value)">
+            <option value="">Todos os status</option>
+            ${status.map(item => `<option value="${escapeAttr(item)}" ${pf.statusFiltro === item ? 'selected' : ''}>${escapeHtml(item === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo')}</option>`).join('')}
+          </select>
+        </label>
+        <label>
+          <span>Origem</span>
+          <select class="config-input" onchange="atualizarFiltroPessoasFisicasCrm2('origem', this.value)">
+            <option value="">Todas as origens</option>
+            ${origens.map(item => `<option value="${escapeAttr(item)}" ${pf.origemFiltro === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}
+          </select>
+        </label>
+        ${(pf.busca || pf.statusFiltro || pf.origemFiltro) ? '<button class="secondary-btn" type="button" onclick="limparFiltrosPessoasFisicasCrm2()">Limpar filtros</button>' : ''}
+      </div>
+
+      <div class="crm2-pessoas-summary"><strong>${items.length}</strong> pessoa(s) física(s) encontrada(s)</div>
+
+      ${items.length ? `
+        <div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap">
+          <table class="ar-crm-phase1-table crm2-pessoas-table">
+            <thead>
+              <tr>
+                <th>Nome completo/nome social</th>
+                <th>CPF</th>
+                <th>Telefone</th>
+                <th>E-mail</th>
+                <th>Última atualização</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(item => `
+                <tr>
+                  <td><strong>${escapeHtml(item.nome)}</strong><small>${escapeHtml(item.status === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo')}</small></td>
+                  <td>${escapeHtml(formatarCpfCrm2(item.cpf))}</td>
+                  <td>${escapeHtml(item.telefone || '—')}</td>
+                  <td>${escapeHtml(item.email || '—')}</td>
+                  <td>${escapeHtml(formatarDataCrm2(item.atualizadoEm))}</td>
+                  <td>
+                    <div class="crm2-pessoas-row-actions">
+                      <button class="secondary-btn" type="button" onclick="abrirPessoaFisicaCrm2('${escapeAttr(item.id)}')">Ver</button>
+                      <button class="secondary-btn" type="button" onclick="editarPessoaFisicaCrm2('${escapeAttr(item.id)}')" ${!pode('painel_ar.crm_2', 'update') ? 'disabled' : ''}>Editar</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<div class="quick-link-empty crm2-pessoas-empty">Nenhuma pessoa física encontrada com os filtros atuais.</div>'}
+    </section>
+  `;
+}
+
+function renderDetalhePessoaFisicaCrm2(pessoa) {
+  const pf = state.ar.crm2.pessoasFisicas;
+  if (!pessoa) {
+    pf.detalheId = '';
+    pf.mensagem = 'Pessoa física não encontrada no estado mockado.';
+    return renderCrm2PessoasFisicasPhase2();
+  }
+
+  const aba = pf.abaDetalhe || 'dados';
+  const podeEditar = pode('painel_ar.crm_2', 'update');
+  const abas = [
+    ['dados', 'Dados cadastrais'],
+    ['timeline', 'Timeline'],
+    ['empresas', 'Empresas vinculadas'],
+    ['pedidos', 'Pedidos']
+  ];
+
+  return `
+    <section class="admin-panel crm2-pf-detail" aria-labelledby="crm2-pf-detail-title">
+      <div class="admin-panel-header">
+        <div>
+          <span class="ar-crm-phase1-kicker">PESSOA FÍSICA · MOCK</span>
+          <h3 id="crm2-pf-detail-title">${escapeHtml(pessoa.nome)}</h3>
+          <p>${escapeHtml(formatarCpfCrm2(pessoa.cpf))} · ${escapeHtml(pessoa.status === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo')}</p>
+        </div>
+        <div class="crm2-pessoas-header-actions">
+          <button class="secondary-btn" type="button" onclick="fecharPessoaFisicaCrm2()">Voltar para a lista</button>
+          <button class="primary-btn" type="button" onclick="editarPessoaFisicaCrm2('${escapeAttr(pessoa.id)}')" ${!podeEditar ? 'disabled' : ''}>Editar</button>
+        </div>
+      </div>
+
+      ${pf.mensagem ? `<p class="admin-message" role="status">${escapeHtml(pf.mensagem)}</p>` : ''}
+
+      <div class="module-tabs crm2-detail-tabs" role="tablist" aria-label="Detalhes da pessoa física">
+        ${abas.map(([chave, rotulo]) => `<button type="button" role="tab" aria-selected="${aba === chave ? 'true' : 'false'}" class="${aba === chave ? 'active' : ''}" onclick="selecionarAbaDetalhePessoaFisicaCrm2('${chave}')">${escapeHtml(rotulo)}</button>`).join('')}
+      </div>
+
+      ${aba === 'dados' ? renderDadosPessoaFisicaCrm2(pessoa) : ''}
+      ${aba === 'timeline' ? renderTimelinePessoaFisicaCrm2(pessoa) : ''}
+      ${aba === 'empresas' ? renderEmpresasPessoaFisicaCrm2(pessoa) : ''}
+      ${aba === 'pedidos' ? renderPedidosPessoaFisicaCrm2(pessoa) : ''}
+    </section>
+  `;
+}
+
+function renderDadosPessoaFisicaCrm2(pessoa) {
+  const campos = [
+    ['Nome completo/nome social', pessoa.nome],
+    ['CPF', formatarCpfCrm2(pessoa.cpf)],
+    ['CEI/CAEPF', pessoa.cei || '—'],
+    ['Data de nascimento', formatarDataCrm2(pessoa.nascimento)],
+    ['Telefone', pessoa.telefone || '—'],
+    ['E-mail', pessoa.email || '—'],
+    ['Origem', pessoa.origem || '—'],
+    ['Parceiro de indicação', pessoa.parceiro || '—'],
+    ['Data de cadastro', formatarDataCrm2(pessoa.cadastroEm)],
+    ['Última atualização', formatarDataCrm2(pessoa.atualizadoEm)]
+  ];
+
+  return `
+    <div class="crm2-pf-detail-grid">
+      ${campos.map(([rotulo, valor]) => `<div class="crm2-pf-detail-field"><span>${escapeHtml(rotulo)}</span><strong>${escapeHtml(valor)}</strong></div>`).join('')}
+      <div class="crm2-pf-detail-field crm2-pf-detail-field-wide"><span>Observações</span><strong>${escapeHtml(pessoa.observacoes || '—')}</strong></div>
+    </div>
+    <div class="crm2-pf-attachments">
+      <div class="admin-panel-header"><div><h4>Anexos</h4><p>Arquivos mockados com validade visual.</p></div></div>
+      ${pessoa.anexos?.length ? `<div class="crm2-pf-attachment-list">${pessoa.anexos.map(anexo => `<div class="crm2-pf-attachment"><strong>${escapeHtml(anexo.nome)}</strong><span>Validade: ${escapeHtml(formatarDataCrm2(anexo.validade))} · ${escapeHtml(anexo.status || 'válido')}</span></div>`).join('')}</div>` : '<div class="quick-link-empty">Nenhum anexo cadastrado.</div>'}
+    </div>
+  `;
+}
+
+function renderTimelinePessoaFisicaCrm2(pessoa) {
+  return pessoa.timeline?.length ? `
+    <div class="crm2-pf-timeline">
+      ${pessoa.timeline.map(evento => `<article class="crm2-pf-timeline-item"><span class="crm2-pf-timeline-dot" aria-hidden="true"></span><div><strong>${escapeHtml(evento.descricao)}</strong><p>${escapeHtml(evento.tipo)} · ${escapeHtml(evento.usuario)} · ${escapeHtml(formatarDataCrm2(evento.data))}</p></div></article>`).join('')}
+    </div>
+  ` : '<div class="quick-link-empty">Nenhum evento registrado.</div>';
+}
+
+function renderEmpresasPessoaFisicaCrm2(pessoa) {
+  return pessoa.empresas?.length ? `
+    <div class="crm2-pf-related-list">${pessoa.empresas.map(empresa => `<article><strong>${escapeHtml(empresa.nome)}</strong><span>${escapeHtml(empresa.vinculo)} · ${escapeHtml(empresa.status)}</span></article>`).join('')}</div>
+  ` : '<div class="quick-link-empty">Nenhuma empresa vinculada.</div>';
+}
+
+function renderPedidosPessoaFisicaCrm2(pessoa) {
+  return pessoa.pedidos?.length ? `
+    <div class="crm2-pf-related-list">${pessoa.pedidos.map(pedido => `<article><strong>${escapeHtml(pedido.numero)} · ${escapeHtml(pedido.produto)}</strong><span>${escapeHtml(pedido.status)} · Vencimento: ${escapeHtml(formatarDataCrm2(pedido.vencimento))}</span></article>`).join('')}</div>
+  ` : '<div class="quick-link-empty">Nenhum pedido vinculado.</div>';
+}
+
+function renderFormularioPessoaFisicaCrm2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  const draft = pf.draft || {};
+  const valor = campo => escapeAttr(draft[campo] || '');
+  const erro = campo => pf.erros?.[campo] ? `<small class="crm2-pf-field-error">${escapeHtml(pf.erros[campo])}</small>` : '';
+  const titulo = pf.modoFormulario === 'edit' ? 'Editar pessoa física' : 'Nova pessoa física';
+
+  return `
+    <section class="hub-form-screen crm2-pf-form" aria-labelledby="crm2-pf-form-title">
+      <header class="hub-form-screen-header">
+        <div>
+          <span class="ar-crm-phase1-kicker">ROTA 201 · CRM 2.0</span>
+          <h2 id="crm2-pf-form-title">${titulo}</h2>
+          <p>Cadastro mockado. Nenhum dado será enviado ou salvo no backend.</p>
+        </div>
+        <button class="secondary-btn" type="button" onclick="fecharFormularioPessoaFisicaCrm2()">Cancelar</button>
+      </header>
+
+      ${pf.mensagem ? `<p class="admin-message hub-form-screen-notice" role="alert">${escapeHtml(pf.mensagem)}</p>` : ''}
+
+      <form class="hub-form-screen-content crm2-pf-form-grid" onsubmit="salvarPessoaFisicaCrm2(event)">
+        <label class="hub-form-span-2">Nome completo/nome social *<input class="config-input" name="nome" required maxlength="180" value="${valor('nome')}" autofocus>${erro('nome')}</label>
+        <label>CPF *<input class="config-input" name="cpf" inputmode="numeric" maxlength="14" required value="${escapeAttr(formatarCpfCrm2(draft.cpf))}" oninput="aplicarMascaraCpfCrm2(this)">${erro('cpf')}</label>
+        <label>CEI/CAEPF<input class="config-input" name="cei" maxlength="30" value="${valor('cei')}"></label>
+        <label>Data de nascimento<input class="config-input" type="date" name="nascimento" value="${valor('nascimento')}">${erro('nascimento')}</label>
+        <label>Telefone<input class="config-input" name="telefone" maxlength="20" value="${valor('telefone')}"></label>
+        <label>E-mail<input class="config-input" type="email" name="email" maxlength="180" value="${valor('email')}">${erro('email')}</label>
+        <label>Origem<select class="config-input" name="origem"><option value="">Selecione</option>${['Indicação', 'Site', 'Parceiro', 'Outro'].map(item => `<option value="${escapeAttr(item)}" ${draft.origem === item ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}</select></label>
+        <label>Parceiro de indicação<input class="config-input" name="parceiro" maxlength="180" value="${valor('parceiro')}"></label>
+        <label>Status<select class="config-input" name="status">${['cliente ativo', 'cliente inativo'].map(item => `<option value="${escapeAttr(item)}" ${draft.status === item ? 'selected' : ''}>${escapeHtml(item === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo')}</option>`).join('')}</select></label>
+        <label class="hub-form-span-2">Observações<textarea class="config-input" name="observacoes" rows="4" maxlength="1000">${escapeHtml(draft.observacoes || '')}</textarea></label>
+        <div class="crm2-pf-attachments-mock hub-form-span-2"><strong>Anexos</strong><span>O upload será habilitado após a homologação das telas.</span></div>
+        <footer class="hub-form-screen-actions hub-form-span-2"><button class="secondary-btn" type="button" onclick="fecharFormularioPessoaFisicaCrm2()">Cancelar</button><button class="primary-btn" type="submit">Salvar mock</button></footer>
+      </form>
+    </section>
+  `;
+}
+
+function atualizarBuscaPessoasFisicasCrm2(valor) {
+  state.ar.crm2.pessoasFisicas.busca = String(valor || '');
+  renderPainelAr();
+}
+
+function atualizarFiltroPessoasFisicasCrm2(tipo, valor) {
+  const pf = state.ar.crm2.pessoasFisicas;
+  if (tipo === 'status') pf.statusFiltro = String(valor || '');
+  if (tipo === 'origem') pf.origemFiltro = String(valor || '');
+  renderPainelAr();
+}
+
+function limparFiltrosPessoasFisicasCrm2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  pf.busca = '';
+  pf.statusFiltro = '';
+  pf.origemFiltro = '';
+  renderPainelAr();
+}
+
+function abrirPessoaFisicaCrm2(id) {
+  const pf = state.ar.crm2.pessoasFisicas;
+  if (!obterPessoaFisicaCrm2(id)) return;
+  pf.detalheId = id;
+  pf.abaDetalhe = 'dados';
+  pf.modoFormulario = '';
+  pf.mensagem = '';
+  renderPainelAr();
+}
+
+function fecharPessoaFisicaCrm2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  pf.detalheId = '';
+  pf.mensagem = '';
+  renderPainelAr();
+}
+
+function selecionarAbaDetalhePessoaFisicaCrm2(aba) {
+  state.ar.crm2.pessoasFisicas.abaDetalhe = aba;
+  renderPainelAr();
+}
+
+function abrirFormularioPessoaFisicaCrm2(modo = 'create', id = '') {
+  if (!pode('painel_ar.crm_2', 'update')) return;
+  const pf = state.ar.crm2.pessoasFisicas;
+  const pessoa = id ? obterPessoaFisicaCrm2(id) : null;
+  pf.modoFormulario = modo;
+  pf.detalheId = modo === 'edit' ? id : '';
+  pf.mensagem = '';
+  pf.erros = {};
+  pf.draft = pessoa ? { ...pessoa } : { status: 'cliente ativo' };
+  renderPainelAr();
+}
+
+function editarPessoaFisicaCrm2(id) {
+  abrirFormularioPessoaFisicaCrm2('edit', id);
+}
+
+function fecharFormularioPessoaFisicaCrm2() {
+  const pf = state.ar.crm2.pessoasFisicas;
+  pf.modoFormulario = '';
+  pf.draft = {};
+  pf.erros = {};
+  pf.mensagem = '';
+  renderPainelAr();
+}
+
+function aplicarMascaraCpfCrm2(input) {
+  input.value = formatarCpfCrm2(input.value);
+}
+
+function salvarPessoaFisicaCrm2(event) {
+  event.preventDefault();
+  if (!pode('painel_ar.crm_2', 'update')) return;
+
+  const pf = state.ar.crm2.pessoasFisicas;
+  const dados = Object.fromEntries(new FormData(event.currentTarget).entries());
+  const cpf = String(dados.cpf || '').replace(/\D/g, '');
+  const erros = {};
+  if (!dados.nome?.trim()) erros.nome = 'Informe o nome completo ou nome social.';
+  if (cpf.length !== 11) erros.cpf = 'Informe um CPF válido com 11 dígitos.';
+  const duplicado = pf.items.some(item => item.cpf === cpf && (pf.modoFormulario !== 'edit' || item.id !== pf.detalheId));
+  if (duplicado) erros.cpf = 'Já existe uma pessoa física mockada com este CPF.';
+  if (Object.keys(erros).length) {
+    pf.erros = erros;
+    pf.draft = { ...dados, cpf };
+    pf.mensagem = 'Revise os campos destacados.';
+    renderPainelAr();
+    return;
+  }
+
+  const agora = new Date().toISOString();
+  if (pf.modoFormulario === 'edit') {
+    const pessoa = obterPessoaFisicaCrm2(pf.detalheId);
+    Object.assign(pessoa, { ...dados, cpf, atualizadoEm: agora });
+    pessoa.timeline = [...(pessoa.timeline || []), { data: agora, usuario: 'Usuário atual', descricao: 'Dados atualizados.', tipo: 'Atualização' }];
+    pf.mensagem = 'Pessoa física atualizada no estado mockado. Nenhum dado foi persistido.';
+  } else {
+    const id = `pf-mock-${Date.now()}`;
+    pf.items.unshift({ ...dados, id, cpf, cadastroEm: agora, atualizadoEm: agora, anexos: [], empresas: [], pedidos: [], timeline: [{ data: agora, usuario: 'Usuário atual', descricao: 'Cadastro criado.', tipo: 'Cadastro' }] });
+    pf.detalheId = id;
+    pf.mensagem = 'Pessoa física criada no estado mockado. Nenhum dado foi persistido.';
+  }
+  pf.modoFormulario = '';
+  pf.erros = {};
+  pf.draft = {};
+  pf.abaDetalhe = 'dados';
+  renderPainelAr();
+}
+
+function acionarMockCrm2(acao) {
+  if (!pode('painel_ar.crm_2', 'update')) {
+    state.ar.crm2.mensagem = 'Seu usuário não possui permissão para executar ações no CRM 2.0.';
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.crm2.mensagem = acao === 'reset'
+    ? 'Estado mockado limpo. Nenhum dado foi salvo.'
+    : 'Validação mockada iniciada. Nenhum dado foi salvo e nenhuma integração foi acionada.';
+  renderPainelAr();
 }
 
 function formatarDataHoraCrmAr(valor = '') {
@@ -9454,7 +10056,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderPainelProdutoMvpAr()}
+    <div class="ar-flow-card-body">
+      ${renderPainelProdutoMvpAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-partner">
@@ -9466,7 +10070,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderPainelParceiroMvpAr()}
+    <div class="ar-flow-card-body">
+      ${renderPainelParceiroMvpAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-budget">
@@ -9478,7 +10084,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderOrcamentoAr()}
+    <div class="ar-flow-card-body">
+      ${renderOrcamentoAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-links">
@@ -9489,10 +10097,11 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderResultadoAr()}
+    <div class="ar-flow-card-body">
+      ${renderResultadoAr()}
+    </div>
   </section>
 </div>
-  </div>
     </section>
   `;
 }
@@ -9676,13 +10285,14 @@ function renderProdutoSelecionadoResumoAr(produto) {
 function alterarBuscaProdutoAr(valor) {
   const tinhaProdutoSelecionado = Boolean(state.ar.produtoId);
 
+  invalidarGeracaoLinksAr();
   state.ar.produtoBusca = valor;
   state.ar.produtoId = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
 
   if (tinhaProdutoSelecionado) {
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     requestAnimationFrame(() => {
       const input = document.getElementById('ar_produto_busca');
@@ -9698,7 +10308,6 @@ function alterarBuscaProdutoAr(valor) {
     return;
   }
 
-  atualizarEstadoBotaoGerarAr();
   atualizarSugestoesProdutoUnicoDomAr();
 }
 function atualizarSugestoesProdutoUnicoDomAr() {
@@ -9766,6 +10375,7 @@ function selecionarProdutoCompletoAr(id) {
 
   if (!produto) return;
 
+  invalidarGeracaoLinksAr();
   state.ar.produtoId = id;
   state.ar.produtoBusca = [
     produto.descricao_comercial || produto.produto,
@@ -9776,7 +10386,7 @@ function selecionarProdutoCompletoAr(id) {
   state.ar.resultado = null;
   state.ar.alertas = [];
 
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
 }
 
@@ -10651,16 +11261,6 @@ function atualizarSugestoesParceiroDomAr() {
     : '<p>Nenhum parceiro encontrado.</p>';
 }
 
-function atualizarEstadoBotaoGerarAr() {
-  const botao = document.getElementById('ar_gerar_btn');
-
-  if (!botao) {
-    return;
-  }
-
-  botao.disabled = state.ar.gerando || !state.ar.produtoId || !state.ar.parceiroId;
-}
-
 function renderOpcoesParceirosAr() {
   const parceiros = parceirosFiltradosAr();
 
@@ -11109,7 +11709,6 @@ function alterarFiltroProdutoAr(chave, valor) {
   state.ar.alertas = [];
 
   atualizarSugestoesProdutoDomAr(chave);
-  atualizarEstadoBotaoGerarAr();
 }
 
 function ativarCampoProdutoAr(chave) {
@@ -11135,24 +11734,24 @@ function selecionarSugestaoProdutoAr(chave, valor) {
       box.hidden = false;
       box.innerHTML = '<p>Complete os outros campos para identificar o produto.</p>';
     }
-    atualizarEstadoBotaoGerarAr();
     return;
   }
 
   state.ar.campoProdutoAtivo = '';
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function alterarBuscaParceiroAr(valor) {
   const tinhaParceiroSelecionado = Boolean(state.ar.parceiroId || state.ar.resultado);
 
+  invalidarGeracaoLinksAr();
   state.ar.parceiroBusca = valor;
   state.ar.parceiroId = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
 
   if (tinhaParceiroSelecionado) {
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     requestAnimationFrame(() => {
       const input = document.getElementById('ar_parceiro_busca');
@@ -11168,18 +11767,17 @@ function alterarBuscaParceiroAr(valor) {
     return;
   }
 
-  atualizarEstadoBotaoGerarAr();
   atualizarSugestoesParceiroDomAr();
 }
 
 function confirmarParceiroDigitadoAr(valor) {
   selecionarParceiroPorTextoAr(valor);
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function confirmarProdutoDigitadoAr() {
   selecionarProdutoPorFiltrosAr();
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function selecionarParceiroPorTextoAr(valor) {
@@ -11219,21 +11817,49 @@ function agendarRenderPainelAr() {
   }, 220);
 }
 
+function atualizarGeradorLinksDomAr() {
+  const fluxo = document.querySelector('.ar-flow-grid');
+
+  if (!fluxo) {
+    renderPainelAr();
+    return;
+  }
+
+  const produto = fluxo.querySelector('.ar-flow-product .ar-flow-card-body');
+  const parceiro = fluxo.querySelector('.ar-flow-partner .ar-flow-card-body');
+  const resumo = fluxo.querySelector('.ar-flow-budget .ar-flow-card-body');
+  const links = fluxo.querySelector('.ar-flow-links .ar-flow-card-body');
+  const acaoLinks = fluxo.querySelector('.ar-links-header-action');
+
+  if (!produto || !parceiro || !resumo || !links || !acaoLinks) {
+    renderPainelAr();
+    return;
+  }
+
+  produto.innerHTML = renderPainelProdutoMvpAr();
+  parceiro.innerHTML = renderPainelParceiroMvpAr();
+  resumo.innerHTML = renderOrcamentoAr();
+  acaoLinks.innerHTML = renderAcaoGerarLinksAr();
+  links.innerHTML = renderResultadoAr();
+}
+
 function selecionarProdutoAr(id) {
+  invalidarGeracaoLinksAr();
   state.ar.produtoId = id;
   state.ar.resultado = null;
   state.ar.alertas = [];
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
 }
 
 function selecionarParceiroAr(id) {
+  invalidarGeracaoLinksAr();
   state.ar.parceiroId = id;
   const parceiro = obterParceiroSelecionadoAr();
   state.ar.parceiroBusca = parceiro ? (parceiro.nome_completo || parceiro.nome) : state.ar.parceiroBusca;
   state.ar.resultado = null;
   state.ar.alertas = [];
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
 }
 
@@ -11242,6 +11868,10 @@ function selecionarAbaAr(aba) {
     state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
     renderPainelAr();
     return;
+  }
+
+  if (state.ar.aba === 'gerar' && aba !== 'gerar') {
+    resetarEstadoGerarLinksAr();
   }
 
   state.ar.aba = aba;
@@ -11722,15 +12352,26 @@ async function gerarLinksAr() {
     return;
   }
 
+  const geracaoLinksToken = state.ar.geracaoLinksToken;
+  const produtoId = state.ar.produtoId;
+  const parceiroId = state.ar.parceiroId;
+  const requisicaoAindaAtual = () => (
+    state.ar.geracaoLinksToken === geracaoLinksToken
+    && state.ar.produtoId === produtoId
+    && state.ar.parceiroId === parceiroId
+  );
+
   try {
     state.ar.message = '';
     state.ar.gerando = true;
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     const response = await chamarApi('generateArLinks', {
-      produto_id: state.ar.produtoId,
-      parceiro_id: state.ar.parceiroId
+      produto_id: produtoId,
+      parceiro_id: parceiroId
     });
+
+    if (!requisicaoAindaAtual()) return;
 
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível gerar os links.'));
@@ -11740,26 +12381,14 @@ async function gerarLinksAr() {
     state.ar.resultado = response.data;
     state.ar.alertas = response.data.alertas || [];
     await esperar(500);
-    renderPainelAr();
+    if (!requisicaoAindaAtual()) return;
+    atualizarGeradorLinksDomAr();
   } catch (erro) {
+    if (!requisicaoAindaAtual()) return;
     state.ar.gerando = false;
     state.ar.resultado = null;
     state.ar.message = erro.message || 'Erro ao gerar links.';
-    renderPainelAr();
-  }
-}
-
-function atualizarBotaoAr(texto, disabled, classe) {
-  const botao = document.getElementById('ar_gerar_btn');
-
-  if (!botao) return;
-
-  botao.textContent = texto;
-  botao.disabled = disabled;
-  botao.classList.remove('is-saving', 'is-saved');
-
-  if (classe) {
-    botao.classList.add(classe);
+    atualizarGeradorLinksDomAr();
   }
 }
 
@@ -12273,6 +12902,8 @@ const HUB_BREADCRUMB_ADMIN_ROUTES = {
 };
 
 function obterLabelBreadcrumbHub(chave = '') {
+  if (String(chave) === '200') return 'CRM 2.0';
+  if (String(chave) === '201') return 'Pessoas físicas';
   return HUB_BREADCRUMB_LABELS[chave] || String(chave || '')
     .split('-')
     .filter(Boolean)
@@ -12390,7 +13021,15 @@ function sincronizarContextoArPelaRota() {
   const { modulo, principal, secundaria } = obterContextoRotaHub();
   if (modulo !== 'painel-ar') return;
 
-  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm'];
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf'];
+  if (principal === '200') {
+    state.ar.aba = 'crm2';
+    return;
+  }
+  if (principal === '201') {
+    state.ar.aba = 'crm2-pf';
+    return;
+  }
   if (principal && abasValidas.includes(principal)) {
     state.ar.aba = principal;
   }
@@ -13364,6 +14003,7 @@ const renderPainelArHubPhase1 = function() {
               ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
               ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
               ${podeAcessarAbaAr('crm') ? `<button class="${state.ar.aba === 'crm' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm')">CRM</button>` : ''}
+              ${podeAcessarAbaAr('crm2') ? `<button class="${['crm2', 'crm2-pf'].includes(state.ar.aba) ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm2')">CRM 2.0</button>` : ''}
             </div>
             ${podeGerenciarParceiros ? `<button class="secondary-btn ar-manage-partners-btn" type="button" onclick="navegarParaModulo('administracao', 'parceiros-indicacao')">Gerenciar parceiros</button>` : ''}
           </div>
@@ -13436,6 +14076,22 @@ const selecionarAbaArHubPhase2 = function(aba) {
     return;
   }
 
+  if (state.ar.aba === 'gerar' && aba !== 'gerar') {
+    resetarEstadoGerarLinksAr();
+  }
+
+  if (aba === 'crm2') {
+    const caminho = `${montarCaminhoHub('painel-ar').replace(/\/+$/g, '')}/200`;
+    const url = new URL(window.location.href);
+    url.pathname = caminho;
+    url.hash = '';
+    window.history.pushState({}, '', url);
+    state.ar.aba = 'crm2';
+    state.ar.crm2.mensagem = '';
+    renderPainelAr();
+    return;
+  }
+
   const hash = aba === 'validacoes'
     ? `validacoes/${state.ar.validacoes.aba || 'consultar'}`
     : aba;
@@ -13488,10 +14144,15 @@ const abrirCentralSenhasHubPhase2 = async function() {
 };
 
 const abrirPainelArHubPhase2 = async function() {
+  const contextoRota = obterContextoRotaHub();
   sincronizarContextoArPelaRota();
-  state.ar.message = '';
-  state.ar.resultado = null;
-  state.ar.alertas = [];
+  const abaDaRota = contextoRota.modulo === 'painel-ar'
+    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf'].includes(contextoRota.principal)
+    ? state.ar.aba
+    : 'inicio';
+
+  resetarEstadoGerarLinksAr();
+  state.ar.aba = abaDaRota;
   await carregarPainelAr();
 
   if (state.ar.aba === 'crm' && !state.ar.crm.carregado) {

@@ -6,6 +6,8 @@ const ROUTE_ALIASES = {
 
   // Nova organização planejada do menu — aliases seguros para rotas legadas/existentes.
   'operacoes/ar-transmares': 'painel-ar',
+  'operacoes/ar-transmares/200': 'painel-ar/200',
+  'operacoes/ar-transmares/201': 'painel-ar/201',
   'admin/sistema/corretora': 'configuracoes/corretora'
 };
 

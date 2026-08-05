@@ -89,6 +89,7 @@ export function montarPermissoesLegadas(usuario) {
     'painel_ar.gerar_links',
     'painel_ar.produtos',
     'painel_ar.validacoes',
+    'painel_ar.crm_2',
     'perfil'
   ];
   const modulos = gestor
@@ -118,7 +119,9 @@ export function montarPermissoesLegadas(usuario) {
       { recurso_chave: 'configuracoes.corretora', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'configuracoes.identidade_visual', acao: 'update', permitido: true, origem: 'legacy' },
       { recurso_chave: 'central_senhas', acao: 'view_secret', permitido: true, origem: 'legacy' },
-      { recurso_chave: 'painel_ar.produtos', acao: 'update', permitido: true, origem: 'legacy' }
+      { recurso_chave: 'painel_ar.produtos', acao: 'update', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'painel_ar.crm_2', acao: 'update', permitido: true, origem: 'legacy' },
+      { recurso_chave: 'painel_ar.crm_2', acao: 'delete', permitido: true, origem: 'legacy' }
     );
   }
 
