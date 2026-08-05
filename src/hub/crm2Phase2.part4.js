@@ -52,10 +52,13 @@ Object.assign(window, {
     event?.stopPropagation();
     const menu = document.getElementById(trigger?.getAttribute('aria-controls') || '');
     if (!menu || trigger.disabled) return;
-    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden])').forEach((openMenu) => {
+    document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden]), body > .hub-filter-dropdown-menu[data-dropdown-input-id]:not([hidden])').forEach((openMenu) => {
       if (openMenu !== menu) {
         openMenu.hidden = true;
-        document.querySelector(`[aria-controls="${openMenu.id}"]`)?.setAttribute('aria-expanded', 'false');
+        const openTrigger = document.getElementById(openMenu.dataset.dropdownInputId || '');
+        openTrigger?.setAttribute('aria-expanded', 'false');
+        const openCombo = openTrigger?.closest('.crm2-pf-select');
+        if (openCombo && openMenu.parentElement === document.body) openCombo.appendChild(openMenu);
       }
     });
     const opening = menu.hidden;
