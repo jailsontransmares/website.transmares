@@ -1,0 +1,299 @@
+.crm2-phase1-roadmap-item.is-available .crm2-phase1-roadmap-status {
+  color: var(--color-success, #067647);
+}
+
+.crm2-pessoas-filter-search {
+  grid-column: span 2;
+}
+
+.crm2-pessoas-state {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 220px;
+  padding: 28px;
+  text-align: center;
+}
+
+.crm2-pessoas-state.is-compact {
+  min-height: 120px;
+}
+
+.crm2-pessoas-state.is-error {
+  background: color-mix(in srgb, var(--color-danger, #b42318) 7%, var(--surface-glass-strong));
+  border-color: color-mix(in srgb, var(--color-danger, #b42318) 30%, var(--borda));
+}
+
+.crm2-pessoas-state strong {
+  color: var(--color-navy);
+}
+
+.crm2-pessoas-state span {
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+
+.crm2-pessoas-pagination {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.crm2-pessoas-pagination > div,
+.crm2-pessoas-row-actions,
+.crm2-pessoas-header-actions,
+.crm2-pf-attachment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm2-pf-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.crm2-pf-summary-grid article {
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 5px;
+  min-height: 86px;
+  padding: 13px;
+}
+
+.crm2-pf-summary-grid span,
+.crm2-pf-attachment-add label > span,
+.crm2-pf-form-attachment-fields label > span,
+.crm2-pf-timeline-composer label > span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.crm2-pf-summary-grid strong {
+  color: var(--color-navy);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.crm2-pf-attachment-add,
+.crm2-pf-form-attachment-fields {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, .7fr) auto;
+}
+
+.crm2-pf-attachment-add label,
+.crm2-pf-form-attachment-fields label,
+.crm2-pf-timeline-composer label,
+.crm2-pf-cpf-search label {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-pf-attachment {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto !important;
+}
+
+.crm2-pf-attachment-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.crm2-pf-attachment-status {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 5px 9px;
+  text-transform: uppercase;
+}
+
+.crm2-pf-attachment-status.is-valido {
+  background: color-mix(in srgb, var(--color-success, #067647) 12%, transparent);
+  color: var(--color-success, #067647);
+}
+
+.crm2-pf-attachment-status.is-vencendo {
+  background: color-mix(in srgb, var(--color-warning, #b54708) 12%, transparent);
+  color: var(--color-warning, #b54708);
+}
+
+.crm2-pf-attachment-status.is-vencido {
+  background: color-mix(in srgb, var(--color-danger, #b42318) 12%, transparent);
+  color: var(--color-danger, #b42318);
+}
+
+.crm2-pf-attachment-status.is-sem-validade {
+  background: color-mix(in srgb, var(--texto-suave) 10%, transparent);
+  color: var(--texto-suave);
+}
+
+.crm2-pf-attachment-actions .secondary-btn,
+.crm2-pf-replace-label {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 31px;
+  padding: 5px 9px;
+}
+
+.crm2-visually-hidden-input {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  width: 1px;
+}
+
+.crm2-pf-timeline-composer {
+  align-items: end;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.crm2-pf-timeline-item p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+
+.crm2-pf-related-list article {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.crm2-pf-related-list article > div {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-pf-cpf-check {
+  max-width: 760px;
+}
+
+.crm2-pf-cpf-search {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(240px, 1fr) auto;
+}
+
+.crm2-pf-cpf-result {
+  align-items: flex-start;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 8px;
+  margin: 0 22px 22px;
+  padding: 16px;
+}
+
+.crm2-pf-cpf-result.is-invalid,
+.crm2-pf-cpf-result.is-found {
+  border-color: color-mix(in srgb, var(--color-danger, #b42318) 30%, var(--borda));
+}
+
+.crm2-pf-cpf-result.is-not-found {
+  border-color: color-mix(in srgb, var(--color-success, #067647) 30%, var(--borda));
+}
+
+.crm2-pf-form-grid label.is-changed {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--borda));
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.crm2-pf-form-grid label.is-changed::after {
+  color: var(--color-primary);
+  content: 'Campo alterado';
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.crm2-pf-status-automatico small,
+.crm2-pf-form-existing-attachments span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.crm2-pf-attachments-mock {
+  margin: 0;
+}
+
+.crm2-pf-attachments-mock legend {
+  color: var(--color-navy);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 5px;
+}
+
+.crm2-pf-attachments-mock p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.crm2-pf-form-existing-attachments {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.crm2-field-error {
+  color: var(--color-danger, #b42318);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .crm2-pessoas-filter-search {
+    grid-column: auto;
+  }
+
+  .crm2-pessoas-pagination,
+  .crm2-pf-timeline-composer {
+    align-items: stretch;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-pf-attachment-add,
+  .crm2-pf-form-attachment-fields,
+  .crm2-pf-cpf-search,
+  .crm2-pf-attachment,
+  .crm2-pf-related-list article {
+    align-items: stretch;
+    grid-template-columns: 1fr !important;
+  }
+
+  .crm2-pf-attachment-status {
+    justify-self: start;
+  }
+}
