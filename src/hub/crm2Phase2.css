@@ -510,7 +510,19 @@
   align-items: end;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 170px);
+  min-width: 0;
+}
+
+.crm2-pf-attachment-draft-row label {
+  min-width: 0;
+}
+
+.crm2-pf-attachment-draft-row .config-input {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
 }
 
 .crm2-pf-attachment-name-input {

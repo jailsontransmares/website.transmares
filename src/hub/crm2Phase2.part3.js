@@ -74,7 +74,7 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
         <div class="crm2-pf-attachment-editor" role="group" aria-label="Configurar anexo selecionado">
           ${crm2PfState.attachmentDraft.map((draft, index) => `<div class="crm2-pf-attachment-draft-row">
             <label><span>Nome do arquivo</span><span class="crm2-pf-attachment-name-input"><input class="config-input" type="text" value="${escapeAttrCrm2(draft.nome)}" oninput="crm2PfUpdateAttachmentDraft(${index}, 'nome', this.value)" ${index === 0 ? 'autofocus' : ''}><b aria-hidden="true">${escapeHtmlCrm2(draft.extensao)}</b></span></label>
-            <label><span>Validade opcional</span><input class="config-input" type="date" value="${escapeAttrCrm2(draft.validade)}" onchange="crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)"></label>
+            <label><span>Fim de validade</span><input class="config-input" type="date" value="${escapeAttrCrm2(draft.validade)}" onchange="crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)"></label>
           </div>`).join('')}
           <div class="crm2-pf-attachment-editor-actions">
             <button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button>
