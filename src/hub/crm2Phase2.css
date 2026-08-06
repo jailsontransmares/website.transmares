@@ -452,6 +452,8 @@
 
 .crm2-pf-attachments-header {
   align-items: center;
+  flex-direction: row;
+  justify-content: flex-start;
 }
 
 .crm2-pf-attachments-content {
@@ -584,6 +586,7 @@
 }
 
 .crm2-pf-form-attachment-row strong {
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -617,6 +620,12 @@
 }
 
 @media (max-width: 800px) {
+  .crm2-pf-attachments-header {
+    flex-direction: row;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
   .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-personal-fields {
     grid-template-columns: 1fr;
   }
