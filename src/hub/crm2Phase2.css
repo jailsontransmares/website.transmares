@@ -347,7 +347,7 @@
   height: 32px;
   justify-content: center;
   padding: 0;
-  position: fixed;
+  position: sticky;
   right: 5px;
   top: 50%;
   transform: translateY(-50%);
@@ -625,11 +625,7 @@
   position: absolute;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 1100;
-}
-
-.crm2-pf-form {
-  padding-bottom: 88px;
+  z-index: 3;
 }
 
 @media (max-width: 700px) {
