@@ -833,7 +833,7 @@ function renderPersonFormCrm2() {
         </div>
 
         <div class="hub-form-screen-actions crm2-pf-form-footer">
-          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar</button>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
