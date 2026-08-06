@@ -289,6 +289,11 @@
   overflow: visible;
 }
 
+.crm2-pf-form {
+  max-width: none;
+  width: 100%;
+}
+
 .crm2-pf-cpf-verification {
   margin: 0;
 }
@@ -416,6 +421,7 @@
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
 }
 
 .crm2-pf-notes-attachments-grid > .hub-form-section {
