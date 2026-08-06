@@ -1320,13 +1320,18 @@ function montarCaminhoHub(idModulo = '') {
 
 function navegarParaRota(caminho) {
   if (window.location.pathname !== caminho && window.crm2PfHasUnsavedChanges?.()) {
-    if (!window.crm2PfRequestLeave?.(() => navegarParaRota(caminho))) return;
+    if (!protegerNavegacaoFormularioPfHub(() => navegarParaRota(caminho))) return;
   }
   if (window.location.pathname !== caminho) {
     window.history.pushState({}, '', caminho);
   }
 
   return renderizarRotaAtual();
+}
+
+function protegerNavegacaoFormularioPfHub(onConfirm) {
+  if (!window.crm2PfHasUnsavedChanges?.()) return true;
+  return window.crm2PfRequestLeave?.(onConfirm) === true;
 }
 
 function navegarHome() {
@@ -1345,9 +1350,6 @@ async function renderizarRotaAtual() {
 }
 
 function navegarParaModulo(idModulo) {
-  if (window.crm2PfHasUnsavedChanges?.()) {
-    if (!window.crm2PfRequestLeave?.(() => navegarParaModulo(idModulo))) return;
-  }
   return navegarParaRota(montarCaminhoHub(idModulo));
 }
 
@@ -11560,8 +11562,8 @@ function selecionarAbaAr(aba) {
     return;
   }
 
-  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba && window.crm2PfHasUnsavedChanges?.()) {
-    if (!window.crm2PfRequestLeave?.(() => selecionarAbaAr(aba))) return;
+  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba) {
+    if (!protegerNavegacaoFormularioPfHub(() => selecionarAbaAr(aba))) return;
   }
 
   if (state.ar.aba === 'gerar' && aba !== 'gerar') {
