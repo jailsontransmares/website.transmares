@@ -419,9 +419,17 @@
 }
 
 .crm2-pf-notes-attachments-grid > .hub-form-section {
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
   box-sizing: border-box;
   min-width: 0;
   min-height: 100%;
+  padding: 14px;
+}
+
+.crm2-pf-notes-block > .hub-form-grid {
+  grid-template-columns: 1fr;
 }
 
 .crm2-pf-notes-block > .hub-form-grid,
