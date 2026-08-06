@@ -13772,6 +13772,10 @@ const selecionarAbaArHubPhase2 = function(aba) {
     return;
   }
 
+  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba) {
+    if (!protegerNavegacaoFormularioPfHub(() => selecionarAbaArHubPhase2(aba))) return;
+  }
+
   if (state.ar.aba === 'gerar' && aba !== 'gerar') {
     resetarEstadoGerarLinksAr();
   }
