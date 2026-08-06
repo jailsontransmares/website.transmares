@@ -219,7 +219,7 @@ function maskCpfCrm2(value = '') {
     .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
 }
 
-function maskPhoneCrm2(value = '') {
+function maskNationalPhoneCrm2(value = '') {
   const digits = String(value).replace(/\D/g, '').slice(0, 11);
   if (digits.length <= 10) {
     return digits
@@ -229,6 +229,16 @@ function maskPhoneCrm2(value = '') {
   return digits
     .replace(/^(\d{2})(\d)/, '($1) $2')
     .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function maskPhoneCrm2(value = '') {
+  const raw = String(value || '').trim();
+  const international = raw.startsWith('+');
+  const digits = raw.replace(/\D/g, '').slice(0, international ? 15 : 11);
+  if (!international) return maskNationalPhoneCrm2(digits);
+  if (digits.startsWith('55')) return `+55 ${maskNationalPhoneCrm2(digits.slice(2))}`.trim();
+  if (digits.startsWith('1')) return `+1 ${digits.length > 1 ? `(${digits.slice(1, 4)}${digits.length >= 4 ? ') ' : ''}${digits.slice(4, 7)}${digits.length >= 7 ? '-' : ''}${digits.slice(7)}` : ''}`.trim();
+  return `+${digits}`;
 }
 
 function validateCpfCrm2(value = '') {
@@ -689,7 +699,7 @@ function renderCpfVerificationCrm2(values = {}) {
         ${showPersonalFields ? formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true, formId: 'crm2-pf-form' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date', formId: 'crm2-pf-form' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form', className: 'crm2-pf-grid-cei' }) : ''}
-        ${showPersonalFields ? formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"', formId: 'crm2-pf-form', className: 'crm2-pf-grid-phone crm2-pf-grid-row-2' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', formId: 'crm2-pf-form', className: 'crm2-pf-grid-phone crm2-pf-grid-row-2' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', formId: 'crm2-pf-form', className: 'crm2-pf-grid-email crm2-pf-grid-row-2' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], formId: 'crm2-pf-form', className: 'crm2-pf-grid-origin' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), formId: 'crm2-pf-form', className: 'crm2-pf-grid-partner' }) : ''}
@@ -806,7 +816,7 @@ function renderPersonFormCrm2() {
         ${editing ? `<section class="hub-form-section" aria-labelledby="crm2-pf-contact-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-contact-title">Contato</strong></div>
           <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="15" onkeyup="crm2PfMaskPhone(this)"' })}
+            ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}

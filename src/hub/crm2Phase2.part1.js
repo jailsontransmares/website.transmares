@@ -216,7 +216,7 @@ function maskCpfCrm2(value = '') {
     .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
 }
 
-function maskPhoneCrm2(value = '') {
+function maskNationalPhoneCrm2(value = '') {
   const digits = String(value).replace(/\D/g, '').slice(0, 11);
   if (digits.length <= 10) {
     return digits
@@ -226,6 +226,16 @@ function maskPhoneCrm2(value = '') {
   return digits
     .replace(/^(\d{2})(\d)/, '($1) $2')
     .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function maskPhoneCrm2(value = '') {
+  const raw = String(value || '').trim();
+  const international = raw.startsWith('+');
+  const digits = raw.replace(/\D/g, '').slice(0, international ? 15 : 11);
+  if (!international) return maskNationalPhoneCrm2(digits);
+  if (digits.startsWith('55')) return `+55 ${maskNationalPhoneCrm2(digits.slice(2))}`.trim();
+  if (digits.startsWith('1')) return `+1 ${digits.length > 1 ? `(${digits.slice(1, 4)}${digits.length >= 4 ? ') ' : ''}${digits.slice(4, 7)}${digits.length >= 7 ? '-' : ''}${digits.slice(7)}` : ''}`.trim();
+  return `+${digits}`;
 }
 
 function validateCpfCrm2(value = '') {
