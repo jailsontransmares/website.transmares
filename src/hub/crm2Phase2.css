@@ -441,7 +441,7 @@
 
 .crm2-pf-notes-block textarea {
   height: 100%;
-  min-height: 120px;
+  min-height: 80px;
   resize: vertical;
 }
 
@@ -477,7 +477,7 @@
   flex-direction: column;
   gap: 6px;
   justify-content: center;
-  min-height: 120px;
+  min-height: 80px;
   padding: 16px;
   text-align: center;
   transition: border-color 160ms ease, background-color 160ms ease;
@@ -660,11 +660,11 @@
   }
 
   .crm2-pf-notes-block textarea {
-    min-height: 100px;
+    min-height: 80px;
   }
 
   .crm2-pf-attachment-dropzone {
-    min-height: 100px;
+    min-height: 80px;
   }
 
   .crm2-pf-attachment-draft-row {
