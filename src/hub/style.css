@@ -3580,45 +3580,6 @@ body.dark .admin-partners-actions-menu {
   font-size: 12px;
 }
 
-.crm2-pf-timeline {
-  display: grid;
-  gap: 0;
-  padding: 8px 4px;
-}
-
-.crm2-pf-timeline-item {
-  border-left: 2px solid color-mix(in srgb, var(--color-primary) 22%, var(--borda));
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 12px minmax(0, 1fr);
-  margin-left: 8px;
-  min-height: 76px;
-  padding: 0 0 20px 18px;
-  position: relative;
-}
-
-.crm2-pf-timeline-dot {
-  background: var(--color-primary);
-  border: 3px solid var(--surface);
-  border-radius: 50%;
-  height: 12px;
-  left: -7px;
-  position: absolute;
-  top: 1px;
-  width: 12px;
-}
-
-.crm2-pf-timeline-item strong {
-  color: var(--color-navy);
-  font-size: 14px;
-}
-
-.crm2-pf-timeline-item p {
-  color: var(--texto-suave);
-  font-size: 12px;
-  margin: 5px 0 0;
-}
-
 .crm2-pf-form {
   max-width: 1080px;
 }

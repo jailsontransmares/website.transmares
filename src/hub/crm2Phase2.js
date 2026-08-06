@@ -39,8 +39,7 @@ const CRM2_PF_INITIAL_ITEMS = [
     ],
     timeline: [
       { data: '2026-07-18T10:30:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' },
-      { data: '2026-08-03T15:42:00', usuario: 'Equipe AR', descricao: 'Dados atualizados.', tipo: 'Atualização' },
-      { data: '2026-08-04T09:20:00', usuario: 'Equipe AR', descricao: 'Observação interna adicionada: cliente confirmou disponibilidade para renovação.', tipo: 'Observação interna' }
+      { data: '2026-08-03T15:42:00', usuario: 'Equipe AR', descricao: 'Dados atualizados. Observações — De: Cliente em prospecção.; Para: Cliente com acompanhamento de renovação.', tipo: 'Atualização' }
     ]
   },
   {
@@ -118,9 +117,11 @@ const crm2PfState = {
   detailId: '',
   detailTab: 'dados',
   formMode: '',
+  inlineEditing: false,
   draft: {},
   draftAttachments: [],
   attachmentDraft: [],
+  attachmentConfirm: null,
   errors: {},
   changedFields: [],
   cpfGate: { value: '', status: '', personId: '', message: '' },
@@ -128,10 +129,20 @@ const crm2PfState = {
 };
 
 let crm2PfPendingLeaveAction = null;
+let crm2PfPendingConfirmAction = null;
+let crm2PfToastTimer = null;
 
 function crm2PfHasUnsavedChangesCrm2() {
-  return ['create', 'edit'].includes(crm2PfState.formMode)
-    && ['new', 'edit'].includes(currentPfRouteCrm2().view);
+  const route = currentPfRouteCrm2();
+  if (crm2PfState.formMode === 'create') return route.view === 'new';
+  if (crm2PfState.formMode === 'edit') {
+    return crm2PfState.inlineEditing
+      && route.view === 'detail'
+      && (crm2PfState.changedFields.length > 0
+        || crm2PfState.draftAttachments.length > 0
+        || crm2PfState.attachmentDraft.length > 0);
+  }
+  return false;
 }
 
 function crm2PfRequestLeaveCrm2(onConfirm) {
@@ -149,6 +160,24 @@ function crm2PfRequestLeaveCrm2(onConfirm) {
         </div>
       </section>
     </div>`);
+  return false;
+}
+
+function crm2PfRequestConfirmationCrm2({ title, description, confirmLabel = 'Confirmar', onConfirm }) {
+  if (document.querySelector('.crm2-pf-confirm-backdrop')) return false;
+  crm2PfPendingConfirmAction = onConfirm;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop crm2-pf-confirm-backdrop" role="presentation">
+      <section class="small-modal crm2-pf-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="crm2-pf-confirm-title" aria-describedby="crm2-pf-confirm-description">
+        <div class="small-modal-header"><h3 id="crm2-pf-confirm-title">${escapeHtmlCrm2(title)}</h3></div>
+        <div class="small-modal-body"><p id="crm2-pf-confirm-description">${escapeHtmlCrm2(description)}</p></div>
+        <div class="small-modal-actions">
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelConfirmation()">Cancelar</button>
+          <button class="save-btn" type="button" onclick="crm2PfConfirmConfirmation()">${escapeHtmlCrm2(confirmLabel)}</button>
+        </div>
+      </section>
+    </div>`);
+  document.querySelector('.crm2-pf-confirm-modal button')?.focus();
   return false;
 }
 
@@ -389,19 +418,16 @@ function renderPeopleListCrm2() {
 
   return `
     <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
-      <div class="admin-panel-header">
+      <div class="admin-panel-header crm2-pessoas-list-header">
         <div>
           <span class="ar-crm-phase1-kicker">ROTA 201 · CRM 2.0</span>
           <h3 id="crm2-pessoas-title">Pessoas físicas</h3>
-          <p>Cadastro central do relacionamento do AR Transmares. Todos os dados desta fase existem apenas em memória.</p>
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
           ${crm2CanEdit() ? '<button class="save-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')">+Incluir</button>' : ''}
         </div>
       </div>
-
-      ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
 
       <form class="ar-crm-list-filters" role="search" onsubmit="crm2PfApplyFilters(event)">
         <label>
@@ -427,44 +453,27 @@ function renderPeopleListCrm2() {
         <button class="secondary-btn" type="button" onclick="crm2PfClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
       </form>
 
-      <div class="crm2-pessoas-summary" aria-live="polite">
-        <strong>${specialState ? 0 : items.length}</strong>
-        <span>${specialState ? 'registros no estado simulado' : 'pessoas físicas encontradas'}</span>
-      </div>
-
       ${specialState ? renderListStateCrm2() : pageItems.length ? `
         <div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap">
           <table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pessoas-table-caption">
             <caption id="crm2-pessoas-table-caption" class="crm2-pessoas-table-caption">Pessoas fisicas cadastradas no CRM 2.0</caption>
             <thead>
               <tr>
-                <th>Nome completo/nome social</th>
+                <th id="crm2-pf-col-name" scope="col">Nome completo/nome social</th>
                 <th id="crm2-pf-col-cpf" scope="col">CPF</th>
                 <th id="crm2-pf-col-phone" scope="col">Telefone</th>
                 <th id="crm2-pf-col-email" scope="col">E-mail</th>
-                <th>Última atualização</th>
-                <th>Ações</th>
+                <th id="crm2-pf-col-updated" scope="col">Última atualização</th>
               </tr>
             </thead>
             <tbody>
               ${pageItems.map((item) => `
                 <tr>
-                  <td><strong>${escapeHtmlCrm2(item.nome)}</strong><small>${escapeHtmlCrm2(personStatusLabelCrm2(item))}</small></td>
+                  <td headers="crm2-pf-col-name"><button class="crm2-pf-name-link" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(item.id)}')" aria-label="Visualizar cadastro de ${escapeAttrCrm2(item.nome)}">${escapeHtmlCrm2(item.nome)}</button></td>
                   <td headers="crm2-pf-col-cpf">${escapeHtmlCrm2(maskCpfCrm2(item.cpf))}</td>
                   <td>${escapeHtmlCrm2(maskPhoneCrm2(item.telefone) || '—')}</td>
                   <td>${escapeHtmlCrm2(item.email || '—')}</td>
-                  <td>${escapeHtmlCrm2(formatDateTimeCrm2(item.atualizadoEm))}</td>
-                  <td>
-                    <div class="hub-row-actions">
-                      <details class="hub-row-actions-menu" data-hub-action-menu data-hub-action-min-width="120" data-hub-action-max-width="190" data-hub-action-gap="6">
-                        <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttrCrm2(item.nome)}" title="Ações rápidas">⋮</summary>
-                        <div class="hub-row-actions-popover" data-hub-action-popover role="menu">
-                          <button type="button" role="menuitem" onclick="crm2PfOpenDetail('${escapeAttrCrm2(item.id)}')">Visualizar</button>
-                          <button type="button" role="menuitem" onclick="crm2PfEdit('${escapeAttrCrm2(item.id)}')" ${!crm2CanEdit() ? 'disabled' : ''}>Editar</button>
-                        </div>
-                      </details>
-                    </div>
-                  </td>
+                  <td headers="crm2-pf-col-updated">${escapeHtmlCrm2(formatDateTimeCrm2(item.atualizadoEm))}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -482,108 +491,108 @@ function renderPeopleListCrm2() {
   `;
 }
 
-function renderReadOnlyCrm2({ label, value = '', type = 'text' }) {
+function renderReadOnlyCrm2({ label, value = '', type = 'text', className = '' }) {
   const safeValue = value ?? '';
-  return `<label class="crm2-pf-readonly-field"><span>${escapeHtmlCrm2(label)}</span>${type === 'textarea'
+  return `<label class="crm2-pf-readonly-field ${escapeAttrCrm2(className)}"><span>${escapeHtmlCrm2(label)}</span>${type === 'textarea'
     ? `<textarea class="config-input" readonly aria-readonly="true">${escapeHtmlCrm2(safeValue)}</textarea>`
     : `<input class="config-input" type="${escapeAttrCrm2(type)}" value="${escapeAttrCrm2(safeValue)}" readonly aria-readonly="true">`}</label>`;
 }
 
 function renderPersonDataCrm2(person) {
-  const attachments = person.anexos || [];
+  if (crm2PfState.inlineEditing && crm2CanEdit()) return renderPersonDataEditCrm2(person);
   return `
     <div class="crm2-pf-view-form">
       <section class="hub-form-section" aria-labelledby="crm2-pf-view-personal-title">
-        <div class="hub-form-section-title"><strong id="crm2-pf-view-personal-title">Dados pessoais</strong></div>
+      <div class="hub-form-section-title"><strong id="crm2-pf-view-personal-title">Dados pessoais</strong></div>
         <div class="hub-form-grid">
-          ${renderReadOnlyCrm2({ label: 'Nome completo/nome social', value: person.nome })}
           ${renderReadOnlyCrm2({ label: 'CPF', value: maskCpfCrm2(person.cpf) })}
-          ${renderReadOnlyCrm2({ label: 'CEI/CAEPF', value: person.cei })}
+          ${renderReadOnlyCrm2({ label: 'Nome completo/nome social', value: person.nome })}
           ${renderReadOnlyCrm2({ label: 'Data de nascimento', value: person.nascimento, type: 'date' })}
+          ${renderReadOnlyCrm2({ label: 'CEI/CAEPF', value: person.cei, className: 'crm2-pf-grid-cei' })}
+          ${renderReadOnlyCrm2({ label: 'Telefone', value: maskPhoneCrm2(person.telefone), className: 'crm2-pf-grid-phone' })}
+          ${renderReadOnlyCrm2({ label: 'E-mail', value: person.email, type: 'email', className: 'crm2-pf-grid-email' })}
+          ${renderReadOnlyCrm2({ label: 'Origem', value: person.origem, className: 'crm2-pf-grid-origin' })}
+          ${renderReadOnlyCrm2({ label: 'Parceiro de indicação', value: person.parceiro, className: 'crm2-pf-grid-partner' })}
         </div>
       </section>
-      <section class="hub-form-section" aria-labelledby="crm2-pf-view-contact-title">
-        <div class="hub-form-section-title"><strong id="crm2-pf-view-contact-title">Contato</strong></div>
-        <div class="hub-form-grid">
-          ${renderReadOnlyCrm2({ label: 'Telefone', value: maskPhoneCrm2(person.telefone) })}
-          ${renderReadOnlyCrm2({ label: 'E-mail', value: person.email, type: 'email' })}
-          ${renderReadOnlyCrm2({ label: 'Origem', value: person.origem })}
-          ${renderReadOnlyCrm2({ label: 'Parceiro de indicação', value: person.parceiro })}
-        </div>
-      </section>
-      <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-view-notes-title">
-        <div class="hub-form-section-title"><strong id="crm2-pf-view-notes-title">Observações</strong></div>
-        <div class="hub-form-grid">
-          ${renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
-        </div>
-      </section>
+      <div class="crm2-pf-notes-attachments-grid">
+        <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-view-notes-title">
+          <div class="hub-form-grid">
+            ${renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
+          </div>
+        </section>
+
+        ${renderFormAttachmentsCrm2(person, true, true)}
+      </div>
     </div>
+  `;
+}
 
-    <section class="crm2-pf-attachments-section" aria-labelledby="crm2-pf-attachments-title">
-      <div class="admin-panel-header crm2-pf-subheader">
-        <div>
-          <h4 id="crm2-pf-attachments-title">Anexos mockados</h4>
-          <p>Os arquivos selecionados não são enviados para nenhum serviço.</p>
+function renderPersonDataEditCrm2(person) {
+  const values = { ...person, ...crm2PfState.draft };
+  return `
+    <form id="crm2-pf-inline-form" class="crm2-pf-view-form crm2-pf-inline-form" onsubmit="crm2PfSave(event)" novalidate>
+      <section class="hub-form-section" aria-labelledby="crm2-pf-inline-personal-title">
+        <div class="hub-form-section-title"><strong id="crm2-pf-inline-personal-title">Dados pessoais</strong></div>
+        <div class="hub-form-grid">
+          ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
+          ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
+          ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
+          ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, className: 'crm2-pf-grid-cei' })}
+          ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-grid-phone' })}
+          ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', className: 'crm2-pf-grid-email' })}
+          ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], className: 'crm2-pf-grid-origin' })}
+          ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-grid-partner' })}
         </div>
+      </section>
+      <div class="crm2-pf-notes-attachments-grid">
+        <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-inline-notes-title">
+          <div class="hub-form-grid">
+            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+          </div>
+        </section>
+        ${renderFormAttachmentsCrm2(person, true, true)}
       </div>
-
-      ${crm2CanEdit() ? `
-        <form class="crm2-pf-attachment-add" onsubmit="crm2PfAddAttachment(event, '${escapeAttrCrm2(person.id)}')">
-          <label><span>Arquivo</span><input class="config-input" type="file" name="arquivo" required></label>
-          <label><span>Validade opcional</span><input class="config-input" type="date" name="validade"></label>
-          <button class="secondary-btn" type="submit">Incluir anexo</button>
-        </form>
-      ` : ''}
-
-      <div class="crm2-pf-related-list">
-        ${attachments.length ? attachments.map((attachment, index) => {
-          const status = attachmentStatusCrm2(attachment.validade);
-          return `
-            <article class="crm2-pf-attachment">
-              <div class="crm2-pf-attachment-copy">
-                <strong>${escapeHtmlCrm2(attachment.nome)}</strong>
-                <span>${escapeHtmlCrm2(attachment.tipo || 'Arquivo')} · Incluído em ${escapeHtmlCrm2(formatDateTimeCrm2(attachment.incluidoEm))}</span>
-                <span>Validade: ${escapeHtmlCrm2(formatDateCrm2(attachment.validade))}</span>
-              </div>
-              <span class="crm2-pf-attachment-status is-${escapeAttrCrm2(attachmentStatusClassCrm2(status))}">${escapeHtmlCrm2(status)}</span>
-              ${crm2CanEdit() ? `
-                <div class="crm2-pf-attachment-actions">
-                  <label class="secondary-btn crm2-pf-replace-label">
-                    Substituir
-                    <input class="crm2-visually-hidden-input" type="file" onchange="crm2PfReplaceAttachment(this, '${escapeAttrCrm2(person.id)}', ${index})">
-                  </label>
-                  <button class="secondary-btn" type="button" onclick="crm2PfRemoveAttachment('${escapeAttrCrm2(person.id)}', ${index})">Remover</button>
-                </div>
-              ` : ''}
-            </article>
-          `;
-        }).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum anexo.</strong><span>Estado vazio preparado para arquivos futuros.</span></div>'}
-      </div>
-    </section>
+    </form>
   `;
 }
 
 function renderTimelineCrm2(person) {
-  const events = [...(person.timeline || [])].sort((a, b) => new Date(b.data) - new Date(a.data));
+  const events = [...(person.timeline || [])].sort((a, b) => new Date(a.data) - new Date(b.data));
+  const automaticDetails = (event) => {
+    const description = String(event.descricao || '').trim();
+    if (/^Anexo removido:/i.test(description)) return { action: 'Exclusão', value: description.replace(/^Anexo removido:\s*/i, '') };
+    if (/^Anexo (incluído|substituído):/i.test(description)) return { action: description.startsWith('Anexo substituído') ? 'Alteração' : 'Inclusão', value: description.replace(/^Anexo (incluído|substituído):\s*/i, '') };
+    if (/^Cadastro criado\.?$/i.test(description)) return { action: 'Inclusão', value: 'Cadastro de pessoa física' };
+    if (/^Dados atualizados\.?$/i.test(description)) return { action: 'Alteração', value: 'Dados cadastrais' };
+    if (/^Dados atualizados\./i.test(description)) return { action: 'Alteração', value: description.replace(/^Dados atualizados\.\s*/i, '') };
+    return { action: event.tipo || 'Alteração', value: description || '—' };
+  };
+  const commentText = (event) => String(event.descricao || '').replace(/^Observação interna adicionada:\s*/i, '');
   return `
-              ${crm2CanEdit() ? `
+    <div class="crm2-pf-timeline">
+      ${events.length ? events.map((event) => event.tipo === 'Observação interna'
+        ? `<article class="crm2-pf-timeline-item crm2-pf-comment-item">
+            <header class="crm2-pf-timeline-item-header"><span>${escapeHtmlCrm2(event.usuario || 'Sistema')} · ${escapeHtmlCrm2(formatDateTimeCrm2(event.data))}</span></header>
+            <strong>${escapeHtmlCrm2(commentText(event))}</strong>
+          </article>`
+        : (() => { const details = automaticDetails(event); return `<article class="crm2-pf-timeline-item is-system-event">
+            <p class="crm2-pf-history-system-line"><span>${escapeHtmlCrm2(event.usuario || 'Sistema')} · ${escapeHtmlCrm2(formatDateTimeCrm2(event.data))} · ${escapeHtmlCrm2(details.action)} ·</span><strong>${escapeHtmlCrm2(details.value)}</strong></p>
+          </article>`; })()
+      ).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum registro.</strong><span>O histórico será preenchido pelas interações realizadas.</span></div>'}
+    </div>
+    ${crm2CanEdit() ? `
       <form class="crm2-pf-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeAttrCrm2(person.id)}')">
         <label>
-          <span>Observação interna</span>
-          <textarea class="config-input" name="observacao" rows="3" placeholder="Registre uma interação mockada" required></textarea>
+          <div class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacao" data-value-target="crm2-pf-rich-observacao" data-placeholder="Adicionar observação ou comentário" oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)"></div>
+          <textarea id="crm2-pf-rich-observacao" class="crm2-pf-rich-text-value" name="observacao" hidden></textarea>
         </label>
-        <button class="secondary-btn" type="submit">Adicionar à timeline</button>
+        <div class="crm2-pf-timeline-composer-actions">
+          ${renderTextFormatToolbarCrm2('observacao', 'Formatação do comentário')}
+          <button class="secondary-btn" type="submit">Adicionar</button>
+        </div>
       </form>
     ` : ''}
-    <div class="crm2-pf-timeline">
-      ${events.length ? events.map((event) => `
-        <article class="crm2-pf-timeline-item">
-          <span>${escapeHtmlCrm2(event.tipo || 'Evento')}</span>
-          <strong>${escapeHtmlCrm2(event.descricao || '')}</strong>
-          <p><span>${escapeHtmlCrm2(formatDateTimeCrm2(event.data))}</span><span>${escapeHtmlCrm2(event.usuario || 'Sistema')}</span></p>
-        </article>
-      `).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum evento.</strong><span>A timeline será preenchida pelas interações mockadas.</span></div>'}
-    </div>
   `;
 }
 
@@ -625,7 +634,6 @@ function renderPersonDetailCrm2(person) {
   }
   const tabs = [
     ['dados', 'Dados cadastrais'],
-    ['timeline', 'Timeline'],
     ['empresas', 'Empresas vinculadas'],
     ['pedidos', 'Pedidos']
   ];
@@ -640,27 +648,47 @@ function renderPersonDetailCrm2(person) {
     <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-detail-title">
       <div class="admin-panel-header">
         <div>
-          <span class="ar-crm-phase1-kicker">PESSOA FÍSICA · MOCK</span>
-          <h3 id="crm2-pessoa-detail-title">${escapeHtmlCrm2(person.nome)}</h3>
-          <p>${escapeHtmlCrm2(maskCpfCrm2(person.cpf))}</p>
-          <span class="crm2-pf-status-pill" role="status">${escapeHtmlCrm2(personStatusLabelCrm2(person))}</span>
+          <div class="crm2-pf-detail-title-row">
+            <h3 id="crm2-pessoa-detail-title">${escapeHtmlCrm2(person.nome)}</h3>
+            <span class="crm2-pf-status-pill is-${escapeAttrCrm2(personStatusCrm2(person).replace(/\s+/g, '-'))}" role="status">${escapeHtmlCrm2(personStatusLabelCrm2(person))}</span>
+          </div>
         </div>
       </div>
 
-      ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
-
       <div class="module-tabs crm2-pf-tabs" role="tablist" aria-label="Detalhes da pessoa física">
-        ${tabs.map(([id, label]) => `<button class="${crm2PfState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PfState.detailTab === id}" onclick="crm2PfSelectTab('${id}')">${escapeHtmlCrm2(label)}</button>`).join('')}
+        ${tabs.map(([id, label]) => `<button class="${crm2PfState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PfState.detailTab === id}" ${crm2PfState.inlineEditing ? 'disabled' : ''} onclick="crm2PfSelectTab('${id}')">${escapeHtmlCrm2(label)}</button>`).join('')}
       </div>
 
-      <div class="crm2-pf-tab-content">${content}</div>
+      <div class="crm2-pf-detail-columns">
+        <div class="crm2-pf-tab-content">${content}</div>
+        <aside class="crm2-pf-timeline-column" aria-labelledby="crm2-pf-timeline-title">
+          <div class="hub-form-section-title"><strong id="crm2-pf-timeline-title">Histórico</strong></div>
+          <div class="crm2-pf-timeline-scroll">${renderTimelineCrm2(person)}</div>
+        </aside>
+      </div>
 
       <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer">
-        <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
-        ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="navegarParaCrm2Rota('201', '${escapeAttrCrm2(person.id)}/editar')">Editar</button>` : ''}
+        ${crm2PfState.inlineEditing
+          ? `<button class="secondary-btn" type="button" onclick="crm2PfCancelInlineEdit()">Cancelar</button>
+             <button class="save-btn" type="submit" form="crm2-pf-inline-form">Salvar alterações</button>`
+          : `<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
+             ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')">Editar</button>` : ''}`}
       </div>
     </section>
   `;
+}
+
+function renderTextFormatToolbarCrm2(fieldName, label) {
+  const field = escapeAttrCrm2(fieldName);
+  return `<div class="crm2-pf-text-format-toolbar" role="toolbar" aria-label="${escapeAttrCrm2(label)}">
+    <button class="icon-btn" type="button" title="Negrito" aria-label="Negrito" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('bold', '${field}')"><i data-lucide="bold" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Itálico" aria-label="Itálico" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('italic', '${field}')"><i data-lucide="italic" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Sublinhado" aria-label="Sublinhado" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('underline', '${field}')"><i data-lucide="underline" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Tachado" aria-label="Tachado" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('strike', '${field}')"><i data-lucide="strikethrough" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('bullet', '${field}')"><i data-lucide="list" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Lista numerada" aria-label="Lista numerada" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('ordered', '${field}')"><i data-lucide="list-ordered" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Limpar formatação" aria-label="Limpar formatação" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('clear', '${field}')"><i data-lucide="remove-formatting" aria-hidden="true"></i></button>
+  </div>`;
 }
 
 function formFieldCrm2({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '', formId = '', options = [], className = '' }) {
@@ -672,7 +700,7 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
   const invalid = error ? 'true' : 'false';
   const locked = crm2PfState.formMode === 'create' && crm2PfState.cpfGate.status !== 'not-found';
   const input = type === 'textarea'
-    ? `<textarea id="${fieldId}" class="config-input" name="${name}" rows="4" autocomplete="off" placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">${escapeHtmlCrm2(value)}</textarea>`
+    ? `<div id="${fieldId}" class="config-input crm2-pf-rich-text-target" contenteditable="${locked ? 'false' : 'true'}" role="textbox" aria-multiline="true" data-field-name="${escapeAttrCrm2(name)}" data-value-target="${fieldId}-value" data-placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)">${escapeHtmlCrm2(value)}</div><textarea id="${fieldId}-value" class="crm2-pf-rich-text-value" name="${name}" hidden ${formId ? `form="${formId}"` : ''}>${escapeHtmlCrm2(value)}</textarea>${renderTextFormatToolbarCrm2(name, `Formatação de ${label}`)}`
     : type === 'select'
       ? `<div class="hub-filter-combobox crm2-pf-select"><input id="${fieldId}" class="config-input crm2-pf-select-trigger" type="text" name="${name}" value="${escapeAttrCrm2(value)}" data-dropdown-menu-id="${fieldId}-menu" data-selected-value="${escapeAttrCrm2(value)}" aria-label="${escapeAttrCrm2(label)}" aria-controls="${fieldId}-menu" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} onfocus="crm2PfToggleDropdown(this, event)" oninput="crm2PfFilterDropdown(this, event)" onkeydown="crm2PfDropdownKeydown(event, this)"><span class="hub-filter-chevron crm2-pf-select-chevron" aria-hidden="true">⌄</span><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${escapeAttrCrm2(label)}" data-dropdown-input-id="${fieldId}" hidden>${options.map((option) => `<button class="hub-filter-dropdown-option ${String(option.value) === String(value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${String(option.value) === String(value) ? 'true' : 'false'}" data-value="${escapeAttrCrm2(option.value)}" data-label="${escapeAttrCrm2(option.label)}" onclick="crm2PfSelectDropdown(this)" onkeydown="crm2PfDropdownKeydown(event, this)">${escapeHtmlCrm2(option.label)}</button>`).join('')}</div></div>`
     : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
@@ -750,7 +778,13 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
   const attachments = [...existing, ...pending];
   return `
     <div class="crm2-pf-attachments-block ${verified ? '' : 'is-disabled'}">
-      <div class="hub-form-section-title crm2-pf-attachments-header"><strong id="crm2-pf-attachments-title">Anexos</strong><button class="icon-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" aria-label="Adicionar anexo" title="Adicionar anexo" ${verified ? '' : 'disabled'}><i data-lucide="file-plus-2" aria-hidden="true"></i></button></div>
+      <div class="hub-form-section-title crm2-pf-attachments-header">
+        <strong id="crm2-pf-attachments-title">Anexos</strong>
+        <div class="crm2-pf-attachments-header-actions">
+          ${crm2PfState.attachmentDraft.length ? '<button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button><button class="save-btn" type="button" onclick="crm2PfConfirmAttachmentDraft()">Adicionar</button>' : ''}
+          <button class="icon-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" aria-label="Adicionar anexo" title="Adicionar anexo" ${verified ? '' : 'disabled'}><i data-lucide="file-plus-2" aria-hidden="true"></i></button>
+        </div>
+      </div>
       <section class="crm2-pf-attachments-content" aria-labelledby="crm2-pf-attachments-title">
         <input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" multiple onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>
         ${attachments.length === 0 && !crm2PfState.attachmentDraft.length ? `<div class="crm2-pf-attachment-dropzone" role="button" tabindex="0" aria-label="Adicionar anexo por arrastar e soltar ou selecionar arquivo" ondragover="crm2PfDragOverAttachment(event)" ondragleave="crm2PfDragLeaveAttachment(event)" ondrop="crm2PfDropAttachment(event)" onkeydown="crm2PfDropzoneKeydown(event)">
@@ -764,22 +798,27 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
             <label><span>Nome do arquivo</span><span class="crm2-pf-attachment-name-input"><input class="config-input" type="text" value="${escapeAttrCrm2(draft.nome)}" oninput="crm2PfUpdateAttachmentDraft(${index}, 'nome', this.value)" ${index === 0 ? 'autofocus' : ''}><b aria-hidden="true">${escapeHtmlCrm2(draft.extensao)}</b></span></label>
             <label><span>Fim de validade</span><input class="config-input" type="date" value="${escapeAttrCrm2(draft.validade)}" onchange="crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)"></label>
           </div>`).join('')}
-          <div class="crm2-pf-attachment-editor-actions">
-            <button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button>
-            <button class="save-btn" type="button" onclick="crm2PfConfirmAttachmentDraft()">Adicionar</button>
-          </div>
         </div>
       ` : ''}
       ${attachments.length ? `<div class="crm2-pf-form-attachment-list" aria-label="Anexos selecionados">${attachments.map((attachment) => `
-        <article class="crm2-pf-form-attachment-row">
+        ${(() => {
+          const confirming = crm2PfState.attachmentConfirm?.source === attachment.source
+            && crm2PfState.attachmentConfirm?.index === attachment.index;
+          return `
+        <article class="crm2-pf-form-attachment-row ${confirming ? 'is-confirming' : ''}">
           <i data-lucide="archive" aria-hidden="true"></i>
-          <strong>${escapeHtmlCrm2(attachment.nome)}</strong>
-          <span class="crm2-pf-attachment-validity-pill">${attachment.validade ? escapeHtmlCrm2(formatDateCrm2(attachment.validade)) : 'Sem validade'}</span>
+          <div class="crm2-pf-attachment-name-cell">
+            ${confirming ? '<div class="crm2-pf-attachment-confirmation" role="alert"><span>Confirmar exclusão?</span><button class="secondary-btn" type="button" onclick="crm2PfConfirmAttachmentRemoval()">Sim</button><button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentRemoval()">Não</button></div>' : ''}
+            ${confirming ? '' : `<strong>${escapeHtmlCrm2(attachment.nome)}</strong>`}
+          </div>
+          ${confirming ? '' : `<span class="crm2-pf-attachment-validity-pill">${attachment.validade ? escapeHtmlCrm2(formatDateCrm2(attachment.validade)) : 'Sem validade'}</span>`}
           <div class="crm2-pf-attachment-row-actions">
-            ${crm2PfState.canView ? `<button class="icon-btn" type="button" aria-label="Visualizar anexo ${escapeAttrCrm2(attachment.nome)}" title="Visualizar" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}
-            ${crm2PfState.canDelete ? `<button class="icon-btn" type="button" aria-label="Excluir anexo ${escapeAttrCrm2(attachment.nome)}" title="Excluir" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+            ${!confirming && crm2PfState.canView ? `<button class="icon-btn" type="button" aria-label="Visualizar anexo ${escapeAttrCrm2(attachment.nome)}" title="Visualizar" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}
+            ${!confirming && crm2PfState.canDelete ? `<button class="icon-btn" type="button" aria-label="Excluir anexo ${escapeAttrCrm2(attachment.nome)}" title="Excluir" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
           </div>
         </article>
+          `;
+        })()}
       `).join('')}</div>` : ''}
       </section>
     </div>
@@ -807,8 +846,6 @@ function renderPersonFormCrm2() {
           ${!editing && crm2PfState.cpfGate.status === 'not-found' ? '<span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span>' : ''}
         </div>
       </header>
-
-      ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
 
       ${!editing ? renderCpfVerificationCrm2(values) : ''}
 
@@ -860,15 +897,17 @@ function renderCrm2Phase2() {
   }
   if (route.view === 'edit') {
     crm2PfState.formMode = 'edit';
+    crm2PfState.inlineEditing = true;
     crm2PfState.detailId = route.id;
-    return renderPersonFormCrm2();
+    return renderPersonDetailCrm2(getPersonCrm2(route.id));
   }
   if (route.view === 'detail') {
-    crm2PfState.formMode = '';
+    if (!crm2PfState.inlineEditing) crm2PfState.formMode = '';
     crm2PfState.detailId = route.id;
     return renderPersonDetailCrm2(getPersonCrm2(route.id));
   }
   crm2PfState.formMode = '';
+  crm2PfState.inlineEditing = false;
   crm2PfState.detailId = '';
   return renderPeopleListCrm2();
 }
@@ -882,6 +921,7 @@ function renderIntoCurrentCrm2Target() {
   }
   target.outerHTML = renderCrm2Phase2();
   portalCrm2PfFooter();
+  portalCrm2Toast();
   enhancePeopleTableCrm2();
   return true;
 }
@@ -893,7 +933,9 @@ function removeCrm2PfFooterPortal() {
 function portalCrm2PfFooter() {
   const footer = document.querySelector('.crm2-pessoas-page .crm2-pf-form-footer');
   if (!footer) return;
-  footer.querySelector('button[type="submit"]')?.setAttribute('form', 'crm2-pf-form');
+  const formId = document.getElementById('crm2-pf-inline-form')?.id
+    || document.getElementById('crm2-pf-form')?.id;
+  if (formId) footer.querySelector('button[type="submit"]')?.setAttribute('form', formId);
   document.body.appendChild(footer);
 }
 
@@ -906,16 +948,14 @@ function enhancePeopleTableCrm2() {
     'crm2-pf-col-cpf',
     'crm2-pf-col-phone',
     'crm2-pf-col-email',
-    'crm2-pf-col-updated',
-    'crm2-pf-col-actions'
+    'crm2-pf-col-updated'
   ];
   const columnLabels = [
     'Nome completo/nome social',
     'CPF',
     'Telefone',
     'E-mail',
-    'Última atualização',
-    'Ações'
+    'Última atualização'
   ];
   const caption = table.querySelector('caption');
   if (caption) caption.textContent = 'Pessoas físicas cadastradas no CRM 2.0';
@@ -972,6 +1012,7 @@ function mountCrm2Phase2() {
   const code = currentRouteCodeCrm2();
   if (code === '200') {
     removeCrm2PfFooterPortal();
+    removeCrm2Toast();
     resetFormCrm2();
     setMessageCrm2('');
     enhanceCrm2Overview();
@@ -979,6 +1020,7 @@ function mountCrm2Phase2() {
   }
   if (code !== '201') {
     removeCrm2PfFooterPortal();
+    removeCrm2Toast();
     return;
   }
   const target = document.querySelector('.crm2-pessoas-page');
@@ -997,6 +1039,7 @@ function rerenderCrm2Phase2() {
   if (!target) return;
   target.outerHTML = renderCrm2Phase2();
   portalCrm2PfFooter();
+  portalCrm2Toast();
   enhancePeopleTableCrm2();
 }
 
@@ -1004,11 +1047,35 @@ function setMessageCrm2(message = '') {
   crm2PfState.message = message;
 }
 
+function removeCrm2Toast() {
+  if (crm2PfToastTimer) window.clearTimeout(crm2PfToastTimer);
+  crm2PfToastTimer = null;
+  document.querySelector('.crm2-pf-toast')?.remove();
+}
+
+function portalCrm2Toast() {
+  removeCrm2Toast();
+  if (!crm2PfState.message) return;
+  const toast = document.createElement('div');
+  toast.className = 'crm2-pf-toast';
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
+  toast.textContent = crm2PfState.message;
+  document.body.appendChild(toast);
+  crm2PfToastTimer = window.setTimeout(() => {
+    if (crm2PfState.message === toast.textContent) crm2PfState.message = '';
+    toast.remove();
+    crm2PfToastTimer = null;
+  }, 4200);
+}
+
 function resetFormCrm2() {
   crm2PfState.formMode = '';
+  crm2PfState.inlineEditing = false;
   crm2PfState.draft = {};
   crm2PfState.draftAttachments = [];
   crm2PfState.attachmentDraft = [];
+  crm2PfState.attachmentConfirm = null;
   crm2PfState.errors = {};
   crm2PfState.changedFields = [];
   crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
@@ -1024,8 +1091,10 @@ function openFormCrm2(mode, id = '') {
     if (!person) return;
     crm2PfState.detailId = person.id;
     crm2PfState.formMode = 'edit';
+    crm2PfState.inlineEditing = true;
     crm2PfState.draft = {};
-    navigateCrm2Route('201', `${person.id}/editar`);
+    crm2PfState.detailTab = 'dados';
+    rerenderCrm2Phase2();
   } else {
     crm2PfState.detailId = '';
     crm2PfState.formMode = 'create';
@@ -1363,8 +1432,31 @@ Object.assign(window, {
   crm2PfEdit(id) {
     openFormCrm2('edit', id);
   },
+  crm2PfCancelInlineEdit() {
+    if (!crm2PfHasUnsavedChangesCrm2()) {
+      resetFormCrm2();
+      setMessageCrm2('');
+      rerenderCrm2Phase2();
+      return;
+    }
+    if (!crm2PfRequestLeaveCrm2(() => window.crm2PfCancelInlineEdit())) return;
+    resetFormCrm2();
+    setMessageCrm2('');
+    rerenderCrm2Phase2();
+  },
+  crm2PfCancelConfirmation() {
+    crm2PfPendingConfirmAction = null;
+    document.querySelector('.crm2-pf-confirm-backdrop')?.remove();
+  },
+  crm2PfConfirmConfirmation() {
+    const action = crm2PfPendingConfirmAction;
+    crm2PfPendingConfirmAction = null;
+    document.querySelector('.crm2-pf-confirm-backdrop')?.remove();
+    action?.();
+  },
   crm2PfSelectTab(tab) {
-    if (!['dados', 'timeline', 'empresas', 'pedidos'].includes(tab)) return;
+    if (crm2PfState.inlineEditing) return;
+    if (!['dados', 'empresas', 'pedidos'].includes(tab)) return;
     crm2PfState.detailTab = tab;
     setMessageCrm2('');
     rerenderCrm2Phase2();
@@ -1384,6 +1476,42 @@ Object.assign(window, {
     event?.preventDefault();
     crm2PfState.page = 1;
     rerenderCrm2Phase2();
+  },
+  crm2PfFormatNote(command, fieldName = 'observacao') {
+    const editor = document.querySelector(`.crm2-pf-rich-text-target[data-field-name="${fieldName}"]`);
+    if (!editor) return;
+    editor.focus();
+    const commands = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', bullet: 'insertUnorderedList', ordered: 'insertOrderedList', clear: 'removeFormat' };
+    if (!commands[command]) return;
+    document.execCommand(commands[command], false);
+    window.crm2PfSyncFormattedField(editor);
+  },
+  crm2PfSyncFormattedField(editor) {
+    if (!editor?.dataset.valueTarget) return;
+    const valueTarget = document.getElementById(editor.dataset.valueTarget);
+    if (!valueTarget) return;
+    valueTarget.value = editor.innerText || '';
+    crm2PfTrackChange(valueTarget);
+  },
+  crm2PfFormatKeydown(event, textarea) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    const key = String(event.key || '').toLowerCase();
+    const command = key === 'b'
+      ? 'bold'
+      : key === 'i'
+        ? 'italic'
+        : key === 'u'
+          ? 'underline'
+          : event.shiftKey && key === '5'
+            ? 'strike'
+            : event.shiftKey && key === '7'
+              ? 'ordered'
+              : event.shiftKey && key === '8'
+                ? 'bullet'
+                : '';
+    if (!command) return;
+    event.preventDefault();
+    window.crm2PfFormatNote(command, textarea?.dataset?.fieldName || textarea?.name || 'observacao');
   },
   crm2PfSetFilter(type, value) {
     if (type === 'status') crm2PfState.statusFilter = String(value || '');
@@ -1485,12 +1613,24 @@ Object.assign(window, {
   },
   crm2PfDeleteFormAttachment(source, index, name) {
     if (!crm2PfState.canDelete) return;
-    if (source === 'draft') {
-      crm2PfState.draftAttachments.splice(index, 1);
+    crm2PfState.attachmentConfirm = { source, index, name };
+    rerenderCrm2Phase2();
+  },
+  crm2PfCancelAttachmentRemoval() {
+    crm2PfState.attachmentConfirm = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfConfirmAttachmentRemoval() {
+    const confirmation = crm2PfState.attachmentConfirm;
+    if (!confirmation || !crm2PfState.canDelete) return;
+    crm2PfState.attachmentConfirm = null;
+    if (confirmation.source === 'draft') {
+      crm2PfState.draftAttachments.splice(confirmation.index, 1);
+      setMessageCrm2('Anexo removido apenas do estado local.');
       rerenderCrm2Phase2();
       return;
     }
-    crm2PfRemoveAttachment(crm2PfState.detailId, index);
+    crm2PfRemoveAttachment(crm2PfState.detailId, confirmation.index);
   },
   crm2PfAddAttachment(event, personId) {
     event.preventDefault();
@@ -1522,7 +1662,6 @@ Object.assign(window, {
     const person = getPersonCrm2(personId);
     const attachment = person?.anexos?.[index];
     if (!person || !attachment) return;
-    if (!window.confirm(`Remover o anexo “${attachment.nome}” do estado mockado?`)) return;
     person.anexos.splice(index, 1);
     registerTimelineCrm2(person, `Anexo removido: ${attachment.nome}.`, 'Anexo');
     setMessageCrm2('Anexo removido apenas do estado local.');
