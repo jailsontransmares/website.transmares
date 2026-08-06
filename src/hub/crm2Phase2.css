@@ -615,15 +615,21 @@
 .crm2-pf-form-footer {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
-  bottom: 12px;
   border-radius: 999px;
   box-shadow: var(--shadow-card);
+  bottom: max(16px, env(safe-area-inset-bottom));
   justify-content: center;
-  justify-self: center;
-  margin: 8px auto;
+  left: 50%;
+  margin: 0;
   padding: 8px 12px;
-  position: sticky;
-  z-index: 3;
+  position: fixed;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 1100;
+}
+
+.crm2-pf-form {
+  padding-bottom: 88px;
 }
 
 @media (max-width: 700px) {
@@ -698,7 +704,8 @@
     align-items: stretch;
     flex-direction: column-reverse;
     border-radius: var(--radius-card);
-    width: min(100%, 360px);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(calc(100vw - 24px), 360px);
   }
 
   .crm2-pf-form-footer > button {
