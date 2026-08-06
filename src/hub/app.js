@@ -7456,12 +7456,6 @@ function renderCrm2Phase1() {
 
       ${crm2.mensagem ? `<p class="admin-message" role="status">${escapeHtml(crm2.mensagem)}</p>` : ''}
 
-      <div class="admin-panel-header crm2-phase1-section-header">
-        <div>
-          <h4>Estrutura reservada</h4>
-        </div>
-      </div>
-
       <div class="crm2-phase1-roadmap" role="list" aria-label="Próximas telas do CRM 2.0">
         ${etapas.map(([codigo, titulo, descricao]) => `
           <article class="crm2-phase1-roadmap-item ${codigo === '201' ? 'is-actionable' : ''}" role="${codigo === '201' ? 'button' : 'listitem'}" ${codigo === '201' ? `tabindex="0" onclick="navegarParaCrm2Rota('${codigo}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('${codigo}'); }"` : ''}>
