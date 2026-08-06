@@ -279,6 +279,28 @@ Object.assign(window, {
     };
     rerenderCrm2Phase2();
   },
+  crm2PfDragOverAttachment(event) {
+    if (!crm2CanEdit()) return;
+    event.preventDefault();
+    event.currentTarget.classList.add('is-dragging');
+  },
+  crm2PfDragLeaveAttachment(event) {
+    event.currentTarget.classList.remove('is-dragging');
+  },
+  crm2PfDropAttachment(event) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('is-dragging');
+    if (!crm2CanEdit()) return;
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    crm2PfState.attachmentDraft = { file, nome: file.name, validade: '' };
+    rerenderCrm2Phase2();
+  },
+  crm2PfDropzoneKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    crm2PfOpenAttachmentPicker();
+  },
   crm2PfUpdateAttachmentDraft(field, value) {
     if (!crm2PfState.attachmentDraft || !['nome', 'validade'].includes(field)) return;
     crm2PfState.attachmentDraft[field] = String(value || '');

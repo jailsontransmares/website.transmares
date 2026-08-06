@@ -441,7 +441,49 @@
 
 .crm2-pf-include-attachment {
   align-self: start;
+  padding: 4px;
   width: fit-content;
+}
+
+.crm2-pf-attachments-header {
+  align-items: center;
+}
+
+.crm2-pf-attachment-dropzone {
+  align-items: center;
+  border: 1px dashed var(--borda);
+  border-radius: var(--radius-control);
+  color: var(--texto-suave);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+  min-height: 150px;
+  padding: 16px;
+  text-align: center;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.crm2-pf-attachment-dropzone svg {
+  height: 22px;
+  width: 22px;
+}
+
+.crm2-pf-attachment-dropzone span {
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.crm2-pf-attachment-dropzone small {
+  font-size: 11px;
+}
+
+.crm2-pf-attachment-dropzone:focus-visible,
+.crm2-pf-attachment-dropzone.is-dragging {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  border-color: var(--color-primary);
+  outline: none;
 }
 
 .crm2-pf-attachment-editor {
@@ -550,6 +592,10 @@
   }
 
   .crm2-pf-notes-block textarea {
+    min-height: 120px;
+  }
+
+  .crm2-pf-attachment-dropzone {
     min-height: 120px;
   }
 }
