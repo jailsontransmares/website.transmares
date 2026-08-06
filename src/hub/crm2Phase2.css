@@ -458,8 +458,11 @@
 
 .crm2-pf-attachments-header {
   align-items: center;
+  background: transparent;
+  border: 0;
   flex-direction: row;
   justify-content: flex-start;
+  padding: 0;
 }
 
 .crm2-pf-attachments-content {
@@ -632,7 +635,7 @@
 @media (max-width: 800px) {
   .crm2-pf-attachments-header {
     flex-direction: row;
-    justify-content: flex-end;
+    justify-content: flex-start;
     width: 100%;
   }
 
