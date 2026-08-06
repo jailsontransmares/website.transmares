@@ -1,0 +1,511 @@
+.crm2-cadastro-page {
+  min-width: 0;
+}
+
+.crm2-cadastro-header-actions,
+.crm2-cadastro-footer,
+.crm2-cadastro-search,
+.crm2-cadastro-section-header,
+.crm2-cadastro-results-heading,
+.crm2-cadastro-pagination,
+.crm2-cadastro-selected {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.crm2-cadastro-draft-banner {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-warning, #b54708) 8%, var(--surface-glass-strong));
+  border: 1px solid color-mix(in srgb, var(--color-warning, #b54708) 28%, var(--borda));
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.crm2-cadastro-draft-banner > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.crm2-cadastro-draft-banner strong {
+  color: var(--color-navy);
+  font-size: 13px;
+}
+
+.crm2-cadastro-draft-banner span {
+  color: var(--texto-suave);
+  font-size: 11px;
+}
+
+.crm2-cadastro-draft-banner > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm2-cadastro-header-actions,
+.crm2-cadastro-section-header > :last-child,
+.crm2-cadastro-selected > :last-child {
+  margin-left: auto;
+}
+
+.crm2-cadastro-mock-pill {
+  background: color-mix(in srgb, var(--color-primary) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--borda));
+  border-radius: 999px;
+  color: var(--color-primary);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-transform: uppercase;
+}
+
+.crm2-cadastro-steps {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.crm2-cadastro-step {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card-compact);
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+button.crm2-cadastro-step {
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.crm2-cadastro-step.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+
+.crm2-cadastro-step.is-disabled {
+  opacity: .58;
+}
+
+button.crm2-cadastro-step:disabled {
+  cursor: not-allowed;
+}
+
+.crm2-cadastro-step-number {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: 999px;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: 0 0 28px;
+  font-size: 12px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.crm2-cadastro-step > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.crm2-cadastro-step strong {
+  color: var(--color-navy);
+  font-size: 12px;
+}
+
+.crm2-cadastro-step small,
+.crm2-cadastro-results-heading span,
+.crm2-cadastro-footer-hint {
+  color: var(--texto-suave);
+  font-size: 11px;
+}
+
+.crm2-cadastro-pf-step {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-cadastro-section-header {
+  align-items: end;
+  border-bottom: 1px solid var(--borda);
+  padding-bottom: 13px;
+}
+
+.crm2-cadastro-section-header h2 {
+  color: var(--color-navy);
+  font-size: clamp(20px, 2vw, 26px);
+  margin: 3px 0 4px;
+}
+
+.crm2-cadastro-section-header p {
+  color: var(--texto-suave);
+  font-size: 13px;
+  margin: 0;
+}
+
+.crm2-cadastro-search {
+  align-items: end;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  padding: 14px;
+}
+
+.crm2-cadastro-search label {
+  display: grid;
+  flex: 1 1 360px;
+  gap: 5px;
+}
+
+.crm2-cadastro-search label span,
+.crm2-cadastro-form label > span {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.crm2-cadastro-results {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crm2-cadastro-results-heading {
+  justify-content: space-between;
+}
+
+.crm2-cadastro-results-heading strong {
+  color: var(--color-navy);
+  font-size: 13px;
+}
+
+.crm2-cadastro-table-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.crm2-cadastro-table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+.crm2-cadastro-table th,
+.crm2-cadastro-table td {
+  border-bottom: 1px solid var(--borda);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.crm2-cadastro-table th {
+  color: var(--texto-suave);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.crm2-cadastro-table td {
+  color: var(--texto);
+  font-size: 12px;
+}
+
+.crm2-cadastro-table td > strong,
+.crm2-cadastro-table td > span,
+.crm2-cadastro-table td > small {
+  display: block;
+}
+
+.crm2-cadastro-table td small {
+  color: var(--texto-suave);
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.crm2-cadastro-table tr.is-selected {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+
+.crm2-cadastro-new-badge {
+  color: var(--color-primary) !important;
+  font-weight: 800;
+}
+
+.crm2-cadastro-pagination {
+  color: var(--texto-suave);
+  font-size: 12px;
+  justify-content: space-between;
+}
+
+.crm2-cadastro-pagination > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm2-cadastro-selected {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--surface-glass-strong));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--borda));
+  border-radius: var(--radius-card);
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.crm2-cadastro-selected h3 {
+  color: var(--color-navy);
+  font-size: 16px;
+  margin: 4px 0;
+}
+
+.crm2-cadastro-selected p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  margin: 0;
+}
+
+.crm2-cadastro-optional-choice {
+  align-items: center;
+  border-top: 1px solid var(--borda);
+  color: var(--texto-suave);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 14px;
+}
+
+.crm2-cadastro-vinculo-field {
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  padding: 14px;
+}
+
+.crm2-cadastro-vinculo-field label {
+  display: grid;
+  gap: 5px;
+  max-width: 420px;
+}
+
+.crm2-cadastro-vinculo-field label > span {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.crm2-cadastro-vinculo-field.has-error {
+  border-color: var(--color-danger, #b42318);
+}
+
+.crm2-cadastro-review {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.crm2-cadastro-review-section {
+  display: grid;
+  gap: 12px;
+}
+
+.crm2-cadastro-review > div {
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 13px;
+}
+
+.crm2-cadastro-review small {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.crm2-cadastro-review strong {
+  color: var(--color-navy);
+  overflow-wrap: anywhere;
+}
+
+.crm2-cadastro-review span {
+  color: var(--texto-suave);
+  font-size: 12px;
+}
+
+.crm2-cadastro-review-details {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.crm2-cadastro-review-details > .is-wide {
+  grid-column: 1 / -1;
+}
+
+.crm2-cadastro-success {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-success, #067647) 8%, var(--surface-glass-strong));
+  border: 1px solid color-mix(in srgb, var(--color-success, #067647) 28%, var(--borda));
+  border-radius: var(--radius-card);
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+
+.crm2-cadastro-success-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-success, #067647) 16%, transparent);
+  border-radius: 999px;
+  color: var(--color-success, #067647);
+  display: inline-flex;
+  flex: 0 0 34px;
+  font-size: 18px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.crm2-cadastro-success h2 {
+  color: var(--color-navy);
+  font-size: 18px;
+  margin: 3px 0;
+}
+
+.crm2-cadastro-success p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  margin: 0;
+}
+
+.crm2-cadastro-form {
+  display: grid;
+  gap: 18px;
+}
+
+.crm2-cadastro-form .hub-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.crm2-cadastro-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-cadastro-form label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.crm2-cadastro-form label.has-error .config-input {
+  border-color: var(--color-danger, #b42318);
+}
+
+.crm2-cadastro-form .crm2-field-error {
+  color: var(--color-danger, #b42318);
+  font-size: 11px;
+}
+
+.crm2-cadastro-footer {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.crm2-cadastro-footer-hint {
+  margin-right: auto;
+}
+
+@media (max-width: 760px) {
+  .crm2-cadastro-header-actions {
+    align-items: stretch;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .crm2-cadastro-header-actions .secondary-btn {
+    flex: 1 1 auto;
+  }
+
+  .crm2-cadastro-draft-banner,
+  .crm2-cadastro-draft-banner > div:last-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crm2-cadastro-draft-banner button {
+    width: 100%;
+  }
+
+  .crm2-cadastro-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-cadastro-step {
+    padding: 9px 10px;
+  }
+
+  .crm2-cadastro-section-header > :last-child,
+  .crm2-cadastro-selected > :last-child {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .crm2-cadastro-section-header > :last-child {
+    width: auto;
+  }
+
+  .crm2-cadastro-form .hub-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-cadastro-review,
+  .crm2-cadastro-review-details {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-cadastro-form label.is-wide {
+    grid-column: auto;
+  }
+
+  .crm2-cadastro-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crm2-cadastro-footer-hint {
+    margin: 0;
+    order: -1;
+  }
+
+  .crm2-cadastro-footer > button {
+    width: 100%;
+  }
+
+  .crm2-cadastro-optional-choice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crm2-cadastro-optional-choice .secondary-btn {
+    width: 100%;
+  }
+}

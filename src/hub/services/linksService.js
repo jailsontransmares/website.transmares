@@ -72,6 +72,7 @@ function mapearLink(item, apoio, usuario) {
     titulo: item.titulo || '',
     descricao: item.descricao || '',
     url: item.url || '',
+    escopo: dados.escopo || 'corretora',
     categoria: categoria?.nome || dados.categoria || '',
     grupo: grupo?.nome || dados.grupo || '',
     status: item.status || 'ativo',
@@ -101,11 +102,12 @@ export async function carregarLinksData(payload = {}) {
     throw new Error(error.message || 'Não foi possível carregar links.');
   }
 
-  const escopo = payload.escopo || 'corretora';
+  const escopo = payload.escopo || 'todos';
   const links = (data || [])
     .filter(item => {
       const dados = getDados(item);
-      return normalizarStatus(dados.tipo) === 'link' && (dados.escopo || 'corretora') === escopo;
+      const escopoItem = dados.escopo || 'corretora';
+      return normalizarStatus(dados.tipo) === 'link' && (escopo === 'todos' || escopoItem === escopo);
     })
     .map(item => mapearLink(item, apoio, usuario));
 

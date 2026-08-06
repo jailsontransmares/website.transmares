@@ -1,10 +1,28 @@
 ﻿import './style.css';
 import './crm2Phase2.css';
-import './crm2Phase2.js';
+import './crm2PessoaFisica.js';
+import './crm2PessoaJuridica.js';
+import './crm2PessoaJuridica.css';
+import './crm2Vinculos.js';
+import './crm2Vinculos.css';
+import './crm2Pedidos.js';
+import './crm2Pedidos.css';
+import './crm2Timeline.js';
+import './crm2Timeline.css';
+import './crm2Oportunidades.js';
+import './crm2Oportunidades.css';
+import './crm2Comunicacao.js';
+import './crm2Comunicacao.css';
+import './crm2Automacoes.js';
+import './crm2Automacoes.css';
+import './crm2CadastroSequencial.js';
+import './crm2CadastroSequencial.css';
+import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
+import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
-import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
+import { canAccessModule, hasPermission, normalizarPermissoes, LINK_RESOURCES } from './services/permissionService.js';
 import {
   atualizarContextoInicialHub,
   invalidarContextoAcessoHub,
@@ -29,9 +47,12 @@ import {
   CircleAlert,
   Clock3,
   createIcons,
+  Download,
+  DownloadCloud,
   ExternalLink,
   Eraser,
   Eye,
+  File,
   FilePlus2,
   Filter,
   House,
@@ -39,7 +60,9 @@ import {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  LayoutGrid,
   List,
+  ListChecks,
   ListOrdered,
   MessageCircle,
   Menu,
@@ -55,6 +78,7 @@ import {
   Strikethrough,
   UploadCloud,
   Underline,
+  Unlink,
   UsersRound,
   Workflow,
   X
@@ -71,7 +95,10 @@ const HUB_LUCIDE_ICONS = {
   CircleAlert,
   CircleHelp,
   Clock3,
+  Download,
+  DownloadCloud,
   Eye,
+  File,
   FilePlus2,
   Filter,
   House,
@@ -79,7 +106,9 @@ const HUB_LUCIDE_ICONS = {
   KeyRound,
   Landmark,
   LayoutDashboard,
+  LayoutGrid,
   List,
+  ListChecks,
   ListOrdered,
   MessageCircle,
   Menu,
@@ -90,6 +119,7 @@ const HUB_LUCIDE_ICONS = {
   Settings,
   Sun,
   Trash2,
+  Unlink,
   RotateCcw,
   RefreshCw,
   Strikethrough,
@@ -385,6 +415,7 @@ const state = {
       requestId: '',
       comments: [],
       attachments: [],
+      attachmentView: 'list',
       message: ''
     },
     sincronizando: false,
@@ -1401,6 +1432,10 @@ function pode(recurso, acao = 'view') {
   return hasPermission(state.permissions, recurso, acao);
 }
 
+function podeAcessarGerenciamentoLinks() {
+  return LINK_RESOURCES.some(recurso => pode(recurso, 'view'));
+}
+
 function podeAcessarAbaAdmin(aba) {
   const permissoesPorAba = {
     usuarios: ['admin.usuarios', 'view'],
@@ -1422,7 +1457,13 @@ function podeAcessarAbaAr(aba) {
     historico: ['painel_ar.validacoes', 'view'],
     crm: ['painel_ar', 'view'],
     crm2: ['painel_ar', 'view'],
-    'crm2-pf': ['painel_ar', 'view']
+    'crm2-pf': ['painel_ar', 'view'],
+    'crm2-pj': ['painel_ar', 'view'],
+    'crm2-vinculos': ['painel_ar', 'view'],
+    'crm2-pedidos': ['painel_ar', 'view'],
+    'crm2-oportunidades': ['painel_ar', 'view'],
+    'crm2-comunicacao': ['painel_ar', 'view'],
+    'crm2-automacoes': ['painel_ar', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -1555,6 +1596,10 @@ function abrirModulo(id) {
 async function abrirModuloDireto(id) {
   const idModulo = normalizarIdModuloRota(id);
 
+  if (['links-corretora', 'links-ar', 'links-gestao'].includes(idModulo)) {
+    return navegarParaRota(`${montarCaminhoHub('central-senhas')}#links`);
+  }
+
   if (!moduloEstaAtivo(idModulo)) {
     renderModuloIndisponivel(idModulo);
     return;
@@ -1562,11 +1607,6 @@ async function abrirModuloDireto(id) {
 
   if (idModulo === 'administracao') {
     await abrirAdministracao();
-    return;
-  }
-
-  if (['links-corretora', 'links-ar', 'links-gestao'].indexOf(idModulo) >= 0) {
-    await abrirLinksUteis(idModulo);
     return;
   }
 
@@ -6436,7 +6476,7 @@ function renderLinkItem(item, gestor) {
   return `
     <article class="link-row status-line-${escapeAttr(item.status || 'inativo')}">
       <div class="link-main">
-        <span class="card-taxonomy">${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
+        <span class="card-taxonomy">${escapeHtml(obterRotuloEscopoLink(item.escopo))} · ${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
         <h3>${escapeHtml(item.titulo || 'Link')}</h3>
         <p>${escapeHtml(item.descricao || '')}</p>
           <div class="link-buttons">
@@ -6475,6 +6515,11 @@ function renderModalNovoLink() {
         <label><span>Título</span><input id="novo_link_titulo" class="config-input" type="text" value="${escapeAttr(item.titulo || '')}">${renderErroCampo(erros.titulo)}</label>
         <label><span>Descrição</span><input id="novo_link_descricao" class="config-input" type="text" value="${escapeAttr(item.descricao || '')}"></label>
         <label><span>URL</span><input id="novo_link_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}">${renderErroCampo(erros.url)}</label>
+        <label><span>Área</span><select id="novo_link_escopo" class="config-input">
+          <option value="corretora" ${(item.escopo || state.links.escopo) === 'corretora' ? 'selected' : ''}>Corretora</option>
+          <option value="ar" ${(item.escopo || state.links.escopo) === 'ar' ? 'selected' : ''}>AR / Certificação</option>
+          <option value="gestao" ${(item.escopo || state.links.escopo) === 'gestao' ? 'selected' : ''}>Gestão</option>
+        </select></label>
         <label><span>Categoria</span><select id="novo_link_categoria" class="config-input"><option value="">Sem categoria</option>${state.links.categorias.map(categoria => `<option value="${escapeAttr(categoria.nome)}" ${item.categoria === categoria.nome ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`).join('')}</select></label>
         <label><span>Grupo</span><select id="novo_link_grupo" class="config-input"><option value="">Sem grupo</option>${state.links.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></label>
         <label><span>Status</span><select id="novo_link_status" class="config-input"><option value="ativo" ${item.status !== 'inativo' ? 'selected' : ''}>ativo</option><option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option></select></label>
@@ -6501,8 +6546,13 @@ function renderErroCampo(mensagem) {
 }
 
 function alterarFiltroLinks(chave, valor) {
+  if (chave === 'escopo') state.links.escopo = valor;
   state.links.filtros[chave] = valor;
   carregarLinksUteis();
+}
+
+function obterRotuloEscopoLink(escopo) {
+  return { corretora: 'Corretora', ar: 'AR', gestao: 'Gestão' }[escopo] || 'Link';
 }
 
 function editarLinkItem(id) {
@@ -6535,7 +6585,7 @@ function fecharModalNovoLink() {
 async function salvarLinkItem(id) {
   const payload = {
     id,
-    escopo: state.links.escopo,
+    escopo: document.getElementById('novo_link_escopo')?.value || state.links.escopo,
     titulo: document.getElementById('novo_link_titulo')?.value || '',
     descricao: document.getElementById('novo_link_descricao')?.value || '',
     url: document.getElementById('novo_link_url')?.value || '',
@@ -6706,6 +6756,11 @@ async function abrirCentralSenhas() {
   state.passwords.modalAberto = false;
   state.passwords.modalId = '';
   await carregarCentralSenhas();
+  if (state.passwords.aba === 'links') {
+    state.links.escopo = 'todos';
+    state.links.titulo = 'Gerenciamento de Links';
+    await carregarLinksUteis();
+  }
 }
 
 async function carregarCentralSenhas() {
@@ -6740,6 +6795,8 @@ async function carregarCentralSenhas() {
 function renderCentralSenhas() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
   const podeVerSenha = pode('central_senhas', 'view_secret');
+  const podeLinks = podeAcessarGerenciamentoLinks();
+  const podeNavegarAbas = podeGerenciar || podeLinks;
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
@@ -6765,19 +6822,22 @@ function renderCentralSenhas() {
             <h2>Central de Senhas</h2>
             <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
           </div>
-          ${podeGerenciar ? `
+          ${pode('central_senhas', 'view') || podeGerenciar || podeLinks ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
-              <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
-              <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
+              <button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>
+              <button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>
             </div>
           ` : ''}
         </div>
 
-        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar) : renderResumoSenhas(podeGerenciar)}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
+        ${state.passwords.aba === 'links'
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar))
+          : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
+        ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
       </section>
     </main>
@@ -6949,11 +7009,7 @@ function alterarFiltroSenha(chave, valor) {
 }
 
 function selecionarAbaSenhas(aba) {
-  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
-    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
-    renderCentralSenhas();
-    return;
-  }
+  if (aba === 'historico') aba = 'acessos';
 
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
@@ -7318,11 +7374,11 @@ function renderMenuPrincipalAr({ podeHistorico, incluirCrm = false, incluirCrm2 
   const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
   const principais = itens.slice(0, limite);
   const secundarias = itens.slice(limite);
-  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-pf'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
+  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
 
   return `<div class="module-tabs hub-module-nav" role="group" aria-label="Visualização do Painel AR">${principais.map(renderItem).join('')}${secundarias.length ? `
     <div class="hub-responsive-more">
-      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-pf'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
+      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
       <div id="ar-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('<button ', '<button role="menuitem" ')).join('')}</div>
     </div>` : ''}</div>`;
 }
@@ -7407,6 +7463,7 @@ function renderPainelAr() {
     </main>
   `;
 
+  initializeHubResizableTables(document);
   restaurarEstadoInteracaoAr(snapshotInteracao);
 }
 
@@ -7443,19 +7500,52 @@ function renderConteudoAr() {
     return renderCrm2PessoasFisicasPhase2();
   }
 
+  if (state.ar.aba === 'crm2-pj') {
+    return typeof window.crm2PjRender === 'function' ? window.crm2PjRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pessoas jurídicas...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-vinculos') {
+    return typeof window.crm2VinculosRender === 'function' ? window.crm2VinculosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Vínculos...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-pedidos') {
+    return typeof window.crm2PedidosRender === 'function' ? window.crm2PedidosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pedidos...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-oportunidades') {
+    return typeof window.crm2OportunidadesRender === 'function' ? window.crm2OportunidadesRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Oportunidades...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-comunicacao') {
+    const configuracaoRoute = obterContextoRotaHub();
+    if (configuracaoRoute.principal === '207' || configuracaoRoute.secundaria === 'automacoes') {
+      return typeof window.crm2AutomacoesRender === 'function' ? window.crm2AutomacoesRender() : '<section class="admin-panel crm2-automacoes-page"><div class="hub-loading" role="status">Carregando Automações...</div></section>';
+    }
+    return typeof window.crm2ComunicacaoRender === 'function' ? window.crm2ComunicacaoRender() : '<section class="admin-panel crm2-comunicacao-page"><div class="hub-loading" role="status">Carregando Comunicação...</div></section>';
+  }
+
   return renderGeradorLinksAr();
 }
 
 function renderCrm2Phase1() {
+  const crm2RouteContext = obterContextoRotaHub();
+  if (crm2RouteContext.principal === '200' && crm2RouteContext.secundaria === 'cadastro') {
+    return typeof window !== 'undefined' && typeof window.crm2CadastroRender === 'function'
+      ? window.crm2CadastroRender()
+      : '<section class="admin-panel crm2-cadastro-page"><div class="hub-loading" role="status">Carregando cadastro sequencial...</div></section>';
+  }
+
   const crm2 = state.ar.crm2;
   const podeExecutar = pode('painel_ar', 'update');
+  const podeVisualizarCrm2 = pode('painel_ar', 'view');
+  const rotasCrm2Disponiveis = ['201', '202', '203', '204', '205', '206'];
   const etapas = [
     ['201', 'Pessoas físicas', 'Cadastro, busca, dados cadastrais e timeline.'],
     ['202', 'Pessoas jurídicas', 'Empresas, documentos e pessoas vinculadas.'],
     ['203', 'Vínculos', 'Relacionamentos entre PF e PJ, com histórico de inativação.'],
     ['204', 'Pedidos', 'Cadastro, detalhe, status, vencimento e histórico.'],
     ['205', 'Oportunidades', 'Leads, negociações, itens e conversão.'],
-    ['206', 'Configurações', 'Comunicação, modelos e automações mockadas.']
+    ['206', 'Configurações', 'Comunicação, automações e modelos mockados.']
   ];
 
   return `
@@ -7472,13 +7562,13 @@ function renderCrm2Phase1() {
 
       <div class="crm2-phase1-roadmap" role="list" aria-label="Próximas telas do CRM 2.0">
         ${etapas.map(([codigo, titulo, descricao]) => `
-          <article class="crm2-phase1-roadmap-item ${codigo === '201' ? 'is-actionable' : ''}" role="${codigo === '201' ? 'button' : 'listitem'}" ${codigo === '201' ? `tabindex="0" onclick="navegarParaCrm2Rota('${codigo}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('${codigo}'); }"` : ''}>
+          <article class="crm2-phase1-roadmap-item ${rotasCrm2Disponiveis.includes(codigo) ? 'is-actionable' : ''}" role="${rotasCrm2Disponiveis.includes(codigo) ? 'button' : 'listitem'}" ${codigo === '201' ? `tabindex="0" onclick="navegarParaCrm2Rota('${codigo}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('${codigo}'); }"` : codigo === '202' ? `tabindex="0" onclick="navegarParaCrm2PjRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2PjRota(); }"` : codigo === '203' ? `tabindex="0" onclick="navegarParaCrm2VinculosRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2VinculosRota(); }"` : codigo === '204' ? `tabindex="0" onclick="navegarParaCrm2PedidosRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2PedidosRota(); }"` : codigo === '205' ? `tabindex="0" onclick="navegarParaCrm2OportunidadesRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2OportunidadesRota(); }"` : codigo === '206' ? `tabindex="0" onclick="navegarParaCrm2ComunicacaoRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2ComunicacaoRota(); }"` : ''}>
             <span class="crm2-phase1-roadmap-code">${escapeHtml(codigo)}</span>
             <div>
               <strong>${escapeHtml(titulo)}</strong>
               <p>${escapeHtml(descricao)}</p>
             </div>
-            <span class="crm2-phase1-roadmap-status">Planejada</span>
+            <span class="crm2-phase1-roadmap-status">${rotasCrm2Disponiveis.includes(codigo) ? 'Disponível' : 'Planejada'}</span>
           </article>
         `).join('')}
       </div>
@@ -7486,6 +7576,9 @@ function renderCrm2Phase1() {
       <div class="admin-panel-actions crm2-phase1-actions">
         <button class="primary-btn" type="button" onclick="acionarMockCrm2('cadastro')" ${!podeExecutar ? 'disabled' : ''}>
           Iniciar validação mockada
+        </button>
+        <button class="secondary-btn" type="button" onclick="navegarParaCrm2Cadastro()" ${!podeVisualizarCrm2 ? 'disabled' : ''}>
+          Abrir cadastro sequencial
         </button>
         <button class="secondary-btn" type="button" onclick="acionarMockCrm2('reset')" ${!podeExecutar ? 'disabled' : ''}>
           Limpar estado
@@ -7504,6 +7597,37 @@ function renderCrm2PessoasFisicasPhase2() {
     <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
       <div class="hub-loading" role="status">Carregando Pessoas físicas...</div>
     </section>
+  `;
+}
+
+function renderToolbarLinks(gestor) {
+  return `
+    <div class="links-toolbar">
+      <select class="config-input" onchange="alterarFiltroLinks('escopo', this.value)" aria-label="Área dos links">
+        <option value="todos" ${state.links.escopo === 'todos' ? 'selected' : ''}>Todas as áreas</option>
+        <option value="corretora" ${state.links.escopo === 'corretora' ? 'selected' : ''}>Corretora</option>
+        <option value="ar" ${state.links.escopo === 'ar' ? 'selected' : ''}>AR / Certificação</option>
+        <option value="gestao" ${state.links.escopo === 'gestao' ? 'selected' : ''}>Gestão</option>
+      </select>
+      <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
+        <option value="">Todas as categorias</option>
+        ${state.links.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+      </select>
+      <select class="config-input" onchange="alterarFiltroLinks('grupo', this.value)">
+        <option value="">Todos os grupos</option>
+        ${state.links.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+      </select>
+      ${gestor ? `
+        <select class="config-input" onchange="alterarFiltroLinks('status', this.value)">
+          <option value="">Todos os status</option>
+          <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
+          <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
+        </select>
+        <button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>
+      ` : ''}
+    </div>
+    <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
+    ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
   `;
 }
 
@@ -8046,7 +8170,7 @@ function abrirDetalheCrmAr(item) {
   state.ar.crm.edicaoAlterada = false;
   state.ar.crm.salvandoEdicao = false;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], message: '' };
+  state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], attachmentView: 'list', message: '' };
   renderPainelAr();
   carregarAtividadeDetalheCrmAr(item, requestId);
 }
@@ -8125,7 +8249,7 @@ function fecharVisualizacaoCrmAr() {
   state.ar.crm.edicaoAlterada = false;
   state.ar.crm.salvandoEdicao = false;
   state.ar.crm.sincronizandoCadastro = false;
-  state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], message: '' };
+  state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], attachmentView: 'list', message: '' };
   renderPainelAr();
 }
 
@@ -8754,12 +8878,44 @@ function renderAtividadeCrmAr() {
   </aside>`;
 }
 
+function alternarVisualizacaoAnexosCrmAr(view) {
+  state.ar.crm.atividade.attachmentView = view === 'grid' ? 'grid' : 'list';
+  renderPainelAr();
+}
+
+function renderAnexoPreviewCrmAr(anexo, index) {
+  const url = anexo.url || anexo.thumbnail || '';
+  const previewUrl = anexo.thumbnail || ((anexo.type || anexo.content_type || anexo.mime_type || '').startsWith('image/') ? anexo.url || '' : '');
+  const nome = anexo.title || anexo.filename || `Anexo ${index + 1}`;
+  const kind = getHubAttachmentPreviewKind({ nome, tipo: anexo.type || anexo.content_type || anexo.mime_type || '' });
+  const previewSource = kind === 'pdf' ? anexo.thumbnail || '' : previewUrl;
+  const openAttrs = url
+    ? `role="button" tabindex="0" data-attachment-url="${escapeAttr(url)}" aria-label="Visualizar ${escapeAttr(nome)}" onclick="window.open(this.dataset.attachmentUrl, '_blank', 'noopener,noreferrer')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.open(this.dataset.attachmentUrl, '_blank', 'noopener,noreferrer'); }"`
+    : 'aria-disabled="true"';
+  if ((kind === 'image' || kind === 'pdf') && previewSource) return `<div class="hub-attachment-preview is-${kind}" ${openAttrs}><img src="${escapeAttr(previewSource)}" alt="Prévia de ${escapeAttr(nome)}" loading="lazy"></div>`;
+  return `<div class="hub-attachment-preview is-unavailable" ${openAttrs}><i data-lucide="file" aria-hidden="true"></i><span>Prévia indisponível</span></div>`;
+}
+
 function renderAnexosCrmAr() {
   const anexos = state.ar.crm.atividade.attachments || [];
   const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id || '';
-  return `<section class="ar-crm-attachments-fixed" aria-label="Anexos">
-    <div><span>Anexos</span>${anexos.length ? `<div class="ar-crm-attachments-list">${anexos.map((anexo) => { const url = anexo.url || anexo.thumbnail || ''; const nome = anexo.title || anexo.filename || 'Anexo sem nome'; return url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`; }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}</div>
-    ${taskId ? '<label class="secondary-btn ar-crm-attachment-upload">Adicionar anexo<input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>' : '<span class="ar-crm-detail-muted">Disponível após a sincronização</span>'}
+  const view = state.ar.crm.atividade.attachmentView === 'grid' ? 'grid' : 'list';
+  return `<section class="hub-attachment-manager ar-crm-attachments-fixed" aria-label="Anexos" data-attachment-manager="HubAttachmentManager">
+    <header class="hub-attachment-manager-header">
+      <strong>Anexos</strong>
+      <div class="hub-attachment-manager-toolbar" role="toolbar" aria-label="Ações dos anexos">
+        <button class="icon-btn ${view === 'list' ? 'is-active' : ''}" type="button" onclick="window.alternarVisualizacaoAnexosCrmAr('list')" aria-label="Exibir anexos em lista" title="Exibir em lista" aria-pressed="${view === 'list' ? 'true' : 'false'}"><i data-lucide="list" aria-hidden="true"></i></button>
+        <button class="icon-btn ${view === 'grid' ? 'is-active' : ''}" type="button" onclick="window.alternarVisualizacaoAnexosCrmAr('grid')" aria-label="Exibir anexos em miniaturas" title="Exibir em miniaturas" aria-pressed="${view === 'grid' ? 'true' : 'false'}"><i data-lucide="layout-grid" aria-hidden="true"></i></button>
+        ${taskId ? '<label class="icon-btn hub-attachment-manager-include" aria-label="Incluir anexo" title="Incluir anexo"><i data-lucide="file-plus-2" aria-hidden="true"></i><input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>' : ''}
+      </div>
+    </header>
+    ${anexos.length ? `<div class="hub-attachment-manager-list ${view === 'grid' ? 'is-grid-view' : ''}" aria-label="Arquivos anexados">${anexos.map((anexo, index) => {
+      const url = anexo.url || anexo.thumbnail || '';
+      const nome = anexo.title || anexo.filename || `Anexo ${index + 1}`;
+      return view === 'grid'
+        ? `<article class="hub-attachment-manager-item is-grid-item">${renderAnexoPreviewCrmAr(anexo, index)}<a class="hub-attachment-manager-name" href="${url ? escapeAttr(url) : '#'}" ${url ? 'target="_blank" rel="noopener"' : 'aria-disabled="true"'}>${escapeHtml(nome)}</a></article>`
+        : `<article class="hub-attachment-manager-item"><i data-lucide="archive" aria-hidden="true"></i>${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`}</article>`;
+    }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}
   </section>`;
 }
 
@@ -12566,15 +12722,17 @@ const HUB_BREADCRUMB_LABELS = {
   aparencia: 'Aparência',
   logo: 'Logo',
   'home-exibicao': 'Home e Exibição',
-  acessos: 'Acessos',
+  acessos: 'Senhas Salvas',
   historico: 'Histórico',
+  links: 'Links Úteis',
   inicio: 'Início',
   gerar: 'Gerar Links',
   produtos: 'Lista Produtos',
   validacoes: 'Validações',
   emitir: 'Emitir Recibo',
   consultar: 'Consultar Recibos',
-  importacao: 'Importação'
+  importacao: 'Importação',
+  cadastro: 'Cadastro sequencial'
 };
 
 const HUB_BREADCRUMB_ADMIN_ROUTES = {
@@ -12595,6 +12753,13 @@ const HUB_BREADCRUMB_ADMIN_ROUTES = {
 function obterLabelBreadcrumbHub(chave = '') {
   if (String(chave) === '200') return 'CRM 2.0';
   if (String(chave) === '201') return 'Pessoas físicas';
+  if (String(chave) === '202') return 'Pessoas jurídicas';
+  if (String(chave) === '204') return 'Pedidos';
+  if (String(chave) === '205') return 'Oportunidades';
+  if (String(chave) === '206') return 'Configurações';
+  if (String(chave) === '207') return 'Configurações';
+  if (String(chave) === 'comunicacao') return 'Comunicação';
+  if (String(chave) === 'automacoes') return 'Automações';
   return HUB_BREADCRUMB_LABELS[chave] || String(chave || '')
     .split('-')
     .filter(Boolean)
@@ -12627,14 +12792,14 @@ function obterBreadcrumbHub() {
       label: obterLabelBreadcrumbHub(contexto.principal),
       path: `${pathModulo.replace(/\/+$/g, '')}/${rotaAdmin}`
     });
-  } else if (contexto.modulo === 'painel-ar' && contexto.principal === '201') {
+  } else if (contexto.modulo === 'painel-ar' && ['201', '202', '203', '204', '205', '206'].includes(contexto.principal)) {
     itens.push({
       label: 'CRM 2.0',
       path: `${pathModulo.replace(/\/+$/g, '')}/200`
     });
     itens.push({
-      label: 'Pessoas físicas',
-      path: `${pathModulo.replace(/\/+$/g, '')}/201`
+      label: contexto.principal === '201' ? 'Pessoas físicas' : contexto.principal === '202' ? 'Pessoas jurídicas' : contexto.principal === '203' ? 'Vínculos PF/PJ' : contexto.principal === '204' ? 'Pedidos' : contexto.principal === '205' ? 'Oportunidades' : contexto.principal === '206' ? 'Comunicação' : 'Automações',
+      path: `${pathModulo.replace(/\/+$/g, '')}/${contexto.principal}`
     });
   } else if (contexto.principal) {
     itens.push({
@@ -12712,8 +12877,10 @@ function sincronizarContextoSenhasPelaRota() {
   const { modulo, principal } = obterContextoRotaHub();
   if (modulo !== 'central-senhas' || !principal) return;
 
-  if (principal === 'acessos' || principal === 'historico') {
-    state.passwords.aba = principal;
+  if (principal === 'links') {
+    state.passwords.aba = 'links';
+  } else if (principal === 'acessos' || principal === 'historico') {
+    state.passwords.aba = 'acessos';
   }
 }
 
@@ -12721,13 +12888,37 @@ function sincronizarContextoArPelaRota() {
   const { modulo, principal, secundaria } = obterContextoRotaHub();
   if (modulo !== 'painel-ar') return;
 
-  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf'];
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
   if (principal === '200') {
     state.ar.aba = 'crm2';
     return;
   }
   if (principal === '201') {
     state.ar.aba = 'crm2-pf';
+    return;
+  }
+  if (principal === '202') {
+    state.ar.aba = 'crm2-pj';
+    return;
+  }
+  if (principal === '203') {
+    state.ar.aba = 'crm2-vinculos';
+    return;
+  }
+  if (principal === '204') {
+    state.ar.aba = 'crm2-pedidos';
+    return;
+  }
+  if (principal === '205') {
+    state.ar.aba = 'crm2-oportunidades';
+    return;
+  }
+  if (principal === '206') {
+    state.ar.aba = 'crm2-comunicacao';
+    return;
+  }
+  if (principal === '207') {
+    state.ar.aba = 'crm2-comunicacao';
     return;
   }
   if (principal && abasValidas.includes(principal)) {
@@ -13600,6 +13791,10 @@ const renderAdministracaoHubPhase1 = function() {
 };
 
 const renderLinksUteisHubPhase1 = function() {
+  if (obterContextoRotaHub().modulo === 'central-senhas') {
+    renderCentralSenhas();
+    return;
+  }
   const gestor = state.usuario?.perfil === 'gestor';
 
   document.getElementById('app').innerHTML = renderHubShell({
@@ -13647,6 +13842,7 @@ const renderLinksUteisHubPhase1 = function() {
 const renderCentralSenhasHubPhase1 = function() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
   const podeVerSenha = pode('central_senhas', 'view_secret');
+  const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
 
   document.getElementById('app').innerHTML = renderHubShell({
     tituloPagina: 'Central de Senhas',
@@ -13658,19 +13854,22 @@ const renderCentralSenhasHubPhase1 = function() {
             <h2>Central de Senhas</h2>
             <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
           </div>
-          ${podeGerenciar ? `
+          ${pode('central_senhas', 'view') || podeGerenciar || podeLinks ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
-              <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
-              <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
+              <button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>
+              <button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>
             </div>
           ` : ''}
         </div>
 
-        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar) : renderResumoSenhas(podeGerenciar)}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
+        ${state.passwords.aba === 'links'
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar))
+          : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
+        ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
       </section>
     `
@@ -13748,16 +13947,18 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
 };
 
 const selecionarAbaSenhasHubPhase2 = function(aba) {
-  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
-    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
-    renderCentralSenhas();
-    return;
-  }
+  if (aba === 'historico') aba = 'acessos';
 
   atualizarHashHub(aba, { replace: true });
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
   renderCentralSenhas();
+
+  if (aba === 'links') {
+    state.links.escopo = 'todos';
+    state.links.titulo = 'Gerenciamento de Links';
+    carregarLinksUteis();
+  }
 };
 
 const selecionarAbaArHubPhase2 = function(aba) {
@@ -13842,7 +14043,7 @@ const abrirPainelArHubPhase2 = async function() {
   const contextoRota = obterContextoRotaHub();
   sincronizarContextoArPelaRota();
   const abaDaRota = contextoRota.modulo === 'painel-ar'
-    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', '200', '201'].includes(contextoRota.principal)
+    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes', '200', '201', '202', '203', '204', '205', '206', '207'].includes(contextoRota.principal)
     ? state.ar.aba
     : 'inicio';
 
@@ -13926,6 +14127,7 @@ Object.assign(window, {
   hubRenderLoading: renderHubLoading,
   navegarLogoParaHomeHub,
   hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
+  hubInicializarTabelasRedimensionaveis: initializeHubResizableTables,
   hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
   hubObterParceirosIndicacao: () => state.admin.parceirosIndicacao || [],
   hubCarregarParceirosIndicacao: carregarParceirosIndicacaoCompartilhado,
@@ -14100,6 +14302,7 @@ Object.assign(window, {
   editarComentarioDetalheCrmAr,
   excluirComentarioDetalheCrmAr,
   adicionarAnexoDetalheCrmAr,
+  alternarVisualizacaoAnexosCrmAr,
   editarCamposCrmAr,
   marcarAlteracaoCamposCrmAr,
   avancarStatusCrmAr,

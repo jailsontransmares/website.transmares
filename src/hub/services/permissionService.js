@@ -20,6 +20,8 @@ const MODULE_RESOURCE_MAP = {
   'configuracoes-identidade-visual': 'configuracoes.identidade_visual'
 };
 
+export const LINK_RESOURCES = ['links_corretora', 'links_ar', 'links_gestao'];
+
 function normalizarIdentificadorModulo(valor = '') {
   return String(valor || '')
     .trim()

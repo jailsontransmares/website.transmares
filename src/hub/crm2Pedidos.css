@@ -1,0 +1,434 @@
+.crm2-pedidos-page .crm2-pedidos-subtitle {
+  color: var(--muted-text, #6b7280);
+  margin: 6px 0 0;
+}
+
+.crm2-pedidos-page .crm2-pedidos-filters {
+  align-items: end;
+}
+
+.crm2-pedidos-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crm2-pedidos-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.crm2-pedidos-metrics article {
+  background: var(--surface-muted, rgba(245, 247, 251, 0.8));
+  border: 1px solid var(--border-color, #dfe4ec);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.crm2-pedidos-metrics small,
+.crm2-pedidos-metrics span {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-pedidos-metrics small {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.crm2-pedidos-metrics strong {
+  color: var(--text-color, #25314a);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.crm2-pedidos-table {
+  min-width: 1320px;
+}
+
+.crm2-pedidos-table td strong,
+.crm2-pedidos-table td small {
+  display: block;
+}
+
+.crm2-pedido-number-link {
+  background: transparent;
+  border: 0;
+  color: var(--link-color, #2856a6);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.crm2-pedido-number-link:hover,
+.crm2-pedido-number-link:focus-visible {
+  text-decoration: underline;
+}
+
+.crm2-pedidos-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm2-pedidos-row-actions .secondary-btn {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.crm2-pedido-form {
+  display: grid;
+  gap: 16px;
+}
+
+.crm2-pedido-form-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.crm2-pedido-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.crm2-pedido-form-grid label > span,
+.crm2-pedido-detail-grid span,
+.crm2-pedidos-detail-summary span {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-pedido-form-grid label.is-wide,
+.crm2-pedido-form-grid label.is-wide textarea {
+  grid-column: 1 / -1;
+}
+
+.crm2-pedido-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.crm2-pedido-detail-page {
+  min-height: 420px;
+}
+
+.crm2-pedidos-detail-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.crm2-pedidos-detail-summary article {
+  background: var(--surface-muted, rgba(245, 247, 251, 0.8));
+  border: 1px solid var(--border-color, #dfe4ec);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.crm2-pedidos-detail-summary strong {
+  color: var(--text-color, #25314a);
+  font-size: 15px;
+}
+
+.crm2-pedido-tabs {
+  margin: 18px 0;
+}
+
+.crm2-pedido-detail-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.crm2-pedido-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crm2-pedido-detail-grid > div.is-wide {
+  grid-column: 1 / -1;
+}
+
+.crm2-pedido-integrations {
+  border-top: 1px solid var(--border-color, #dfe4ec);
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+.crm2-pedido-integrations-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.crm2-pedido-integrations-grid article {
+  border: 1px solid var(--border-color, #dfe4ec);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+}
+
+.crm2-pedido-integrations-grid article > span,
+.crm2-pedido-integrations-grid article > small {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-pedido-integrations-grid article .secondary-btn {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+.crm2-pedido-detail-grid small,
+.crm2-pedido-related-list small,
+.crm2-pedido-timeline p,
+.crm2-pedido-timeline small {
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-pedido-related-list,
+.crm2-pedido-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.crm2-pedido-related-list article {
+  border: 1px solid var(--border-color, #dfe4ec);
+  border-radius: 10px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.crm2-pedido-timeline article {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 10px minmax(0, 1fr);
+}
+
+.crm2-pedido-timeline-marker {
+  background: #466fc1;
+  border-radius: 50%;
+  height: 10px;
+  margin-top: 5px;
+  width: 10px;
+}
+
+.crm2-pedido-timeline-marker.is-cancelamento {
+  background: #a13b42;
+}
+
+.crm2-pedido-timeline-marker.is-encerramento,
+.crm2-pedido-timeline-marker.is-financeiro {
+  background: #1f7141;
+}
+
+.crm2-pedido-timeline-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.crm2-pedido-history-type {
+  background: #e9eefb;
+  border-radius: 999px;
+  color: #36569a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.crm2-pedido-history-type.is-cancelamento {
+  background: #fcebec;
+  color: #a13b42;
+}
+
+.crm2-pedido-history-type.is-financeiro {
+  background: #e8f6ee;
+  color: #1f7141;
+}
+
+.crm2-pedido-closed-notice {
+  background: #f5f7fb;
+  border: 1px solid var(--border-color, #dfe4ec);
+  border-radius: 8px;
+  color: var(--muted-text, #6b7280);
+  margin: 14px 0;
+  padding: 10px 12px;
+}
+
+.crm2-pedido-cancel-action {
+  border-color: #efc2c5;
+  color: #a13b42;
+}
+
+.crm2-pedido-close-action {
+  border-color: #b7e4c9;
+  color: #1f7141;
+}
+
+.crm2-pedido-timeline p {
+  margin: 5px 0;
+}
+
+.crm2-pedidos-table td small {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.crm2-pedidos-status,
+.crm2-pedidos-financial {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.crm2-pedidos-status.is-ativo,
+.crm2-pedidos-financial.is-pago {
+  background: #e8f6ee;
+  border-color: #b7e4c9;
+  color: #1f7141;
+}
+
+.crm2-pedidos-status.is-vencido,
+.crm2-pedidos-status.is-cancelado,
+.crm2-pedidos-financial.is-estornado {
+  background: #fcebec;
+  border-color: #efc2c5;
+  color: #a13b42;
+}
+
+.crm2-pedidos-status.is-concluido {
+  background: #e9eefb;
+  border-color: #c9d5f5;
+  color: #36569a;
+}
+
+.crm2-pedidos-status.is-em-validacao,
+.crm2-pedidos-status.is-em-cadastro,
+.crm2-pedidos-status.is-aguardando-documentacao,
+.crm2-pedidos-status.is-aguardando-pagamento,
+.crm2-pedidos-financial.is-pendente {
+  background: #fff5df;
+  border-color: #f0d59b;
+  color: #86600d;
+}
+
+.crm2-pedidos-pending {
+  color: #86600d !important;
+  font-weight: 600;
+}
+
+.crm2-pedidos-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.crm2-pedidos-pagination > span {
+  color: var(--muted-text, #6b7280);
+  font-size: 13px;
+}
+
+.crm2-pedidos-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+
+.crm2-pedidos-state {
+  margin-top: 18px;
+}
+
+@media (max-width: 900px) {
+  .crm2-pedidos-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-pedidos-page .crm2-pedidos-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-pedido-form-grid,
+  .crm2-pedido-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-pedidos-detail-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-pedido-integrations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .crm2-pedidos-metrics,
+  .crm2-pedidos-page .crm2-pedidos-filters,
+  .crm2-pedido-form-grid,
+  .crm2-pedido-detail-grid,
+  .crm2-pedidos-detail-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pedido-form-grid label.is-wide,
+  .crm2-pedido-detail-grid > div.is-wide {
+    grid-column: auto;
+  }
+
+  .crm2-pedidos-filter-actions,
+  .crm2-pedidos-filter-actions button {
+    width: 100%;
+  }
+
+  .crm2-pedidos-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crm2-pedidos-pagination > div,
+  .crm2-pedidos-pagination button {
+    width: 100%;
+  }
+
+  .crm2-pedido-form-actions,
+  .crm2-pedido-form-actions button {
+    width: 100%;
+  }
+
+  .crm2-pedido-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .crm2-pedido-timeline-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,154 @@
+.crm2-pj-tabs {
+  margin: 0 0 18px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.crm2-pj-tabs button {
+  white-space: nowrap;
+}
+
+.crm2-pj-attachments {
+  margin-top: 18px;
+}
+
+.crm2-pj-attachments .hub-form-section-title {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.crm2-pj-attachment-add {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.crm2-pj-attachment-add span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.crm2-pj-attachment-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 14px;
+}
+
+.crm2-pj-attachment-card {
+  background: var(--fundo-card, #fff);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.crm2-pj-attachment-preview {
+  align-items: center;
+  background: var(--fundo-suave, #f5f7fa);
+  border-radius: 8px;
+  display: flex;
+  height: 112px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.crm2-pj-attachment-preview[role="button"] {
+  cursor: pointer;
+}
+
+.crm2-pj-attachment-preview img,
+.crm2-pj-attachment-preview iframe {
+  border: 0;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.crm2-pj-attachment-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.crm2-pj-attachment-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm2-pj-attachment-meta small {
+  color: var(--texto-suave);
+}
+
+.crm2-pj-attachment-validity {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: start;
+  padding: 3px 8px;
+}
+
+.crm2-pj-attachment-validity.is-valido {
+  background: #e7f7ee;
+  color: #167344;
+}
+
+.crm2-pj-attachment-validity.is-vencendo {
+  background: #fff4d6;
+  color: #8a5a00;
+}
+
+.crm2-pj-attachment-validity.is-vencido {
+  background: #fde8e8;
+  color: #b42318;
+}
+
+.crm2-pj-attachment-validity.is-sem-validade {
+  background: var(--fundo-suave, #f5f7fa);
+  color: var(--texto-suave);
+}
+
+.crm2-pj-attachment-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.crm2-pj-attachment-drafts {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.crm2-pj-attachment-draft {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+}
+
+.crm2-pj-status-section small {
+  color: var(--texto-suave);
+  display: block;
+  margin-top: 6px;
+}
+
+@media (max-width: 720px) {
+  .crm2-pj-attachment-draft {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pj-attachment-draft .secondary-btn {
+    justify-self: start;
+  }
+
+  .crm2-pj-attachment-grid {
+    grid-template-columns: 1fr;
+  }
+}

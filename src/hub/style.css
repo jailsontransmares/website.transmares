@@ -1342,7 +1342,7 @@ body.dark .module-card {
 
 .module-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-lg);
 }
 
@@ -3402,6 +3402,7 @@ body.dark .admin-partners-actions-menu {
 .crm2-phase1-roadmap {
   display: grid;
   gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .crm2-phase1-roadmap-item {
@@ -3413,6 +3414,10 @@ body.dark .admin-partners-actions-menu {
   gap: 14px;
   grid-template-columns: 52px minmax(0, 1fr) auto;
   padding: 13px 16px;
+}
+
+.crm2-phase1-roadmap-item > div {
+  min-width: 0;
 }
 
 .crm2-phase1-roadmap-code {
@@ -4237,6 +4242,166 @@ body.dark .admin-partners-actions-menu {
   font-weight: 800;
 }
 
+.hub-attachment-manager.ar-crm-attachments-fixed {
+  align-items: stretch;
+  display: grid;
+  gap: 12px;
+  justify-content: stretch;
+}
+
+.hub-attachment-manager-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.hub-attachment-manager-header > strong {
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hub-attachment-manager-toolbar {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.hub-attachment-manager-toolbar .icon-btn {
+  height: 26px;
+  min-height: 26px;
+  padding: 4px;
+  width: 26px;
+}
+
+.hub-attachment-manager-toolbar .icon-btn svg {
+  height: 15px;
+  width: 15px;
+}
+
+.hub-attachment-manager-toolbar .icon-btn.is-active {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.hub-attachment-manager-include {
+  cursor: pointer;
+  display: inline-flex;
+  position: relative;
+}
+
+.hub-attachment-manager-list {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.hub-attachment-manager-list.is-grid-view {
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hub-attachment-manager-item {
+  align-items: center;
+  border-bottom: var(--glass-border-subtle);
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 0;
+}
+
+.hub-attachment-manager-item > svg {
+  color: var(--texto-suave);
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.hub-attachment-manager-item > a,
+.hub-attachment-manager-name,
+.hub-attachment-manager-item > span {
+  color: var(--cor-principal);
+  font-size: 11px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hub-attachment-manager-item.is-grid-item {
+  align-items: stretch;
+  border: 0;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+}
+
+.hub-attachment-manager-item.is-grid-item .hub-attachment-preview {
+  height: 112px;
+  width: 100%;
+}
+
+.hub-attachment-manager-item.is-grid-item .hub-attachment-manager-name {
+  display: -webkit-box;
+  font-size: 10px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hub-attachment-preview {
+  align-items: center;
+  background: color-mix(in srgb, var(--texto-suave) 7%, transparent);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-input);
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+}
+
+.hub-attachment-preview.is-image img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.hub-attachment-preview.is-pdf iframe {
+  border: 0;
+  height: 100%;
+  pointer-events: none;
+  width: 100%;
+}
+
+.hub-attachment-preview.is-unavailable {
+  color: var(--texto-suave);
+  flex-direction: column;
+  font-size: 10px;
+  gap: 4px;
+}
+
+.hub-attachment-preview.is-unavailable svg {
+  height: 20px;
+  width: 20px;
+}
+
+@media (max-width: 900px) {
+  .hub-attachment-manager-list.is-grid-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .hub-attachment-manager-list.is-grid-view {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .ar-crm-detail-screen-header {
   align-items: flex-start;
   border-bottom: 1px solid var(--borda);
@@ -4784,6 +4949,18 @@ body.dark .admin-partners-actions-menu {
   .ar-crm-field-group-grid,
   .ar-crm-order-data .ar-crm-field-group-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .crm2-phase1-roadmap {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .crm2-phase1-roadmap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -11968,10 +12145,26 @@ body.dark .hub-layout .fin-modal-backdrop {
   width: min(720px, 100%);
 }
 
+@media (max-width: 1180px) {
+  .module-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .module-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 800px) {
   .hub-layout .modal-backdrop.hub-modal-backdrop--contained,
   .hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained {
     padding: 8px;
+  }
+
+  .crm2-phase1-roadmap {
+    grid-template-columns: 1fr;
   }
 
   .hub-layout .modal-backdrop.hub-modal-backdrop--contained > .small-modal,
@@ -12535,6 +12728,51 @@ body.dark .dashboard .config-group {
   font-size: 11px;
   line-height: 1.25;
   margin: 0;
+}
+
+/* Padrão global: colunas ajustáveis por arraste ou teclado. */
+table[data-resizable-table] {
+  table-layout: fixed;
+}
+
+table[data-resizable-table] > thead > tr > th {
+  overflow: visible;
+  position: relative;
+}
+
+.hub-table-resize-handle {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  bottom: 0;
+  cursor: col-resize;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: -4px;
+  top: 0;
+  touch-action: none;
+  width: 8px;
+  z-index: 2;
+}
+
+.hub-table-resize-handle::after {
+  background: color-mix(in srgb, var(--cor-principal) 38%, transparent);
+  border-radius: 999px;
+  content: '';
+  inset: 4px 2px;
+  position: absolute;
+  transition: background-color 120ms ease;
+}
+
+.hub-table-resize-handle:hover::after,
+.hub-table-resize-handle:focus-visible::after {
+  background: var(--cor-principal);
+}
+
+.hub-table-resize-handle:focus-visible {
+  outline: 2px solid var(--cor-principal);
+  outline-offset: -2px;
 }
 
 @media (max-width: 899px) {

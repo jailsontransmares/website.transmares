@@ -1,0 +1,227 @@
+.crm2-timeline-filters {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.crm2-timeline-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.crm2-timeline-filters label > span,
+.crm2-unified-timeline-composer label > span {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-timeline-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crm2-unified-timeline-summary {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+
+.crm2-unified-timeline-summary strong {
+  color: var(--text-color, #25314a);
+  font-size: 22px;
+}
+
+.crm2-unified-timeline-summary span,
+.crm2-unified-timeline-summary small {
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-unified-timeline-list {
+  display: grid;
+  gap: 16px;
+}
+
+.crm2-unified-timeline-item {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 12px minmax(0, 1fr);
+}
+
+.crm2-unified-timeline-marker {
+  background: #466fc1;
+  border-radius: 50%;
+  height: 10px;
+  margin-top: 7px;
+  width: 10px;
+}
+
+.crm2-unified-timeline-marker.is-cancelamento {
+  background: #a13b42;
+}
+
+.crm2-unified-timeline-marker.is-financeiro,
+.crm2-unified-timeline-marker.is-encerramento {
+  background: #1f7141;
+}
+
+.crm2-unified-timeline-content {
+  border-bottom: 1px solid var(--border-color, #dfe4ec);
+  display: grid;
+  gap: 6px;
+  padding-bottom: 14px;
+}
+
+.crm2-unified-timeline-content header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.crm2-unified-timeline-content header > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.crm2-unified-timeline-content header time,
+.crm2-unified-timeline-content p,
+.crm2-unified-timeline-content > small {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-unified-timeline-content p {
+  margin: 0;
+}
+
+.crm2-unified-timeline-type,
+.crm2-unified-timeline-source {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.crm2-unified-timeline-type {
+  background: #e9eefb;
+  color: #36569a;
+}
+
+.crm2-unified-timeline-type.is-cancelamento {
+  background: #fcebec;
+  color: #a13b42;
+}
+
+.crm2-unified-timeline-type.is-financeiro,
+.crm2-unified-timeline-type.is-encerramento {
+  background: #e8f6ee;
+  color: #1f7141;
+}
+
+.crm2-unified-timeline-source {
+  background: #f5f7fb;
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-timeline-changes {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-timeline-changes span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.crm2-timeline-changes small {
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-timeline-related-link {
+  background: transparent;
+  border: 0;
+  color: var(--link-color, #2856a6);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  width: fit-content;
+}
+
+.crm2-timeline-related-link:hover,
+.crm2-timeline-related-link:focus-visible {
+  text-decoration: underline;
+}
+
+.crm2-unified-timeline-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.crm2-unified-timeline-pagination > span {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-unified-timeline-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+
+.crm2-unified-timeline-composer {
+  border-top: 1px solid var(--border-color, #dfe4ec);
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+.crm2-unified-timeline-composer label {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-unified-timeline-composer button {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .crm2-timeline-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .crm2-timeline-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-timeline-filter-actions,
+  .crm2-timeline-filter-actions button,
+  .crm2-unified-timeline-composer button {
+    width: 100%;
+  }
+
+  .crm2-unified-timeline-content header,
+  .crm2-unified-timeline-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crm2-unified-timeline-pagination > div,
+  .crm2-unified-timeline-pagination > div button {
+    width: 100%;
+  }
+}

@@ -174,7 +174,10 @@ function deveExibirModuloNaHome(item) {
 }
 
 function normalizarCards(registros, usuario, permissoes) {
-  const ativos = registros.filter(deveExibirModuloNaHome);
+  const idsLinksLegados = new Set(['links-corretora', 'links-ar', 'links-gestao']);
+  const ativos = registros
+    .filter(deveExibirModuloNaHome)
+    .filter(item => !idsLinksLegados.has(normalizarSlugModulo(item.slug || item.modulo_id || item.id_modulo || item.titulo || item.id)));
   const cards = ativos
     .map(item => {
       const dados = obterDadosItem(item);

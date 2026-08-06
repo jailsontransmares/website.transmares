@@ -1,0 +1,215 @@
+.crm2-vinculos-page .crm2-vinculos-filters {
+  align-items: end;
+}
+
+.crm2-vinculos-table {
+  min-width: 960px;
+}
+
+.crm2-vinculos-table td strong,
+.crm2-vinculos-table td small {
+  display: block;
+}
+
+.crm2-vinculos-table td small {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.crm2-vinculo-type {
+  color: var(--text-color, #25314a);
+  font-weight: 600;
+}
+
+.crm2-vinculo-link {
+  background: transparent;
+  border: 0;
+  color: var(--link-color, #2856a6);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  text-align: left;
+}
+
+.crm2-vinculo-link:hover,
+.crm2-vinculo-link:focus-visible {
+  text-decoration: underline;
+}
+
+.crm2-vinculo-detail-header {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 22px 0 18px;
+}
+
+.crm2-vinculo-detail-header h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.crm2-vinculo-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.crm2-vinculo-detail-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.crm2-vinculo-detail-grid > .is-wide {
+  grid-column: 1 / -1;
+}
+
+.crm2-vinculo-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crm2-vinculo-detail-card strong {
+  font-size: 16px;
+}
+
+.crm2-vinculo-detail-fields {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.crm2-vinculo-detail-fields span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crm2-vinculo-detail-fields small,
+.crm2-vinculo-timeline-item small {
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-vinculo-detail-notes {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.crm2-vinculo-timeline {
+  display: grid;
+  gap: 18px;
+}
+
+.crm2-vinculo-timeline-item {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 12px minmax(0, 1fr);
+}
+
+.crm2-vinculo-timeline-marker {
+  background: #466fc1;
+  border-radius: 50%;
+  height: 10px;
+  margin-top: 5px;
+  width: 10px;
+}
+
+.crm2-vinculo-timeline-item header {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.crm2-vinculo-timeline-item header span {
+  color: var(--muted-text, #6b7280);
+  font-size: 12px;
+}
+
+.crm2-vinculo-timeline-item p {
+  margin: 6px 0;
+}
+
+.crm2-pf-vinculos-block {
+  margin-bottom: 16px;
+}
+
+.crm2-pf-vinculos-block .hub-form-section-title {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.crm2-vinculos-state {
+  margin-top: 18px;
+}
+
+.crm2-vinculos-actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.crm2-vinculo-history-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.crm2-vinculo-history-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crm2-vinculo-history-grid small {
+  color: var(--muted-text, #6b7280);
+}
+
+.crm2-vinculo-inactivate-button {
+  border-color: #d7a6a6;
+  color: #9a3d3d;
+}
+
+@media (max-width: 900px) {
+  .crm2-vinculos-page .crm2-vinculos-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .crm2-vinculos-page .crm2-vinculos-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-vinculos-page .crm2-vinculos-filters button {
+    width: 100%;
+  }
+
+  .crm2-vinculo-history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-vinculo-detail-header,
+  .crm2-vinculo-timeline-item header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crm2-vinculo-detail-grid,
+  .crm2-vinculo-detail-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-vinculo-detail-grid > .is-wide {
+    grid-column: auto;
+  }
+
+  .crm2-pf-vinculos-block .hub-form-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}

@@ -438,6 +438,209 @@
   gap: 5px;
 }
 
+.crm2-pf-company-card {
+  align-items: start;
+  gap: 12px;
+}
+
+.crm2-pf-company-copy {
+  min-width: 0;
+}
+
+.crm2-pf-company-copy > strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.crm2-pf-company-cnpj {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.crm2-pf-company-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.crm2-pf-company-pill {
+  background: color-mix(in srgb, var(--texto-suave) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--texto-suave) 18%, var(--borda));
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm2-pf-company-pill.is-order-count {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 20%, var(--borda));
+  color: var(--color-primary);
+}
+
+.crm2-pf-company-card > .icon-btn {
+  flex: 0 0 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 4px;
+  width: 26px;
+}
+
+.crm2-pf-company-card > .icon-btn svg {
+  height: 15px;
+  width: 15px;
+}
+
+.crm2-pf-companies-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.crm2-pf-company-search {
+  flex: 0 1 300px;
+  margin: 0;
+  max-width: 300px;
+  min-width: 0;
+}
+
+.crm2-pf-company-search-row {
+  align-items: end;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.crm2-pf-company-include {
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding-left: 9px;
+  padding-right: 9px;
+  white-space: nowrap;
+}
+
+.crm2-pf-company-search label {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-pf-company-search label > span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.crm2-pf-companies-table {
+  border-collapse: collapse;
+  min-width: 620px;
+  width: 100%;
+}
+
+.crm2-pf-companies-table th,
+.crm2-pf-companies-table td {
+  border-bottom: var(--glass-border-subtle);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.crm2-pf-companies-table th {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.crm2-pf-companies-table td {
+  color: var(--texto);
+  font-size: 11px;
+}
+
+.crm2-pf-company-name-link {
+  background: transparent;
+  border: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  padding: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.crm2-pf-company-name-link:hover,
+.crm2-pf-company-name-link:focus-visible {
+  text-decoration: underline;
+}
+
+.crm2-pf-companies-table .crm2-pf-company-pill {
+  display: inline-flex;
+}
+
+.crm2-pf-order-status-pill {
+  background: color-mix(in srgb, var(--texto-suave) 9%, transparent);
+}
+
+.crm2-pf-order-pagination {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  font-size: 10px;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.crm2-pf-order-pagination > div {
+  display: flex;
+  gap: 6px;
+}
+
+.crm2-pf-order-pagination .secondary-btn {
+  font-size: 10px;
+  min-height: 26px;
+  padding: 4px 8px;
+}
+
+.crm2-pf-companies-table .crm2-pf-expiration-pill.is-expired {
+  background: color-mix(in srgb, var(--color-danger, #b42318) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger, #b42318) 28%, var(--borda));
+  color: var(--color-danger, #b42318);
+  font-weight: 800;
+}
+
+.crm2-pf-company-actions-heading,
+.crm2-pf-company-actions {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.crm2-pf-company-delete {
+  color: var(--color-danger, #b42318);
+  height: 26px;
+  min-height: 26px;
+  padding: 4px;
+  width: 26px;
+}
+
+.crm2-pf-company-delete svg {
+  height: 15px;
+  width: 15px;
+}
+
 .crm2-pf-form-header-actions {
   align-items: center;
   display: flex;
@@ -494,6 +697,22 @@
   color: var(--color-danger, #b42318);
   font-size: 11px;
   font-weight: 700;
+}
+
+.crm2-pessoas-page .hub-form-grid label.is-changed {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, var(--borda));
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.crm2-pessoas-page .hub-form-grid label.is-changed::after {
+  color: var(--color-primary);
+  content: 'Campo alterado';
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  margin-top: 4px;
 }
 
 .crm2-pessoas-page.hub-form-screen {
@@ -736,7 +955,7 @@
   background: transparent;
   border: 0;
   flex-direction: row;
-  justify-content: flex-start;
+  justify-content: space-between;
   padding: 0;
 }
 
@@ -746,6 +965,50 @@
   flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
+  margin-left: auto;
+}
+
+.crm2-pf-attachment-batch-toolbar {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.crm2-pf-attachment-batch-toolbar .icon-btn,
+.crm2-pf-attachments-header-actions > .icon-btn {
+  height: 26px;
+  min-height: 26px;
+  padding: 4px;
+  width: 26px;
+}
+
+.crm2-pf-attachment-batch-toolbar .icon-btn svg,
+.crm2-pf-attachments-header-actions > .icon-btn svg {
+  height: 15px;
+  width: 15px;
+}
+
+.crm2-pf-attachment-batch-toolbar .icon-btn.is-active,
+.crm2-pf-attachments-header-actions > .icon-btn.is-active {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.crm2-pf-attachment-toolbar-divider {
+  background: var(--borda);
+  height: 20px;
+  margin: 0 3px;
+  width: 1px;
+}
+
+.crm2-pf-attachment-selection-count {
+  color: var(--texto-suave);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.crm2-pf-batch-delete {
+  color: var(--color-danger, #b42318);
 }
 
 .crm2-pf-attachments-content {
@@ -910,6 +1173,151 @@
   padding: 8px 10px;
 }
 
+.crm2-pf-form-attachment-row:has(.crm2-pf-attachment-select) {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+}
+
+.crm2-pf-form-attachment-row.is-selected {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-glass-strong));
+  border-color: color-mix(in srgb, var(--color-primary) 34%, var(--borda));
+}
+
+.crm2-pf-attachment-select {
+  align-items: center;
+  display: inline-flex;
+  margin: 0;
+}
+
+.crm2-pf-attachment-select input {
+  accent-color: var(--color-primary);
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view {
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-form-attachment-row,
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-form-attachment-row:has(.crm2-pf-attachment-select) {
+  align-content: start;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 112px auto auto;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  position: relative;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-form-attachment-row > *,
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-name-cell,
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-row-actions {
+  min-width: 0;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-select {
+  left: 8px;
+  position: absolute;
+  top: 8px;
+  z-index: 1;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-form-attachment-row > svg {
+  height: 16px;
+  left: 10px;
+  position: absolute;
+  top: 102px;
+  width: 16px;
+}
+
+.crm2-pf-attachment-preview {
+  align-items: center;
+  background: color-mix(in srgb, var(--texto-suave) 6%, transparent);
+  border-radius: var(--radius-input);
+  display: flex;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: 112px;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.crm2-pf-attachment-preview.is-image img {
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+
+.crm2-pf-attachment-preview.is-pdf iframe {
+  border: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.crm2-pf-attachment-preview.is-unavailable {
+  color: var(--texto-suave);
+  flex-direction: column;
+  font-size: 10px;
+  gap: 4px;
+}
+
+.crm2-pf-attachment-preview.is-unavailable svg {
+  height: 20px;
+  width: 20px;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-name-cell {
+  grid-column: 1;
+  grid-row: 2;
+  overflow: hidden;
+  padding: 0;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-name-cell strong {
+  display: block;
+  font-size: 10px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-validity-pill {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  justify-self: start;
+  text-overflow: ellipsis;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-row-actions {
+  grid-column: 2;
+  grid-row: 2;
+  flex-shrink: 0;
+  justify-self: end;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-row-actions .icon-btn:first-child:last-child {
+  margin-left: 4px;
+}
+
+.crm2-pf-form-attachment-list.is-grid-view .crm2-pf-attachment-row-actions .icon-btn {
+  flex: 0 0 24px;
+}
+
 .crm2-pf-form-attachment-row > svg {
   color: var(--texto-suave);
   height: 17px;
@@ -917,7 +1325,15 @@
 }
 
 .crm2-pf-attachment-row-actions > .icon-btn {
-  padding: 5px;
+  height: 24px;
+  min-height: 24px;
+  padding: 3px;
+  width: 24px;
+}
+
+.crm2-pf-attachment-row-actions > .icon-btn svg {
+  height: 14px;
+  width: 14px;
 }
 
 .crm2-pf-form-attachment-row strong {
@@ -1164,5 +1580,33 @@
 
   .crm2-pf-attachment-status {
     justify-self: start;
+  }
+
+  .crm2-pf-form-attachment-list.is-grid-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .crm2-pf-company-search-row {
+    align-items: center;
+    gap: 6px;
+  }
+
+  .crm2-pf-company-search {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .crm2-pf-company-include {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+
+  .crm2-pf-form-attachment-list.is-grid-view {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
