@@ -411,6 +411,74 @@
   grid-row: 3;
 }
 
+.crm2-pf-include-attachment {
+  align-self: start;
+  width: fit-content;
+}
+
+.crm2-pf-attachment-editor {
+  align-items: end;
+  border-left: 2px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  padding: 8px 0 8px 10px;
+}
+
+.crm2-pf-attachment-editor label,
+.crm2-pf-form-attachment-row {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-pf-attachment-editor label > span {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.crm2-pf-attachment-editor-actions,
+.crm2-pf-attachment-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm2-pf-form-attachment-list {
+  display: grid;
+  gap: 7px;
+}
+
+.crm2-pf-form-attachment-row {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface-glass-strong) 72%, transparent);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-input);
+  column-gap: 9px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding: 8px 10px;
+}
+
+.crm2-pf-form-attachment-row > svg {
+  color: var(--texto-suave);
+  height: 17px;
+  width: 17px;
+}
+
+.crm2-pf-form-attachment-row strong {
+  overflow-wrap: anywhere;
+}
+
+.crm2-pf-attachment-validity-pill {
+  background: color-mix(in srgb, var(--texto-suave) 10%, transparent);
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font-size: 10px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
 .crm2-pf-form-footer {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
@@ -464,6 +532,30 @@
 
   .crm2-pf-form-footer > button {
     width: 100%;
+  }
+
+  .crm2-pf-attachment-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-attachment-editor-actions,
+  .crm2-pf-attachment-row-actions {
+    width: 100%;
+  }
+
+  .crm2-pf-attachment-editor-actions > button,
+  .crm2-pf-attachment-row-actions > button {
+    flex: 1 1 auto;
+  }
+
+  .crm2-pf-form-attachment-row {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .crm2-pf-attachment-validity-pill,
+  .crm2-pf-attachment-row-actions {
+    grid-column: 2;
   }
 }
 

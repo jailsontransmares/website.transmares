@@ -264,6 +264,56 @@ Object.assign(window, {
     setMessageCrm2('Observação adicionada à timeline mockada.');
     rerenderCrm2Phase2();
   },
+  crm2PfOpenAttachmentPicker() {
+    if (!crm2CanEdit()) return;
+    document.getElementById('crm2-pf-attachment-picker')?.click();
+  },
+  crm2PfSelectAttachment(input) {
+    if (!crm2CanEdit()) return;
+    const file = input?.files?.[0];
+    if (!file) return;
+    crm2PfState.attachmentDraft = {
+      file,
+      nome: file.name,
+      validade: ''
+    };
+    rerenderCrm2Phase2();
+  },
+  crm2PfUpdateAttachmentDraft(field, value) {
+    if (!crm2PfState.attachmentDraft || !['nome', 'validade'].includes(field)) return;
+    crm2PfState.attachmentDraft[field] = String(value || '');
+  },
+  crm2PfCancelAttachmentDraft() {
+    crm2PfState.attachmentDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfConfirmAttachmentDraft() {
+    const draft = crm2PfState.attachmentDraft;
+    if (!draft?.file || !String(draft.nome || '').trim()) return;
+    crm2PfState.draftAttachments = [
+      ...(crm2PfState.draftAttachments || []),
+      fileToAttachmentCrm2(draft.file, draft.validade, String(draft.nome).trim())
+    ];
+    crm2PfState.attachmentDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfViewAttachment(source, index, name) {
+    const attachment = source === 'draft'
+      ? crm2PfState.draftAttachments?.[index]
+      : getPersonCrm2(crm2PfState.detailId)?.anexos?.[index];
+    if (!attachment) return;
+    setMessageCrm2(`Visualização mockada: ${name}. Nenhum arquivo é aberto ou enviado.`);
+    rerenderCrm2Phase2();
+  },
+  crm2PfDeleteFormAttachment(source, index, name) {
+    if (!crm2PfState.canDelete) return;
+    if (source === 'draft') {
+      crm2PfState.draftAttachments.splice(index, 1);
+      rerenderCrm2Phase2();
+      return;
+    }
+    crm2PfRemoveAttachment(crm2PfState.detailId, index);
+  },
   crm2PfAddAttachment(event, personId) {
     event.preventDefault();
     if (!crm2CanEdit()) return;
@@ -290,7 +340,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfRemoveAttachment(personId, index) {
-    if (!crm2CanEdit()) return;
+    if (!crm2PfState.canDelete) return;
     const person = getPersonCrm2(personId);
     const attachment = person?.anexos?.[index];
     if (!person || !attachment) return;

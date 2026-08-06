@@ -51,6 +51,40 @@ function crm2PfPartnerOptions() {
   return options;
 }
 
+function renderFormAttachmentsCrm2(person, editing, verified) {
+  const existing = editing ? (person?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index })) : [];
+  const pending = (crm2PfState.draftAttachments || []).map((attachment, index) => ({ ...attachment, source: 'draft', index }));
+  const attachments = [...existing, ...pending];
+  return `
+    <section class="hub-form-section crm2-pf-attachments-mock ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-attachments-title">
+      <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong></div>
+      <button class="secondary-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" ${verified ? '' : 'disabled'}>Incluir anexo</button>
+      <input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>
+      ${crm2PfState.attachmentDraft ? `
+        <div class="crm2-pf-attachment-editor" role="group" aria-label="Configurar anexo selecionado">
+          <label><span>Nome do arquivo</span><input class="config-input" type="text" value="${escapeAttrCrm2(crm2PfState.attachmentDraft.nome)}" oninput="crm2PfUpdateAttachmentDraft('nome', this.value)" autofocus></label>
+          <label><span>Validade opcional</span><input class="config-input" type="date" value="${escapeAttrCrm2(crm2PfState.attachmentDraft.validade)}" onchange="crm2PfUpdateAttachmentDraft('validade', this.value)"></label>
+          <div class="crm2-pf-attachment-editor-actions">
+            <button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button>
+            <button class="save-btn" type="button" onclick="crm2PfConfirmAttachmentDraft()">Adicionar</button>
+          </div>
+        </div>
+      ` : ''}
+      ${attachments.length ? `<div class="crm2-pf-form-attachment-list" aria-label="Anexos selecionados">${attachments.map((attachment) => `
+        <article class="crm2-pf-form-attachment-row">
+          <i data-lucide="archive" aria-hidden="true"></i>
+          <strong>${escapeHtmlCrm2(attachment.nome)}</strong>
+          <span class="crm2-pf-attachment-validity-pill">${attachment.validade ? escapeHtmlCrm2(formatDateCrm2(attachment.validade)) : 'Sem validade'}</span>
+          <div class="crm2-pf-attachment-row-actions">
+            ${crm2PfState.canView ? `<button class="secondary-btn" type="button" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')">Visualizar</button>` : ''}
+            ${crm2PfState.canDelete ? `<button class="secondary-btn" type="button" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')">Excluir</button>` : ''}
+          </div>
+        </article>
+      `).join('')}</div>` : ''}
+    </section>
+  `;
+}
+
 function renderPersonFormCrm2() {
   const route = currentPfRouteCrm2();
   const editing = route.view === 'edit' || crm2PfState.formMode === 'edit';
@@ -100,14 +134,7 @@ function renderPersonFormCrm2() {
           </div>
         </section>` : ''}
 
-        <section class="hub-form-section crm2-pf-attachments-mock ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-attachments-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-attachments-title">Anexos</strong></div>
-          <div class="crm2-pf-form-attachment-fields">
-            <label><span>Arquivo</span><input class="config-input" type="file" name="anexoArquivo" ${verified ? '' : 'disabled'}></label>
-            <label><span>Validade</span><input class="config-input" type="date" name="anexoValidade" ${verified ? '' : 'disabled'}></label>
-          </div>
-          ${editing && (person?.anexos || []).length ? `<div class="crm2-pf-form-existing-attachments"><strong>Anexos atuais</strong>${person.anexos.map((attachment) => `<span>${escapeHtmlCrm2(attachment.nome)}</span>`).join('')}</div>` : ''}
-        </section>
+        ${renderFormAttachmentsCrm2(person, editing, verified)}
 
         <div class="hub-form-screen-actions crm2-pf-form-footer">
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
@@ -250,6 +277,8 @@ function setMessageCrm2(message = '') {
 function resetFormCrm2() {
   crm2PfState.formMode = '';
   crm2PfState.draft = {};
+  crm2PfState.draftAttachments = [];
+  crm2PfState.attachmentDraft = null;
   crm2PfState.errors = {};
   crm2PfState.changedFields = [];
   crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
@@ -272,6 +301,8 @@ function openFormCrm2(mode, id = '') {
     crm2PfState.formMode = 'create';
     crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
     crm2PfState.draft = {};
+    crm2PfState.draftAttachments = [];
+    crm2PfState.attachmentDraft = null;
     navigateCrm2Route('201', 'novo');
   }
 }
@@ -299,9 +330,10 @@ function describeChangesCrm2(original, updated) {
   });
 }
 
-function fileToAttachmentCrm2(file, expiration = '') {
+function fileToAttachmentCrm2(file, expiration = '', customName = '') {
   return {
-    nome: file?.name || 'Arquivo selecionado',
+    nome: customName || file?.name || 'Arquivo selecionado',
+    arquivoOriginal: file?.name || '',
     tipo: file?.type || file?.name?.split('.').pop()?.toUpperCase() || 'Arquivo',
     incluidoEm: new Date().toISOString(),
     validade: expiration
@@ -313,10 +345,6 @@ function savePersonCrm2(event) {
   if (!crm2CanEdit()) return;
   const form = event.currentTarget;
   const data = new FormData(form);
-  const file = form.elements.anexoArquivo?.files?.[0] || null;
-  const attachmentExpiration = String(data.get('anexoValidade') || '');
-  data.delete('anexoArquivo');
-  data.delete('anexoValidade');
   const values = Object.fromEntries(data.entries());
   values.nome = String(values.nome || '').trim();
   values.cpf = String(values.cpf || crm2PfState.cpfGate.value || '').replace(/\D/g, '');
@@ -341,17 +369,17 @@ function savePersonCrm2(event) {
   }
 
   const now = new Date().toISOString();
-  const newAttachment = file ? fileToAttachmentCrm2(file, attachmentExpiration) : null;
+  const pendingAttachments = [...(crm2PfState.draftAttachments || [])];
 
   if (crm2PfState.formMode === 'edit') {
     const person = getPersonCrm2(crm2PfState.detailId);
     if (!person) return;
     const changes = describeChangesCrm2(person, values);
     Object.assign(person, values, { atualizadoEm: now });
-    if (newAttachment) person.anexos = [...(person.anexos || []), newAttachment];
+    if (pendingAttachments.length) person.anexos = [...(person.anexos || []), ...pendingAttachments];
     if (changes.length) registerTimelineCrm2(person, `Dados atualizados. ${changes.join(' | ')}`, 'Atualização');
-    if (newAttachment) registerTimelineCrm2(person, `Anexo incluído: ${newAttachment.nome}.`, 'Anexo');
-    setMessageCrm2(changes.length || newAttachment
+    pendingAttachments.forEach((attachment) => registerTimelineCrm2(person, `Anexo incluído: ${attachment.nome}.`, 'Anexo'));
+    setMessageCrm2(changes.length || pendingAttachments.length
       ? 'Pessoa física atualizada no estado mockado. Nenhum dado foi persistido.'
       : 'Nenhuma alteração foi identificada.');
   } else {
@@ -361,12 +389,12 @@ function savePersonCrm2(event) {
       id,
       cadastroEm: now,
       atualizadoEm: now,
-      anexos: newAttachment ? [newAttachment] : [],
+      anexos: pendingAttachments,
       empresas: [],
       pedidos: [],
       timeline: [{ data: now, usuario: 'Usuário atual', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
     };
-    if (newAttachment) person.timeline.push({ data: now, usuario: 'Usuário atual', descricao: `Anexo incluído: ${newAttachment.nome}.`, tipo: 'Anexo' });
+    pendingAttachments.forEach((attachment) => person.timeline.push({ data: now, usuario: 'Usuário atual', descricao: `Anexo incluído: ${attachment.nome}.`, tipo: 'Anexo' }));
     crm2PfState.items.unshift(person);
     crm2PfState.detailId = id;
     setMessageCrm2('Pessoa física criada no estado mockado. Nenhum dado foi persistido.');
