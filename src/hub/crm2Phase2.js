@@ -667,7 +667,6 @@ function renderCpfVerificationCrm2(values = {}) {
         ${showPersonalFields ? formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', formId: 'crm2-pf-form', className: 'crm2-pf-grid-email crm2-pf-grid-row-2' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], formId: 'crm2-pf-form', className: 'crm2-pf-grid-origin' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), formId: 'crm2-pf-form', className: 'crm2-pf-grid-partner' }) : ''}
-        ${showPersonalFields ? formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', formId: 'crm2-pf-form', className: 'crm2-pf-grid-notes' }) : ''}
         ${gate.status === 'found' ? `
           <div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF">
             <button class="secondary-btn" type="button" onclick="crm2PfOpenDetail('${escapeAttrCrm2(gate.personId)}')">Abrir cadastro</button>
@@ -771,11 +770,17 @@ function renderPersonFormCrm2() {
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
             ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
           </div>
         </section>` : ''}
 
-        ${renderFormAttachmentsCrm2(person, editing, verified)}
+        <div class="crm2-pf-notes-attachments-grid">
+          <section class="hub-form-section crm2-pf-notes-block ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
+            <div class="hub-form-grid">
+              ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+            </div>
+          </section>
+          ${renderFormAttachmentsCrm2(person, editing, verified)}
+        </div>
 
         <div class="hub-form-screen-actions crm2-pf-form-footer">
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>

@@ -411,6 +411,13 @@
   grid-row: 3;
 }
 
+.crm2-pf-notes-attachments-grid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .crm2-pf-include-attachment {
   align-self: start;
   width: fit-content;
@@ -507,6 +514,10 @@
   .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-personal-fields > * {
     grid-column: 1;
     grid-row: auto;
+  }
+
+  .crm2-pf-notes-attachments-grid {
+    grid-template-columns: 1fr;
   }
 }
 
