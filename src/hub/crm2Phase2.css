@@ -615,9 +615,13 @@
 .crm2-pf-form-footer {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
-  bottom: 0;
-  margin: 8px -4px -10px;
-  padding: 12px 4px 4px;
+  bottom: 12px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+  justify-content: center;
+  justify-self: center;
+  margin: 8px auto;
+  padding: 8px 12px;
   position: sticky;
   z-index: 3;
 }
@@ -693,6 +697,8 @@
   .crm2-pf-form-footer {
     align-items: stretch;
     flex-direction: column-reverse;
+    border-radius: var(--radius-card);
+    width: min(100%, 360px);
   }
 
   .crm2-pf-form-footer > button {

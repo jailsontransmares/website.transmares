@@ -117,7 +117,6 @@ function renderPersonFormCrm2() {
         </div>
         <div class="crm2-pf-form-header-actions">
           ${!editing && crm2PfState.cpfGate.status === 'not-found' ? '<span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span>' : ''}
-          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
         </div>
       </header>
 
@@ -156,6 +155,7 @@ function renderPersonFormCrm2() {
         </div>
 
         <div class="hub-form-screen-actions crm2-pf-form-footer">
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar para a lista</button>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
