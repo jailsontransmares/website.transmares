@@ -7450,35 +7450,15 @@ function renderCrm2Phase1() {
         <div>
           <span class="ar-crm-phase1-kicker">FASE 1 · FUNDAÇÃO MOCKADA</span>
           <h3 id="crm2-title">CRM 2.0</h3>
-          <p>Nova estrutura de relacionamento do AR Transmares, independente do CRM atual.</p>
         </div>
         <span class="ar-crm-phase1-status">Rota ${escapeHtml(crm2.codigoRota)}</span>
       </div>
 
       ${crm2.mensagem ? `<p class="admin-message" role="status">${escapeHtml(crm2.mensagem)}</p>` : ''}
 
-      <div class="ar-crm-phase1-grid" aria-label="Resumo do CRM 2.0">
-        <article class="ar-crm-phase1-card">
-          <span class="ar-crm-phase1-card-label">Escopo atual</span>
-          <strong>Telas mockadas</strong>
-          <p>Validação visual e funcional antes de qualquer integração.</p>
-        </article>
-        <article class="ar-crm-phase1-card">
-          <span class="ar-crm-phase1-card-label">Base do relacionamento</span>
-          <strong>Pessoa Física</strong>
-          <p>PF será o centro dos próximos cadastros, pedidos e timelines.</p>
-        </article>
-        <article class="ar-crm-phase1-card">
-          <span class="ar-crm-phase1-card-label">Integrações</span>
-          <strong>Desativadas</strong>
-          <p>Supabase, ClickUp, Brevo e automações entram somente após a homologação.</p>
-        </article>
-      </div>
-
       <div class="admin-panel-header crm2-phase1-section-header">
         <div>
           <h4>Estrutura reservada</h4>
-          <p>As próximas telas serão liberadas nesta sequência:</p>
         </div>
       </div>
 
