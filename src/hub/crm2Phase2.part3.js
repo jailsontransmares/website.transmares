@@ -88,8 +88,8 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
           <strong>${escapeHtmlCrm2(attachment.nome)}</strong>
           <span class="crm2-pf-attachment-validity-pill">${attachment.validade ? escapeHtmlCrm2(formatDateCrm2(attachment.validade)) : 'Sem validade'}</span>
           <div class="crm2-pf-attachment-row-actions">
-            ${crm2PfState.canView ? `<button class="secondary-btn" type="button" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')">Visualizar</button>` : ''}
-            ${crm2PfState.canDelete ? `<button class="secondary-btn" type="button" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')">Excluir</button>` : ''}
+            ${crm2PfState.canView ? `<button class="icon-btn" type="button" aria-label="Visualizar anexo ${escapeAttrCrm2(attachment.nome)}" title="Visualizar" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}
+            ${crm2PfState.canDelete ? `<button class="icon-btn" type="button" aria-label="Excluir anexo ${escapeAttrCrm2(attachment.nome)}" title="Excluir" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
           </div>
         </article>
       `).join('')}</div>` : ''}

@@ -585,6 +585,10 @@
   width: 17px;
 }
 
+.crm2-pf-attachment-row-actions > .icon-btn {
+  padding: 5px;
+}
+
 .crm2-pf-form-attachment-row strong {
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -698,6 +702,10 @@
   .crm2-pf-attachment-editor-actions > button,
   .crm2-pf-attachment-row-actions > button {
     flex: 1 1 auto;
+  }
+
+  .crm2-pf-attachment-row-actions > .icon-btn {
+    flex: 0 0 auto;
   }
 
   .crm2-pf-form-attachment-row {
