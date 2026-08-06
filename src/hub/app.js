@@ -3308,16 +3308,7 @@ function formatarMascaraParceiro(valor = '', mascara = '') {
   }
 
   if (mascara === 'telefone') {
-    if (digitos.startsWith('55') && digitos.length > 11) digitos = digitos.slice(2);
-    digitos = digitos.slice(0, 11);
-    if (digitos.length <= 10) {
-      return digitos
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d{1,4})$/, '$1-$2');
-    }
-    return digitos
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+    return formatarTelefoneHub(valor);
   }
 
   return valor;
@@ -4238,7 +4229,7 @@ function renderModalUsuarioAdmin() {
             <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
             <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
             <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="numeric" maxlength="15" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
+            <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
             <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
             <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
             ${editando ? `
@@ -5497,6 +5488,22 @@ async function carregarParceirosIndicacaoAdmin(preservarMensagem = false) {
     renderAdministracao();
   }
 }
+
+function formatarTelefoneHub(valor = '') {
+  const raw = String(valor || '').trim();
+  const internacional = raw.startsWith('+');
+  const digitos = raw.replace(/\D/g, '').slice(0, internacional ? 15 : 11);
+  const nacional = (numero) => {
+    if (numero.length <= 10) return numero.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d{1,4})$/, '$1-$2');
+    return numero.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+  };
+  if (!internacional) return nacional(digitos);
+  if (digitos.startsWith('55')) return `+55 ${nacional(digitos.slice(2))}`.trim();
+  if (digitos.startsWith('1')) return `+1 ${digitos.length > 1 ? `(${digitos.slice(1, 4)}${digitos.length >= 4 ? ') ' : ''}${digitos.slice(4, 7)}${digitos.length >= 7 ? '-' : ''}${digitos.slice(7)}` : ''}`.trim();
+  return `+${digitos}`;
+}
+
+window.formatarTelefoneHub = formatarTelefoneHub;
 
 let parceirosIndicacaoCompartilhadoPromise = null;
 
@@ -7876,7 +7883,7 @@ function renderCadastroClienteCrmAr() {
             </label>
             <label class="ar-crm-edit-field">
               <span>Telefone</span>
-              <input id="ar-crm-new-telefone" class="config-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" data-crm-mask="telefone" value="${valorMascarado('telefone', 'telefone')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
+              <input id="ar-crm-new-telefone" class="config-input" type="tel" inputmode="tel" autocomplete="tel" maxlength="24" data-crm-mask="telefone" value="${valorMascarado('telefone', 'telefone')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
             </label>
             <label class="ar-crm-edit-field">
               <span>Nascimento</span>

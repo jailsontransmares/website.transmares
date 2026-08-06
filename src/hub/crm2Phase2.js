@@ -232,6 +232,7 @@ function maskNationalPhoneCrm2(value = '') {
 }
 
 function maskPhoneCrm2(value = '') {
+  if (typeof window !== 'undefined' && typeof window.formatarTelefoneHub === 'function') return window.formatarTelefoneHub(value);
   const raw = String(value || '').trim();
   const international = raw.startsWith('+');
   const digits = raw.replace(/\D/g, '').slice(0, international ? 15 : 11);
