@@ -445,8 +445,19 @@
   width: fit-content;
 }
 
+.crm2-pf-attachments-block {
+  min-height: 100%;
+  min-width: 0;
+}
+
 .crm2-pf-attachments-header {
   align-items: center;
+}
+
+.crm2-pf-attachments-content {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
 .crm2-pf-attachment-dropzone {
@@ -584,6 +595,8 @@
   }
 
   .crm2-pf-notes-attachments-grid > .hub-form-section,
+  .crm2-pf-attachments-block,
+  .crm2-pf-attachments-content,
   .crm2-pf-notes-block > .hub-form-grid,
   .crm2-pf-notes-block label,
   .crm2-pf-notes-block textarea {

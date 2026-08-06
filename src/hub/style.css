@@ -3648,20 +3648,6 @@ body.dark .admin-partners-actions-menu {
   font-size: 11px;
 }
 
-.crm2-pf-attachments-mock {
-  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--color-warning) 38%, var(--borda));
-  border-radius: var(--radius-card);
-  display: grid;
-  gap: 4px;
-  padding: 14px;
-}
-
-.crm2-pf-attachments-mock span {
-  color: var(--texto-suave);
-  font-size: 12px;
-}
-
 .ar-crm-phase1-next-step {
   justify-content: flex-start;
 }
