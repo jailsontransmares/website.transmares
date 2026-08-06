@@ -643,11 +643,8 @@ function renderPersonDetailCrm2(person) {
         <div>
           <span class="ar-crm-phase1-kicker">PESSOA FÍSICA · MOCK</span>
           <h3 id="crm2-pessoa-detail-title">${escapeHtmlCrm2(person.nome)}</h3>
-          <p>${escapeHtmlCrm2(maskCpfCrm2(person.cpf))} · ${escapeHtmlCrm2(personStatusLabelCrm2(person))}</p>
-        </div>
-        <div class="crm2-pessoas-header-actions">
-          <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar à lista</button>
-          ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="navegarParaCrm2Rota('201', '${escapeAttrCrm2(person.id)}/editar')">Editar</button>` : ''}
+          <p>${escapeHtmlCrm2(maskCpfCrm2(person.cpf))}</p>
+          <span class="crm2-pf-status-pill" role="status">${escapeHtmlCrm2(personStatusLabelCrm2(person))}</span>
         </div>
       </div>
 
@@ -666,6 +663,11 @@ function renderPersonDetailCrm2(person) {
       </div>
 
       <div class="crm2-pf-tab-content">${content}</div>
+
+      <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer">
+        <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
+        ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="navegarParaCrm2Rota('201', '${escapeAttrCrm2(person.id)}/editar')">Editar</button>` : ''}
+      </div>
     </section>
   `;
 }
