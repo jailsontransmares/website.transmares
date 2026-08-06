@@ -2,9 +2,21 @@ Object.assign(window, {
   crm2PfRender: renderCrm2Phase2,
   navegarParaCrm2Rota: navigateCrm2Route,
   crm2PfOpenForm: openFormCrm2,
+  crm2PfHasUnsavedChanges: crm2PfHasUnsavedChangesCrm2,
+  crm2PfRequestLeave: crm2PfRequestLeaveCrm2,
+  crm2PfCancelLeave() {
+    crm2PfPendingLeaveAction = null;
+    document.querySelector('.crm2-pf-unsaved-backdrop')?.remove();
+  },
+  crm2PfConfirmLeave() {
+    const action = crm2PfPendingLeaveAction;
+    crm2PfPendingLeaveAction = null;
+    document.querySelector('.crm2-pf-unsaved-backdrop')?.remove();
+    resetFormCrm2();
+    action?.();
+  },
   crm2PfCancelForm() {
-    const hasDraft = Object.values(crm2PfState.draft || {}).some((value) => String(value || '').trim());
-    if (hasDraft && !window.confirm('Descartar os dados preenchidos?')) return;
+    if (!crm2PfRequestLeaveCrm2(() => window.crm2PfCancelForm())) return;
     resetFormCrm2();
     setMessageCrm2('');
     navigateCrm2Route('201');
@@ -404,5 +416,10 @@ const crm2Observer = new MutationObserver(() => {
 
 crm2Observer.observe(document.documentElement, { childList: true, subtree: true });
 window.addEventListener('popstate', () => window.setTimeout(mountCrm2Phase2, 0));
+window.addEventListener('beforeunload', (event) => {
+  if (!crm2PfHasUnsavedChangesCrm2()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 window.addEventListener('DOMContentLoaded', mountCrm2Phase2, { once: true });
 window.setTimeout(mountCrm2Phase2, 0);

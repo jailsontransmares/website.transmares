@@ -124,6 +124,32 @@ const crm2PfState = {
   message: ''
 };
 
+let crm2PfPendingLeaveAction = null;
+
+function crm2PfHasUnsavedChangesCrm2() {
+  if (!['create', 'edit'].includes(crm2PfState.formMode)) return false;
+  const hasDraftFields = Object.values(crm2PfState.draft || {}).some((value) => String(value || '').trim());
+  return hasDraftFields || Boolean(crm2PfState.cpfGate?.value) || Boolean(crm2PfState.draftAttachments?.length) || Boolean(crm2PfState.attachmentDraft?.length);
+}
+
+function crm2PfRequestLeaveCrm2(onConfirm) {
+  if (!crm2PfHasUnsavedChangesCrm2()) return true;
+  if (document.querySelector('.crm2-pf-unsaved-backdrop')) return false;
+  crm2PfPendingLeaveAction = onConfirm;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop crm2-pf-unsaved-backdrop" role="presentation">
+      <section class="small-modal crm2-pf-unsaved-modal" role="alertdialog" aria-modal="true" aria-labelledby="crm2-pf-unsaved-title" aria-describedby="crm2-pf-unsaved-description">
+        <div class="small-modal-header"><h3 id="crm2-pf-unsaved-title">Sair sem salvar?</h3></div>
+        <div class="small-modal-body"><p id="crm2-pf-unsaved-description">Existem dados preenchidos que serão perdidos. Deseja realmente sair?</p></div>
+        <div class="small-modal-actions">
+          <button class="secondary-btn" type="button" onclick="crm2PfCancelLeave()">Continuar editando</button>
+          <button class="save-btn" type="button" onclick="crm2PfConfirmLeave()">Sair e perder dados</button>
+        </div>
+      </section>
+    </div>`);
+  return false;
+}
+
 function crm2CanEdit() {
   return crm2PfState.canEdit === true;
 }
@@ -177,6 +203,7 @@ function routePathCrm2(code, suffix = '') {
 function navigateCrm2Route(code, suffix = '') {
   const normalized = String(code || '').trim();
   if (!CRM2_PF_ROUTE_CODES.has(normalized)) return;
+  if (!crm2PfRequestLeaveCrm2(() => navigateCrm2Route(code, suffix))) return;
   window.history.pushState({}, '', routePathCrm2(normalized, suffix));
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.setTimeout(mountCrm2Phase2, 0);

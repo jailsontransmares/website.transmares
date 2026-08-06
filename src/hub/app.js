@@ -1342,6 +1342,9 @@ async function renderizarRotaAtual() {
 }
 
 function navegarParaModulo(idModulo) {
+  if (window.crm2PfHasUnsavedChanges?.()) {
+    if (!window.crm2PfRequestLeave?.(() => navegarParaModulo(idModulo))) return;
+  }
   return navegarParaRota(montarCaminhoHub(idModulo));
 }
 
@@ -11552,6 +11555,10 @@ function selecionarAbaAr(aba) {
     state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
     renderPainelAr();
     return;
+  }
+
+  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba && window.crm2PfHasUnsavedChanges?.()) {
+    if (!window.crm2PfRequestLeave?.(() => selecionarAbaAr(aba))) return;
   }
 
   if (state.ar.aba === 'gerar' && aba !== 'gerar') {
