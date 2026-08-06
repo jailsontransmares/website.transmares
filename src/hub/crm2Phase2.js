@@ -700,11 +700,11 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
       <div class="hub-form-section-title crm2-pf-attachments-header"><strong id="crm2-pf-attachments-title">Anexos</strong><button class="icon-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" aria-label="Adicionar anexo" title="Adicionar anexo" ${verified ? '' : 'disabled'}><i data-lucide="file-plus-2" aria-hidden="true"></i></button></div>
       <section class="crm2-pf-attachments-content" aria-labelledby="crm2-pf-attachments-title">
         <input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>
-        <div class="crm2-pf-attachment-dropzone" role="button" tabindex="0" aria-label="Adicionar anexo por arrastar e soltar ou selecionar arquivo" ondragover="crm2PfDragOverAttachment(event)" ondragleave="crm2PfDragLeaveAttachment(event)" ondrop="crm2PfDropAttachment(event)" onkeydown="crm2PfDropzoneKeydown(event)">
+        ${attachments.length === 0 ? `<div class="crm2-pf-attachment-dropzone" role="button" tabindex="0" aria-label="Adicionar anexo por arrastar e soltar ou selecionar arquivo" ondragover="crm2PfDragOverAttachment(event)" ondragleave="crm2PfDragLeaveAttachment(event)" ondrop="crm2PfDropAttachment(event)" onkeydown="crm2PfDropzoneKeydown(event)">
           <i data-lucide="upload-cloud" aria-hidden="true"></i>
           <span>Arraste e solte um arquivo aqui</span>
           <small>ou use o ícone de adicionar anexo</small>
-        </div>
+        </div>` : ''}
       ${crm2PfState.attachmentDraft ? `
         <div class="crm2-pf-attachment-editor" role="group" aria-label="Configurar anexo selecionado">
           <label><span>Nome do arquivo</span><input class="config-input" type="text" value="${escapeAttrCrm2(crm2PfState.attachmentDraft.nome)}" oninput="crm2PfUpdateAttachmentDraft('nome', this.value)" autofocus></label>
