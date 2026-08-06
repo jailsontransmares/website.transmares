@@ -117,7 +117,7 @@ const crm2PfState = {
   formMode: '',
   draft: {},
   draftAttachments: [],
-  attachmentDraft: null,
+  attachmentDraft: [],
   errors: {},
   changedFields: [],
   cpfGate: { value: '', status: '', personId: '', message: '' },

@@ -120,7 +120,7 @@ const crm2PfState = {
   formMode: '',
   draft: {},
   draftAttachments: [],
-  attachmentDraft: null,
+  attachmentDraft: [],
   errors: {},
   changedFields: [],
   cpfGate: { value: '', status: '', personId: '', message: '' },
@@ -691,6 +691,12 @@ function crm2PfPartnerOptions() {
   return options;
 }
 
+function splitAttachmentFileNameCrm2(name = '') {
+  const value = String(name || 'Arquivo selecionado');
+  const dot = value.lastIndexOf('.');
+  return dot > 0 ? { nome: value.slice(0, dot), extensao: value.slice(dot) } : { nome: value, extensao: '' };
+}
+
 function renderFormAttachmentsCrm2(person, editing, verified) {
   const existing = editing ? (person?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index })) : [];
   const pending = (crm2PfState.draftAttachments || []).map((attachment, index) => ({ ...attachment, source: 'draft', index }));
@@ -699,16 +705,18 @@ function renderFormAttachmentsCrm2(person, editing, verified) {
     <div class="crm2-pf-attachments-block ${verified ? '' : 'is-disabled'}">
       <div class="hub-form-section-title crm2-pf-attachments-header"><strong id="crm2-pf-attachments-title">Anexos</strong><button class="icon-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" aria-label="Adicionar anexo" title="Adicionar anexo" ${verified ? '' : 'disabled'}><i data-lucide="file-plus-2" aria-hidden="true"></i></button></div>
       <section class="crm2-pf-attachments-content" aria-labelledby="crm2-pf-attachments-title">
-        <input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>
+        <input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" multiple onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>
         ${attachments.length === 0 ? `<div class="crm2-pf-attachment-dropzone" role="button" tabindex="0" aria-label="Adicionar anexo por arrastar e soltar ou selecionar arquivo" ondragover="crm2PfDragOverAttachment(event)" ondragleave="crm2PfDragLeaveAttachment(event)" ondrop="crm2PfDropAttachment(event)" onkeydown="crm2PfDropzoneKeydown(event)">
           <i data-lucide="upload-cloud" aria-hidden="true"></i>
           <span>Arraste e solte um arquivo aqui</span>
           <small>ou use o ícone de adicionar anexo</small>
         </div>` : ''}
-      ${crm2PfState.attachmentDraft ? `
+      ${crm2PfState.attachmentDraft.length ? `
         <div class="crm2-pf-attachment-editor" role="group" aria-label="Configurar anexo selecionado">
-          <label><span>Nome do arquivo</span><input class="config-input" type="text" value="${escapeAttrCrm2(crm2PfState.attachmentDraft.nome)}" oninput="crm2PfUpdateAttachmentDraft('nome', this.value)" autofocus></label>
-          <label><span>Validade opcional</span><input class="config-input" type="date" value="${escapeAttrCrm2(crm2PfState.attachmentDraft.validade)}" onchange="crm2PfUpdateAttachmentDraft('validade', this.value)"></label>
+          ${crm2PfState.attachmentDraft.map((draft, index) => `<div class="crm2-pf-attachment-draft-row">
+            <label><span>Nome do arquivo</span><span class="crm2-pf-attachment-name-input"><input class="config-input" type="text" value="${escapeAttrCrm2(draft.nome)}" oninput="crm2PfUpdateAttachmentDraft(${index}, 'nome', this.value)" ${index === 0 ? 'autofocus' : ''}><b aria-hidden="true">${escapeHtmlCrm2(draft.extensao)}</b></span></label>
+            <label><span>Validade opcional</span><input class="config-input" type="date" value="${escapeAttrCrm2(draft.validade)}" onchange="crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)"></label>
+          </div>`).join('')}
           <div class="crm2-pf-attachment-editor-actions">
             <button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button>
             <button class="save-btn" type="button" onclick="crm2PfConfirmAttachmentDraft()">Adicionar</button>
@@ -930,7 +938,7 @@ function resetFormCrm2() {
   crm2PfState.formMode = '';
   crm2PfState.draft = {};
   crm2PfState.draftAttachments = [];
-  crm2PfState.attachmentDraft = null;
+  crm2PfState.attachmentDraft = [];
   crm2PfState.errors = {};
   crm2PfState.changedFields = [];
   crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
@@ -954,7 +962,7 @@ function openFormCrm2(mode, id = '') {
     crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
     crm2PfState.draft = {};
     crm2PfState.draftAttachments = [];
-    crm2PfState.attachmentDraft = null;
+    crm2PfState.attachmentDraft = [];
     navigateCrm2Route('201', 'novo');
   }
 }
@@ -1331,13 +1339,13 @@ Object.assign(window, {
   },
   crm2PfSelectAttachment(input) {
     if (!crm2CanEdit()) return;
-    const file = input?.files?.[0];
-    if (!file) return;
-    crm2PfState.attachmentDraft = {
+    const files = Array.from(input?.files || []);
+    if (!files.length) return;
+    crm2PfState.attachmentDraft = files.map((file) => ({
       file,
-      nome: file.name,
+      ...splitAttachmentFileNameCrm2(file.name),
       validade: ''
-    };
+    }));
     rerenderCrm2Phase2();
   },
   crm2PfDragOverAttachment(event) {
@@ -1352,9 +1360,13 @@ Object.assign(window, {
     event.preventDefault();
     event.currentTarget.classList.remove('is-dragging');
     if (!crm2CanEdit()) return;
-    const file = event.dataTransfer?.files?.[0];
-    if (!file) return;
-    crm2PfState.attachmentDraft = { file, nome: file.name, validade: '' };
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (!files.length) return;
+    crm2PfState.attachmentDraft = files.map((file) => ({
+      file,
+      ...splitAttachmentFileNameCrm2(file.name),
+      validade: ''
+    }));
     rerenderCrm2Phase2();
   },
   crm2PfDropzoneKeydown(event) {
@@ -1362,22 +1374,23 @@ Object.assign(window, {
     event.preventDefault();
     crm2PfOpenAttachmentPicker();
   },
-  crm2PfUpdateAttachmentDraft(field, value) {
-    if (!crm2PfState.attachmentDraft || !['nome', 'validade'].includes(field)) return;
-    crm2PfState.attachmentDraft[field] = String(value || '');
+  crm2PfUpdateAttachmentDraft(index, field, value) {
+    const draft = crm2PfState.attachmentDraft?.[index];
+    if (!draft || !['nome', 'validade'].includes(field)) return;
+    draft[field] = String(value || '');
   },
   crm2PfCancelAttachmentDraft() {
-    crm2PfState.attachmentDraft = null;
+    crm2PfState.attachmentDraft = [];
     rerenderCrm2Phase2();
   },
   crm2PfConfirmAttachmentDraft() {
-    const draft = crm2PfState.attachmentDraft;
-    if (!draft?.file || !String(draft.nome || '').trim()) return;
+    const drafts = crm2PfState.attachmentDraft || [];
+    if (!drafts.length || drafts.some((draft) => !draft.file || !String(draft.nome || '').trim())) return;
     crm2PfState.draftAttachments = [
       ...(crm2PfState.draftAttachments || []),
-      fileToAttachmentCrm2(draft.file, draft.validade, String(draft.nome).trim())
+      ...drafts.map((draft) => fileToAttachmentCrm2(draft.file, draft.validade, `${String(draft.nome).trim()}${draft.extensao || ''}`))
     ];
-    crm2PfState.attachmentDraft = null;
+    crm2PfState.attachmentDraft = [];
     rerenderCrm2Phase2();
   },
   crm2PfViewAttachment(source, index, name) {

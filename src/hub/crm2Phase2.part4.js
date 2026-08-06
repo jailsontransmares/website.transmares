@@ -270,13 +270,13 @@ Object.assign(window, {
   },
   crm2PfSelectAttachment(input) {
     if (!crm2CanEdit()) return;
-    const file = input?.files?.[0];
-    if (!file) return;
-    crm2PfState.attachmentDraft = {
+    const files = Array.from(input?.files || []);
+    if (!files.length) return;
+    crm2PfState.attachmentDraft = files.map((file) => ({
       file,
-      nome: file.name,
+      ...splitAttachmentFileNameCrm2(file.name),
       validade: ''
-    };
+    }));
     rerenderCrm2Phase2();
   },
   crm2PfDragOverAttachment(event) {
@@ -291,9 +291,13 @@ Object.assign(window, {
     event.preventDefault();
     event.currentTarget.classList.remove('is-dragging');
     if (!crm2CanEdit()) return;
-    const file = event.dataTransfer?.files?.[0];
-    if (!file) return;
-    crm2PfState.attachmentDraft = { file, nome: file.name, validade: '' };
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (!files.length) return;
+    crm2PfState.attachmentDraft = files.map((file) => ({
+      file,
+      ...splitAttachmentFileNameCrm2(file.name),
+      validade: ''
+    }));
     rerenderCrm2Phase2();
   },
   crm2PfDropzoneKeydown(event) {
@@ -301,22 +305,23 @@ Object.assign(window, {
     event.preventDefault();
     crm2PfOpenAttachmentPicker();
   },
-  crm2PfUpdateAttachmentDraft(field, value) {
-    if (!crm2PfState.attachmentDraft || !['nome', 'validade'].includes(field)) return;
-    crm2PfState.attachmentDraft[field] = String(value || '');
+  crm2PfUpdateAttachmentDraft(index, field, value) {
+    const draft = crm2PfState.attachmentDraft?.[index];
+    if (!draft || !['nome', 'validade'].includes(field)) return;
+    draft[field] = String(value || '');
   },
   crm2PfCancelAttachmentDraft() {
-    crm2PfState.attachmentDraft = null;
+    crm2PfState.attachmentDraft = [];
     rerenderCrm2Phase2();
   },
   crm2PfConfirmAttachmentDraft() {
-    const draft = crm2PfState.attachmentDraft;
-    if (!draft?.file || !String(draft.nome || '').trim()) return;
+    const drafts = crm2PfState.attachmentDraft || [];
+    if (!drafts.length || drafts.some((draft) => !draft.file || !String(draft.nome || '').trim())) return;
     crm2PfState.draftAttachments = [
       ...(crm2PfState.draftAttachments || []),
-      fileToAttachmentCrm2(draft.file, draft.validade, String(draft.nome).trim())
+      ...drafts.map((draft) => fileToAttachmentCrm2(draft.file, draft.validade, `${String(draft.nome).trim()}${draft.extensao || ''}`))
     ];
-    crm2PfState.attachmentDraft = null;
+    crm2PfState.attachmentDraft = [];
     rerenderCrm2Phase2();
   },
   crm2PfViewAttachment(source, index, name) {

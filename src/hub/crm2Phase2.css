@@ -502,8 +502,32 @@
   border-left: 2px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 180px auto;
+  grid-template-columns: 1fr;
   padding: 8px 0 8px 10px;
+}
+
+.crm2-pf-attachment-draft-row {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+
+.crm2-pf-attachment-name-input {
+  align-items: center;
+  display: flex;
+}
+
+.crm2-pf-attachment-name-input input {
+  min-width: 0;
+}
+
+.crm2-pf-attachment-name-input b {
+  color: var(--texto-suave);
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  padding-left: 4px;
 }
 
 .crm2-pf-attachment-editor label,
@@ -610,6 +634,10 @@
 
   .crm2-pf-attachment-dropzone {
     min-height: 120px;
+  }
+
+  .crm2-pf-attachment-draft-row {
+    grid-template-columns: 1fr;
   }
 }
 
