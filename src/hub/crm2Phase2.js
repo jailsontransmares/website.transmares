@@ -629,7 +629,6 @@ function renderPersonDetailCrm2(person) {
     ['empresas', 'Empresas vinculadas'],
     ['pedidos', 'Pedidos']
   ];
-  const lastActivity = [...(person.timeline || [])].sort((a, b) => new Date(b.data) - new Date(a.data))[0]?.data || person.atualizadoEm;
   const content = {
     dados: renderPersonDataCrm2(person),
     timeline: renderTimelineCrm2(person),
@@ -649,14 +648,6 @@ function renderPersonDetailCrm2(person) {
       </div>
 
       ${crm2PfState.message ? `<p class="admin-message" role="status">${escapeHtmlCrm2(crm2PfState.message)}</p>` : ''}
-
-      <div class="crm2-pf-summary-grid">
-        <article><span>Status atual</span><strong>${escapeHtmlCrm2(personStatusLabelCrm2(person))}</strong></article>
-        <article><span>Empresas</span><strong>${(person.empresas || []).length}</strong></article>
-        <article><span>Pedidos</span><strong>${(person.pedidos || []).length}</strong></article>
-        <article><span>Anexos</span><strong>${(person.anexos || []).length}</strong></article>
-        <article><span>Última atividade</span><strong>${escapeHtmlCrm2(formatDateTimeCrm2(lastActivity))}</strong></article>
-      </div>
 
       <div class="module-tabs crm2-pf-tabs" role="tablist" aria-label="Detalhes da pessoa física">
         ${tabs.map(([id, label]) => `<button class="${crm2PfState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PfState.detailTab === id}" onclick="crm2PfSelectTab('${id}')">${escapeHtmlCrm2(label)}</button>`).join('')}
