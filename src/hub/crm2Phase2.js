@@ -864,14 +864,27 @@ function renderCrm2Phase2() {
 }
 
 function renderIntoCurrentCrm2Target() {
+  removeCrm2PfFooterPortal();
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return false;
   if (!crm2PfState.mounted) {
     crm2PfState.mounted = true;
   }
   target.outerHTML = renderCrm2Phase2();
+  portalCrm2PfFooter();
   enhancePeopleTableCrm2();
   return true;
+}
+
+function removeCrm2PfFooterPortal() {
+  document.body.querySelector(':scope > .crm2-pf-form-footer')?.remove();
+}
+
+function portalCrm2PfFooter() {
+  const footer = document.querySelector('.crm2-pessoas-page .crm2-pf-form-footer');
+  if (!footer) return;
+  footer.querySelector('button[type="submit"]')?.setAttribute('form', 'crm2-pf-form');
+  document.body.appendChild(footer);
 }
 
 function enhancePeopleTableCrm2() {
@@ -948,25 +961,32 @@ function enhanceCrm2Overview() {
 function mountCrm2Phase2() {
   const code = currentRouteCodeCrm2();
   if (code === '200') {
+    removeCrm2PfFooterPortal();
     resetFormCrm2();
     setMessageCrm2('');
     enhanceCrm2Overview();
     return;
   }
   if (code !== '201') {
+    removeCrm2PfFooterPortal();
     return;
   }
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return;
-  if (target.dataset.crm2Phase2Enhanced === 'true') return;
+  if (target.dataset.crm2Phase2Enhanced === 'true') {
+    portalCrm2PfFooter();
+    return;
+  }
   renderIntoCurrentCrm2Target();
 }
 
 function rerenderCrm2Phase2() {
   if (currentRouteCodeCrm2() !== '201') return;
+  removeCrm2PfFooterPortal();
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return;
   target.outerHTML = renderCrm2Phase2();
+  portalCrm2PfFooter();
   enhancePeopleTableCrm2();
 }
 

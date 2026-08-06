@@ -347,7 +347,7 @@
   height: 32px;
   justify-content: center;
   padding: 0;
-  position: sticky;
+  position: absolute;
   right: 5px;
   top: 50%;
   transform: translateY(-50%);
@@ -374,7 +374,8 @@
 
 .crm2-pf-select-chevron {
   pointer-events: none;
-  position: absolute;
+  position: fixed;
+  top: auto !important;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
@@ -622,10 +623,11 @@
   left: 50%;
   margin: 0;
   padding: 8px 12px;
-  position: absolute;
+  position: fixed;
+  top: auto !important;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 3;
+  z-index: 2147483000;
 }
 
 @media (max-width: 700px) {
