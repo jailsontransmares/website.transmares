@@ -1319,6 +1319,9 @@ function montarCaminhoHub(idModulo = '') {
 }
 
 function navegarParaRota(caminho) {
+  if (window.location.pathname !== caminho && window.crm2PfHasUnsavedChanges?.()) {
+    if (!window.crm2PfRequestLeave?.(() => navegarParaRota(caminho))) return;
+  }
   if (window.location.pathname !== caminho) {
     window.history.pushState({}, '', caminho);
   }
