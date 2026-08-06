@@ -127,9 +127,8 @@ const crm2PfState = {
 let crm2PfPendingLeaveAction = null;
 
 function crm2PfHasUnsavedChangesCrm2() {
-  if (!['create', 'edit'].includes(crm2PfState.formMode)) return false;
-  const hasDraftFields = Object.values(crm2PfState.draft || {}).some((value) => String(value || '').trim());
-  return hasDraftFields || Boolean(crm2PfState.cpfGate?.value) || Boolean(crm2PfState.draftAttachments?.length) || Boolean(crm2PfState.attachmentDraft?.length);
+  return ['create', 'edit'].includes(crm2PfState.formMode)
+    && ['new', 'edit'].includes(currentPfRouteCrm2().view);
 }
 
 function crm2PfRequestLeaveCrm2(onConfirm) {
