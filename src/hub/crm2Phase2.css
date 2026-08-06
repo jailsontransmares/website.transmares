@@ -622,7 +622,7 @@
   left: 50%;
   margin: 0;
   padding: 8px 12px;
-  position: fixed;
+  position: absolute;
   transform: translateX(-50%);
   width: max-content;
   z-index: 1100;
