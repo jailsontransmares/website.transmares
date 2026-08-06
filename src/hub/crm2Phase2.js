@@ -482,24 +482,41 @@ function renderPeopleListCrm2() {
   `;
 }
 
+function renderReadOnlyCrm2({ label, value = '', type = 'text' }) {
+  const safeValue = value ?? '';
+  return `<label class="crm2-pf-readonly-field"><span>${escapeHtmlCrm2(label)}</span>${type === 'textarea'
+    ? `<textarea class="config-input" readonly aria-readonly="true">${escapeHtmlCrm2(safeValue)}</textarea>`
+    : `<input class="config-input" type="${escapeAttrCrm2(type)}" value="${escapeAttrCrm2(safeValue)}" readonly aria-readonly="true">`}</label>`;
+}
+
 function renderPersonDataCrm2(person) {
   const attachments = person.anexos || [];
   return `
-    <div class="crm2-pf-detail-grid">
-      ${[
-        ['Nome', person.nome],
-        ['CPF', maskCpfCrm2(person.cpf)],
-        ['CEI/CAEPF', person.cei || '—'],
-        ['Data de nascimento', formatDateCrm2(person.nascimento)],
-        ['Telefone', maskPhoneCrm2(person.telefone) || '—'],
-        ['E-mail', person.email || '—'],
-        ['Origem', person.origem || '—'],
-        ['Parceiro de indicação', person.parceiro || '—'],
-        ['Status automático', personStatusLabelCrm2(person)],
-        ['Data de cadastro', formatDateTimeCrm2(person.cadastroEm)],
-        ['Última atualização', formatDateTimeCrm2(person.atualizadoEm)]
-      ].map(([label, value]) => `<div><span>${escapeHtmlCrm2(label)}</span><strong>${escapeHtmlCrm2(value)}</strong></div>`).join('')}
-      <div class="is-wide"><span>Observações</span><strong>${escapeHtmlCrm2(person.observacoes || '—')}</strong></div>
+    <div class="crm2-pf-view-form">
+      <section class="hub-form-section" aria-labelledby="crm2-pf-view-personal-title">
+        <div class="hub-form-section-title"><strong id="crm2-pf-view-personal-title">Dados pessoais</strong></div>
+        <div class="hub-form-grid">
+          ${renderReadOnlyCrm2({ label: 'Nome completo/nome social', value: person.nome })}
+          ${renderReadOnlyCrm2({ label: 'CPF', value: maskCpfCrm2(person.cpf) })}
+          ${renderReadOnlyCrm2({ label: 'CEI/CAEPF', value: person.cei })}
+          ${renderReadOnlyCrm2({ label: 'Data de nascimento', value: person.nascimento, type: 'date' })}
+        </div>
+      </section>
+      <section class="hub-form-section" aria-labelledby="crm2-pf-view-contact-title">
+        <div class="hub-form-section-title"><strong id="crm2-pf-view-contact-title">Contato</strong></div>
+        <div class="hub-form-grid">
+          ${renderReadOnlyCrm2({ label: 'Telefone', value: maskPhoneCrm2(person.telefone) })}
+          ${renderReadOnlyCrm2({ label: 'E-mail', value: person.email, type: 'email' })}
+          ${renderReadOnlyCrm2({ label: 'Origem', value: person.origem })}
+          ${renderReadOnlyCrm2({ label: 'Parceiro de indicação', value: person.parceiro })}
+        </div>
+      </section>
+      <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-view-notes-title">
+        <div class="hub-form-section-title"><strong id="crm2-pf-view-notes-title">Observações</strong></div>
+        <div class="hub-form-grid">
+          ${renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
+        </div>
+      </section>
     </div>
 
     <section class="crm2-pf-attachments-section" aria-labelledby="crm2-pf-attachments-title">

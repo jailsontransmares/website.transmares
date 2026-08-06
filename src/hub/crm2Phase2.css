@@ -294,6 +294,17 @@
   width: 100%;
 }
 
+.crm2-pf-view-form {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-pf-readonly-field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
 .crm2-pf-cpf-verification {
   margin: 0;
 }
