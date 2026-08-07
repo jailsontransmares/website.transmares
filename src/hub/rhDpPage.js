@@ -33,6 +33,7 @@ import {
   limparMenusAcoesGlobais
 } from './actionMenuPortal.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
+import './formFooterPortal.js';
 
 const LIMITE_POR_PAGINA = 10;
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
@@ -545,6 +546,13 @@ export function criarRhDpController({
 
   function renderMetricasRhDp(itens, acoes = '') {
     return `<div class="rh-metrics-bar"><div class="rh-metric-pills" role="group" aria-label="Indicadores da área">${itens.map(({ id, label, shortLabel, value, tone = '' }) => `<span class="rh-metric-pill ${tone ? `is-${tone}` : ''}"><span class="rh-metric-label">${label}</span><span class="rh-metric-short" aria-hidden="true">${shortLabel || label.slice(0, 1)}</span><strong>${value}</strong></span>`).join('')}</div>${acoes ? `<div class="rh-metrics-actions">${acoes}</div>` : ''}</div>`;
+  }
+
+  function renderFooterRhDp() {
+    const incluir = state.secao === 'colaboradores' && podeCriar()
+      ? '<button class="save-btn" type="button" data-rh-action="open-create">Incluir</button>'
+      : '';
+    return `<div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" data-rh-action="go-home">Voltar</button>${incluir}</div>`;
   }
 
   function nomeColaborador(id) {
@@ -1150,7 +1158,7 @@ export function criarRhDpController({
       tituloPagina: 'RH & DP',
       descricaoPagina: 'Cadastro e gestão interna de colaboradores.',
       classeConteudo: 'rh-dp-page',
-      conteudo
+      conteudo: `${conteudo}${state.modal.aberto ? '' : renderFooterRhDp()}`
     });
     conectarEventos();
     conectarMenuMaisRhDp();
@@ -1158,8 +1166,11 @@ export function criarRhDpController({
   }
 
   function conectarEventos() {
-    document.querySelector('[data-rh-action="open-create"]')?.addEventListener('click', () => {
+    document.querySelectorAll('[data-rh-action="open-create"]').forEach(botao => botao.addEventListener('click', () => {
       abrirCadastro('', 'create');
+    }));
+    document.querySelector('[data-rh-action="go-home"]')?.addEventListener('click', () => {
+      navegarParaRota(montarCaminhoModulo(''));
     });
     document.querySelectorAll('[data-rh-action="quick-open-ferias"]').forEach(botao => {
       botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'ferias'));
@@ -1817,7 +1828,7 @@ export function criarRhDpController({
           ${state.modal.loading ? '' : renderSecaoObservacoes(readonly)}
 
           ${state.modal.loading ? '' : `
-            <div class="small-modal-actions rh-modal-actions">
+            <div class="small-modal-actions rh-modal-actions" data-hub-form-footer>
               <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
               <div class="rh-modal-step-actions">
                 ${etapaAtual > 0 ? '<button class="secondary-btn" type="button" onclick="hubRhDpVoltarEtapaCadastro()">Anterior</button>' : ''}

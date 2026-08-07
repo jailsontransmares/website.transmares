@@ -154,7 +154,7 @@ function renderPersonFormCrm2() {
           ${renderFormAttachmentsCrm2(person, editing, verified)}
         </div>
 
-        <div class="hub-form-screen-actions crm2-pf-form-footer">
+        <div class="hub-form-screen-actions" data-hub-form-footer>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar</button>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>

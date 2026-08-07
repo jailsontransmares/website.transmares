@@ -2,6 +2,7 @@
 
 // --- src/hub/crm2Phase2.part1.js ---
 import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
+import { portalHubFormFooter, removeHubFormFooterPortals } from './formFooterPortal.js';
 
 const CRM2_PF_ROUTE_CODES = new Set(['200', '201']);
 
@@ -727,7 +728,7 @@ function renderPersonDetailCrm2(person) {
         </aside>
       </div>
 
-      <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer">
+      <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer" data-hub-form-footer>
         ${crm2PfState.inlineEditing && ['empresas', 'pedidos'].includes(crm2PfState.detailTab)
           ? `<button class="secondary-btn" type="button" onclick="crm2PfCancelInlineEdit()">Cancelar</button>
              <button class="save-btn" type="button" onclick="crm2PfSaveCurrentTab()">Salvar alterações</button>`
@@ -965,7 +966,7 @@ function renderPersonFormCrm2() {
           ${renderFormAttachmentsCrm2(person, editing, verified)}
         </div>
 
-        <div class="hub-form-screen-actions crm2-pf-form-footer">
+        <div class="hub-form-screen-actions crm2-pf-form-footer" data-hub-form-footer>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar</button>
           <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
           <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
@@ -1014,7 +1015,7 @@ function renderIntoCurrentCrm2Target() {
 }
 
 function removeCrm2PfFooterPortal() {
-  document.body.querySelectorAll(':scope > .crm2-pf-form-footer').forEach((footer) => footer.remove());
+  removeHubFormFooterPortals();
 }
 
 function portalCrm2PfFooter() {
@@ -1022,15 +1023,7 @@ function portalCrm2PfFooter() {
     removeCrm2PfFooterPortal();
     return;
   }
-  const footer = document.querySelector('.crm2-pessoas-page .crm2-pf-form-footer');
-  if (!footer) return;
-  document.body.querySelectorAll(':scope > .crm2-pf-form-footer').forEach((portalFooter) => {
-    if (portalFooter !== footer) portalFooter.remove();
-  });
-  const formId = document.getElementById('crm2-pf-inline-form')?.id
-    || document.getElementById('crm2-pf-form')?.id;
-  if (formId) footer.querySelector('button[type="submit"]')?.setAttribute('form', formId);
-  document.body.appendChild(footer);
+  portalHubFormFooter(document.querySelector('.crm2-pessoas-page'));
 }
 
 function enhancePeopleTableCrm2() {
@@ -2082,13 +2075,46 @@ window.addEventListener('hub-parceiros-indicacao-atualizados', () => {
   if (currentRouteCodeCrm2()) rerenderCrm2Phase2();
 });
 
-const crm2Observer = new MutationObserver(() => {
-  if (!currentRouteCodeCrm2()) return;
-  window.requestAnimationFrame(mountCrm2Phase2);
+let crm2MountFrame = 0;
+
+function cancelarMontagemCrm2Agendada() {
+  if (!crm2MountFrame) return;
+  window.cancelAnimationFrame(crm2MountFrame);
+  crm2MountFrame = 0;
+}
+
+function agendarMontagemCrm2() {
+  cancelarMontagemCrm2Agendada();
+  crm2MountFrame = window.requestAnimationFrame(() => {
+    crm2MountFrame = 0;
+    if (currentRouteCodeCrm2()) mountCrm2Phase2();
+  });
+}
+
+const crm2Observer = new MutationObserver((mutations) => {
+  if (!currentRouteCodeCrm2()) {
+    cancelarMontagemCrm2Agendada();
+    return;
+  }
+
+  const alterouAlvoCrm2 = mutations.some(({ addedNodes, removedNodes }) => [
+    ...addedNodes,
+    ...removedNodes
+  ].some((node) => node.nodeType === Node.ELEMENT_NODE && (
+    node.matches?.('.crm2-pessoas-page')
+      || node.querySelector?.('.crm2-pessoas-page')
+  )));
+
+  if (alterouAlvoCrm2) agendarMontagemCrm2();
 });
 
 crm2Observer.observe(document.documentElement, { childList: true, subtree: true });
-window.addEventListener('popstate', () => window.setTimeout(mountCrm2Phase2, 0));
+window.addEventListener('popstate', () => {
+  cancelarMontagemCrm2Agendada();
+  window.setTimeout(() => {
+    if (currentRouteCodeCrm2()) mountCrm2Phase2();
+  }, 0);
+});
 window.addEventListener('beforeunload', (event) => {
   if (!crm2PfHasUnsavedChangesCrm2()) return;
   event.preventDefault();

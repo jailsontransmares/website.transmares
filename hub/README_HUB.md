@@ -35,3 +35,12 @@ No Render, configurar o Static Site com:
 - A integração principal usa Supabase via variáveis de ambiente Vite.
 - `VITE_LEGACY_APPS_SCRIPT_URL` deve ser mantida apenas enquanto houver módulos usando fallback legado.
 - O Hub recebeu `noindex,nofollow` para reduzir risco de indexação em mecanismos de busca.
+
+## Arquitetura de rotas
+
+O contrato global de rotas, aliases e regras de evolução está em:
+
+- `src/hub/routeConfig.js`
+- `docs/hub-routing-architecture.md`
+
+Novas telas devem seguir a rota canônica e registrar compatibilidade legada somente quando necessário.

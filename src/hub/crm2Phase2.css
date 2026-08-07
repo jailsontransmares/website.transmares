@@ -1402,7 +1402,8 @@
   white-space: nowrap;
 }
 
-.crm2-pf-form-footer {
+.crm2-pf-form-footer,
+[data-hub-form-footer] {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
   border-radius: 999px;
@@ -1512,7 +1513,8 @@
     flex: 1 1 100%;
   }
 
-  .crm2-pf-form-footer {
+  .crm2-pf-form-footer,
+  [data-hub-form-footer] {
     align-items: stretch;
     flex-direction: column-reverse;
     border-radius: var(--radius-card);
@@ -1520,7 +1522,8 @@
     width: min(calc(100vw - 24px), 360px);
   }
 
-  .crm2-pf-form-footer > button {
+  .crm2-pf-form-footer > button,
+  [data-hub-form-footer] > button {
     width: 100%;
   }
 

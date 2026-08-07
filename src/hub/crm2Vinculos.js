@@ -1,5 +1,6 @@
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
+import { portalHubFormFooter } from './formFooterPortal.js';
 
 const CRM2_VINCULOS_INITIAL_ITEMS = [
   {
@@ -305,6 +306,10 @@ function renderPaginationVinculos(totalPages, totalItems) {
   return `<div class="crm2-pessoas-pagination crm2-vinculos-pagination" aria-label="Paginação de vínculos"><span>Página <strong>${crm2VinculosState.page}</strong> de <strong>${totalPages}</strong> · ${totalItems} registro(s)</span><div><button class="secondary-btn" type="button" onclick="crm2VinculosSetPage(${crm2VinculosState.page - 1})" ${crm2VinculosState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2VinculosSetPage(${crm2VinculosState.page + 1})" ${crm2VinculosState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`;
 }
 
+function renderVinculosFooter(actions) {
+  return `<div class="hub-form-screen-actions" data-hub-form-footer>${actions}</div>`;
+}
+
 function renderVinculosList() {
   const filtered = filteredVinculos();
   const totalPages = Math.max(1, Math.ceil(filtered.length / crm2VinculosState.perPage));
@@ -326,6 +331,7 @@ function renderVinculosList() {
       </div>
     </form>
     ${crm2VinculosState.listState !== 'normal' ? renderStateVinculos() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap crm2-vinculos-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table crm2-vinculos-table" aria-describedby="crm2-vinculos-caption"><caption id="crm2-vinculos-caption" class="crm2-pessoas-table-caption">Vínculos entre pessoas físicas e jurídicas no CRM 2.0</caption><thead><tr><th scope="col">Pessoa física</th><th scope="col">Pessoa jurídica</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Início</th><th scope="col">Última atualização</th>${hasActions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pfNome)}</button><small>${escapeHtmlVinculo(maskCpfVinculo(item.pfCpf))}</small></td><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pjRazaoSocial)}</button><small>${escapeHtmlVinculo(maskCnpjVinculo(item.pjCnpj))}</small></td><td><span class="crm2-vinculo-type">${escapeHtmlVinculo(item.tipo)}</span></td><td><span class="crm2-pessoas-status is-${escapeAttrVinculo(normalizeSearchVinculo(item.status))}" role="status">${escapeHtmlVinculo(item.status)}</span></td><td>${escapeHtmlVinculo(formatDateVinculo(item.inicioEm))}</td><td>${escapeHtmlVinculo(formatDateTimeVinculo(item.atualizadoEm))}</td>${hasActions ? `<td class="crm2-vinculos-actions">${crm2VinculosState.canEdit ? `<button class="icon-btn" type="button" onclick="crm2VinculosOpenEdit('${escapeAttrVinculo(item.id)}')" aria-label="Editar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Editar vínculo">✎</button>` : ''}${crm2VinculosState.canDelete && item.status === 'Ativo' ? `<button class="icon-btn" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')" aria-label="Inativar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Inativar vínculo">×</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>${renderPaginationVinculos(totalPages, filtered.length)}` : `<div class="crm2-pessoas-state crm2-vinculos-state" role="status"><strong>${crm2VinculosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum vínculo cadastrado.'}</strong><span>${crm2VinculosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui vínculos.'}</span><button class="secondary-btn" type="button" onclick="crm2VinculosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
+    ${renderVinculosFooter(`<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar</button>${crm2VinculosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2VinculosOpenCreate()">Incluir</button>' : ''}`)}
   </section>`;
 }
 
@@ -370,7 +376,7 @@ function renderVinculoForm(item = null) {
         ${renderVinculoFormField({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
       </div></section>
       <section class="hub-form-section crm2-vinculo-history-section"><div class="hub-form-section-title"><strong>Histórico do vínculo</strong></div><div class="crm2-vinculo-history-grid"><span><small>Situação atual</small><strong>${escapeHtmlVinculo(status)}</strong></span><span><small>Início</small><strong>${escapeHtmlVinculo(formatDateVinculo(values.inicioEm))}</strong></span><span><small>Encerramento</small><strong>${escapeHtmlVinculo(formatDateVinculo(values.encerramentoEm))}</strong></span>${values.motivoInativacao ? `<span class="is-wide"><small>Motivo da inativação</small><strong>${escapeHtmlVinculo(values.motivoInativacao)}</strong></span>` : ''}</div></section>
-      <div class="hub-form-screen-actions crm2-pf-form-footer"><button class="secondary-btn" type="button" onclick="crm2VinculosCancelForm()">Voltar</button>${editing && crm2VinculosState.canDelete && status === 'Ativo' ? `<button class="secondary-btn crm2-vinculo-inactivate-button" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')">Inativar vínculo</button>` : ''}<button class="save-btn" type="submit">${actionLabel}</button></div>
+      <div class="hub-form-screen-actions crm2-pf-form-footer" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2VinculosCancelForm()">Voltar</button>${editing && crm2VinculosState.canDelete && status === 'Ativo' ? `<button class="secondary-btn crm2-vinculo-inactivate-button" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')">Inativar vínculo</button>` : ''}<button class="save-btn" type="submit">${actionLabel}</button></div>
     </form>
   </section>`;
 }
@@ -401,6 +407,7 @@ function renderVinculoDetail(item) {
       <section class="hub-form-section is-wide"><div class="hub-form-section-title"><strong>Observações</strong></div><p class="crm2-vinculo-detail-notes">${escapeHtmlVinculo(item.observacoes || 'Nenhuma observação registrada.')}</p></section>
       <section class="hub-form-section is-wide"><div class="hub-form-section-title"><strong>Histórico do vínculo</strong></div>${renderVinculoHistory(item)}</section>
     </div>
+    ${renderVinculosFooter(`<button class="secondary-btn" type="button" onclick="crm2VinculosCloseDetail()">Voltar</button>${editButton}${inactivateButton}`)}
   </section>`;
 }
 
@@ -431,7 +438,10 @@ function renderVinculos() {
 function mountVinculos() {
   window.hubLimparDropdowns?.({ remover: true });
   const target = document.querySelector('[data-crm2-vinculos="true"]');
-  if (target) target.outerHTML = renderVinculos();
+  if (target) {
+    target.outerHTML = renderVinculos();
+    portalHubFormFooter(document.querySelector('[data-crm2-vinculos="true"]'));
+  }
 }
 
 function rerenderVinculos() {

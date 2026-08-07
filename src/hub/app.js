@@ -29,6 +29,7 @@ import {
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
+import { HUB_ADMIN_ROUTE_TABS, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
 import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
@@ -452,6 +453,10 @@ const state = {
 };
 
 const ADMIN_PARTNER_COLUMNS_STORAGE_KEY = 'hub-admin-partners-visible-columns-v1';
+let renderizarRotaAtual;
+let navegarParaModulo;
+let renderPainelAr;
+let selecionarAbaAr;
 const ADMIN_PARTNER_SEARCH_DEBOUNCE_MS = 650;
 const ADMIN_PARTNER_COLUMNS = [
   { id: 'acoes', label: 'Ações', locked: true, min: '112px', size: '0.55fr' },
@@ -1307,14 +1312,6 @@ function acionarCardModulo(event, id) {
   }
 }
 
-function obterBaseHub() {
-  const pathname = window.location.pathname || '/';
-
-  return pathname === '/hub' || pathname.startsWith('/hub/')
-    ? '/hub'
-    : '';
-}
-
 function obterCaminhoAssetHub(caminhoAsset) {
   const base = obterBaseHub();
   const caminhoLimpo = String(caminhoAsset || '').replace(/^\/+/, '');
@@ -1383,24 +1380,6 @@ function protegerNavegacaoFormularioPfHub(onConfirm) {
 
 function navegarHome() {
   return navegarParaRota(montarCaminhoHub());
-}
-
-async function renderizarRotaAtual() {
-  limparMenusAcoesGlobais();
-  hubLimparDropdowns({ remover: true });
-  window.crm2PfRemoveFooterPortal?.();
-  const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
-
-  if (!idModulo) {
-    renderDashboard();
-    return;
-  }
-
-  await abrirModuloDireto(idModulo);
-}
-
-function navegarParaModulo(idModulo) {
-  return navegarParaRota(montarCaminhoHub(idModulo));
 }
 
 function normalizarIdModuloRota(idModulo = '') {
@@ -7427,53 +7406,6 @@ window.addEventListener('resize', () => {
   renderPainelAr();
 });
 
-function renderPainelAr() {
-  window.crm2PfArActive = state.ar.aba === 'crm2-pf';
-  window.crm2PfRemoveFooterPortal?.();
-  fecharMenuMaisAr();
-  const snapshotInteracao = capturarEstadoInteracaoAr();
-  fecharDropdownCrmAr();
-  const podeHistorico = podeAcessarAbaAr('historico');
-  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
-  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
-
-  document.getElementById('app').innerHTML = `
-    <main class="dashboard">
-      <header class="topbar">
-        ${renderHeaderLogo()}
-        <div class="brand">
-          <h1>${escapeHtml(nomeSistema)}</h1>
-          <p>${escapeHtml(subtitulo)}</p>
-        </div>
-
-        <div class="user-box">
-          <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
-          ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
-        </div>
-      </header>
-
-      <section class="admin-panel">
-        <div class="admin-panel-header ar-panel-header">
-          <div class="ar-panel-title">
-            <button type="button" onclick="selecionarAbaAr('inicio')" title="Ir para o início do Painel AR">
-              <h2>Painel AR Transmares</h2>
-            </button>
-            <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
-          </div>
-          ${renderMenuPrincipalAr({ podeHistorico })}
-        </div>
-
-        ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-        ${state.ar.loading ? renderHubLoading('Carregando produtos e parceiros...') : renderConteudoAr()}
-      </section>
-    </main>
-  `;
-
-  initializeHubResizableTables(document);
-  restaurarEstadoInteracaoAr(snapshotInteracao);
-}
-
 function renderConteudoAr() {
   if (!podeAcessarAbaAr(state.ar.aba)) {
     state.ar.aba = 'inicio';
@@ -11713,29 +11645,6 @@ function selecionarParceiroAr(id) {
   tentarGerarLinksAutomaticamenteAr();
 }
 
-function selecionarAbaAr(aba) {
-  if (!podeAcessarAbaAr(aba)) {
-    state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
-    renderPainelAr();
-    return;
-  }
-
-  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba) {
-    if (!protegerNavegacaoFormularioPfHub(() => selecionarAbaAr(aba))) return;
-  }
-
-  if (state.ar.aba === 'gerar' && aba !== 'gerar') {
-    resetarEstadoGerarLinksAr();
-  }
-
-  state.ar.aba = aba;
-  renderPainelAr();
-
-  if (aba === 'validacoes' && !state.ar.validacoes.loading) {
-    carregarValidacoesAr();
-  }
-}
-
 function selecionarSubabaValidacoesAr(aba) {
   if (aba === 'emitir' && !pode('painel_ar.validacoes', 'emitir_recibo')) {
     state.ar.validacoes.message = 'Seu usuário não possui permissão para emitir recibos.';
@@ -12668,21 +12577,7 @@ function atualizarHashHub(hash = '', { replace = false } = {}) {
 }
 
 function atualizarRotaAdminHub(aba = '', { replace = false } = {}) {
-  const rotasPorAba = {
-    categorias: 'cadastros/categorias',
-    grupos: 'cadastros/grupos',
-    usuarios: 'cadastros/usuarios',
-    perfis: 'cadastros/perfis',
-    'parceiros-indicacao': 'cadastros/parceiros-indicacao',
-    'logs-integracoes': 'sistema/logs-integracoes',
-    auditoria: 'sistema/logs-integracoes/auditoria',
-    limites: 'parametros/limites',
-    identidade: 'identidade',
-    aparencia: 'aparencia',
-    logo: 'logo',
-    'home-exibicao': 'home-exibicao'
-  };
-  const rotaAba = rotasPorAba[aba] || aba;
+  const rotaAba = obterRotaAdminPorAba(aba);
   const baseAdmin = montarCaminhoHub('administracao').replace(/\/+$/g, '');
   const url = new URL(window.location.href);
   url.pathname = rotaAba ? `${baseAdmin}/${rotaAba}` : baseAdmin;
@@ -12743,18 +12638,7 @@ const HUB_BREADCRUMB_LABELS = {
 };
 
 const HUB_BREADCRUMB_ADMIN_ROUTES = {
-  categorias: 'cadastros/categorias',
-  grupos: 'cadastros/grupos',
-  usuarios: 'cadastros/usuarios',
-  perfis: 'cadastros/perfis',
-  'parceiros-indicacao': 'cadastros/parceiros-indicacao',
-  'logs-integracoes': 'sistema/logs-integracoes',
-  auditoria: 'sistema/logs-integracoes/auditoria',
-  limites: 'parametros/limites',
-  identidade: 'identidade',
-  aparencia: 'aparencia',
-  logo: 'logo',
-  'home-exibicao': 'home-exibicao'
+  ...HUB_ADMIN_ROUTE_TABS
 };
 
 function obterLabelBreadcrumbHub(chave = '') {
@@ -13681,6 +13565,9 @@ const renderDashboardHubPhase1 = function() {
 };
 
 const renderizarRotaAtualHubPhase2 = async function() {
+  limparMenusAcoesGlobais();
+  hubLimparDropdowns({ remover: true });
+  window.hubRemoveFormFooterPortals?.();
   const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
 
   if (rotaRelativa === 'notificacoes') {
@@ -13884,6 +13771,8 @@ const renderCentralSenhasHubPhase1 = function() {
 };
 
 const renderPainelArHubPhase1 = function() {
+  window.crm2PfArActive = state.ar.aba === 'crm2-pf';
+  window.hubRemoveFormFooterPortals?.();
   fecharMenuMaisAr();
   const podeHistorico = podeAcessarAbaAr('historico');
   const podeGerenciarParceiros = pode('admin', 'view') && pode('admin.parceiros_indicacao', 'view');

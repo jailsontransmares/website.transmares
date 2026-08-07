@@ -1,39 +1,10 @@
-const ROUTE_ALIASES = {
-  'admin/usuarios': 'admin/cadastros/usuarios',
-  'admin/perfis': 'admin/cadastros/perfis',
-  'admin/permissoes': 'admin/permissoes',
-  configuracoes: 'admin#identidade',
-
-  // Nova organização planejada do menu — aliases seguros para rotas legadas/existentes.
-  'operacoes/ar-transmares': 'painel-ar',
-  'operacoes/ar-transmares/200': 'painel-ar/200',
-  'operacoes/ar-transmares/201': 'painel-ar/201',
-  'admin/sistema/corretora': 'configuracoes/corretora'
-};
-
-function obterBaseHub(pathname) {
-  if (pathname === '/hub' || pathname.startsWith('/hub/')) {
-    return '/hub';
-  }
-
-  return '';
-}
-
-function normalizarRotaHub(pathname) {
-  const base = obterBaseHub(pathname);
-  const semBase = base ? pathname.slice(base.length) : pathname;
-
-  return semBase
-    .replace(/^\/+|\/+$/g, '')
-    .replace(/^index\.html$/i, '')
-    .toLowerCase();
-}
+import { HUB_ROUTE_ALIASES, obterBaseHub, normalizarRotaHub } from './routeConfig.js';
 
 function montarUrlAliasRotaHub(pathname = window.location.pathname || '/') {
   const [caminho = ''] = String(pathname || '/').split('#');
   const base = obterBaseHub(caminho);
   const rota = normalizarRotaHub(caminho);
-  const destino = ROUTE_ALIASES[rota];
+  const destino = HUB_ROUTE_ALIASES[rota];
 
   if (!destino) {
     return '';
