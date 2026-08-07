@@ -126,7 +126,7 @@ const crm2PfState = {
   registrationDateFilter: '',
   listState: 'normal',
   page: 1,
-  perPage: 5,
+  perPage: 15,
   detailId: '',
   detailTab: 'dados',
   companySearch: '',
@@ -150,6 +150,7 @@ const crm2PfState = {
 let crm2PfPendingLeaveAction = null;
 let crm2PfPendingConfirmAction = null;
 let crm2PfToastTimer = null;
+let crm2PfSearchTimer = null;
 
 function crm2PfHasUnsavedChangesCrm2() {
   const route = currentPfRouteCrm2();
@@ -443,12 +444,8 @@ function renderPaginationCrm2(totalPages, totalItems) {
 function renderPeopleListCrm2() {
   const items = filteredPeopleCrm2();
   const { totalPages, pageItems } = paginatedPeopleCrm2(items);
-  const origins = [...new Set(crm2PfState.items.map((item) => item.origem).filter(Boolean))];
-  const hasFilters = Boolean(
-    crm2PfState.search
-    || crm2PfState.statusFilter
-    || crm2PfState.originFilter
-  );
+  const hasFilters = Boolean(crm2PfState.search || crm2PfState.statusFilter);
+  const searchExpanded = Boolean(crm2PfState.searchExpanded);
   const specialState = crm2PfState.listState !== 'normal';
 
   return `
@@ -460,32 +457,24 @@ function renderPeopleListCrm2() {
         </div>
         <div class="crm2-pessoas-header-actions">
           <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
-          ${crm2CanCreate() ? '<button class="save-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')">+Incluir</button>' : ''}
         </div>
       </div>
 
-      <form class="ar-crm-list-filters" role="search" onsubmit="crm2PfApplyFilters(event)">
-        <label>
-          <span>Buscar</span>
-          <input class="config-input" type="search" placeholder="Nome, CPF, telefone ou e-mail" value="${escapeAttrCrm2(crm2PfState.search)}" oninput="crm2PfSetSearch(this.value)">
-        </label>
-        <label>
-          <span>Status</span>
-          <select class="config-input" onchange="crm2PfSetFilter('status', this.value)">
-            <option value="">Todos os status</option>
-            <option value="cliente ativo" ${crm2PfState.statusFilter === 'cliente ativo' ? 'selected' : ''}>Cliente ativo</option>
-            <option value="cliente inativo" ${crm2PfState.statusFilter === 'cliente inativo' ? 'selected' : ''}>Cliente inativo</option>
-          </select>
-        </label>
-        <label>
-          <span>Origem</span>
-          <select class="config-input" onchange="crm2PfSetFilter('origin', this.value)">
-            <option value="">Todas as origens</option>
-            ${origins.map((origin) => `<option value="${escapeAttrCrm2(origin)}" ${crm2PfState.originFilter === origin ? 'selected' : ''}>${escapeHtmlCrm2(origin)}</option>`).join('')}
-          </select>
-        </label>
-        <button class="save-btn" type="submit">Aplicar filtros</button>
-        <button class="secondary-btn" type="button" onclick="crm2PfClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
+      <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2PfApplyFilters(event)">
+        <div class="crm2-pf-filter-actions">
+          ${crm2CanCreate() ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')">+Incluir</button>' : ''}
+          <div class="crm2-pf-select">
+            <button id="crm2-pf-status-filter" class="icon-btn ${crm2PfState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pf-status-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2PfToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button>
+            <div id="crm2-pf-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-pf-status-filter" data-dropdown-width="180" hidden>
+              ${[['', 'Todos'], ['cliente ativo', 'Cliente ativo'], ['cliente inativo', 'Cliente inativo']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PfState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PfState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrCrm2(value)}" onclick="crm2PfSelectStatusFilter(this)">${escapeHtmlCrm2(label)}</button>`).join('')}
+            </div>
+          </div>
+          <div class="crm2-pf-search-control ${searchExpanded ? 'is-expanded' : ''}">
+            <input class="config-input" type="search" aria-label="Buscar pessoa física" placeholder="Busca por nome, CPF, telefone ou e-mail" value="${escapeAttrCrm2(crm2PfState.search)}" ${searchExpanded ? '' : 'hidden'} oninput="crm2PfSetSearch(this.value, this)" onfocusout="crm2PfHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }">
+            <button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${searchExpanded ? 'true' : 'false'}" onclick="crm2PfToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button>
+          </div>
+          ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PfClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
+        </div>
       </form>
 
       ${specialState ? renderListStateCrm2() : pageItems.length ? `
@@ -593,45 +582,9 @@ function renderPersonDataEditCrm2(person) {
 }
 
 function renderTimelineCrm2(person) {
-  if (typeof window !== 'undefined' && typeof window.crm2TimelineRender === 'function') {
-    return window.crm2TimelineRender(person);
-  }
-  const events = [...(person.timeline || [])].sort((a, b) => new Date(a.data) - new Date(b.data));
-  const automaticDetails = (event) => {
-    const description = String(event.descricao || '').trim();
-    if (/^Anexo removido:/i.test(description)) return { action: 'Exclusão', value: description.replace(/^Anexo removido:\s*/i, '') };
-    if (/^Anexo (incluído|substituído):/i.test(description)) return { action: description.startsWith('Anexo substituído') ? 'Alteração' : 'Inclusão', value: description.replace(/^Anexo (incluído|substituído):\s*/i, '') };
-    if (/^Cadastro criado\.?$/i.test(description)) return { action: 'Inclusão', value: 'Cadastro de pessoa física' };
-    if (/^Dados atualizados\.?$/i.test(description)) return { action: 'Alteração', value: 'Dados cadastrais' };
-    if (/^Dados atualizados\./i.test(description)) return { action: 'Alteração', value: description.replace(/^Dados atualizados\.\s*/i, '') };
-    return { action: event.tipo || 'Alteração', value: description || '—' };
-  };
-  const commentText = (event) => String(event.descricao || '').replace(/^Observação interna adicionada:\s*/i, '');
-  return `
-    <div class="crm2-pf-timeline">
-      ${events.length ? events.map((event) => event.tipo === 'Observação interna'
-        ? `<article class="crm2-pf-timeline-item crm2-pf-comment-item">
-            <header class="crm2-pf-timeline-item-header"><span>${escapeHtmlCrm2(event.usuario || 'Sistema')} · ${escapeHtmlCrm2(formatDateTimeCrm2(event.data))}</span></header>
-            <strong>${escapeHtmlCrm2(commentText(event))}</strong>
-          </article>`
-        : (() => { const details = automaticDetails(event); return `<article class="crm2-pf-timeline-item is-system-event">
-            <p class="crm2-pf-history-system-line"><span>${escapeHtmlCrm2(event.usuario || 'Sistema')} · ${escapeHtmlCrm2(formatDateTimeCrm2(event.data))} · ${escapeHtmlCrm2(details.action)} ·</span><strong>${escapeHtmlCrm2(details.value)}</strong></p>
-          </article>`; })()
-      ).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum registro.</strong><span>O histórico será preenchido pelas interações realizadas.</span></div>'}
-    </div>
-    ${crm2CanEdit() && crm2PfState.inlineEditing ? `
-      <form class="crm2-pf-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeAttrCrm2(person.id)}')">
-        <label>
-          <div class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacao" data-value-target="crm2-pf-rich-observacao" data-placeholder="Adicionar observação ou comentário" oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)"></div>
-          <textarea id="crm2-pf-rich-observacao" class="crm2-pf-rich-text-value" name="observacao" hidden></textarea>
-        </label>
-        <div class="crm2-pf-timeline-composer-actions">
-          ${renderTextFormatToolbarCrm2('observacao', 'Formatação do comentário')}
-          <button class="secondary-btn" type="submit">Adicionar</button>
-        </div>
-      </form>
-    ` : ''}
-  `;
+  return typeof window !== 'undefined' && typeof window.crm2TimelineRender === 'function'
+    ? window.crm2TimelineRender(person)
+    : '<div class="crm2-pessoas-state is-compact"><strong>Histórico indisponível.</strong><span>Não foi possível carregar a timeline.</span></div>';
 }
 
 function renderVinculosCrm2(person) {
@@ -768,8 +721,9 @@ function renderPersonDetailCrm2(person) {
       <div class="crm2-pf-detail-columns">
         <div class="crm2-pf-tab-content">${content}</div>
         <aside class="crm2-pf-timeline-column" aria-labelledby="crm2-pf-timeline-title">
-          <div class="hub-form-section-title"><strong id="crm2-pf-timeline-title">Histórico</strong></div>
+          <div class="hub-form-section-title crm2-pf-timeline-title"><div class="crm2-pf-timeline-heading"><strong id="crm2-pf-timeline-title">Histórico</strong>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderCounter === 'function' ? window.crm2TimelineRenderCounter(person) : ''}</div>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderDetailsToggle === 'function' ? window.crm2TimelineRenderDetailsToggle() : ''}</div>
           <div class="crm2-pf-timeline-scroll">${renderTimelineCrm2(person)}</div>
+          ${typeof window !== 'undefined' && typeof window.crm2TimelineRenderComposer === 'function' ? window.crm2TimelineRenderComposer(person) : ''}
         </aside>
       </div>
 
@@ -1060,12 +1014,19 @@ function renderIntoCurrentCrm2Target() {
 }
 
 function removeCrm2PfFooterPortal() {
-  document.body.querySelector(':scope > .crm2-pf-form-footer')?.remove();
+  document.body.querySelectorAll(':scope > .crm2-pf-form-footer').forEach((footer) => footer.remove());
 }
 
 function portalCrm2PfFooter() {
+  if (window.crm2PfArActive === false) {
+    removeCrm2PfFooterPortal();
+    return;
+  }
   const footer = document.querySelector('.crm2-pessoas-page .crm2-pf-form-footer');
   if (!footer) return;
+  document.body.querySelectorAll(':scope > .crm2-pf-form-footer').forEach((portalFooter) => {
+    if (portalFooter !== footer) portalFooter.remove();
+  });
   const formId = document.getElementById('crm2-pf-inline-form')?.id
     || document.getElementById('crm2-pf-form')?.id;
   if (formId) footer.querySelector('button[type="submit"]')?.setAttribute('form', formId);
@@ -1142,8 +1103,14 @@ function enhanceCrm2Overview() {
 }
 
 function mountCrm2Phase2() {
+  if (window.crm2PfArActive === false) {
+    removeCrm2PfFooterPortal();
+    removeCrm2Toast();
+    return;
+  }
   const code = currentRouteCodeCrm2();
   if (code === '200') {
+    window.hubLimparDropdowns?.({ remover: true });
     removeCrm2PfFooterPortal();
     removeCrm2Toast();
     resetFormCrm2();
@@ -1152,6 +1119,7 @@ function mountCrm2Phase2() {
     return;
   }
   if (code !== '201') {
+    window.hubLimparDropdowns?.({ remover: true });
     removeCrm2PfFooterPortal();
     removeCrm2Toast();
     return;
@@ -1162,11 +1130,13 @@ function mountCrm2Phase2() {
     portalCrm2PfFooter();
     return;
   }
+  window.hubLimparDropdowns?.({ remover: true });
   renderIntoCurrentCrm2Target();
 }
 
 function rerenderCrm2Phase2() {
-  if (currentRouteCodeCrm2() !== '201') return;
+  if (window.crm2PfArActive === false || currentRouteCodeCrm2() !== '201') return;
+  window.hubLimparDropdowns?.({ remover: true });
   removeCrm2PfFooterPortal();
   const target = document.querySelector('.crm2-pessoas-page');
   if (!target) return;
@@ -1443,6 +1413,7 @@ function saveCurrentCrm2Tab() {
 Object.assign(window, {
   crm2PfRender: renderCrm2Phase2,
   crm2PfRerender: rerenderCrm2Phase2,
+  crm2PfRemoveFooterPortal: removeCrm2PfFooterPortal,
   crm2PfGetMockItems() {
     return crm2PfState.items.map((item) => ({
       id: item.id,
@@ -1573,8 +1544,9 @@ Object.assign(window, {
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 8;
     const gap = 6;
-    const menuWidth = Math.min(rect.width, window.innerWidth - (viewportPadding * 2));
-    const menuMaxHeight = Math.min(280, window.innerHeight - (viewportPadding * 2));
+    const requestedWidth = Number(menu.dataset.dropdownWidth) || rect.width;
+    const menuWidth = Math.min(requestedWidth, window.innerWidth - (viewportPadding * 2));
+    const menuMaxHeight = Math.max(160, window.innerHeight - (viewportPadding * 2));
     menu.style.width = `${menuWidth}px`;
     menu.style.maxHeight = `${menuMaxHeight}px`;
     menu.style.overflowY = 'auto';
@@ -1585,7 +1557,8 @@ Object.assign(window, {
     const top = openAbove
       ? Math.max(viewportPadding, rect.top - menuHeight - gap)
       : Math.min(rect.bottom + gap, window.innerHeight - menuHeight - viewportPadding);
-    const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - menuWidth - viewportPadding);
+    const centeredLeft = rect.left + ((rect.width - menuWidth) / 2);
+    const left = Math.min(Math.max(viewportPadding, centeredLeft), window.innerWidth - menuWidth - viewportPadding);
     menu.style.left = `${left}px`;
     menu.style.top = `${Math.max(viewportPadding, top)}px`;
   },
@@ -1760,16 +1733,12 @@ Object.assign(window, {
     setMessageCrm2('');
     rerenderCrm2Phase2();
   },
-  crm2PfSetSearch(value) {
-    crm2PfState.search = String(value || '');
-    crm2PfState.page = 1;
-    rerenderCrm2Phase2();
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector('.ar-crm-list-filters input[type="search"]');
-      if (!input) return;
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    });
+  crm2PfSetSearch(value, input) {
+    window.hubAtualizarBuscaAoDigitar(input, (search) => {
+      crm2PfState.search = search;
+      crm2PfState.searchExpanded = true;
+      crm2PfState.page = 1;
+    }, rerenderCrm2Phase2, () => document.querySelector('.crm2-pf-search-control input[type="search"]'));
   },
   crm2PfSetCompanySearch(input) {
     const cursor = typeof input?.selectionStart === 'number' ? input.selectionStart : String(input?.value || '').length;
@@ -1856,8 +1825,39 @@ Object.assign(window, {
     crm2PfState.page = 1;
     rerenderCrm2Phase2();
   },
+  crm2PfSelectStatusFilter(option) {
+    const menu = option?.closest('.hub-filter-dropdown-menu');
+    if (!menu) return;
+    menu.remove();
+    crm2PfState.statusFilter = String(option.dataset.value || '');
+    crm2PfState.page = 1;
+    rerenderCrm2Phase2();
+  },
+  crm2PfToggleSearch(button) {
+    const control = button?.closest('.crm2-pf-search-control');
+    const input = control?.querySelector('input[type="search"]');
+    if (!control || !input) return;
+    const expanded = !control.classList.contains('is-expanded');
+    crm2PfState.searchExpanded = expanded;
+    control.classList.toggle('is-expanded', expanded);
+    input.hidden = !expanded;
+    button.setAttribute('aria-expanded', String(expanded));
+    if (expanded) input.focus({ preventScroll: true });
+  },
+  crm2PfHandleSearchBlur(event) {
+    const input = event?.currentTarget;
+    const control = input?.closest('.crm2-pf-search-control');
+    if (!control || control.contains(event.relatedTarget)) return;
+    window.setTimeout(() => {
+      if (control.contains(document.activeElement)) return;
+      crm2PfState.searchExpanded = false;
+      control.classList.remove('is-expanded');
+      input.hidden = true;
+      control.querySelector('button')?.setAttribute('aria-expanded', 'false');
+    }, 0);
+  },
   crm2PfClearFilters() {
-    Object.assign(crm2PfState, { search: '', statusFilter: '', originFilter: '', registrationDateFilter: '', page: 1 });
+    Object.assign(crm2PfState, { search: '', searchExpanded: false, statusFilter: '', originFilter: '', registrationDateFilter: '', page: 1 });
     rerenderCrm2Phase2();
   },
   crm2PfSetListState(value) {

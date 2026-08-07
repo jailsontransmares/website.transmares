@@ -5,15 +5,8 @@ import { hasPermission } from './services/permissionService.js';
 
 const crm2TimelineState = {
   pfId: '',
-  search: '',
-  typeFilter: '',
-  sourceFilter: '',
-  userFilter: '',
-  dateFrom: '',
-  dateTo: '',
-  page: 1,
-  perPage: 8,
-  listState: 'normal'
+  listState: 'normal',
+  systemDetailsExpanded: false
 };
 
 function escapeTimeline(value = '') {
@@ -53,15 +46,15 @@ function canEditTimeline() {
   return hasPermission(permissions, 'painel_ar', 'update') || hasPermission(permissions, 'painel_ar', 'create');
 }
 
-function resetTimelineFilters() {
-  Object.assign(crm2TimelineState, {
-    search: '', typeFilter: '', sourceFilter: '', userFilter: '', dateFrom: '', dateTo: '', page: 1, listState: 'normal'
-  });
+function resetTimelineState() {
+  crm2TimelineState.listState = 'normal';
+  crm2TimelineState.systemDetailsExpanded = false;
 }
 
 function parseTimelineChanges(text = '') {
   return String(text).split(' · ').flatMap((part) => {
-    const match = part.match(/^([^:]+):\s*(.*?)\s+→\s*(.*)$/);
+    const match = part.match(/^([^:]+):\s*(.*?)\s+→\s*(.*)$/)
+      || part.match(/^(.+?)(?:\s+—)?\s+De:\s*(.*?)\s*;\s*Para:\s*(.*)$/i);
     return match ? [{ campo: match[1].trim(), de: match[2].trim(), para: match[3].trim() }] : [];
   });
 }
@@ -208,88 +201,92 @@ function buildTimelineEvents(person) {
     .sort((a, b) => new Date(b.data) - new Date(a.data));
 }
 
-function filteredTimelineEvents(events) {
-  const search = normalizeTimeline(crm2TimelineState.search);
-  return events.filter((event) => {
-    const searchable = [event.tipo, event.entidade, event.origem, event.usuario, event.descricao, event.alteracoes, event.referencia?.label].map(normalizeTimeline);
-    return (!search || searchable.some((value) => value.includes(search)))
-      && (!crm2TimelineState.typeFilter || event.tipo === crm2TimelineState.typeFilter)
-      && (!crm2TimelineState.sourceFilter || event.origem === crm2TimelineState.sourceFilter)
-      && (!crm2TimelineState.userFilter || event.usuario === crm2TimelineState.userFilter)
-      && (!crm2TimelineState.dateFrom || String(event.data || '').slice(0, 10) >= crm2TimelineState.dateFrom)
-      && (!crm2TimelineState.dateTo || String(event.data || '').slice(0, 10) <= crm2TimelineState.dateTo);
-  });
-}
-
 function renderTimelineState(state, totalEvents) {
   const copy = {
     loading: ['Carregando timeline...', 'Estado de carregamento simulado para homologação.'],
     error: ['Não foi possível carregar a timeline.', 'Erro simulado. Nenhuma integração externa foi acionada.'],
     empty: ['Nenhum evento registrado.', 'A Pessoa Física ainda não possui eventos na timeline unificada.']
   }[state];
-  if (!copy) return totalEvents ? '' : `<div class="crm2-pessoas-state crm2-timeline-state" role="status"><strong>Nenhum evento encontrado.</strong><span>Ajuste os filtros para consultar outros registros.</span><button class="secondary-btn" type="button" onclick="crm2TimelineClearFilters()">Limpar filtros</button></div>`;
+  if (!copy) return totalEvents ? '' : `<div class="crm2-pessoas-state crm2-timeline-state" role="status"><strong>Nenhum evento registrado.</strong><span>O histórico será preenchido pelas interações realizadas.</span></div>`;
   return `<div class="crm2-pessoas-state crm2-timeline-state ${state === 'error' ? 'is-error' : ''}" role="${state === 'error' ? 'alert' : 'status'}" ${state === 'loading' ? 'aria-busy="true"' : ''}><strong>${copy[0]}</strong><span>${copy[1]}</span><button class="secondary-btn" type="button" onclick="crm2TimelineSetState('normal')">Voltar à timeline</button></div>`;
 }
 
 function renderTimelineChanges(event) {
-  if (!event.changes.length) return event.alteracoes ? `<small class="crm2-timeline-changes">${escapeTimeline(event.alteracoes)}</small>` : '';
-  return `<div class="crm2-timeline-changes">${event.changes.map((change) => `<span><strong>${escapeTimeline(change.campo)}</strong><small>De: ${escapeTimeline(change.de)} · Para: ${escapeTimeline(change.para)}</small></span>`).join('')}</div>`;
+  const changes = event.changes.length
+    ? event.changes
+    : [{ campo: 'Registro', de: '—', para: event.alteracoes || event.descricao || '—' }];
+  return changes.map((change) => `<span class="crm2-unified-timeline-inline-change"><span class="crm2-unified-timeline-change-field">${escapeTimeline(change.campo)}:</span> <s>${escapeTimeline(change.de)}</s> <strong>${escapeTimeline(change.para)}</strong></span>`).join(' · ');
 }
 
 function renderTimelineRelatedLink(event) {
   const reference = event.referencia || {};
-  if (event.entidade === 'Pedido' && reference.pedidoId) return `<button class="crm2-timeline-related-link" type="button" onclick="crm2TimelineOpenPedido('${escapeTimelineAttr(reference.pedidoId)}')">Abrir pedido ${escapeTimeline(reference.label || '')}</button>`;
-  if (event.entidade === 'PJ' && reference.pjId) return `<button class="crm2-timeline-related-link" type="button" onclick="crm2TimelineOpenPj('${escapeTimelineAttr(reference.pjId)}')">Abrir empresa ${escapeTimeline(reference.label || '')}</button>`;
-  if (event.entidade === 'Vínculo' && reference.vinculoId) return `<button class="crm2-timeline-related-link" type="button" onclick="crm2TimelineOpenVinculo('${escapeTimelineAttr(reference.vinculoId)}')">Abrir vínculo ${escapeTimeline(reference.label || '')}</button>`;
+  if (event.entidade === 'Pedido' && reference.pedidoId) return `<button class="crm2-timeline-related-link" type="button" aria-label="Abrir pedido ${escapeTimelineAttr(reference.label || '')}" onclick="crm2TimelineOpenPedido('${escapeTimelineAttr(reference.pedidoId)}')">Abrir</button>`;
+  if (event.entidade === 'PJ' && reference.pjId) return `<button class="crm2-timeline-related-link" type="button" aria-label="Abrir empresa ${escapeTimelineAttr(reference.label || '')}" onclick="crm2TimelineOpenPj('${escapeTimelineAttr(reference.pjId)}')">Abrir</button>`;
+  if (event.entidade === 'Vínculo' && reference.vinculoId) return `<button class="crm2-timeline-related-link" type="button" aria-label="Abrir vínculo ${escapeTimelineAttr(reference.label || '')}" onclick="crm2TimelineOpenVinculo('${escapeTimelineAttr(reference.vinculoId)}')">Abrir</button>`;
   return '';
 }
 
 function renderTimelineEvent(event) {
   const eventClass = normalizeTimeline(event.tipo).replace(/\s+/g, '-');
-  return `<article class="crm2-unified-timeline-item"><span class="crm2-unified-timeline-marker is-${escapeTimelineAttr(eventClass)}" aria-hidden="true"></span><div class="crm2-unified-timeline-content"><header><div><span class="crm2-unified-timeline-type is-${escapeTimelineAttr(eventClass)}">${escapeTimeline(event.tipo)}</span><span class="crm2-unified-timeline-source">${escapeTimeline(event.origem)}</span></div><time datetime="${escapeTimelineAttr(event.data)}">${escapeTimeline(formatTimelineDate(event.data))}</time></header><strong>${escapeTimeline(event.descricao)}</strong><p>Por ${escapeTimeline(event.usuario)}</p>${renderTimelineChanges(event)}${renderTimelineRelatedLink(event)}</div></article>`;
+  const isComment = event.tipo === 'Observação interna';
+  const action = event.changes.length ? 'Alteração' : event.tipo || 'Atualização';
+  const content = isComment
+    ? `<p class="crm2-unified-timeline-comment-meta"><span>${escapeTimeline(event.usuario)} · ${escapeTimeline(formatTimelineDate(event.data))}</span></p><strong class="crm2-unified-timeline-comment-text">${escapeTimeline(event.descricao)}</strong>`
+    : `<p class="crm2-unified-timeline-system-line"><span class="crm2-unified-timeline-meta">${escapeTimeline(event.usuario)} - ${escapeTimeline(formatTimelineDate(event.data))} -</span><strong class="crm2-unified-timeline-action">${escapeTimeline(action)}</strong>${renderTimelineChanges(event)}${renderTimelineRelatedLink(event)}</p>`;
+  return `<article class="crm2-unified-timeline-item ${isComment ? 'is-comment' : ''}"><span class="crm2-unified-timeline-marker is-${escapeTimelineAttr(eventClass)}" aria-hidden="true"></span><div class="crm2-unified-timeline-content">${content}</div></article>`;
 }
 
-function renderTimelineFilters(events) {
-  const types = [...new Set(events.map((event) => event.tipo))];
-  const sources = [...new Set(events.map((event) => event.origem))];
-  const users = [...new Set(events.map((event) => event.usuario))];
-  const active = Boolean(crm2TimelineState.search || crm2TimelineState.typeFilter || crm2TimelineState.sourceFilter || crm2TimelineState.userFilter || crm2TimelineState.dateFrom || crm2TimelineState.dateTo);
-  return `<form class="crm2-timeline-filters" role="search" onsubmit="crm2TimelineApplyFilters(event)" aria-label="Filtrar timeline unificada"><label><span>Buscar</span><input class="config-input" name="search" type="search" value="${escapeTimelineAttr(crm2TimelineState.search)}" placeholder="Evento, usuário, pedido ou empresa"></label><label><span>Tipo</span><select class="config-input" name="type"><option value="">Todos os tipos</option>${types.map((type) => `<option value="${escapeTimelineAttr(type)}" ${crm2TimelineState.typeFilter === type ? 'selected' : ''}>${escapeTimeline(type)}</option>`).join('')}</select></label><label><span>Origem</span><select class="config-input" name="source"><option value="">Todas as origens</option>${sources.map((source) => `<option value="${escapeTimelineAttr(source)}" ${crm2TimelineState.sourceFilter === source ? 'selected' : ''}>${escapeTimeline(source)}</option>`).join('')}</select></label><label><span>Usuário</span><select class="config-input" name="user"><option value="">Todos os usuários</option>${users.map((user) => `<option value="${escapeTimelineAttr(user)}" ${crm2TimelineState.userFilter === user ? 'selected' : ''}>${escapeTimeline(user)}</option>`).join('')}</select></label><label><span>Desde</span><input class="config-input" name="dateFrom" type="date" value="${escapeTimelineAttr(crm2TimelineState.dateFrom)}"></label><label><span>Até</span><input class="config-input" name="dateTo" type="date" value="${escapeTimelineAttr(crm2TimelineState.dateTo)}"></label><div class="crm2-timeline-filter-actions"><button class="save-btn" type="submit">Aplicar filtros</button><button class="secondary-btn" type="button" onclick="crm2TimelineClearFilters()" ${active ? '' : 'disabled'}>Limpar filtros</button></div></form>`;
+function renderTimelineFormatToolbar() {
+  return `<div class="crm2-pf-text-format-toolbar" role="toolbar" aria-label="Formatação da observação interna">
+    <button class="icon-btn" type="button" title="Negrito" aria-label="Negrito" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('bold', 'observacao')"><i data-lucide="bold" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Itálico" aria-label="Itálico" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('italic', 'observacao')"><i data-lucide="italic" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Sublinhado" aria-label="Sublinhado" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('underline', 'observacao')"><i data-lucide="underline" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Tachado" aria-label="Tachado" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('strike', 'observacao')"><i data-lucide="strikethrough" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('bullet', 'observacao')"><i data-lucide="list" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Lista numerada" aria-label="Lista numerada" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('ordered', 'observacao')"><i data-lucide="list-ordered" aria-hidden="true"></i></button>
+    <button class="icon-btn" type="button" title="Limpar formatação" aria-label="Limpar formatação" onmousedown="event.preventDefault()" onclick="crm2PfFormatNote('clear', 'observacao')"><i data-lucide="remove-formatting" aria-hidden="true"></i></button>
+  </div>`;
+}
+
+function renderTimelineComposer(person) {
+  if (!person || !canEditTimeline()) return '';
+  return `<form class="crm2-unified-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeTimelineAttr(person.id)}')"><label><div id="crm2-timeline-observacao" class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacao" data-value-target="crm2-timeline-observacao-value" data-placeholder="Registre uma interação mockada" aria-label="Observação interna" oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)"></div><textarea id="crm2-timeline-observacao-value" class="crm2-pf-rich-text-value" name="observacao" hidden></textarea></label><div class="crm2-unified-timeline-composer-actions">${renderTimelineFormatToolbar()}<button class="secondary-btn" type="submit">Comentar</button></div></form>`;
+}
+
+function renderTimelineCounter(person) {
+  if (!person) return '';
+  return `<span class="crm2-pf-timeline-count">${buildTimelineEvents(person).length} eventos</span>`;
+}
+
+function renderTimelineDetailsToggle() {
+  const expanded = crm2TimelineState.systemDetailsExpanded;
+  return `<button class="crm2-pf-timeline-details-toggle" type="button" aria-expanded="${expanded ? 'true' : 'false'}" aria-controls="crm2-pf-timeline-scroll" onclick="crm2TimelineToggleDetails()">${expanded ? 'Recolher detalhes' : 'Expandir detalhes'}</button>`;
 }
 
 function renderTimeline(person) {
   if (!person) return '';
   if (crm2TimelineState.pfId !== person.id) {
     crm2TimelineState.pfId = person.id;
-    resetTimelineFilters();
+    resetTimelineState();
   }
   const events = buildTimelineEvents(person);
-  const filtered = filteredTimelineEvents(events);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / crm2TimelineState.perPage));
-  crm2TimelineState.page = Math.min(Math.max(1, crm2TimelineState.page), totalPages);
-  const pageItems = filtered.slice((crm2TimelineState.page - 1) * crm2TimelineState.perPage, crm2TimelineState.page * crm2TimelineState.perPage);
+  const observations = events.filter((event) => event.tipo === 'Observação interna');
+  const eventsToRender = crm2TimelineState.systemDetailsExpanded ? events : observations;
   const visibleContent = crm2TimelineState.listState !== 'normal'
     ? renderTimelineState(crm2TimelineState.listState, events.length)
-    : pageItems.length
-      ? `<div class="crm2-unified-timeline-list" aria-live="polite">${pageItems.map(renderTimelineEvent).join('')}</div><div class="crm2-unified-timeline-pagination" aria-label="Paginação da timeline"><span>Página <strong>${crm2TimelineState.page}</strong> de <strong>${totalPages}</strong> · ${filtered.length} evento(s)</span><div><button class="secondary-btn" type="button" onclick="crm2TimelineSetPage(${crm2TimelineState.page - 1})" ${crm2TimelineState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2TimelineSetPage(${crm2TimelineState.page + 1})" ${crm2TimelineState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`
-      : events.length ? renderTimelineState('normal', 0) : renderTimelineState('empty', 0);
-  return `${renderTimelineFilters(events)}<div class="crm2-unified-timeline-summary" aria-live="polite"><strong>${filtered.length}</strong><span>evento(s) encontrados</span><small>PF, PJ, vínculos e pedidos</small></div>${visibleContent}${canEditTimeline() ? `<form class="crm2-unified-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeTimelineAttr(person.id)}')"><label><span>Adicionar observação interna</span><textarea class="config-input" name="observacao" rows="3" placeholder="Registre uma interação mockada" required></textarea></label><button class="secondary-btn" type="submit">Adicionar à timeline</button></form>` : ''}`;
+    : events.length
+      ? `<div class="crm2-unified-timeline-list" aria-live="polite">${eventsToRender.map(renderTimelineEvent).join('')}</div>`
+      : renderTimelineState('normal', 0);
+  return visibleContent;
 }
 
 Object.assign(window, {
   crm2TimelineRender: renderTimeline,
-  crm2TimelineApplyFilters(event) {
-    event?.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    Object.assign(crm2TimelineState, { search: String(values.search || '').trim(), typeFilter: String(values.type || ''), sourceFilter: String(values.source || ''), userFilter: String(values.user || ''), dateFrom: String(values.dateFrom || ''), dateTo: String(values.dateTo || ''), page: 1 });
-    window.crm2PfRerender?.();
-  },
-  crm2TimelineClearFilters() {
-    resetTimelineFilters();
-    window.crm2PfRerender?.();
-  },
-  crm2TimelineSetPage(page) {
-    crm2TimelineState.page = Math.max(1, Number(page) || 1);
+  crm2TimelineRenderComposer: renderTimelineComposer,
+  crm2TimelineRenderCounter: renderTimelineCounter,
+  crm2TimelineRenderDetailsToggle: renderTimelineDetailsToggle,
+  crm2TimelineToggleDetails() {
+    crm2TimelineState.systemDetailsExpanded = !crm2TimelineState.systemDetailsExpanded;
     window.crm2PfRerender?.();
   },
   crm2TimelineSetState(value) {

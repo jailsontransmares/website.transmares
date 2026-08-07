@@ -149,7 +149,8 @@ const crm2VinculosState = {
   typeFilter: '',
   statusFilter: '',
   page: 1,
-  perPage: 5,
+  perPage: 15,
+  searchExpanded: false,
   listState: 'normal',
   message: '',
   formMode: '',
@@ -157,6 +158,8 @@ const crm2VinculosState = {
   draft: {},
   errors: {}
 };
+
+let crm2VinculosSearchTimer = null;
 
 const CRM2_VINCULOS_PF_OPTIONS = [
   { id: 'pf-001', nome: 'Mariana Alves de Souza', cpf: '12345678909' },
@@ -312,13 +315,15 @@ function renderVinculosList() {
   const hasActions = crm2VinculosState.canEdit || crm2VinculosState.canDelete;
 
   return `<section class="admin-panel crm2-pessoas-page crm2-vinculos-page" data-crm2-vinculos="true" aria-labelledby="crm2-vinculos-title">
-    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 203 · CRM 2.0</span><h3 id="crm2-vinculos-title">Vínculos PF/PJ</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>${crm2VinculosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2VinculosOpenCreate()">+Incluir</button>' : ''}</div></div>
+    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 203 · CRM 2.0</span><h3 id="crm2-vinculos-title">Vínculos PF/PJ</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></div>
     ${crm2VinculosState.message ? `<p class="admin-message" role="status">${escapeHtmlVinculo(crm2VinculosState.message)}</p>` : ''}
-    <form class="ar-crm-list-filters crm2-vinculos-filters" role="search" onsubmit="crm2VinculosApplyFilters(event)">
-      <label><span>Buscar</span><input class="config-input" type="search" placeholder="PF, PJ, CPF ou CNPJ" value="${escapeAttrVinculo(crm2VinculosState.search)}" oninput="crm2VinculosSetSearch(this.value)"></label>
-      <label><span>Tipo de vínculo</span><select class="config-input" onchange="crm2VinculosSetTypeFilter(this.value)"><option value="">Todos os tipos</option>${['Titular', 'Representante legal', 'Contador', 'Outros'].map((type) => `<option value="${escapeAttrVinculo(type)}" ${crm2VinculosState.typeFilter === type ? 'selected' : ''}>${escapeHtmlVinculo(type)}</option>`).join('')}</select></label>
-      <label><span>Situação</span><select class="config-input" onchange="crm2VinculosSetStatusFilter(this.value)"><option value="">Todas as situações</option><option value="Ativo" ${crm2VinculosState.statusFilter === 'Ativo' ? 'selected' : ''}>Ativo</option><option value="Inativo" ${crm2VinculosState.statusFilter === 'Inativo' ? 'selected' : ''}>Inativo</option></select></label>
-      <button class="save-btn" type="submit">Aplicar filtros</button><button class="secondary-btn" type="button" onclick="crm2VinculosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
+    <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2VinculosApplyFilters(event)">
+      <div class="crm2-pf-filter-actions">
+        ${crm2VinculosState.canCreate ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="crm2VinculosOpenCreate()">+Incluir</button>' : ''}
+        <div class="crm2-pf-select"><button id="crm2-vinculos-filter" class="icon-btn ${crm2VinculosState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-vinculos-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2VinculosToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-vinculos-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-vinculos-filter" data-dropdown-width="180" hidden>${[['', 'Todos'], ['Ativo', 'Ativo'], ['Inativo', 'Inativo']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2VinculosState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2VinculosState.statusFilter === value ? 'true' : 'false'}" data-field="status" data-value="${escapeAttrVinculo(value)}" onclick="crm2VinculosSelectFilter(this)">${escapeHtmlVinculo(label)}</button>`).join('')}</div></div>
+        <div class="crm2-pf-search-control ${crm2VinculosState.searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar vínculo" placeholder="Busca por PF, PJ, CPF ou CNPJ" value="${escapeAttrVinculo(crm2VinculosState.search)}" ${crm2VinculosState.searchExpanded ? '' : 'hidden'} oninput="crm2VinculosSetSearch(this.value, this)" onfocusout="crm2VinculosHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${crm2VinculosState.searchExpanded ? 'true' : 'false'}" onclick="crm2VinculosToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>
+        ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2VinculosClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
+      </div>
     </form>
     ${crm2VinculosState.listState !== 'normal' ? renderStateVinculos() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap crm2-vinculos-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table crm2-vinculos-table" aria-describedby="crm2-vinculos-caption"><caption id="crm2-vinculos-caption" class="crm2-pessoas-table-caption">Vínculos entre pessoas físicas e jurídicas no CRM 2.0</caption><thead><tr><th scope="col">Pessoa física</th><th scope="col">Pessoa jurídica</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Início</th><th scope="col">Última atualização</th>${hasActions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pfNome)}</button><small>${escapeHtmlVinculo(maskCpfVinculo(item.pfCpf))}</small></td><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pjRazaoSocial)}</button><small>${escapeHtmlVinculo(maskCnpjVinculo(item.pjCnpj))}</small></td><td><span class="crm2-vinculo-type">${escapeHtmlVinculo(item.tipo)}</span></td><td><span class="crm2-pessoas-status is-${escapeAttrVinculo(normalizeSearchVinculo(item.status))}" role="status">${escapeHtmlVinculo(item.status)}</span></td><td>${escapeHtmlVinculo(formatDateVinculo(item.inicioEm))}</td><td>${escapeHtmlVinculo(formatDateTimeVinculo(item.atualizadoEm))}</td>${hasActions ? `<td class="crm2-vinculos-actions">${crm2VinculosState.canEdit ? `<button class="icon-btn" type="button" onclick="crm2VinculosOpenEdit('${escapeAttrVinculo(item.id)}')" aria-label="Editar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Editar vínculo">✎</button>` : ''}${crm2VinculosState.canDelete && item.status === 'Ativo' ? `<button class="icon-btn" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')" aria-label="Inativar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Inativar vínculo">×</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>${renderPaginationVinculos(totalPages, filtered.length)}` : `<div class="crm2-pessoas-state crm2-vinculos-state" role="status"><strong>${crm2VinculosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum vínculo cadastrado.'}</strong><span>${crm2VinculosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui vínculos.'}</span><button class="secondary-btn" type="button" onclick="crm2VinculosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
   </section>`;
@@ -424,6 +429,7 @@ function renderVinculos() {
 }
 
 function mountVinculos() {
+  window.hubLimparDropdowns?.({ remover: true });
   const target = document.querySelector('[data-crm2-vinculos="true"]');
   if (target) target.outerHTML = renderVinculos();
 }
@@ -586,10 +592,14 @@ Object.assign(window, {
     crm2VinculosState.errors = {};
     navigateVinculos();
   },
-  crm2VinculosSetSearch(value) { crm2VinculosState.search = String(value || ''); crm2VinculosState.page = 1; rerenderVinculos(); },
+  crm2VinculosSetSearch(value, input) { window.hubAtualizarBuscaAoDigitar(input, (search) => { crm2VinculosState.search = search; crm2VinculosState.searchExpanded = true; crm2VinculosState.page = 1; }, rerenderVinculos, () => document.querySelector('.crm2-pf-search-control input[type="search"]')); },
+  crm2VinculosToggleDropdown(trigger, event) { window.crm2PfToggleDropdown?.(trigger, event); },
+  crm2VinculosSelectFilter(option) { const menu = option?.closest('.hub-filter-dropdown-menu'); if (!menu) return; menu.remove(); const field = option.dataset.field; if (field === 'type') crm2VinculosState.typeFilter = String(option.dataset.value || ''); if (field === 'status') crm2VinculosState.statusFilter = String(option.dataset.value || ''); crm2VinculosState.page = 1; rerenderVinculos(); },
+  crm2VinculosToggleSearch(button) { const control = button?.closest('.crm2-pf-search-control'); const input = control?.querySelector('input[type="search"]'); if (!control || !input) return; const expanded = !control.classList.contains('is-expanded'); crm2VinculosState.searchExpanded = expanded; control.classList.toggle('is-expanded', expanded); input.hidden = !expanded; button.setAttribute('aria-expanded', String(expanded)); if (expanded) input.focus({ preventScroll: true }); },
+  crm2VinculosHandleSearchBlur(event) { const input = event?.currentTarget; const control = input?.closest('.crm2-pf-search-control'); if (!control || control.contains(event.relatedTarget)) return; window.setTimeout(() => { if (control.contains(document.activeElement)) return; crm2VinculosState.searchExpanded = false; control.classList.remove('is-expanded'); input.hidden = true; control.querySelector('button')?.setAttribute('aria-expanded', 'false'); }, 0); },
   crm2VinculosSetTypeFilter(value) { crm2VinculosState.typeFilter = String(value || ''); crm2VinculosState.page = 1; rerenderVinculos(); },
   crm2VinculosSetStatusFilter(value) { crm2VinculosState.statusFilter = String(value || ''); crm2VinculosState.page = 1; rerenderVinculos(); },
-  crm2VinculosClearFilters() { crm2VinculosState.search = ''; crm2VinculosState.typeFilter = ''; crm2VinculosState.statusFilter = ''; crm2VinculosState.page = 1; crm2VinculosState.message = ''; rerenderVinculos(); },
+  crm2VinculosClearFilters() { window.clearTimeout(crm2VinculosSearchTimer); crm2VinculosState.search = ''; crm2VinculosState.searchExpanded = false; crm2VinculosState.typeFilter = ''; crm2VinculosState.statusFilter = ''; crm2VinculosState.page = 1; crm2VinculosState.message = ''; rerenderVinculos(); },
   crm2VinculosApplyFilters(event) { event?.preventDefault(); crm2VinculosState.page = 1; rerenderVinculos(); },
   crm2VinculosSetPage(page) { crm2VinculosState.page = Math.max(1, Number(page) || 1); rerenderVinculos(); },
   crm2VinculosSetListState(value) { crm2VinculosState.listState = ['normal', 'loading', 'error', 'empty'].includes(value) ? value : 'normal'; rerenderVinculos(); }

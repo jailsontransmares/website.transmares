@@ -58,7 +58,8 @@ const crm2PjState = {
   search: '',
   statusFilter: '',
   page: 1,
-  perPage: 5,
+  perPage: 15,
+  searchExpanded: false,
   formMode: '',
   detailId: '',
   detailTab: 'dados',
@@ -71,6 +72,7 @@ const crm2PjState = {
 };
 
 let pendingLeaveActionPj = null;
+let crm2PjSearchTimer = null;
 
 function escapeHtmlPj(value = '') {
   return String(value ?? '')
@@ -308,13 +310,16 @@ function renderListPj() {
   const pageItems = items.slice((crm2PjState.page - 1) * crm2PjState.perPage, crm2PjState.page * crm2PjState.perPage);
   const hasFilters = Boolean(crm2PjState.search || crm2PjState.statusFilter);
   return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-title">
-    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-title">Pessoas jurídicas</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>${crm2PjState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PjOpenCreate()">+Incluir</button>' : ''}</div></div>
-    <form class="ar-crm-list-filters" role="search" onsubmit="crm2PjApplyFilters(event)">
-      <label><span>Buscar</span><input class="config-input" type="search" placeholder="Razão social ou CNPJ" value="${escapeAttrPj(crm2PjState.search)}" oninput="crm2PjSetSearch(this.value)"></label>
-      <label><span>Status</span><select class="config-input" onchange="crm2PjSetFilter(this.value)"><option value="">Todos os status</option><option value="empresa ativa" ${crm2PjState.statusFilter === 'empresa ativa' ? 'selected' : ''}>Empresa ativa</option><option value="empresa inativa" ${crm2PjState.statusFilter === 'empresa inativa' ? 'selected' : ''}>Empresa inativa</option><option value="empresa baixada" ${crm2PjState.statusFilter === 'empresa baixada' ? 'selected' : ''}>Empresa baixada</option></select></label>
-      <button class="save-btn" type="submit">Aplicar filtros</button><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>
+    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-title">Pessoas jurídicas</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></div>
+    <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2PjApplyFilters(event)">
+      <div class="crm2-pf-filter-actions">
+        ${crm2PjState.canCreate ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="crm2PjOpenCreate()">+Incluir</button>' : ''}
+        <div class="crm2-pf-select"><button id="crm2-pj-status-filter" class="icon-btn ${crm2PjState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pj-status-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2PjToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-pj-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-pj-status-filter" data-dropdown-width="180" hidden>${[['', 'Todos'], ['empresa ativa', 'Empresa ativa'], ['empresa inativa', 'Empresa inativa'], ['empresa baixada', 'Empresa baixada']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PjState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PjState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrPj(value)}" onclick="crm2PjSelectStatusFilter(this)">${escapeHtmlPj(label)}</button>`).join('')}</div></div>
+        <div class="crm2-pf-search-control ${crm2PjState.searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar pessoa jurídica" placeholder="Busca por razão social ou CNPJ" value="${escapeAttrPj(crm2PjState.search)}" ${crm2PjState.searchExpanded ? '' : 'hidden'} oninput="crm2PjSetSearch(this.value, this)" onfocusout="crm2PjHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${crm2PjState.searchExpanded ? 'true' : 'false'}" onclick="crm2PjToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>
+        ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PjClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
+      </div>
     </form>
-    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Status</th><th scope="col">Pessoas vinculadas</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => { const status = displayedStatusPj(item); return `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(item.razaoSocial)}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td><span class="crm2-pessoas-status is-${escapeAttrPj(normalizeSearchPj(status).replace(/\s+/g, '-'))}" role="status">${escapeHtmlPj(status)}</span></td><td>${peopleCountPj(item)}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`; }).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : `<div class="crm2-pessoas-state" role="status"><strong>${crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.'}</strong><span>${crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.'}</span><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
+    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(item.razaoSocial)}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : `<div class="crm2-pessoas-state" role="status"><strong>${crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.'}</strong><span>${crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.'}</span><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
   </section>`;
 }
 
@@ -405,6 +410,7 @@ function renderPj() {
 }
 
 function mountPj() {
+  window.hubLimparDropdowns?.({ remover: true });
   const target = document.querySelector('[data-crm2-pj="true"]');
   if (target) target.outerHTML = renderPj();
 }
@@ -481,9 +487,15 @@ Object.assign(window, {
   crm2PjCancelForm() { if (!requestLeavePj(() => window.crm2PjCancelForm())) return; crm2PjState.formMode = ''; crm2PjState.detailId = ''; crm2PjState.draft = {}; crm2PjState.errors = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = []; navigatePj(); },
   crm2PjConfirmLeave() { document.querySelector('.crm2-pj-unsaved-backdrop')?.remove(); const action = pendingLeaveActionPj; pendingLeaveActionPj = null; crm2PjState.draft = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = []; action?.(); },
   crm2PjCancelLeave() { pendingLeaveActionPj = null; document.querySelector('.crm2-pj-unsaved-backdrop')?.remove(); },
-  crm2PjSetSearch(value) { crm2PjState.search = String(value || ''); crm2PjState.page = 1; rerenderPj(); },
+  crm2PjSetSearch(value, input) {
+    window.hubAtualizarBuscaAoDigitar(input, (search) => { crm2PjState.search = search; crm2PjState.searchExpanded = true; crm2PjState.page = 1; }, rerenderPj, () => document.querySelector('.crm2-pf-search-control input[type="search"]'));
+  },
+  crm2PjToggleDropdown(trigger, event) { window.crm2PfToggleDropdown?.(trigger, event); },
+  crm2PjSelectStatusFilter(option) { const menu = option?.closest('.hub-filter-dropdown-menu'); if (!menu) return; menu.remove(); crm2PjState.statusFilter = String(option.dataset.value || ''); crm2PjState.page = 1; rerenderPj(); },
+  crm2PjToggleSearch(button) { const control = button?.closest('.crm2-pf-search-control'); const input = control?.querySelector('input[type="search"]'); if (!control || !input) return; const expanded = !control.classList.contains('is-expanded'); crm2PjState.searchExpanded = expanded; control.classList.toggle('is-expanded', expanded); input.hidden = !expanded; button.setAttribute('aria-expanded', String(expanded)); if (expanded) input.focus({ preventScroll: true }); },
+  crm2PjHandleSearchBlur(event) { const input = event?.currentTarget; const control = input?.closest('.crm2-pf-search-control'); if (!control || control.contains(event.relatedTarget)) return; window.setTimeout(() => { if (control.contains(document.activeElement)) return; crm2PjState.searchExpanded = false; control.classList.remove('is-expanded'); input.hidden = true; control.querySelector('button')?.setAttribute('aria-expanded', 'false'); }, 0); },
   crm2PjSetFilter(value) { crm2PjState.statusFilter = String(value || ''); crm2PjState.page = 1; rerenderPj(); },
-  crm2PjClearFilters() { crm2PjState.search = ''; crm2PjState.statusFilter = ''; crm2PjState.page = 1; rerenderPj(); },
+  crm2PjClearFilters() { window.clearTimeout(crm2PjSearchTimer); crm2PjState.search = ''; crm2PjState.searchExpanded = false; crm2PjState.statusFilter = ''; crm2PjState.page = 1; rerenderPj(); },
   crm2PjApplyFilters(event) { event?.preventDefault(); crm2PjState.page = 1; rerenderPj(); },
   crm2PjSetPage(page) { crm2PjState.page = Math.max(1, Number(page) || 1); rerenderPj(); },
   crm2PjSetListState(value) { crm2PjState.listState = ['normal', 'loading', 'error', 'empty'].includes(value) ? value : 'normal'; rerenderPj(); },

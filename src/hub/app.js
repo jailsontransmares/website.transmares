@@ -592,6 +592,8 @@ window.addEventListener('hubAdminUsuariosAtualizados', () => {
   agendarAtualizacaoContextoAcessoHub('usuario-atualizado');
 });
 window.addEventListener('popstate', () => {
+  limparMenusAcoesGlobais();
+  hubLimparDropdowns({ remover: true });
   if (state.usuario) {
     renderizarRotaAtual();
   }
@@ -1384,6 +1386,9 @@ function navegarHome() {
 }
 
 async function renderizarRotaAtual() {
+  limparMenusAcoesGlobais();
+  hubLimparDropdowns({ remover: true });
+  window.crm2PfRemoveFooterPortal?.();
   const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
 
   if (!idModulo) {
@@ -7423,6 +7428,8 @@ window.addEventListener('resize', () => {
 });
 
 function renderPainelAr() {
+  window.crm2PfArActive = state.ar.aba === 'crm2-pf';
+  window.crm2PfRemoveFooterPortal?.();
   fecharMenuMaisAr();
   const snapshotInteracao = capturarEstadoInteracaoAr();
   fecharDropdownCrmAr();
@@ -14089,6 +14096,33 @@ function escapeAttr(texto) {
   return escapeHtml(texto).replace(/`/g, '&#096;');
 }
 
+function hubAtualizarBuscaAoDigitar(input, atualizarValor, rerenderizar, localizarInput) {
+  if (!input || typeof atualizarValor !== 'function' || typeof rerenderizar !== 'function') return;
+  atualizarValor(String(input.value || ''));
+  window.clearTimeout(input.__hubSearchTimer);
+  const cursor = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+  input.__hubSearchTimer = window.setTimeout(() => {
+    rerenderizar();
+    window.requestAnimationFrame(() => {
+      const campo = typeof localizarInput === 'function' ? localizarInput() : input;
+      if (!campo) return;
+      campo.focus({ preventScroll: true });
+      campo.setSelectionRange(cursor, cursor);
+    });
+  }, 180);
+}
+
+function hubLimparDropdowns({ remover = false } = {}) {
+  document.querySelectorAll('body > .hub-filter-dropdown-menu[data-dropdown-input-id]').forEach((menu) => {
+    const trigger = document.getElementById(menu.dataset.dropdownInputId || '');
+    const combo = trigger?.closest('.crm2-pf-select');
+    menu.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (remover || !trigger || !combo) menu.remove();
+    else combo.appendChild(menu);
+  });
+}
+
 function obterMensagemApi(response, fallback) {
   const code = response?.error?.code;
   const mensagens = {
@@ -14134,6 +14168,8 @@ Object.assign(window, {
   hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
   hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
   hubPode: pode,
+  hubAtualizarBuscaAoDigitar,
+  hubLimparDropdowns,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,
