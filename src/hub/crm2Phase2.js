@@ -131,8 +131,8 @@ const crm2PfState = {
   detailId: '',
   detailTab: 'dados',
   companySearch: '',
+  vinculoFormOpen: false,
   orderSearch: '',
-  orderPage: 1,
   formMode: '',
   inlineEditing: false,
   draft: {},
@@ -200,6 +200,58 @@ function crm2PfRequestConfirmationCrm2({ title, description, confirmLabel = 'Con
     </div>`);
   document.querySelector('.crm2-pf-confirm-modal button')?.focus();
   return false;
+}
+
+function crm2PfOpenVinculoFormCrm2() {
+  if (!crm2CanCreate() || document.querySelector('.crm2-pf-vinculo-form-backdrop')) return;
+  const person = getPersonCrm2(crm2PfState.detailId);
+  const registeredCompanies = [...new Map((person?.vinculos || [])
+    .filter((vinculo) => vinculo.razaoSocial)
+    .map((vinculo) => [vinculo.razaoSocial, vinculo.cnpj || '']))].map(([razaoSocial, cnpj]) => ({ razaoSocial, cnpj }));
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-backdrop crm2-pf-vinculo-form-backdrop" role="presentation">
+      <section class="small-modal crm2-pf-vinculo-form-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-pf-vinculo-form-title">
+        <div class="small-modal-header"><h3 id="crm2-pf-vinculo-form-title">Incluir vínculo</h3></div>
+        <form class="small-modal-body crm2-pf-vinculo-form" onsubmit="crm2PfSaveVinculo(event)">
+          <label><span>Razão social *</span><input class="config-input" name="razaoSocial" list="crm2-pf-vinculo-empresas" autocomplete="off" required autofocus><datalist id="crm2-pf-vinculo-empresas">${registeredCompanies.map((company) => `<option value="${escapeAttrCrm2(company.razaoSocial)}" label="${escapeAttrCrm2(company.cnpj)}"></option>`).join('')}</datalist></label>
+          <label><span>CNPJ</span><input class="config-input" name="cnpj" inputmode="numeric"></label>
+          <label><span>Tipo de vínculo *</span><select class="config-input" name="tipo" required><option value="">Selecione</option><option>Representante legal</option><option>Contador</option><option>Sócio</option><option>Outros</option></select></label>
+          <label><span>Data de início *</span><input class="config-input" type="date" name="inicioEm" required></label>
+          <div class="small-modal-actions"><button class="secondary-btn" type="button" onclick="crm2PfCancelVinculoForm()">Cancelar</button><button class="save-btn" type="submit">Incluir</button></div>
+        </form>
+      </section>
+    </div>`);
+  crm2PfState.vinculoFormOpen = true;
+}
+
+function crm2PfCancelVinculoFormCrm2() {
+  crm2PfState.vinculoFormOpen = false;
+  document.querySelector('.crm2-pf-vinculo-form-backdrop')?.remove();
+}
+
+function crm2PfSaveVinculoCrm2(event) {
+  event?.preventDefault();
+  if (!crm2CanCreate()) return;
+  const person = getPersonCrm2(crm2PfState.detailId);
+  const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+  const razaoSocial = String(values.razaoSocial || '').trim();
+  const cnpj = String(values.cnpj || '').trim();
+  const tipo = String(values.tipo || '').trim();
+  const inicioEm = String(values.inicioEm || '').trim();
+  if (!person || !razaoSocial || !tipo || !inicioEm) return;
+  person.vinculos = Array.isArray(person.vinculos) ? person.vinculos : [];
+  const duplicate = person.vinculos.some((vinculo) => normalizeSearchCrm2(vinculo.razaoSocial) === normalizeSearchCrm2(razaoSocial) && vinculo.status === 'Ativo');
+  if (duplicate) {
+    setMessageCrm2('Já existe um vínculo ativo com essa empresa.');
+    crm2PfCancelVinculoFormCrm2();
+    rerenderCrm2Phase2();
+    return;
+  }
+  person.vinculos.push({ id: `vinculo-${Date.now()}`, razaoSocial, cnpj, tipo, status: 'Ativo', inicioEm, encerramentoEm: '' });
+  registerTimelineCrm2(person, `Vínculo com a empresa ${razaoSocial} incluído.`, 'Inclusão');
+  setMessageCrm2('Vínculo incluído apenas no estado local.');
+  crm2PfCancelVinculoFormCrm2();
+  rerenderCrm2Phase2();
 }
 
 function crm2CanEdit() {
@@ -484,7 +536,7 @@ function renderPeopleListCrm2() {
             <caption id="crm2-pessoas-table-caption" class="crm2-pessoas-table-caption">Pessoas fisicas cadastradas no CRM 2.0</caption>
             <thead>
               <tr>
-                <th id="crm2-pf-col-name" scope="col">Nome completo/nome social</th>
+                <th id="crm2-pf-col-name" scope="col">Nome</th>
                 <th id="crm2-pf-col-cpf" scope="col">CPF</th>
                 <th id="crm2-pf-col-phone" scope="col">Telefone</th>
                 <th id="crm2-pf-col-email" scope="col">E-mail</th>
@@ -531,7 +583,7 @@ function renderPersonDataCrm2(person) {
       <div class="hub-form-section-title"><strong id="crm2-pf-view-personal-title">Dados pessoais</strong></div>
         <div class="hub-form-grid">
           ${renderReadOnlyCrm2({ label: 'CPF', value: maskCpfCrm2(person.cpf) })}
-          ${renderReadOnlyCrm2({ label: 'Nome completo/nome social', value: person.nome })}
+          ${renderReadOnlyCrm2({ label: 'Nome', value: person.nome })}
           ${renderReadOnlyCrm2({ label: 'Data de nascimento', value: person.nascimento, type: 'date' })}
           ${renderReadOnlyCrm2({ label: 'CEI/CAEPF', value: person.cei, className: 'crm2-pf-grid-cei' })}
           ${renderReadOnlyCrm2({ label: 'Telefone', value: maskPhoneCrm2(person.telefone), className: 'crm2-pf-grid-phone' })}
@@ -540,15 +592,6 @@ function renderPersonDataCrm2(person) {
           ${renderReadOnlyCrm2({ label: 'Parceiro de indicação', value: person.parceiro, className: 'crm2-pf-grid-partner' })}
         </div>
       </section>
-      <div class="crm2-pf-notes-attachments-grid">
-        <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-view-notes-title">
-          <div class="hub-form-grid">
-            ${renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
-          </div>
-        </section>
-
-        ${renderFormAttachmentsCrm2(person, false, true, true)}
-      </div>
     </div>
   `;
 }
@@ -561,7 +604,7 @@ function renderPersonDataEditCrm2(person) {
         <div class="hub-form-section-title"><strong id="crm2-pf-inline-personal-title">Dados pessoais</strong></div>
         <div class="hub-form-grid">
           ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
-          ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
+          ${formFieldCrm2({ label: 'Nome', name: 'nome', value: values.nome, required: true })}
           ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
           ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, className: 'crm2-pf-grid-cei' })}
           ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-grid-phone' })}
@@ -570,15 +613,29 @@ function renderPersonDataEditCrm2(person) {
           ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-grid-partner' })}
         </div>
       </section>
-      <div class="crm2-pf-notes-attachments-grid">
-        <section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pf-inline-notes-title">
-          <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
-          </div>
-        </section>
-        ${renderFormAttachmentsCrm2(person, true, true, true)}
-      </div>
     </form>
+  `;
+}
+
+function renderPersonSidebarCrm2(person) {
+  const editing = crm2PfState.inlineEditing && crm2CanEdit();
+  const values = { ...person, ...crm2PfState.draft };
+  return `
+    <aside class="crm2-pf-detail-sidebar" aria-label="Informações complementares">
+      <section class="hub-form-section crm2-pf-notes-block" aria-label="Observações">
+        <div class="hub-form-grid">
+          ${editing
+            ? formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', formId: 'crm2-pf-inline-form' })
+            : renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
+        </div>
+      </section>
+      <section class="hub-form-section crm2-pf-history-section" aria-labelledby="crm2-pf-timeline-title">
+        <div class="hub-form-section-title crm2-pf-timeline-title"><div class="crm2-pf-timeline-heading"><strong id="crm2-pf-timeline-title">Histórico</strong>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderCounter === 'function' ? window.crm2TimelineRenderCounter(person) : ''}</div>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderDetailsToggle === 'function' ? window.crm2TimelineRenderDetailsToggle() : ''}</div>
+        <div class="crm2-pf-timeline-scroll">${renderTimelineCrm2(person)}</div>
+        ${typeof window !== 'undefined' && typeof window.crm2TimelineRenderComposer === 'function' ? window.crm2TimelineRenderComposer(person) : ''}
+      </section>
+      ${renderFormAttachmentsCrm2(person, editing, true, true)}
+    </aside>
   `;
 }
 
@@ -590,99 +647,50 @@ function renderTimelineCrm2(person) {
 
 function renderVinculosCrm2(person) {
   const vinculos = Array.isArray(person.vinculos) ? person.vinculos : [];
-  return `<section class="hub-form-section crm2-pf-vinculos-block" aria-labelledby="crm2-pf-vinculos-title"><div class="hub-form-section-title"><strong id="crm2-pf-vinculos-title">Vínculos PF/PJ</strong><button class="secondary-btn" type="button" onclick="navegarParaCrm2VinculosRota()">Gerenciar na Rota 203</button></div>${vinculos.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table" aria-label="Vínculos da pessoa física"><thead><tr><th scope="col">Pessoa jurídica</th><th scope="col">CNPJ</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Início</th><th scope="col">Encerramento</th></tr></thead><tbody>${vinculos.map((vinculo) => `<tr><td>${vinculo.id ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrCrm2(vinculo.id)}')">${escapeHtmlCrm2(vinculo.razaoSocial)}</button>` : escapeHtmlCrm2(vinculo.razaoSocial)}</td><td>${escapeHtmlCrm2(vinculo.cnpj || '—')}</td><td>${escapeHtmlCrm2(vinculo.tipo || '—')}</td><td><span class="crm2-pessoas-status is-${escapeAttrCrm2(normalizeSearchCrm2(vinculo.status || ''))}" role="status">${escapeHtmlCrm2(vinculo.status || '—')}</span></td><td>${escapeHtmlCrm2(formatDateCrm2(vinculo.inicioEm))}</td><td>${escapeHtmlCrm2(formatDateCrm2(vinculo.encerramentoEm))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum vínculo registrado.</strong><span>Os vínculos PF/PJ serão exibidos nesta aba quando cadastrados.</span></div>'}</section>`;
+  const search = normalizeSearchCrm2(crm2PfState.companySearch);
+  const filteredVinculos = vinculos
+    .map((vinculo, index) => ({ vinculo, index }))
+    .filter(({ vinculo }) => !search || [vinculo.razaoSocial, vinculo.nome, vinculo.cnpj].some((value) => normalizeSearchCrm2(value).includes(search)));
+
+  return `
+    <section class="hub-form-section crm2-pf-vinculos-block" aria-labelledby="crm2-pf-vinculos-title">
+      <div class="hub-form-section-title">
+        <strong id="crm2-pf-vinculos-title">Empresas vinculadas</strong>
+        ${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfOpenVinculoForm()">Incluir</button>' : ''}
+      </div>
+      ${filteredVinculos.length ? `<div class="crm2-pf-companies-table-wrap">
+        <table class="crm2-pf-companies-table" data-resizable-table data-resizable-editable="false" data-resize-key="crm2-pf-vinculos" aria-label="Empresas vinculadas">
+          <tbody>${filteredVinculos.map(({ vinculo, index }) => {
+            const razaoSocial = vinculo.razaoSocial || vinculo.nome || 'Razão social não informada';
+            return `<tr><td><strong class="crm2-pf-company-primary-value">${vinculo.id ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrCrm2(vinculo.id)}')" aria-label="Visualizar vínculo ${escapeAttrCrm2(razaoSocial)}">${escapeHtmlCrm2(razaoSocial)}</button>` : escapeHtmlCrm2(razaoSocial)}</strong><span class="crm2-pf-company-meta-pill">CNPJ: ${escapeHtmlCrm2(vinculo.cnpj || '—')}</span></td>${crm2PfState.canDelete ? `<td><button class="icon-btn crm2-pf-vinculo-delete" type="button" onclick="crm2PfRemoveVinculo(${index})" aria-label="Excluir vínculo de ${escapeAttrCrm2(razaoSocial)}" title="Excluir vínculo"><i data-lucide="trash-2" aria-hidden="true"></i></button></td>` : ''}</tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>` : (vinculos.length ? '<div class="crm2-pessoas-state is-compact"><strong>Nenhum vínculo encontrado.</strong><span>Ajuste o nome ou o CNPJ informado.</span></div>' : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum vínculo registrado.</strong><span>Os vínculos PF/PJ serão exibidos nesta aba quando cadastrados.</span></div>')}
+    </section>
+  `;
 }
 
 function renderCompaniesCrm2(person) {
-  const companies = person.empresas || [];
-  const activeOrderStatuses = new Set(['ativo', 'em validação', 'em andamento', 'pendente']);
-  const orders = person.pedidos || [];
-  const editingCompanies = crm2PfState.inlineEditing === true;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const search = normalizeSearchCrm2(crm2PfState.companySearch);
-  const filteredCompanies = companies
-    .map((company, index) => ({ company, index }))
-    .filter(({ company }) => !search || [company.razaoSocial, company.nome, company.cnpj].some((value) => normalizeSearchCrm2(value).includes(search)));
-  return `
-    ${renderVinculosCrm2(person)}
-    <div class="crm2-pf-company-search-row">
-      <div class="crm2-pf-company-search">
-        <label>
-          <input class="config-input" type="search" value="${escapeAttrCrm2(crm2PfState.companySearch)}" placeholder="Buscar empresa" oninput="crm2PfSetCompanySearch(this)" aria-label="Buscar empresa por razão social ou CNPJ">
-        </label>
-      </div>
-          ${crm2CanEdit() && editingCompanies ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfIncludeCompany()">+Incluir</button>' : ''}
-    </div>
-    ${filteredCompanies.length ? `<div class="crm2-pf-companies-table-wrap">
-      <table class="crm2-pf-companies-table" data-resizable-table data-resizable-editable="${editingCompanies ? 'true' : 'false'}" data-resize-key="crm2-pf-empresas" aria-label="Empresas vinculadas">
-        <thead>
-          <tr>
-            <th scope="col">Razão social</th>
-            <th scope="col">CNPJ</th>
-            <th scope="col">Pedidos ativos</th>
-            <th scope="col">Vencimento mais próximo</th>
-            ${editingCompanies && crm2PfState.canDelete ? '<th scope="col" class="crm2-pf-company-actions-heading">Ações</th>' : ''}
-          </tr>
-        </thead>
-        <tbody>
-          ${filteredCompanies.map(({ company, index }) => {
-            const razaoSocial = company.razaoSocial || company.nome || 'Razão social não informada';
-            const pedidosAtivos = orders.filter((order) => String(order.empresa || '').trim() === String(razaoSocial).trim() && activeOrderStatuses.has(normalizeSearchCrm2(order.status))).length;
-            const certificados = Array.isArray(company.certificados) ? company.certificados : [];
-            const vencimentos = [
-              ...certificados.map((certificado) => certificado.vencimento || certificado.validade || certificado.dataVencimento),
-              ...orders.filter((order) => String(order.empresa || '').trim() === String(razaoSocial).trim()).map((order) => order.vencimento)
-            ].filter(Boolean).map((value) => String(value).slice(0, 10)).filter((value) => !Number.isNaN(new Date(`${value}T23:59:59`).getTime())).sort();
-            const vencimentoMaisProximo = vencimentos[0] || '';
-            const vencimentoExpirado = Boolean(vencimentoMaisProximo && new Date(`${vencimentoMaisProximo}T23:59:59`) < today);
-            return `<tr>
-              <td><button class="crm2-pf-company-name-link" type="button" onclick="crm2PfViewCompany(${index})" aria-label="Visualizar empresa ${escapeAttrCrm2(razaoSocial)}">${escapeHtmlCrm2(razaoSocial)}</button></td>
-              <td>${escapeHtmlCrm2(company.cnpj || '—')}</td>
-              <td><span class="crm2-pf-company-pill is-order-count">${pedidosAtivos}</span></td>
-              <td><span class="crm2-pf-company-pill crm2-pf-expiration-pill ${vencimentoExpirado ? 'is-expired' : ''}" ${vencimentoExpirado ? 'role="status" title="Certificado vencido"' : ''}>${vencimentoMaisProximo ? escapeHtmlCrm2(formatDateCrm2(vencimentoMaisProximo)) : '—'}</span></td>
-              ${editingCompanies && crm2PfState.canDelete ? `<td class="crm2-pf-company-actions"><button class="icon-btn crm2-pf-company-delete" type="button" onclick="crm2PfRemoveCompany(${index})" aria-label="Excluir vínculo de ${escapeAttrCrm2(razaoSocial)}" title="Excluir vínculo"><i data-lucide="unlink" aria-hidden="true"></i></button></td>` : ''}
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>` : (companies.length ? '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma empresa encontrada.</strong><span>Ajuste o nome ou o CNPJ informado.</span></div>' : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma empresa vinculada.</strong><span>A criação e o detalhe de PJ serão habilitados na Fase 3.</span></div>')}
-  `;
+  return renderVinculosCrm2(person);
 }
 
 function renderOrdersCrm2(person) {
   const orders = person.pedidos || [];
-  const companies = person.empresas || [];
   const search = normalizeSearchCrm2(crm2PfState.orderSearch);
   const filteredOrders = orders.filter((order) => !search || [order.status, order.empresa, order.numero, order.produto].some((value) => normalizeSearchCrm2(value).includes(search)));
-  const perPage = 15;
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / perPage));
-  crm2PfState.orderPage = Math.min(Math.max(1, crm2PfState.orderPage), totalPages);
-  const pageStart = (crm2PfState.orderPage - 1) * perPage;
-  const pageOrders = filteredOrders.slice(pageStart, pageStart + perPage);
   return `
-    <div class="crm2-pf-company-search-row crm2-pf-order-search-row">
-      <div class="crm2-pf-company-search crm2-pf-order-search">
-        <label>
-          <input class="config-input" type="search" value="${escapeAttrCrm2(crm2PfState.orderSearch)}" placeholder="Buscar pedido" oninput="crm2PfSetOrderSearch(this)" aria-label="Buscar pedido por status, razão social, número ou produto">
-        </label>
-      </div>
-      ${crm2CanEdit() && crm2PfState.inlineEditing ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfIncludeOrder()">+Incluir</button>' : ''}
-    </div>
-    ${orders.length && pageOrders.length ? `<div class="crm2-pf-companies-table-wrap">
+    ${orders.length && filteredOrders.length ? `<div class="crm2-pf-companies-table-wrap crm2-pf-orders-table-wrap">
       <table class="crm2-pf-companies-table crm2-pf-orders-table" data-resizable-table data-resizable-editable="${crm2PfState.inlineEditing ? 'true' : 'false'}" data-resize-key="crm2-pf-pedidos" aria-label="Pedidos vinculados">
-        <thead><tr><th scope="col">Status</th><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Vencimento</th></tr></thead>
-        <tbody>${pageOrders.map((order) => `<tr>
-          <td><span class="crm2-pf-company-pill crm2-pf-order-status-pill">${escapeHtmlCrm2(order.status || '—')}</span></td>
-          <td>${escapeHtmlCrm2(order.empresa || '—')}</td>
-          <td>${escapeHtmlCrm2(companies.find((company) => String(company.razaoSocial || company.nome || '').trim() === String(order.empresa || '').trim())?.cnpj || order.cnpj || '—')}</td>
-          <td>${escapeHtmlCrm2(formatDateCrm2(order.vencimento))}</td>
-        </tr>`).join('')}</tbody>
+        <tbody>${filteredOrders.map((order) => {
+          const isPessoaFisica = String(order.tipoPessoa || order.pessoaTipo || '').toUpperCase() === 'PF' || /e-CPF/i.test(String(order.produto || ''));
+          const relatedName = isPessoaFisica ? (order.pfNome || person.nome || 'Pessoa física não informada') : (order.pjRazaoSocial || order.empresa || 'Pessoa jurídica não informada');
+          return `<tr>
+            <td><strong>${escapeHtmlCrm2(order.numero || '—')}</strong></td>
+            <td><strong>${escapeHtmlCrm2(order.produto || '—')}</strong><span class="crm2-pf-order-meta-pill">${escapeHtmlCrm2(relatedName)}</span></td>
+            <td><span class="crm2-pf-order-meta-pill">${escapeHtmlCrm2(formatDateCrm2(order.vencimento))}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
       </table>
-      <div class="crm2-pf-order-pagination" aria-label="Paginação de pedidos">
-        <span>Página ${crm2PfState.orderPage} de ${totalPages} · ${filteredOrders.length} pedido(s)</span>
-        <div><button class="secondary-btn" type="button" onclick="crm2PfSetOrderPage(${crm2PfState.orderPage - 1})" ${crm2PfState.orderPage <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2PfSetOrderPage(${crm2PfState.orderPage + 1})" ${crm2PfState.orderPage >= totalPages ? 'disabled' : ''}>Próxima</button></div>
-      </div>
     </div>` : orders.length ? '<div class="crm2-pessoas-state is-compact"><strong>Nenhum pedido encontrado.</strong><span>Ajuste o texto informado na busca.</span></div>' : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum pedido vinculado.</strong><span>A criação de pedidos será habilitada em fase posterior.</span></div>'}
   `;
 }
@@ -692,18 +700,6 @@ function renderPersonDetailCrm2(person) {
     crm2PfState.detailId = '';
     return renderPeopleListCrm2();
   }
-  const tabs = [
-    ['dados', 'Dados cadastrais'],
-    ['empresas', 'Empresas vinculadas'],
-    ['pedidos', 'Pedidos']
-  ];
-  const content = {
-    dados: renderPersonDataCrm2(person),
-    timeline: renderTimelineCrm2(person),
-    empresas: renderCompaniesCrm2(person),
-    pedidos: renderOrdersCrm2(person)
-  }[crm2PfState.detailTab] || renderPersonDataCrm2(person);
-
   return `
     <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-detail-title">
       <div class="admin-panel-header">
@@ -715,24 +711,25 @@ function renderPersonDetailCrm2(person) {
         </div>
       </div>
 
-      <div class="module-tabs crm2-pf-tabs" role="tablist" aria-label="Detalhes da pessoa física">
-        ${tabs.map(([id, label]) => `<button class="${crm2PfState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PfState.detailTab === id}" ${crm2PfState.inlineEditing && !['dados', 'empresas', 'pedidos'].includes(id) ? 'disabled' : ''} onclick="crm2PfSelectTab('${id}')">${escapeHtmlCrm2(label)}</button>`).join('')}
-      </div>
-
-      <div class="crm2-pf-detail-columns">
-        <div class="crm2-pf-tab-content">${content}</div>
-        <aside class="crm2-pf-timeline-column" aria-labelledby="crm2-pf-timeline-title">
-          <div class="hub-form-section-title crm2-pf-timeline-title"><div class="crm2-pf-timeline-heading"><strong id="crm2-pf-timeline-title">Histórico</strong>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderCounter === 'function' ? window.crm2TimelineRenderCounter(person) : ''}</div>${typeof window !== 'undefined' && typeof window.crm2TimelineRenderDetailsToggle === 'function' ? window.crm2TimelineRenderDetailsToggle() : ''}</div>
-          <div class="crm2-pf-timeline-scroll">${renderTimelineCrm2(person)}</div>
-          ${typeof window !== 'undefined' && typeof window.crm2TimelineRenderComposer === 'function' ? window.crm2TimelineRenderComposer(person) : ''}
-        </aside>
+      <div class="crm2-pf-detail-layout">
+        <main class="crm2-pf-detail-main">
+          <section class="hub-form-section crm2-pf-detail-section" aria-labelledby="crm2-pf-data-section-title">
+            <div class="hub-form-section-title"><strong id="crm2-pf-data-section-title">Dados cadastrais</strong></div>
+            ${renderPersonDataCrm2(person)}
+          </section>
+          <div class="crm2-pf-related-sections">
+            ${renderCompaniesCrm2(person)}
+            <section class="hub-form-section crm2-pf-detail-section" aria-labelledby="crm2-pf-orders-section-title">
+              <div class="hub-form-section-title"><strong id="crm2-pf-orders-section-title">Pedidos</strong>${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfIncludeOrder()">Incluir</button>' : ''}</div>
+              ${renderOrdersCrm2(person)}
+            </section>
+          </div>
+        </main>
+        ${renderPersonSidebarCrm2(person)}
       </div>
 
       <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer" data-hub-form-footer>
-        ${crm2PfState.inlineEditing && ['empresas', 'pedidos'].includes(crm2PfState.detailTab)
-          ? `<button class="secondary-btn" type="button" onclick="crm2PfCancelInlineEdit()">Cancelar</button>
-             <button class="save-btn" type="button" onclick="crm2PfSaveCurrentTab()">Salvar alterações</button>`
-          : crm2PfState.inlineEditing
+        ${crm2PfState.inlineEditing
             ? `<button class="secondary-btn" type="button" onclick="crm2PfCancelInlineEdit()">Cancelar</button>
                <button class="save-btn" type="submit" form="crm2-pf-inline-form">Salvar alterações</button>`
           : `<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
@@ -799,7 +796,7 @@ function renderCpfVerificationCrm2(values = {}) {
           ${gate.status === 'invalid' ? '<small id="crm2-pf-cpf-message" class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}
           ${gate.status === 'found' ? '<small id="crm2-pf-cpf-found-message" class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}
         </label>
-        ${showPersonalFields ? formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true, formId: 'crm2-pf-form' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Nome', name: 'nome', value: values.nome, required: true, formId: 'crm2-pf-form' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date', formId: 'crm2-pf-form' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form', className: 'crm2-pf-grid-cei' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', formId: 'crm2-pf-form', className: 'crm2-pf-grid-phone crm2-pf-grid-row-2' }) : ''}
@@ -940,7 +937,7 @@ function renderPersonFormCrm2() {
         ${editing ? `<section class="hub-form-section" aria-labelledby="crm2-pf-personal-title">
           <div class="hub-form-section-title"><strong id="crm2-pf-personal-title">Dados pessoais</strong></div>
           <div class="hub-form-grid">
-            ${formFieldCrm2({ label: 'Nome completo/nome social', name: 'nome', value: values.nome, required: true })}
+            ${formFieldCrm2({ label: 'Nome', name: 'nome', value: values.nome, required: true })}
             ${formFieldCrm2({ label: 'CPF', name: 'cpf', value: maskCpfCrm2(values.cpf || crm2PfState.cpfGate.value), required: true, extra: 'inputmode="numeric" maxlength="14" readonly' })}
             ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}
             ${formFieldCrm2({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}
@@ -1038,7 +1035,7 @@ function enhancePeopleTableCrm2() {
     'crm2-pf-col-updated'
   ];
   const columnLabels = [
-    'Nome completo/nome social',
+    'Nome',
     'CPF',
     'Telefone',
     'E-mail',
@@ -1171,7 +1168,6 @@ function resetFormCrm2() {
   crm2PfState.inlineEditing = false;
   crm2PfState.companySearch = '';
   crm2PfState.orderSearch = '';
-  crm2PfState.orderPage = 1;
   crm2PfState.draft = {};
   crm2PfState.draftAttachments = [];
   crm2PfState.attachmentDraft = [];
@@ -1749,10 +1745,36 @@ Object.assign(window, {
     setMessageCrm2('A inclusão de vínculo PJ será disponibilizada na próxima etapa do CRM 2.0.');
     rerenderCrm2Phase2();
   },
+  crm2PfOpenVinculoForm() {
+    crm2PfOpenVinculoFormCrm2();
+  },
+  crm2PfCancelVinculoForm() {
+    crm2PfCancelVinculoFormCrm2();
+  },
+  crm2PfSaveVinculo(event) {
+    crm2PfSaveVinculoCrm2(event);
+  },
+  crm2PfRemoveVinculo(index) {
+    if (!crm2PfState.canDelete) return;
+    const person = getPersonCrm2(crm2PfState.detailId);
+    const vinculo = person?.vinculos?.[index];
+    if (!person || !vinculo) return;
+    const name = vinculo.razaoSocial || 'empresa';
+    crm2PfRequestConfirmationCrm2({
+      title: 'Excluir vínculo?',
+      description: `O vínculo com ${name} será removido deste cadastro mockado. Deseja continuar?`,
+      confirmLabel: 'Excluir vínculo',
+      onConfirm: () => {
+        person.vinculos.splice(index, 1);
+        registerTimelineCrm2(person, `Vínculo com a empresa ${name} excluído.`, 'Exclusão');
+        setMessageCrm2('Vínculo excluído apenas do estado local.');
+        rerenderCrm2Phase2();
+      }
+    });
+  },
   crm2PfSetOrderSearch(input) {
     const cursor = typeof input?.selectionStart === 'number' ? input.selectionStart : String(input?.value || '').length;
     crm2PfState.orderSearch = String(input?.value || '');
-    crm2PfState.orderPage = 1;
     rerenderCrm2Phase2();
     window.requestAnimationFrame(() => {
       const field = document.querySelector('.crm2-pf-order-search input');
@@ -1760,10 +1782,6 @@ Object.assign(window, {
       field.focus({ preventScroll: true });
       field.setSelectionRange(cursor, cursor);
     });
-  },
-  crm2PfSetOrderPage(page) {
-    crm2PfState.orderPage = Math.max(1, Number(page) || 1);
-    rerenderCrm2Phase2();
   },
   crm2PfIncludeOrder() {
     if (!crm2CanEdit()) return;

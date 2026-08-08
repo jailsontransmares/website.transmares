@@ -139,7 +139,46 @@
   margin-top: 6px;
 }
 
+.crm2-pj-detail-layout,
+.crm2-pj-form-layout {
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+}
+
+.crm2-pj-form-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.crm2-pj-form-layout > .hub-form-section,
+.crm2-pj-form-layout > .crm2-pf-detail-main {
+  grid-column: 1;
+}
+
+.crm2-pj-form-layout > .crm2-pj-status-section,
+.crm2-pj-form-layout > .crm2-pj-attachments,
+.crm2-pj-form-layout > .crm2-pf-detail-sidebar {
+  grid-column: 2;
+}
+
+.crm2-pj-form-layout > .hub-form-screen-actions {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 720px) {
+  .crm2-pj-detail-layout,
+  .crm2-pj-form-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pj-form-layout > .hub-form-section,
+  .crm2-pj-form-layout > .crm2-pf-detail-main,
+  .crm2-pj-form-layout > .crm2-pj-status-section,
+  .crm2-pj-form-layout > .crm2-pj-attachments,
+  .crm2-pj-form-layout > .crm2-pf-detail-sidebar,
+  .crm2-pj-form-layout > .hub-form-screen-actions {
+    grid-column: auto;
+  }
+
   .crm2-pj-attachment-draft {
     grid-template-columns: 1fr;
   }

@@ -276,10 +276,14 @@
 
 .crm2-pf-text-format-toolbar {
   align-items: center;
-  display: flex;
+  display: none;
   flex-wrap: wrap;
   gap: 2px;
   justify-content: flex-start;
+}
+
+.crm2-pf-rich-text-target:focus + .crm2-pf-rich-text-value + .crm2-pf-text-format-toolbar {
+  display: flex;
 }
 
 .crm2-pf-text-format-toolbar .icon-btn {
@@ -534,6 +538,60 @@
   white-space: nowrap;
 }
 
+.crm2-pf-vinculo-delete {
+  color: var(--color-danger, #b42318);
+  height: 22px;
+  min-height: 22px;
+  padding: 2px;
+  width: 22px;
+}
+
+.crm2-pf-vinculo-delete:hover,
+.crm2-pf-vinculo-delete:focus-visible {
+  color: var(--color-danger, #b42318);
+}
+
+.crm2-pf-vinculo-delete svg {
+  height: 12px;
+  width: 12px;
+}
+
+.crm2-pf-vinculo-form-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.crm2-pf-vinculo-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.crm2-pf-vinculo-form > label {
+  display: grid;
+  gap: 5px;
+}
+
+.crm2-pf-vinculo-form > label > span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.crm2-pf-vinculo-form .small-modal-actions {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+@media (max-width: 560px) {
+  .crm2-pf-vinculo-form {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-vinculo-form .small-modal-actions {
+    grid-column: auto;
+  }
+}
+
 .crm2-pf-company-search label {
   display: grid;
   gap: 5px;
@@ -590,12 +648,55 @@
   text-decoration: underline;
 }
 
+.crm2-pf-company-primary-value {
+  display: block;
+  font-size: 11px;
+}
+
+.crm2-pf-company-meta-pill {
+  background: color-mix(in srgb, var(--texto-suave) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--texto-suave) 14%, var(--borda));
+  border-radius: 999px;
+  color: var(--texto-suave);
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
 .crm2-pf-companies-table .crm2-pf-company-pill {
   display: inline-flex;
 }
 
 .crm2-pf-order-status-pill {
   background: color-mix(in srgb, var(--texto-suave) 9%, transparent);
+}
+
+.crm2-pf-orders-table td > strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.crm2-pf-order-meta-pill {
+  background: color-mix(in srgb, var(--texto-suave) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--texto-suave) 14%, var(--borda));
+  border-radius: 999px;
+  color: var(--texto-suave);
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 6px;
+  text-overflow: ellipsis;
+  vertical-align: top;
+  white-space: nowrap;
 }
 
 .crm2-pf-order-pagination {
@@ -624,6 +725,19 @@
   border-color: color-mix(in srgb, var(--color-danger, #b42318) 28%, var(--borda));
   color: var(--color-danger, #b42318);
   font-weight: 800;
+}
+
+.crm2-pf-companies-table .crm2-pf-company-pill.is-order-count,
+.crm2-pf-companies-table .crm2-pf-expiration-pill {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.crm2-pf-companies-table .crm2-pf-expiration-pill.is-expired {
+  background: transparent;
+  border-color: transparent;
 }
 
 .crm2-pf-company-actions-heading,
@@ -746,6 +860,211 @@
   min-width: 0;
 }
 
+.crm2-pf-detail-sections {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.crm2-pf-detail-section {
+  min-width: 0;
+}
+
+.crm2-pf-detail-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+  min-width: 0;
+}
+
+.crm2-pf-detail-main,
+.crm2-pf-detail-sidebar {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-pf-detail-main {
+  row-gap: 26px;
+}
+
+.crm2-pf-detail-main > .crm2-pf-detail-section {
+  min-width: 0;
+}
+
+.crm2-pf-detail-main > .crm2-pf-related-sections {
+  grid-column: auto;
+  margin-top: 0;
+}
+
+.crm2-pf-detail-sidebar {
+  align-content: start;
+}
+
+.crm2-pf-detail-sidebar .crm2-pf-history-section {
+  min-width: 0;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child {
+  display: contents;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child > .hub-form-section-title {
+  grid-column: 1 / span 3;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child > .crm2-pf-view-form {
+  display: contents;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-view-form > section:first-child,
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-view-form > form > section:first-child {
+  grid-column: 1 / span 3;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-notes-attachments-grid {
+  display: contents;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-notes-block,
+.crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-attachments-block {
+  grid-column: 4;
+}
+
+.crm2-pf-related-sections {
+  display: grid;
+  gap: 18px;
+  grid-column: 1 / span 3;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  min-width: 0;
+  border-top: var(--glass-border-subtle);
+  margin-top: -18px;
+  padding-top: 4px;
+}
+
+.crm2-pf-related-sections > * {
+  min-width: 0;
+}
+
+.crm2-pf-related-sections > .hub-form-section {
+  align-content: start;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.crm2-pf-related-sections > .crm2-pf-vinculos-block {
+  box-sizing: border-box;
+  position: relative;
+}
+
+.crm2-pf-related-sections > .crm2-pf-vinculos-block::after {
+  background: var(--borda);
+  content: '';
+  height: 48px;
+  position: absolute;
+  right: -9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+}
+
+.crm2-pf-related-sections .crm2-pf-company-include {
+  font-size: 10px;
+  min-height: 24px;
+  padding: 4px 7px;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table {
+  height: 100%;
+}
+
+.crm2-pf-related-sections .crm2-pf-orders-table-wrap {
+  max-height: 282px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table thead th {
+  height: 34px;
+  box-sizing: border-box;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table tbody td {
+  height: 54px;
+  box-sizing: border-box;
+  vertical-align: top;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table-wrap {
+  overflow-x: visible;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.crm2-pf-related-sections .crm2-pf-companies-table th,
+.crm2-pf-related-sections .crm2-pf-companies-table td {
+  overflow-wrap: anywhere;
+}
+
+.crm2-pf-related-sections .crm2-pf-company-name-link,
+.crm2-pf-related-sections .crm2-pf-company-meta-pill,
+.crm2-pf-related-sections .crm2-pf-order-meta-pill {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.crm2-pf-related-sections .crm2-pf-company-actions-heading,
+.crm2-pf-related-sections .crm2-pf-vinculo-delete {
+  width: 24px;
+}
+
+.crm2-pf-related-sections .crm2-pf-vinculos-block .crm2-pf-companies-table th:first-child,
+.crm2-pf-related-sections .crm2-pf-vinculos-block .crm2-pf-companies-table td:first-child {
+  width: auto;
+}
+
+.crm2-pf-related-sections .crm2-pf-vinculos-block .crm2-pf-companies-table th:last-child,
+.crm2-pf-related-sections .crm2-pf-vinculos-block .crm2-pf-companies-table td:last-child {
+  padding-left: 3px;
+  padding-right: 3px;
+  width: 24px;
+}
+
+.crm2-pf-related-sections .crm2-pf-orders-table th:first-child,
+.crm2-pf-related-sections .crm2-pf-orders-table td:first-child {
+  width: 25%;
+}
+
+.crm2-pf-related-sections .crm2-pf-orders-table th:nth-child(2),
+.crm2-pf-related-sections .crm2-pf-orders-table td:nth-child(2) {
+  width: 45%;
+}
+
+.crm2-pf-related-sections .crm2-pf-orders-table th:last-child,
+.crm2-pf-related-sections .crm2-pf-orders-table td:last-child {
+  width: 30%;
+}
+
+.crm2-pf-related-sections > .crm2-pf-vinculos-block,
+.crm2-pf-related-sections > .crm2-pf-detail-section {
+  grid-column: auto;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-related-sections {
+  grid-column: 1 / span 3;
+}
+
+.crm2-pf-detail-sections > .crm2-pf-history-section {
+  grid-column: 4;
+}
+
 .crm2-pf-detail-columns {
   align-items: start;
   display: grid;
@@ -833,6 +1152,14 @@
 .crm2-pf-readonly-field textarea {
   min-height: 80px;
   resize: vertical;
+}
+
+.crm2-pf-view-form .crm2-pf-readonly-field > span,
+.crm2-pf-inline-form .hub-form-grid > label > span,
+.crm2-pf-form .hub-form-grid > label > span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .crm2-pf-cpf-verification {
@@ -1461,6 +1788,52 @@
 
   .crm2-pf-detail-columns {
     grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-detail-sections {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child {
+    display: grid;
+  }
+
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child > .crm2-pf-view-form {
+    display: grid;
+  }
+
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-notes-attachments-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-related-sections {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .crm2-pf-related-sections > .crm2-pf-vinculos-block {
+    position: static;
+  }
+
+  .crm2-pf-related-sections > .crm2-pf-vinculos-block::after {
+    display: none;
+  }
+
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child > .hub-form-section-title,
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-view-form > section:first-child,
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-view-form > form > section:first-child,
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-notes-block,
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:first-child .crm2-pf-attachments-block,
+  .crm2-pf-detail-sections > .crm2-pf-vinculos-block,
+  .crm2-pf-detail-sections > .crm2-pf-detail-section:not(:first-child):not(.crm2-pf-history-section),
+  .crm2-pf-detail-sections > .crm2-pf-history-section {
+    grid-column: auto;
   }
 
   .crm2-pf-timeline-column {

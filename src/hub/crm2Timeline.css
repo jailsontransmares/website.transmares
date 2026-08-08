@@ -183,6 +183,10 @@
   overflow: hidden;
 }
 
+.crm2-unified-timeline-composer:has(.crm2-pf-rich-text-target:focus) .crm2-pf-text-format-toolbar {
+  display: flex;
+}
+
 .crm2-unified-timeline-composer-actions .crm2-pf-text-format-toolbar .icon-btn {
   flex: 1 1 30px;
   min-width: 22px;
