@@ -123,14 +123,14 @@
   font-weight: 700;
 }
 
-.crm2-opp-filters {
-  align-items: end;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.crm2-opp-filter-bar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 0 0 6px;
 }
 
-.crm2-opp-filters label,
 .crm2-opp-form-grid label,
 .crm2-opp-duplicate-check label {
   display: flex;
@@ -138,7 +138,7 @@
   gap: 5px;
 }
 
-.crm2-opp-filters label > span,
+.crm2-opp-filter-modal-form label > span,
 .crm2-opp-form-grid label > span,
 .crm2-opp-duplicate-check label > span,
 .crm2-opp-detail-grid span,
@@ -150,23 +150,107 @@
 }
 
 .crm2-opp-filter-actions {
+  align-items: center;
   display: flex;
+  flex: 0 1 auto;
   gap: 8px;
+  justify-content: flex-end;
+  width: auto;
 }
+
+.crm2-opp-filter-actions .icon-btn,
+.crm2-opp-filter-actions .save-btn {
+  min-height: 38px;
+}
+
+.crm2-opp-filter-actions .icon-btn {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 38px;
+}
+
+.crm2-opp-filter-actions .icon-btn.is-active { color: var(--color-primary, #2856a6); }
+.crm2-opp-filter-actions .icon-btn svg { height: 17px; width: 17px; }
+.crm2-opp-clear-filter { font-size: 20px; line-height: 1; }
+
+.crm2-opp-filter-bar .crm2-opp-view-toggle {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  margin: 0;
+}
+
+.crm2-opp-search-control {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.crm2-opp-search-control input {
+  min-width: 0;
+  width: 0;
+}
+
+.crm2-opp-search-control.is-expanded input { width: min(260px, 28vw); }
+.crm2-opp-search-control input::placeholder { font-size: 12px; }
+
+.crm2-opp-filter-modal-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, .48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 45;
+}
+
+.crm2-opp-filter-modal {
+  background: var(--hub-surface, #fff);
+  border: 1px solid var(--hub-border, #dbe3ef);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, .28);
+  max-height: min(88vh, 720px);
+  overflow: auto;
+  padding: 20px;
+  width: min(620px, 100%);
+}
+
+.crm2-opp-filter-modal-header,
+.crm2-opp-filter-modal-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.crm2-opp-filter-modal-header h3 { margin: 4px 0 0; }
+.crm2-opp-filter-modal-form { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 20px; }
+.crm2-opp-filter-modal-form label { display: flex; flex-direction: column; gap: 5px; }
+.crm2-opp-filter-modal-actions { grid-column: 1 / -1; margin-top: 8px; }
+.crm2-opp-filter-modal-actions > div { display: flex; gap: 8px; }
 
 .crm2-opp-view-toggle {
   justify-content: flex-end;
   margin: 16px 0 10px;
 }
 
-.crm2-opp-view-toggle > span {
-  color: var(--muted-text, #6b7280);
-  margin-right: auto;
+.crm2-opp-table {
+  min-width: 900px;
+  table-layout: fixed;
 }
 
-.crm2-opp-table {
-  min-width: 980px;
-}
+.crm2-opp-table th:nth-child(1) { width: 28%; }
+.crm2-opp-table th:nth-child(2) { width: 16%; }
+.crm2-opp-table th:nth-child(3) { width: 18%; }
+.crm2-opp-table th:nth-child(4) { width: 18%; }
+.crm2-opp-table th:nth-child(5) { width: 20%; }
+.crm2-opp-table th,
+.crm2-opp-table td { overflow: hidden; white-space: normal; }
+.crm2-opp-table td { vertical-align: top; }
+.crm2-opp-table td > * { max-width: 100%; }
+.crm2-opp-table .crm2-opp-primary-value { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm2-opp-table td:last-child { overflow-wrap: anywhere; }
 
 .crm2-opp-table td strong,
 .crm2-opp-table td small {
@@ -181,6 +265,28 @@
   font-size: 12px;
   margin-top: 3px;
 }
+
+.crm2-opp-primary-value { display: block; }
+.crm2-opp-meta-pill { background: rgba(70, 111, 193, .08); border-radius: 999px; box-sizing: border-box; color: var(--muted-text, #64748b); display: inline-block; font-size: 11px; line-height: 1.25; max-width: 100%; min-width: 0; overflow: hidden; padding: 3px 7px; text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; width: fit-content; }
+.crm2-opp-next-action { display: inline-block; font-weight: 600; }
+.crm2-opp-next-action.is-upcoming { color: #2856a6; }
+.crm2-opp-next-action.is-today { color: #b45309; }
+.crm2-opp-next-action.is-overdue { color: #b42318; }
+.crm2-opp-next-action.is-none { color: var(--muted-text, #64748b); font-weight: 400; }
+.crm2-opp-next-action-editor { display: grid; gap: 3px; max-width: 100%; min-width: 0; }
+.crm2-opp-next-action-input { appearance: none; -webkit-appearance: none; background: transparent; border: 1px solid transparent; border-radius: 8px; box-sizing: border-box; font: inherit; max-width: 100%; min-width: 0; padding: 4px 5px; text-align: left; width: 100%; }
+.crm2-opp-next-action-input:hover,
+.crm2-opp-next-action-input:focus-visible { border-color: var(--border-color, #dfe4ec); outline: none; }
+.crm2-opp-next-action-input.is-upcoming { color: #2856a6; }
+.crm2-opp-next-action-input.is-today { color: #b45309; }
+.crm2-opp-next-action-input.is-overdue { color: #b42318; }
+.crm2-opp-next-action-input.is-none { color: var(--muted-text, #64748b); }
+.crm2-opp-next-action-time { background: rgba(70, 111, 193, .08); border: 1px solid transparent; border-radius: 999px; box-sizing: border-box; color: var(--muted-text, #64748b); font-size: 11px; line-height: 1.25; max-width: 100%; min-width: 0; padding: 3px 7px; width: fit-content; }
+.crm2-opp-next-action-time:hover,
+.crm2-opp-next-action-time:focus-visible { border-color: var(--border-color, #dfe4ec); outline: none; }
+.crm2-opp-next-action-time.is-upcoming { color: #2856a6; }
+.crm2-opp-next-action-time.is-today { color: #b45309; }
+.crm2-opp-next-action-time.is-overdue { color: #b42318; }
 
 .crm2-opp-link {
   background: transparent;
@@ -203,10 +309,17 @@
   border-radius: 999px;
   color: #36569a;
   display: inline-flex;
-  font-size: 12px;
+  box-sizing: border-box;
+  font-size: 11px;
   font-weight: 700;
-  padding: 4px 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px 7px;
+  text-overflow: ellipsis;
+  vertical-align: middle;
   white-space: nowrap;
+  width: fit-content;
 }
 
 .crm2-opp-pill.is-perdida {
@@ -218,6 +331,31 @@
 .crm2-opp-pill.is-negociacao {
   background: #e8f6ee;
   color: #1f7141;
+}
+
+.crm2-opp-pill.is-novo {
+  background: #e8f0ff;
+  color: #2856a6;
+}
+
+.crm2-opp-pill.is-qualificacao {
+  background: #f1eafe;
+  color: #6941c6;
+}
+
+.crm2-opp-pill.is-proposta {
+  background: #fff4d6;
+  color: #9a6700;
+}
+
+.crm2-opp-pill.is-negociacao {
+  background: #e4f7f1;
+  color: #087f5b;
+}
+
+.crm2-opp-pill.is-ganha {
+  background: #dcfce7;
+  color: #15803d;
 }
 
 .crm2-opp-kanban {
@@ -492,10 +630,6 @@
     grid-template-columns: repeat(6, minmax(210px, 1fr));
   }
 
-  .crm2-opp-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .crm2-opp-form-grid,
   .crm2-opp-detail-grid,
   .crm2-opp-detail-summary {
@@ -504,7 +638,6 @@
 }
 
 @media (max-width: 640px) {
-  .crm2-opp-filters,
   .crm2-opp-form-grid,
   .crm2-opp-detail-grid,
   .crm2-opp-detail-summary {
@@ -517,7 +650,6 @@
   }
 
   .crm2-opp-filter-actions,
-  .crm2-opp-filter-actions button,
   .crm2-opp-form-actions,
   .crm2-opp-form-actions button {
     width: 100%;
@@ -525,15 +657,23 @@
 
   .crm2-opp-form-actions,
   .crm2-opp-detail-actions,
-  .crm2-opp-pagination,
-  .crm2-opp-view-toggle {
+  .crm2-opp-pagination {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .crm2-opp-view-toggle > span {
-    margin-right: 0;
-  }
+  .crm2-opp-filter-bar { gap: 5px; }
+  .crm2-opp-filter-actions { flex: 1 1 auto; gap: 5px; min-width: 0; width: auto; }
+  .crm2-opp-filter-bar .crm2-opp-view-toggle { align-items: center; gap: 4px; }
+  .crm2-opp-filter-bar .crm2-opp-view-toggle button { font-size: 12px; padding: 7px 8px; }
+  .crm2-opp-filter-actions .save-btn { font-size: 12px; min-height: 34px; padding: 7px 9px; }
+  .crm2-opp-filter-actions .icon-btn { min-height: 34px; min-width: 34px; padding: 6px; }
+  .crm2-opp-search-control.is-expanded input { width: min(220px, calc(100vw - 150px)); }
+  .crm2-opp-filter-modal-backdrop { padding: 10px; }
+  .crm2-opp-filter-modal { max-height: 92vh; padding: 16px; }
+  .crm2-opp-filter-modal-form { grid-template-columns: 1fr; }
+  .crm2-opp-filter-modal-actions { align-items: stretch; flex-direction: column; }
+  .crm2-opp-filter-modal-actions > div { justify-content: flex-end; }
 
   .crm2-opp-pagination > div {
     display: flex;

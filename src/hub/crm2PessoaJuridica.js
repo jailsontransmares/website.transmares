@@ -1,6 +1,6 @@
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
-import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
+import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
 import { portalHubFormFooter } from './formFooterPortal.js';
 
 const CRM2_PJ_INITIAL_ITEMS = [
@@ -64,9 +64,17 @@ const crm2PjState = {
   formMode: '',
   detailId: '',
   detailTab: 'dados',
+  inlineEditing: false,
   draft: {},
+  cnpjGate: { value: '', status: '', companyId: '', message: '' },
   attachmentDraft: [],
+  attachmentSelectionDraft: [],
   attachmentRemoved: [],
+  attachmentSelectionMode: false,
+  selectedAttachmentKeys: [],
+  attachmentView: 'list',
+  attachmentInlineEditKey: '',
+  attachmentInlineDraft: null,
   errors: {},
   message: '',
   listState: 'normal'
@@ -106,6 +114,19 @@ function maskCnpjPj(value = '') {
     .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
 }
 
+function maskCpfPj(value = '') {
+  const digits = String(value).replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2');
+}
+
+function maskCepPj(value = '') {
+  const digits = String(value).replace(/\D/g, '').slice(0, 8);
+  return digits.replace(/^(\d{5})(\d)/, '$1-$2');
+}
+
 function validateCnpjPj(value = '') {
   const cnpj = String(value).replace(/\D/g, '');
   if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
@@ -122,7 +143,10 @@ function validateCnpjPj(value = '') {
 
 function formatDatePj(value = '') {
   if (!value) return '—';
-  const date = new Date(value);
+  const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
 }
 
@@ -185,6 +209,16 @@ function displayedStatusPj(item = {}) {
   return item.statusManual || automaticStatusPj(item) || item.status || 'empresa inativa';
 }
 
+function renderAutomaticStatusPillPj(item = {}) {
+  const status = automaticStatusPj(item);
+  const slug = normalizeSearchPj(status).replace(/\s+/g, '-');
+  const label = {
+    'empresa ativa': 'Empresa ativa',
+    'empresa inativa': 'Empresa inativa'
+  }[status] || status.charAt(0).toUpperCase() + status.slice(1);
+  return `<span class="crm2-pf-status-pill is-${escapeAttrPj(slug)}" role="status">${escapeHtmlPj(label)}</span>`;
+}
+
 function peopleCountPj(item = {}) {
   return Array.isArray(item.pessoasVinculadas) ? item.pessoasVinculadas.length : Number(item.pessoasVinculadas || 0);
 }
@@ -203,27 +237,6 @@ function attachmentStatusPj(validade = '') {
   if (days < 0) return 'vencido';
   if (days <= 30) return 'vencendo';
   return 'válido';
-}
-
-function attachmentKindPj(attachment = {}) {
-  return getHubAttachmentPreviewKind({ nome: attachment.nome, tipo: attachment.tipo });
-}
-
-function renderPjAttachmentPreview(attachment, source, index) {
-  const kind = attachmentKindPj(attachment);
-  const url = attachment.previewUrl || attachment.url || '';
-  const action = url ? `role="button" tabindex="0" onclick="crm2PjViewAttachment('${source}', ${index})" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); crm2PjViewAttachment('${source}', ${index}); }"` : 'aria-disabled="true"';
-  if (kind === 'image' && url) return `<div class="crm2-pj-attachment-preview is-image" ${action}><img src="${escapeAttrPj(url)}" alt="Prévia de ${escapeAttrPj(attachment.nome)}" loading="lazy"></div>`;
-  if (kind === 'pdf' && url) return `<div class="crm2-pj-attachment-preview is-pdf" ${action}><iframe src="${escapeAttrPj(url)}#toolbar=0&navpanes=0&scrollbar=0" title="Prévia de ${escapeAttrPj(attachment.nome)}" loading="lazy"></iframe></div>`;
-  return `<div class="crm2-pj-attachment-preview is-unavailable" ${action}><span>Prévia indisponível</span></div>`;
-}
-
-function renderPjAttachments(item, editing = false) {
-  const existing = (item?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index }))
-    .filter((attachment) => !crm2PjState.attachmentRemoved.includes(attachment.index));
-  const pending = crm2PjState.attachmentDraft.map((attachment, index) => ({ ...attachment, source: 'draft', index }));
-  const attachments = [...existing, ...pending];
-  return `<section class="hub-form-section crm2-pj-attachments" aria-labelledby="crm2-pj-attachments-title"><div class="hub-form-section-title"><strong id="crm2-pj-attachments-title">Anexos</strong>${editing ? '<label class="icon-btn crm2-pj-attachment-add" title="Incluir anexo" aria-label="Incluir anexo"><span aria-hidden="true">+</span><input type="file" multiple hidden onchange="crm2PjSelectAttachment(this)"></label>' : ''}</div>${editing && crm2PjState.attachmentDraft.length ? `<div class="crm2-pj-attachment-drafts">${crm2PjState.attachmentDraft.map((attachment, index) => `<div class="crm2-pj-attachment-draft"><input class="config-input" type="text" value="${escapeAttrPj(attachment.nome)}" aria-label="Nome do anexo" oninput="crm2PjUpdateAttachmentDraft(${index}, 'nome', this.value)"><input class="config-input" type="date" value="${escapeAttrPj(attachment.validade)}" aria-label="Validade do anexo" onchange="crm2PjUpdateAttachmentDraft(${index}, 'validade', this.value)"><button class="secondary-btn" type="button" onclick="crm2PjRemoveAttachment('draft', ${index})">Remover</button></div>`).join('')}</div>` : ''}${attachments.length ? `<div class="crm2-pj-attachment-grid">${attachments.map((attachment) => `<article class="crm2-pj-attachment-card">${renderPjAttachmentPreview(attachment, attachment.source, attachment.index)}<div class="crm2-pj-attachment-meta"><strong>${escapeHtmlPj(attachment.nome)}</strong><span class="crm2-pj-attachment-validity is-${escapeAttrPj(normalizeSearchPj(attachmentStatusPj(attachment.validade)).replace(/\s+/g, '-'))}">${escapeHtmlPj(attachmentStatusPj(attachment.validade))}</span><small>${attachment.validade ? `Validade: ${escapeHtmlPj(formatDatePj(attachment.validade))}` : 'Sem validade'}</small></div><div class="crm2-pj-attachment-actions"><button class="icon-btn" type="button" title="Baixar anexo" aria-label="Baixar ${escapeAttrPj(attachment.nome)}" onclick="crm2PjDownloadAttachment('${attachment.source}', ${attachment.index})">↓</button>${editing && crm2PjState.canDelete ? `<button class="icon-btn" type="button" title="Remover anexo" aria-label="Remover ${escapeAttrPj(attachment.nome)}" onclick="crm2PjRemoveAttachment('${attachment.source}', ${attachment.index})">×</button>` : ''}</div></article>`).join('')}</div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum anexo.</strong><span>Os anexos podem ser incluídos durante a edição.</span></div>'}</section>`;
 }
 
 function fileToAttachmentPj(file) {
@@ -261,13 +274,15 @@ function hasUnsavedPj() {
   const route = currentPjRoute();
   if (crm2PjState.formMode === 'create' && route.view === 'new') {
     return Object.values(crm2PjState.draft).some((value) => String(value || '').trim())
-      || crm2PjState.attachmentDraft.length > 0;
+      || crm2PjState.attachmentDraft.length > 0
+      || crm2PjState.attachmentSelectionDraft.length > 0;
   }
-  if (crm2PjState.formMode !== 'edit' || route.view !== 'edit') return false;
-  const original = getPj(route.id);
-  return Boolean(original && ['razaoSocial', 'endereco', 'observacoes', 'statusManual']
+  if (crm2PjState.formMode !== 'edit' || !crm2PjState.inlineEditing || route.view !== 'detail') return false;
+  const original = getPj(crm2PjState.detailId || route.id);
+  return Boolean(original && ['razaoSocial', 'endereco', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidadeEstado', 'uf', 'observacoes', 'statusManual']
     .some((field) => String(crm2PjState.draft[field] ?? original[field] ?? '').trim() !== String(original[field] ?? '').trim())
     || crm2PjState.attachmentDraft.length > 0
+    || crm2PjState.attachmentSelectionDraft.length > 0
     || crm2PjState.attachmentRemoved.length > 0);
 }
 
@@ -304,6 +319,55 @@ function renderPaginationPj(totalPages, totalItems) {
   return `<div class="crm2-pessoas-pagination" aria-label="Paginação de pessoas jurídicas"><span>Página <strong>${crm2PjState.page}</strong> de <strong>${totalPages}</strong> · ${totalItems} registro(s)</span><div><button class="secondary-btn" type="button" onclick="crm2PjSetPage(${crm2PjState.page - 1})" ${crm2PjState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2PjSetPage(${crm2PjState.page + 1})" ${crm2PjState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`;
 }
 
+function renderPjAttachments(item, editing = false) {
+  const existing = (item?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index }))
+    .filter((attachment) => !crm2PjState.attachmentRemoved.includes(attachment.index));
+  const pending = crm2PjState.attachmentDraft.map((attachment, index) => ({ ...attachment, source: 'draft', index }));
+  return renderHubAttachmentManager({
+    id: 'crm2-pj-attachments-title',
+    className: 'crm2-pj-attachments',
+    attachments: [...existing, ...pending],
+    drafts: crm2PjState.attachmentSelectionDraft,
+    editing,
+    canView: crm2PjState.canView,
+    canInclude: crm2PjState.canEdit || (crm2PjState.formMode === 'create' && crm2PjState.canCreate),
+    canEdit: crm2PjState.canEdit,
+    canDelete: editing && crm2PjState.canDelete,
+    showBatchActions: crm2PjState.canView && !crm2PjState.attachmentSelectionDraft.length,
+    selectionMode: crm2PjState.attachmentSelectionMode,
+    selectedKeys: crm2PjState.selectedAttachmentKeys,
+    viewMode: crm2PjState.attachmentView,
+    inlineEditKey: crm2PjState.attachmentInlineEditKey,
+    inlineDraft: crm2PjState.attachmentInlineDraft,
+    formatDate: (value) => value ? formatDatePj(value) : 'Sem validade',
+    handlers: {
+      selectFiles: () => 'crm2PjSelectAttachment(this)',
+      openEdit: () => `crm2PjOpenEdit('${escapeAttrPj(item?.id || crm2PjState.detailId)}')`,
+      cancelDraft: () => 'crm2PjCancelAttachmentDraft()',
+      confirmDraft: () => 'crm2PjConfirmAttachmentDraft()',
+      toggleSelection: () => 'crm2PjToggleAttachmentSelection()',
+      downloadAll: () => 'crm2PjDownloadAllAttachments()',
+      downloadSelected: () => 'crm2PjDownloadSelectedAttachments()',
+      deleteSelected: () => 'crm2PjDeleteSelectedAttachments()',
+      setView: (view) => `crm2PjSetAttachmentView('${escapeAttrPj(view)}')`,
+      updateDraftName: (index) => `crm2PjUpdateAttachmentDraft(${index}, 'nome', this.value)`,
+      updateDraftExpiration: (index) => `crm2PjUpdateAttachmentDraft(${index}, 'validade', this.value)`,
+      maskDraftDate: (index) => `crm2PjMaskAttachmentDraftDate(${index}, this)`,
+      pickDraftDate: (index) => `crm2PjSetAttachmentDraftDateFromPicker(${index}, this.value)`,
+      view: (source, index) => `crm2PjViewAttachment('${escapeAttrPj(source)}', ${index})`,
+      editInline: (source, index) => `crm2PjToggleAttachmentInlineEdit('${escapeAttrPj(source)}', ${index})`,
+      updateInlineName: () => "crm2PjUpdateAttachmentInlineDraft('nome', this.value)",
+      maskDate: () => 'crm2PjMaskAttachmentDate(this)',
+      pickDate: () => 'crm2PjSetAttachmentDateFromPicker(this.value)',
+      saveInlineEdit: () => 'crm2PjSaveAttachmentInlineEdit()',
+      cancelInlineEdit: () => 'crm2PjCancelAttachmentInlineEdit()',
+      download: (source, index) => `crm2PjDownloadAttachment('${escapeAttrPj(source)}', ${index})`,
+      delete: (source, index) => `crm2PjRemoveAttachment('${escapeAttrPj(source)}', ${index})`,
+      toggleSelected: (source, index) => `crm2PjToggleAttachmentSelected('${escapeAttrPj(source)}', ${index}, this.checked)`
+    }
+  });
+}
+
 function renderPjFooter(actions) {
   return `<div class="hub-form-screen-actions" data-hub-form-footer>${actions}</div>`;
 }
@@ -329,26 +393,90 @@ function renderListPj() {
   </section>`;
 }
 
-function renderFieldPj({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '', changed = false }) {
+function renderFieldPj({ label, name, value = '', type = 'text', required = false, wide = false, placeholder = '', extra = '', changed = false, formId = '' }) {
+  if (name === 'observacoes' && type === 'textarea') return renderPjObservationField(value, true, changed);
   const error = crm2PjState.errors[name] || '';
   const id = `crm2-pj-${name}`;
-  return `<label class="${wide ? 'is-wide ' : ''}${changed ? 'is-changed' : ''}"><span for="${id}">${label}${required ? ' *' : ''}</span>${type === 'textarea' ? `<textarea id="${id}" class="config-input" name="${name}" rows="4" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">${escapeHtmlPj(value)}</textarea>` : `<input id="${id}" class="config-input" type="${type}" name="${name}" value="${escapeAttrPj(value)}" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">`}${error ? `<small class="crm2-field-error">${escapeHtmlPj(error)}</small>` : ''}</label>`;
+  const formAttribute = formId ? ` form="${escapeAttrPj(formId)}"` : '';
+  return `<label class="${wide ? 'is-wide ' : ''}${changed ? 'is-changed' : ''}"><span for="${id}">${label}${required ? ' *' : ''}</span>${type === 'textarea' ? `<textarea id="${id}" class="config-input" name="${name}" rows="4" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">${escapeHtmlPj(value)}</textarea>` : `<input id="${id}" class="config-input" type="${type}" name="${name}" value="${escapeAttrPj(value)}" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''} ${extra}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">`}${error ? `<small class="crm2-field-error">${escapeHtmlPj(error)}</small>` : ''}</label>`;
+}
+
+function renderPjObservationField(value = '', editing = false, changed = false) {
+  if (!editing) return `<label class="crm2-pf-readonly-field"><span>Observações</span><textarea class="config-input" readonly aria-readonly="true">${escapeHtmlPj(value || 'Nenhuma observação registrada.')}</textarea></label>`;
+  return `<label class="crm2-pj-observation-field ${changed ? 'is-changed' : ''}"><span>Observações</span><div id="crm2-pj-observacoes-editor" class="config-input crm2-pf-rich-text-target crm2-pj-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacoes" oninput="crm2PjSyncObservation(this)" onkeydown="crm2PjFormatObservationKeydown(event, this)">${escapeHtmlPj(value)}</div><textarea class="crm2-pf-rich-text-value crm2-pj-rich-text-value" name="observacoes" hidden>${escapeHtmlPj(value)}</textarea><div class="crm2-pf-text-format-toolbar" role="toolbar" aria-label="Formatação das observações"><button class="icon-btn" type="button" title="Negrito" aria-label="Negrito" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('bold')"><i data-lucide="bold" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Itálico" aria-label="Itálico" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('italic')"><i data-lucide="italic" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Sublinhado" aria-label="Sublinhado" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('underline')"><i data-lucide="underline" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Tachado" aria-label="Tachado" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('strike')"><i data-lucide="strikethrough" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('bullet')"><i data-lucide="list" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Lista numerada" aria-label="Lista numerada" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('ordered')"><i data-lucide="list-ordered" aria-hidden="true"></i></button><button class="icon-btn" type="button" title="Limpar formatação" aria-label="Limpar formatação" onmousedown="event.preventDefault()" onclick="crm2PjFormatObservation('clear')"><i data-lucide="remove-formatting" aria-hidden="true"></i></button></div></label>`;
+}
+
+function pjAddressValues(item = {}) {
+  return {
+    cep: item.cep || '',
+    logradouro: item.logradouro || item.endereco || '',
+    numero: item.numero || '',
+    complemento: item.complemento || '',
+    bairro: item.bairro || '',
+    cidadeEstado: item.cidadeEstado || '',
+    uf: item.uf || ''
+  };
+}
+
+function renderPjStatusField(item = {}, editing = false, formId = '') {
+  if (!editing) return `<label><span>Situação na RFB</span><input class="config-input" value="${escapeAttrPj(displayedStatusPj(item))}" readonly></label>`;
+  const value = item.statusManual || '';
+  const formAttribute = formId ? ` form="${escapeAttrPj(formId)}"` : '';
+  return `<label><span>Situação na RFB</span><select class="config-input" name="statusManual"${formAttribute} onchange="crm2PjTrackChange(this)"><option value="" ${!value ? 'selected' : ''}>Usar status automático</option><option value="empresa ativa" ${value === 'empresa ativa' ? 'selected' : ''}>Empresa ativa</option><option value="empresa inativa" ${value === 'empresa inativa' ? 'selected' : ''}>Empresa inativa</option><option value="empresa baixada" ${value === 'empresa baixada' ? 'selected' : ''}>Empresa baixada</option></select></label>`;
+}
+
+function renderPjAddressFields(item = {}, editing = false, formId = '') {
+  const values = pjAddressValues(item);
+  const field = (label, name) => editing
+    ? renderFieldPj({ label, name, value: name === 'cep' ? maskCepPj(values[name]) : values[name], formId, extra: name === 'cep' ? 'inputmode="numeric" maxlength="9" onkeyup="crm2PjMaskCep(this)"' : '', changed: item[name] !== undefined && String(values[name]) !== String(item[name] || '') })
+    : `<label><span>${label}</span><input class="config-input" value="${escapeAttrPj(name === 'cep' ? maskCepPj(values[name]) : values[name])}" readonly></label>`;
+  return `<div class="crm2-pj-data-row crm2-pj-data-row-address">${field('CEP', 'cep')}${field('Logradouro', 'logradouro')}${field('Número', 'numero')}</div><div class="crm2-pj-data-row crm2-pj-data-row-complement">${field('Complemento', 'complemento')}${field('Bairro', 'bairro')}${field('Cidade', 'cidadeEstado')}${field('UF', 'uf')}</div>`;
+}
+
+function renderCnpjVerificationPj(values = {}) {
+  const gate = crm2PjState.cnpjGate;
+  const verified = gate.status === 'not-found';
+  return `
+    <section class="hub-form-section crm2-pf-cpf-verification crm2-pj-cnpj-verification" aria-labelledby="crm2-pj-cnpj-title">
+      <div class="hub-form-section-title"><strong id="crm2-pj-cnpj-title">Dados da empresa</strong></div>
+      <form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''} ${verified ? 'crm2-pf-cpf-has-personal-fields' : ''}" onsubmit="crm2PjSearchCnpj(event)" novalidate>
+        <label class="${gate.status === 'invalid' ? 'is-invalid' : ''}">
+          <span>CNPJ *</span>
+          <span class="crm2-pf-cpf-input-wrap">
+            <input class="config-input" name="cnpj" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="Consulte o CNPJ antes de iniciar o cadastro." value="${escapeAttrPj(maskCnpjPj(gate.value))}" oninput="crm2PjMaskCnpjGate(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">
+            <button class="crm2-pf-cpf-icon" type="${verified ? 'button' : 'submit'}" ${verified ? 'onclick="crm2PjChangeCnpj()"' : ''} aria-label="${verified ? 'Alterar CNPJ' : 'Consultar CNPJ'}" title="${verified ? 'Alterar CNPJ' : 'Consultar CNPJ'}"><i data-lucide="${verified ? 'eraser' : 'search'}" aria-hidden="true"></i></button>
+          </span>
+          ${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CNPJ válido para continuar.</small>' : ''}
+          ${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CNPJ.</small>' : ''}
+        </label>
+        ${verified ? renderFieldPj({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true, formId: 'crm2-pj-form' }) : ''}
+        ${verified ? renderPjStatusField(values, true, 'crm2-pj-form') : ''}
+        ${verified ? renderPjAddressFields(values, true, 'crm2-pj-form') : ''}
+        ${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CNPJ"><button class="secondary-btn" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(gate.companyId)}')">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2PjChangeCnpj()">Consultar outro CNPJ</button></div>` : ''}
+      </form>
+    </section>
+  `;
 }
 
 function renderFormPjBase() {
   const values = crm2PjState.draft;
-  return `<section class="hub-form-screen crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-form-title"><header class="hub-form-screen-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h2 id="crm2-pj-form-title">Novo cadastro PJ</h2></div><span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span></header><form id="crm2-pj-form" class="hub-form-screen-content crm2-pf-form crm2-pj-form-layout" onsubmit="crm2PjSave(event)" novalidate><section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados da empresa</strong></div><div class="hub-form-grid">${renderFieldPj({ label: 'CNPJ', name: 'cnpj', value: maskCnpjPj(values.cnpj), required: true, extra: 'inputmode="numeric" maxlength="18" onkeyup="crm2PjMaskCnpj(this)"' })}${renderFieldPj({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true })}${renderFieldPj({ label: 'Endereço', name: 'endereco', value: values.endereco, wide: true, placeholder: 'Rua, número, complemento, cidade/UF' })}${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></section><div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Voltar</button><button class="save-btn" type="submit">Salvar</button></div></form></section>`;
+  const verified = crm2PjState.cnpjGate.status === 'not-found';
+  const form = verified ? `<form id="crm2-pj-form" class="hub-form-screen-content crm2-pf-form crm2-pj-form-layout" onsubmit="crm2PjSave(event)" novalidate><input type="hidden" name="cnpj" value="${escapeAttrPj(gateValuePj())}"><div class="crm2-pf-notes-attachments-grid"><section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-pj-notes-title"><div class="hub-form-grid">${renderPjObservationField(values.observacoes, true)}</div></section>${renderPjAttachments(null, true)}</div><div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Voltar</button><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Cancelar</button><button class="save-btn" type="submit">Salvar</button></div></form>` : '';
+  return `<section class="hub-form-screen crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-form-title"><header class="hub-form-screen-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h2 id="crm2-pj-form-title">Novo cadastro PJ</h2></div><div class="crm2-pf-form-header-actions">${verified ? '<span class="crm2-pf-status-pill is-novo-cadastro" role="status">Novo cadastro</span>' : ''}</div></header>${renderCnpjVerificationPj(values)}${form}</section>`;
+}
+
+function gateValuePj() {
+  return String(crm2PjState.cnpjGate.value || crm2PjState.draft.cnpj || '').replace(/\D/g, '');
 }
 
 function renderFormPj() {
-  const html = renderFormPjBase();
-  return html.replace('</div></section><div class="hub-form-screen-actions', `</div></section>${renderPjAttachments(null, true)}<div class="hub-form-screen-actions`);
+  return renderFormPjBase();
 }
 
 function renderEditFormPjBase(item) {
   const values = { ...item, ...crm2PjState.draft };
   const changed = (field) => String(values[field] ?? '').trim() !== String(item?.[field] ?? '').trim();
-  return `<section class="hub-form-screen crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-form-title"><header class="hub-form-screen-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h2 id="crm2-pj-form-title">Editar cadastro PJ</h2></div><span class="crm2-pf-status-pill" role="status">Edição</span></header><form id="crm2-pj-form" class="hub-form-screen-content crm2-pf-form crm2-pj-form-layout" onsubmit="crm2PjSave(event)" novalidate><main class="crm2-pf-detail-main"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid">${renderFieldPj({ label: 'CNPJ', name: 'cnpj', value: maskCnpjPj(item.cnpj), required: true, extra: 'inputmode="numeric" maxlength="18" readonly' })}${renderFieldPj({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true, changed: changed('razaoSocial') })}${renderFieldPj({ label: 'Endereço', name: 'endereco', value: values.endereco, wide: true, placeholder: 'Rua, número, complemento, cidade/UF', changed: changed('endereco') })}${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true, changed: changed('observacoes') })}</div></section><div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar">${renderManualStatusPj({ ...item, ...crm2PjState.draft })}${renderPjAttachments(item, true)}</aside><div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Voltar</button><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Cancelar</button><button class="save-btn" type="submit">Salvar alterações</button></div></form></section>`;
+  return `<section class="hub-form-screen crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-form-title"><header class="hub-form-screen-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h2 id="crm2-pj-form-title">Editar cadastro PJ</h2>${renderAutomaticStatusPillPj(item)}</div></div><span class="crm2-pf-status-pill" role="status">Edição</span></header><form id="crm2-pj-form" class="hub-form-screen-content crm2-pf-form crm2-pj-form-layout" onsubmit="crm2PjSave(event)" novalidate><main class="crm2-pf-detail-main"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid crm2-pj-data-grid"><div class="crm2-pj-data-row crm2-pj-data-row-main">${renderFieldPj({ label: 'CNPJ', name: 'cnpj', value: maskCnpjPj(item.cnpj), required: true, extra: 'inputmode="numeric" maxlength="18" readonly' })}${renderFieldPj({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true, changed: changed('razaoSocial') })}${renderPjStatusField({ ...item, ...values }, true)}</div>${renderPjAddressFields({ ...item, ...values }, true)}</div></section><div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div>${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true, changed: changed('observacoes') })}</section>${renderPjAttachments(item, true)}</aside><div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Voltar</button><button class="secondary-btn" type="button" onclick="crm2PjCancelForm()">Cancelar</button><button class="save-btn" type="submit">Salvar alterações</button></div></form></section>`;
 }
 
 function renderManualStatusPj(item) {
@@ -361,11 +489,15 @@ function renderEditFormPj(item) {
 }
 
 function renderDetailPjLegacy(item) {
-  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button></div></div><div class="crm2-pf-view-form"><section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid"><label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label><label class="is-wide"><span>Endereço</span><textarea class="config-input" readonly>${escapeHtmlPj(item.endereco)}</textarea></label><label class="is-wide"><span>Observações</span><textarea class="config-input" readonly>${escapeHtmlPj(item.observacoes)}</textarea></label></div></section><div class="crm2-pf-summary-grid"><article><span>Data de cadastro</span><strong>${escapeHtmlPj(formatDatePj(item.cadastroEm))}</strong></article><article><span>Status</span><strong>${escapeHtmlPj(item.status)}</strong></article></div></div></section>`;
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button></div></div><div class="crm2-pf-view-form"><section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid"><label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label><label class="is-wide"><span>Endereço</span><textarea class="config-input" readonly>${escapeHtmlPj(item.endereco)}</textarea></label><label class="is-wide"><span>Observações</span><textarea class="config-input" readonly>${escapeHtmlPj(item.observacoes)}</textarea></label></div></section><div class="crm2-pf-summary-grid"><article><span>Status</span><strong>${escapeHtmlPj(item.status)}</strong></article></div></div></section>`;
 }
 
-function renderPjDataTabBase(item) {
-  return `<section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid"><label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label><label class="is-wide"><span>Endereço</span><textarea class="config-input" readonly>${escapeHtmlPj(item.endereco)}</textarea></label><label class="is-wide"><span>Observações</span><textarea class="config-input" readonly>${escapeHtmlPj(item.observacoes)}</textarea></label></div></section><div class="crm2-pf-summary-grid"><article><span>Data de cadastro</span><strong>${escapeHtmlPj(formatDatePj(item.cadastroEm))}</strong></article><article><span>Última atualização</span><strong>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</strong></article><article><span>Status automático</span><strong>${escapeHtmlPj(automaticStatusPj(item))}</strong></article><article><span>Status exibido</span><strong>${escapeHtmlPj(displayedStatusPj(item))}</strong></article></div>`;
+function renderPjDataTabBase(item, editing = false) {
+  const values = editing ? { ...item, ...crm2PjState.draft } : item;
+  const main = editing
+    ? `${renderFieldPj({ label: 'CNPJ', name: 'cnpj', value: maskCnpjPj(item.cnpj), required: true, extra: 'inputmode="numeric" maxlength="18" readonly' })}${renderFieldPj({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true, changed: String(values.razaoSocial || '') !== String(item.razaoSocial || '') })}${renderPjStatusField(values, true)}`
+    : `<label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label>${renderPjStatusField(item)}`;
+  return `<section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid crm2-pj-data-grid"><div class="crm2-pj-data-row crm2-pj-data-row-main">${main}</div>${editing ? renderPjAddressFields(values, true) : renderPjAddressFields(item)}</div></section>`;
 }
 
 function renderPjDataTab(item) {
@@ -374,20 +506,67 @@ function renderPjDataTab(item) {
 
 function renderPjPeopleTab(item) {
   const people = Array.isArray(item.pessoasVinculadas) ? item.pessoasVinculadas : [];
-  return people.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table" aria-label="Pessoas vinculadas"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th></tr></thead><tbody>${people.map((person) => `<tr><td>${person.vinculoId ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrPj(person.vinculoId)}')" aria-label="Abrir vínculo de ${escapeAttrPj(person.nome)}">${escapeHtmlPj(person.nome)}</button>` : escapeHtmlPj(person.nome)}</td><td>${escapeHtmlPj(person.cpf || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pessoa vinculada.</strong><span>Os vínculos serão habilitados em fase posterior.</span></div>';
+  const actions = crm2PjState.canDelete;
+  const content = people.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table crm2-pj-people-table" aria-label="Pessoas vinculadas"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th>${actions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${people.map((person, index) => `<tr><td>${person.vinculoId ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrPj(person.vinculoId)}')" aria-label="Abrir vínculo de ${escapeAttrPj(person.nome)}">${escapeHtmlPj(person.nome)}</button>` : escapeHtmlPj(person.nome)}</td><td>${person.cpf ? escapeHtmlPj(maskCpfPj(person.cpf)) : '—'}</td>${actions ? `<td class="crm2-pj-people-actions"><button class="icon-btn crm2-pf-vinculo-delete" type="button" onclick="crm2PjRemoveVinculo('${escapeAttrPj(item.id)}', ${index})" aria-label="Excluir vínculo de ${escapeAttrPj(person.nome)}" title="Excluir vínculo"><i data-lucide="trash-2" aria-hidden="true"></i></button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pessoa vinculada.</strong><span>Os vínculos serão habilitados em fase posterior.</span></div>';
+  return `<div class="crm2-pj-people-content">${content}</div>`;
 }
+
+function enhancePjPeopleSection(root = document) {
+  if (!crm2PjState.canCreate) return;
+  root.querySelectorAll?.('.crm2-pf-related-sections .crm2-pf-detail-section').forEach((section) => {
+    const title = section.querySelector('.hub-form-section-title');
+    if (title?.querySelector('[data-crm2-pj-people-include]')) return;
+    if (title?.querySelector('strong')?.textContent?.trim() !== 'Pessoas vinculadas') return;
+    const button = document.createElement('button');
+    button.className = 'save-btn crm2-pf-company-include';
+    button.type = 'button';
+    button.dataset.crm2PjPeopleInclude = 'true';
+    button.textContent = 'Incluir';
+    button.addEventListener('click', () => window.crm2VinculosOpenCreate?.());
+    title.appendChild(button);
+  });
+}
+
+function iniciarObserverPjPeopleSection() {
+  const iniciar = () => {
+    const observer = new MutationObserver(() => {
+      const root = document.querySelector('[data-crm2-pj="true"]');
+      if (root) {
+        enhancePjPeopleSection(root);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar, { once: true });
+  else iniciar();
+}
+
+iniciarObserverPjPeopleSection();
 
 function renderPjOrdersTab(item) {
   const orders = Array.isArray(item.pedidos) ? item.pedidos : [];
-  return orders.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table" aria-label="Pedidos da pessoa jurídica"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">PF responsável</th><th scope="col">Status</th><th scope="col">Vencimento</th></tr></thead><tbody>${orders.map((order) => `<tr><td>${escapeHtmlPj(order.numero || '—')}</td><td>${escapeHtmlPj(order.produto || '—')}</td><td>${escapeHtmlPj(order.pessoa || '—')}</td><td>${escapeHtmlPj(order.status || '—')}</td><td>${escapeHtmlPj(formatDatePj(order.vencimento))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum pedido vinculado.</strong><span>Os pedidos serão habilitados em fase posterior.</span></div>';
+  return orders.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table crm2-pj-orders-table" aria-label="Pedidos da pessoa jurídica"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">Vencimento</th></tr></thead><tbody>${orders.map((order) => `<tr><td>${order.numero ? `<button class="crm2-pj-order-number-link" type="button" onclick="crm2PjOpenOrder('${escapeAttrPj(order.numero)}')">${escapeHtmlPj(order.numero)}</button>` : '—'}</td><td><strong>${escapeHtmlPj(order.produto || '—')}</strong>${order.pessoa ? `<span class="crm2-pf-order-meta-pill">${escapeHtmlPj(order.pessoa)}</span>` : ''}</td><td>${escapeHtmlPj(formatDatePj(order.vencimento))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum pedido vinculado.</strong><span>Os pedidos serão habilitados em fase posterior.</span></div>';
+}
+
+function openPjOrder(numero = '') {
+  const order = window.crm2PedidosGetMockItems?.().find((item) => item.numero === numero);
+  if (order?.id && typeof window.crm2PedidosOpenDetail === 'function') window.crm2PedidosOpenDetail(order.id);
+  else window.navegarParaCrm2PedidosRota?.();
 }
 
 function renderDetailPjReadOnly(item) {
-  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3></div></div>${crm2PjState.message ? `<p class="admin-message" role="status">${escapeHtmlPj(crm2PjState.message)}</p>` : ''}<div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div>${renderPjDataTabBase(item)}</section><div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-status-section"><div class="hub-form-section-title"><strong>Status</strong></div><div class="hub-form-grid"><label><span>Status exibido</span><input class="config-input" value="${escapeAttrPj(displayedStatusPj(item))}" readonly></label></div></section>${renderPjAttachments(item, false)}</aside></div>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button>${crm2PjState.canEdit ? `<button class="save-btn" type="button" onclick="crm2PjOpenEdit('${escapeAttrPj(item.id)}')">Editar</button>` : ''}`)}</section>`;
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div>${crm2PjState.message ? `<p class="admin-message" role="status">${escapeHtmlPj(crm2PjState.message)}</p>` : ''}<div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div><p>${escapeHtmlPj(item.observacoes || 'Nenhuma observação registrada.')}</p></section>${renderPjAttachments(item, false)}</aside></div>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button>${crm2PjState.canEdit ? `<button class="save-btn" type="button" onclick="crm2PjOpenEdit('${escapeAttrPj(item.id)}')">Editar</button>` : ''}`)}</section>`;
+}
+
+function renderDetailPjInlineEdit(item) {
+  const values = { ...item, ...crm2PjState.draft };
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div><form id="crm2-pj-inline-form" onsubmit="crm2PjSave(event)" novalidate><div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item, true)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div>${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true, changed: String(values.observacoes || '') !== String(item.observacoes || '') })}</section>${renderPjAttachments(item, true)}</aside></div></form>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCancelInlineEdit()">Cancelar</button><button class="save-btn" type="submit" form="crm2-pj-inline-form">Salvar alterações</button>`)}</section>`;
 }
 
 function renderDetailPj(item) {
   if (!item) return renderListPj();
+  if (crm2PjState.inlineEditing && crm2PjState.canEdit) return renderDetailPjInlineEdit(item);
   return renderDetailPjReadOnly(item);
 }
 
@@ -395,7 +574,18 @@ function renderPj() {
   permissionsPj();
   if (!crm2PjState.canView) return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true"><div class="crm2-pessoas-state is-error" role="alert"><strong>Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar Pessoas jurídicas.</span><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></section>`;
   const route = currentPjRoute();
-  if (route.view === 'new') return renderFormPj();
+  if (route.view === 'new') {
+    if (crm2PjState.formMode !== 'create') {
+      crm2PjState.formMode = 'create';
+      crm2PjState.draft = {};
+      crm2PjState.errors = {};
+      crm2PjState.cnpjGate = { value: '', status: '', companyId: '', message: '' };
+      crm2PjState.attachmentDraft = [];
+      crm2PjState.attachmentSelectionDraft = [];
+      crm2PjState.attachmentRemoved = [];
+    }
+    return renderFormPj();
+  }
   if (route.view === 'edit') return getPj(route.id) ? renderEditFormPj(getPj(route.id)) : renderListPj();
   if (route.view === 'detail') return renderDetailPj(getPj(route.id));
   return renderListPj();
@@ -406,7 +596,10 @@ function mountPj() {
   const target = document.querySelector('[data-crm2-pj="true"]');
   if (target) {
     target.outerHTML = renderPj();
-    portalHubFormFooter(document.querySelector('[data-crm2-pj="true"]'));
+    const root = document.querySelector('[data-crm2-pj="true"]');
+    enhancePjPeopleSection(root);
+    window.requestAnimationFrame(() => { void hydrateHubPdfThumbnails(root); });
+    portalHubFormFooter(root);
   }
 }
 
@@ -459,28 +652,69 @@ Object.assign(window, {
   crm2PjOpenCreate() {
     if (!crm2PjState.canCreate) return;
     crm2PjState.formMode = 'create'; crm2PjState.draft = {}; crm2PjState.errors = {}; crm2PjState.message = '';
-    crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = [];
+    crm2PjState.cnpjGate = { value: '', status: '', companyId: '', message: '' };
+    crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = [];
     navigatePj('novo');
   },
   crm2PjOpenEdit(id) {
+    if (window.event?.currentTarget?.classList.contains('crm2-pf-include-attachment')) {
+      window.crm2PjOpenAttachmentPicker(id);
+      return;
+    }
     if (!crm2PjState.canEdit) return;
     const item = getPj(id);
     if (!item) return;
     crm2PjState.formMode = 'edit';
+    crm2PjState.inlineEditing = true;
     crm2PjState.detailId = id;
     crm2PjState.detailTab = 'dados';
     crm2PjState.draft = {};
     crm2PjState.attachmentDraft = [];
+    crm2PjState.attachmentSelectionDraft = [];
     crm2PjState.attachmentRemoved = [];
     crm2PjState.errors = {};
     crm2PjState.message = '';
-    navigatePj(`${id}/editar`);
+    rerenderPj();
   },
-  crm2PjOpenDetail(id) { if (getPj(id)) { crm2PjState.detailId = id; crm2PjState.detailTab = 'dados'; crm2PjState.message = ''; navigatePj(id); } },
+  crm2PjOpenAttachmentPicker(id) {
+    if (!crm2PjState.canEdit || !getPj(id)) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = () => {
+      window.crm2PjSelectAttachment(input);
+      input.remove();
+    };
+    input.click();
+  },
+  crm2PjCancelInlineEdit() {
+    if (!requestLeavePj(() => window.crm2PjCancelInlineEdit())) return;
+    crm2PjState.formMode = '';
+    crm2PjState.inlineEditing = false;
+    crm2PjState.draft = {};
+    crm2PjState.errors = {};
+    crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = [];
+    crm2PjState.attachmentRemoved = [];
+    rerenderPj();
+  },
+  crm2PjRemoveVinculo(companyId, index) {
+    if (!crm2PjState.canDelete) return;
+    const company = getPj(companyId);
+    const vinculo = company?.pessoasVinculadas?.[Number(index)];
+    if (!company || !vinculo) return;
+    const name = vinculo.nome || 'a pessoa vinculada';
+    if (!window.confirm(`Excluir o vínculo com ${name}?`)) return;
+    company.pessoasVinculadas.splice(Number(index), 1);
+    company.atualizadoEm = new Date().toISOString();
+    crm2PjState.message = 'Vínculo excluído apenas do estado local.';
+    rerenderPj();
+  },
+  crm2PjOpenDetail(id) { if (getPj(id)) { crm2PjState.formMode = ''; crm2PjState.inlineEditing = false; crm2PjState.detailId = id; crm2PjState.detailTab = 'dados'; crm2PjState.message = ''; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; crm2PjState.attachmentSelectionMode = false; crm2PjState.selectedAttachmentKeys = []; crm2PjState.attachmentInlineEditKey = ''; crm2PjState.attachmentInlineDraft = null; navigatePj(id); } },
+  crm2PjOpenOrder: openPjOrder,
   crm2PjSelectTab(tab) { if (['dados', 'pessoas', 'pedidos'].includes(tab)) { crm2PjState.detailTab = tab; rerenderPj(); } },
-  crm2PjCloseDetail() { crm2PjState.detailId = ''; crm2PjState.detailTab = 'dados'; crm2PjState.message = ''; navigatePj(); },
-  crm2PjCancelForm() { if (!requestLeavePj(() => window.crm2PjCancelForm())) return; crm2PjState.formMode = ''; crm2PjState.detailId = ''; crm2PjState.draft = {}; crm2PjState.errors = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = []; navigatePj(); },
-  crm2PjConfirmLeave() { document.querySelector('.crm2-pj-unsaved-backdrop')?.remove(); const action = pendingLeaveActionPj; pendingLeaveActionPj = null; crm2PjState.draft = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = []; action?.(); },
+  crm2PjCloseDetail() { crm2PjState.formMode = ''; crm2PjState.inlineEditing = false; crm2PjState.detailId = ''; crm2PjState.detailTab = 'dados'; crm2PjState.message = ''; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; crm2PjState.attachmentSelectionMode = false; crm2PjState.selectedAttachmentKeys = []; crm2PjState.attachmentInlineEditKey = ''; crm2PjState.attachmentInlineDraft = null; navigatePj(); },
+  crm2PjCancelForm() { if (!requestLeavePj(() => window.crm2PjCancelForm())) return; crm2PjState.formMode = ''; crm2PjState.inlineEditing = false; crm2PjState.detailId = ''; crm2PjState.draft = {}; crm2PjState.errors = {}; crm2PjState.cnpjGate = { value: '', status: '', companyId: '', message: '' }; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; navigatePj(); },
+  crm2PjConfirmLeave() { document.querySelector('.crm2-pj-unsaved-backdrop')?.remove(); const action = pendingLeaveActionPj; pendingLeaveActionPj = null; crm2PjState.draft = {}; crm2PjState.cnpjGate = { value: '', status: '', companyId: '', message: '' }; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; action?.(); },
   crm2PjCancelLeave() { pendingLeaveActionPj = null; document.querySelector('.crm2-pj-unsaved-backdrop')?.remove(); },
   crm2PjSetSearch(value, input) {
     window.hubAtualizarBuscaAoDigitar(input, (search) => { crm2PjState.search = search; crm2PjState.searchExpanded = true; crm2PjState.page = 1; }, rerenderPj, () => document.querySelector('.crm2-pf-search-control input[type="search"]'));
@@ -495,6 +729,70 @@ Object.assign(window, {
   crm2PjSetPage(page) { crm2PjState.page = Math.max(1, Number(page) || 1); rerenderPj(); },
   crm2PjSetListState(value) { crm2PjState.listState = ['normal', 'loading', 'error', 'empty'].includes(value) ? value : 'normal'; rerenderPj(); },
   crm2PjMaskCnpj(input) { input.value = maskCnpjPj(input.value); crm2PjState.draft.cnpj = input.value; },
+  crm2PjMaskCnpjGate(input) {
+    input.value = maskCnpjPj(input.value);
+    crm2PjState.cnpjGate.value = String(input.value || '').replace(/\D/g, '');
+    crm2PjState.draft.cnpj = crm2PjState.cnpjGate.value;
+    if (crm2PjState.cnpjGate.status !== 'not-found') crm2PjState.cnpjGate.status = '';
+  },
+  crm2PjSearchCnpj(event) {
+    event?.preventDefault();
+    const value = String(new FormData(event.currentTarget).get('cnpj') || '').replace(/\D/g, '');
+    crm2PjState.cnpjGate.value = value;
+    crm2PjState.draft.cnpj = value;
+    if (!validateCnpjPj(value)) {
+      crm2PjState.cnpjGate = { value, status: 'invalid', companyId: '', message: 'Informe um CNPJ válido para continuar.' };
+    } else {
+      const company = crm2PjState.items.find((item) => String(item.cnpj || '').replace(/\D/g, '') === value);
+      crm2PjState.cnpjGate = company
+        ? { value, status: 'found', companyId: company.id, message: 'CNPJ já cadastrado. A criação de duplicidade foi bloqueada.' }
+        : { value, status: 'not-found', companyId: '', message: 'CNPJ não localizado. O novo cadastro pode ser iniciado.' };
+    }
+    rerenderPj();
+  },
+  crm2PjChangeCnpj() {
+    crm2PjState.cnpjGate = { value: '', status: '', companyId: '', message: '' };
+    crm2PjState.draft = {};
+    crm2PjState.errors = {};
+    rerenderPj();
+    window.requestAnimationFrame(() => document.querySelector('.crm2-pj-cnpj-verification input[name="cnpj"]')?.focus());
+  },
+  crm2PjMaskCep(input) { input.value = maskCepPj(input.value); crm2PjState.draft.cep = input.value; },
+  crm2PjSyncObservation(editor) {
+    const value = editor?.innerHTML || '';
+    const hidden = editor?.closest('label')?.querySelector('textarea[name="observacoes"]');
+    if (hidden) hidden.value = value;
+    crm2PjState.draft.observacoes = value;
+  },
+  crm2PjFormatObservation(command) {
+    const editor = document.querySelector('.crm2-pj-rich-text-target');
+    if (!editor) return;
+    editor.focus();
+    const commands = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', bullet: 'insertUnorderedList', ordered: 'insertOrderedList', clear: 'removeFormat' };
+    if (!commands[command]) return;
+    document.execCommand(commands[command], false);
+    window.crm2PjSyncObservation?.(editor);
+  },
+  crm2PjFormatObservationKeydown(event, editor) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    const key = String(event.key || '').toLowerCase();
+    const command = key === 'b'
+      ? 'bold'
+      : key === 'i'
+        ? 'italic'
+        : key === 'u'
+          ? 'underline'
+          : event.shiftKey && key === '5'
+            ? 'strike'
+            : event.shiftKey && key === '7'
+              ? 'ordered'
+              : event.shiftKey && key === '8'
+                ? 'bullet'
+                : '';
+    if (!command) return;
+    event.preventDefault();
+    window.crm2PjFormatObservation(command);
+  },
   crm2PjTrackChange(input) {
     if (!input?.name) return;
     crm2PjState.draft[input.name] = input.value;
@@ -503,22 +801,154 @@ Object.assign(window, {
     const changed = original && String(input.value || '').trim() !== String(original[input.name] || '').trim();
     input.closest('label')?.classList.toggle('is-changed', Boolean(changed));
   },
+  crm2PjToggleAttachmentInlineEdit(source, index) {
+    if (!crm2PjState.canEdit) return;
+    const item = getPj(crm2PjState.detailId || currentPjRoute().id);
+    const attachment = source === 'draft' ? crm2PjState.attachmentDraft[index] : item?.anexos?.[index];
+    if (!attachment) return;
+    crm2PjState.attachmentInlineEditKey = `${source}:${index}`;
+    const filename = String(attachment.nome || '');
+    const extensionMatch = filename.match(/(\.[^.]+)$/);
+    crm2PjState.attachmentInlineDraft = { nome: extensionMatch ? filename.slice(0, -extensionMatch[1].length) : filename, extensao: extensionMatch?.[1] || '', validade: attachment.validade || '', displayValidade: attachment.validade ? formatDatePj(attachment.validade) : '' };
+    rerenderPj();
+  },
+  crm2PjUpdateAttachmentInlineDraft(field, value) {
+    if (!crm2PjState.attachmentInlineDraft || !['nome', 'validade'].includes(field)) return;
+    crm2PjState.attachmentInlineDraft[field] = String(value || '');
+  },
+  crm2PjUpdateAttachmentInlineDateDraft(value) {
+    if (!crm2PjState.attachmentInlineDraft) return;
+    const text = String(value || '').trim();
+    const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    crm2PjState.attachmentInlineDraft.displayValidade = text;
+    crm2PjState.attachmentInlineDraft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+  },
+  crm2PjMaskAttachmentDate(input) {
+    if (!input) return;
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+    const masked = digits.length > 4
+      ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+        : digits;
+    input.value = masked;
+    window.crm2PjUpdateAttachmentInlineDateDraft(masked);
+  },
+  crm2PjSetAttachmentDateFromPicker(value) {
+    if (!crm2PjState.attachmentInlineDraft) return;
+    crm2PjState.attachmentInlineDraft.validade = String(value || '');
+    crm2PjState.attachmentInlineDraft.displayValidade = formatDatePj(value);
+    rerenderPj();
+  },
+  crm2PjSaveAttachmentInlineEdit() {
+    const [source, index] = String(crm2PjState.attachmentInlineEditKey || ':').split(':');
+    const draft = crm2PjState.attachmentInlineDraft;
+    const item = getPj(crm2PjState.detailId || currentPjRoute().id);
+    const attachment = source === 'draft' ? crm2PjState.attachmentDraft[Number(index)] : item?.anexos?.[Number(index)];
+    if (!attachment || !draft) return;
+    attachment.nome = `${draft.nome}${draft.extensao || ''}`;
+    attachment.validade = draft.validade;
+    if (item) item.atualizadoEm = new Date().toISOString();
+    crm2PjState.attachmentInlineEditKey = '';
+    crm2PjState.attachmentInlineDraft = null;
+    rerenderPj();
+  },
+  crm2PjCancelAttachmentInlineEdit() {
+    crm2PjState.attachmentInlineEditKey = '';
+    crm2PjState.attachmentInlineDraft = null;
+    rerenderPj();
+  },
   crm2PjSelectAttachment(input) {
-    const allowed = crm2PjState.formMode === 'edit' ? crm2PjState.canEdit : crm2PjState.canCreate;
+    const allowed = crm2PjState.canEdit || (crm2PjState.formMode === 'new' && crm2PjState.canCreate);
     if (!allowed) return;
-    crm2PjState.attachmentDraft.push(...Array.from(input?.files || []).map(fileToAttachmentPj));
+    const attachments = Array.from(input?.files || []).map(fileToAttachmentPj).map((attachment) => {
+      const match = String(attachment.nome || '').match(/(\.[^.]+)$/);
+      return { ...attachment, nome: match ? attachment.nome.slice(0, -match[1].length) : attachment.nome, extensao: match?.[1] || '' };
+    });
+    if (!attachments.length) return;
+    crm2PjState.attachmentSelectionDraft.push(...attachments);
     rerenderPj();
   },
   crm2PjUpdateAttachmentDraft(index, field, value) {
-    const attachment = crm2PjState.attachmentDraft[index];
+    const attachment = crm2PjState.attachmentSelectionDraft[index];
     if (!attachment || !['nome', 'validade'].includes(field)) return;
     attachment[field] = String(value || '');
+  },
+  crm2PjMaskAttachmentDraftDate(index, input) {
+    const draft = crm2PjState.attachmentSelectionDraft?.[index];
+    if (!draft || !input) return;
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+    const masked = digits.length > 4
+      ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+        : digits;
+    input.value = masked;
+    draft.displayValidade = masked;
+    const match = masked.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    draft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+  },
+  crm2PjSetAttachmentDraftDateFromPicker(index, value) {
+    const draft = crm2PjState.attachmentSelectionDraft?.[index];
+    if (!draft) return;
+    const iso = String(value || '');
+    draft.validade = iso;
+    draft.displayValidade = iso ? formatDatePj(iso) : '';
+    rerenderPj();
   },
   crm2PjRemoveAttachment(source, index) {
     if (!crm2PjState.canDelete && crm2PjState.formMode === 'edit') return;
     if (!window.confirm('Remover este anexo do estado mockado?')) return;
     if (source === 'draft') crm2PjState.attachmentDraft.splice(Number(index), 1);
     else if (!crm2PjState.attachmentRemoved.includes(Number(index))) crm2PjState.attachmentRemoved.push(Number(index));
+    rerenderPj();
+  },
+  crm2PjCancelAttachmentDraft() {
+    crm2PjState.attachmentSelectionDraft = [];
+    crm2PjState.attachmentInlineEditKey = '';
+    crm2PjState.attachmentInlineDraft = null;
+    rerenderPj();
+  },
+  crm2PjConfirmAttachmentDraft() {
+    if (!crm2PjState.attachmentSelectionDraft.length) return;
+    crm2PjState.attachmentDraft.push(...crm2PjState.attachmentSelectionDraft.map((attachment) => ({
+      ...attachment,
+      nome: `${String(attachment.nome || '').trim()}${attachment.extensao || ''}`
+    })));
+    crm2PjState.attachmentSelectionDraft = [];
+    crm2PjState.attachmentInlineEditKey = '';
+    crm2PjState.attachmentInlineDraft = null;
+    rerenderPj();
+  },
+  crm2PjToggleAttachmentSelection() {
+    crm2PjState.attachmentSelectionMode = !crm2PjState.attachmentSelectionMode;
+    if (!crm2PjState.attachmentSelectionMode) crm2PjState.selectedAttachmentKeys = [];
+    rerenderPj();
+  },
+  crm2PjSetAttachmentView(view) {
+    if (!['list', 'grid'].includes(view)) return;
+    crm2PjState.attachmentView = view;
+    rerenderPj();
+  },
+  crm2PjToggleAttachmentSelected(source, index, checked) {
+    const key = `${source}:${index}`;
+    crm2PjState.selectedAttachmentKeys = checked
+      ? [...new Set([...crm2PjState.selectedAttachmentKeys, key])]
+      : crm2PjState.selectedAttachmentKeys.filter((item) => item !== key);
+    rerenderPj();
+  },
+  crm2PjDownloadAllAttachments() {
+    const item = getPj(crm2PjState.detailId || currentPjRoute().id);
+    (item?.anexos || []).forEach((_, index) => window.crm2PjDownloadAttachment('existing', index));
+    crm2PjState.attachmentDraft.forEach((_, index) => window.crm2PjDownloadAttachment('draft', index));
+  },
+  crm2PjDownloadSelectedAttachments() {
+    crm2PjState.selectedAttachmentKeys.forEach((key) => { const [source, index] = key.split(':'); window.crm2PjDownloadAttachment(source, Number(index)); });
+  },
+  crm2PjDeleteSelectedAttachments() {
+    if (!crm2PjState.canDelete) return;
+    [...crm2PjState.selectedAttachmentKeys].forEach((key) => { const [source, index] = key.split(':'); if (source === 'draft') crm2PjState.attachmentDraft.splice(Number(index), 1); else if (!crm2PjState.attachmentRemoved.includes(Number(index))) crm2PjState.attachmentRemoved.push(Number(index)); });
+    crm2PjState.selectedAttachmentKeys = [];
     rerenderPj();
   },
   crm2PjViewAttachment(source, index) {
@@ -544,10 +974,12 @@ Object.assign(window, {
     event?.preventDefault();
     if (crm2PjState.formMode === 'edit' ? !crm2PjState.canEdit : !crm2PjState.canCreate) return;
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    values.cnpj = String(values.cnpj || '').replace(/\D/g, '');
+    values.cnpj = String(values.cnpj || crm2PjState.cnpjGate.value || '').replace(/\D/g, '');
+    values.cep = String(values.cep || '').replace(/\D/g, '');
     values.razaoSocial = String(values.razaoSocial || '').trim();
     const errors = {};
     if (!validateCnpjPj(values.cnpj)) errors.cnpj = 'Informe um CNPJ válido.';
+    if (crm2PjState.formMode === 'create' && crm2PjState.cnpjGate.status !== 'not-found') errors.cnpj = 'Consulte o CNPJ antes de salvar o cadastro.';
     if (!values.razaoSocial) errors.razaoSocial = 'Informe a razão social.';
     if (crm2PjState.items.some((item) => item.cnpj === values.cnpj && (crm2PjState.formMode !== 'edit' || item.id !== crm2PjState.detailId))) errors.cnpj = 'Já existe uma pessoa jurídica mockada com este CNPJ.';
     if (Object.keys(errors).length) { crm2PjState.errors = errors; crm2PjState.draft = { ...crm2PjState.draft, ...values }; rerenderPj(); return; }
@@ -558,18 +990,20 @@ Object.assign(window, {
       item.anexos = (item.anexos || []).filter((attachment, index) => !crm2PjState.attachmentRemoved.includes(index));
       item.anexos.push(...crm2PjState.attachmentDraft);
       item.statusManual = ['empresa ativa', 'empresa inativa', 'empresa baixada'].includes(values.statusManual) ? values.statusManual : '';
-      Object.assign(item, { razaoSocial: values.razaoSocial, endereco: values.endereco || '', observacoes: values.observacoes || '', status: displayedStatusPj(item), atualizadoEm: now });
+      Object.assign(item, { razaoSocial: values.razaoSocial, endereco: values.logradouro || values.endereco || '', cep: values.cep || '', logradouro: values.logradouro || '', numero: values.numero || '', complemento: values.complemento || '', bairro: values.bairro || '', cidadeEstado: values.cidadeEstado || '', uf: values.uf || '', observacoes: values.observacoes || '', status: displayedStatusPj(item), atualizadoEm: now });
       crm2PjState.formMode = '';
+      crm2PjState.inlineEditing = false;
       crm2PjState.draft = {};
       crm2PjState.errors = {};
-      crm2PjState.attachmentDraft = [];
+    crm2PjState.attachmentDraft = [];
+    crm2PjState.attachmentSelectionDraft = [];
       crm2PjState.attachmentRemoved = [];
       crm2PjState.message = 'Pessoa jurídica atualizada no estado mockado. Nenhum dado foi persistido.';
       navigatePj(item.id);
       return;
     }
     const item = { ...values, id: `pj-mock-${Date.now()}`, cadastroEm: now, atualizadoEm: now, status: 'empresa inativa', statusAutomatico: 'empresa inativa', statusManual: '', anexos: [...crm2PjState.attachmentDraft], pessoasVinculadas: [], pedidos: [] };
-    crm2PjState.items.unshift(item); crm2PjState.formMode = ''; crm2PjState.draft = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentRemoved = []; crm2PjState.message = 'Pessoa jurídica criada no estado mockado. Nenhum dado foi persistido.'; navigatePj(item.id);
+    crm2PjState.items.unshift(item); crm2PjState.formMode = ''; crm2PjState.draft = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; crm2PjState.message = 'Pessoa jurídica criada no estado mockado. Nenhum dado foi persistido.'; navigatePj(item.id);
   }
 });
 

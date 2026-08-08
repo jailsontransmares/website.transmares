@@ -1,8 +1,8 @@
 ﻿// CRM 2.0 / Pessoas Físicas — bundle oficial carregado pelo app principal.
 
-// --- src/hub/crm2Phase2.part1.js ---
-import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
+// --- Estado e renderização da Fase 2 ---
 import { portalHubFormFooter, removeHubFormFooterPortals } from './formFooterPortal.js';
+import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
 
 const CRM2_PF_ROUTE_CODES = new Set(['200', '201']);
 
@@ -136,12 +136,14 @@ const crm2PfState = {
   formMode: '',
   inlineEditing: false,
   draft: {},
-  draftAttachments: [],
   attachmentDraft: [],
-  attachmentConfirm: null,
+  attachmentSelectionDraft: [],
+  attachmentRemoved: [],
   attachmentSelectionMode: false,
   selectedAttachmentKeys: [],
   attachmentView: 'list',
+  attachmentInlineEditKey: '',
+  attachmentInlineDraft: null,
   errors: {},
   changedFields: [],
   cpfGate: { value: '', status: '', personId: '', message: '' },
@@ -160,8 +162,9 @@ function crm2PfHasUnsavedChangesCrm2() {
     return crm2PfState.inlineEditing
       && route.view === 'detail'
       && (crm2PfState.changedFields.length > 0
-        || crm2PfState.draftAttachments.length > 0
-        || crm2PfState.attachmentDraft.length > 0);
+        || crm2PfState.attachmentDraft.length > 0
+        || crm2PfState.attachmentSelectionDraft.length > 0
+        || crm2PfState.attachmentRemoved.length > 0);
   }
   return false;
 }
@@ -312,6 +315,9 @@ function navigateCrm2Route(code, suffix = '') {
   const normalized = String(code || '').trim();
   if (!CRM2_PF_ROUTE_CODES.has(normalized)) return;
   if (!crm2PfRequestLeaveCrm2(() => navigateCrm2Route(code, suffix))) return;
+  const suffixParts = String(suffix || '').split('/').filter(Boolean);
+  const isPfEditRoute = normalized === '201' && suffixParts[1] === 'editar';
+  if (!isPfEditRoute) resetFormCrm2();
   window.history.pushState({}, '', routePathCrm2(normalized, suffix));
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.setTimeout(mountCrm2Phase2, 0);
@@ -370,7 +376,10 @@ function validateEmailCrm2(value = '') {
 
 function formatDateCrm2(value = '') {
   if (!value) return '—';
-  const date = new Date(value);
+  const dateOnly = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
 }
@@ -416,22 +425,6 @@ function personStatusLabelCrm2(person = {}) {
   return personStatusCrm2(person) === 'cliente ativo' ? 'Cliente ativo' : 'Cliente inativo';
 }
 
-function attachmentStatusCrm2(expiration = '') {
-  if (!expiration) return 'sem validade';
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const date = new Date(`${String(expiration).slice(0, 10)}T23:59:59`);
-  if (Number.isNaN(date.getTime())) return 'sem validade';
-  const days = Math.ceil((date - today) / 86400000);
-  if (days < 0) return 'vencido';
-  if (days <= 30) return 'vencendo';
-  return 'válido';
-}
-
-function attachmentStatusClassCrm2(status = '') {
-  return normalizeSearchCrm2(status).replace(/\s+/g, '-');
-}
-
 function registerTimelineCrm2(person, description, type = 'Atualização') {
   if (!person) return;
   const now = new Date().toISOString();
@@ -462,7 +455,7 @@ function paginatedPeopleCrm2(items) {
   return { totalPages, pageItems: items.slice(start, start + crm2PfState.perPage) };
 }
 
-// --- src/hub/crm2Phase2.part2.js ---
+// --- Dados cadastrais ---
 function renderListStateCrm2() {
   const state = crm2PfState.listState;
   if (state === 'normal') return '';
@@ -617,6 +610,67 @@ function renderPersonDataEditCrm2(person) {
   `;
 }
 
+function fileToAttachmentCrm2(file) {
+  const kind = getHubAttachmentPreviewKind({ nome: file?.name, tipo: file?.type });
+  return {
+    nome: file?.name || 'Arquivo selecionado',
+    tipo: file?.type || 'application/octet-stream',
+    validade: '',
+    incluidoEm: new Date().toISOString(),
+    arquivo: file || null,
+    previewUrl: kind !== 'unavailable' && file && typeof URL !== 'undefined' ? URL.createObjectURL(file) : ''
+  };
+}
+
+function renderFormAttachmentsCrm2(item, editing = false) {
+  const existing = (item?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index }))
+    .filter((attachment) => !crm2PfState.attachmentRemoved.includes(attachment.index));
+  const pending = crm2PfState.attachmentDraft.map((attachment, index) => ({ ...attachment, source: 'draft', index }));
+  return renderHubAttachmentManager({
+    id: 'crm2-pf-attachments-title',
+    className: 'crm2-pj-attachments',
+    attachments: [...existing, ...pending],
+    drafts: crm2PfState.attachmentSelectionDraft,
+    editing,
+    canView: crm2PfState.canView,
+    canInclude: crm2PfState.canEdit || (crm2PfState.formMode === 'create' && crm2PfState.canCreate),
+    canEdit: crm2PfState.canEdit,
+    canDelete: editing && crm2PfState.canDelete,
+    showBatchActions: crm2PfState.canView && !crm2PfState.attachmentSelectionDraft.length,
+    selectionMode: crm2PfState.attachmentSelectionMode,
+    selectedKeys: crm2PfState.selectedAttachmentKeys,
+    viewMode: crm2PfState.attachmentView,
+    inlineEditKey: crm2PfState.attachmentInlineEditKey,
+    inlineDraft: crm2PfState.attachmentInlineDraft,
+    formatDate: (value) => value ? formatDateCrm2(value) : 'Sem validade',
+    handlers: {
+      selectFiles: () => 'crm2PfSelectAttachment(this)',
+      openEdit: () => `crm2PfEdit('${escapeAttrCrm2(item?.id || crm2PfState.detailId)}')`,
+      cancelDraft: () => 'crm2PfCancelAttachmentDraft()',
+      confirmDraft: () => 'crm2PfConfirmAttachmentDraft()',
+      toggleSelection: () => 'crm2PfToggleAttachmentSelection()',
+      downloadAll: () => 'crm2PfDownloadAllAttachments()',
+      downloadSelected: () => 'crm2PfDownloadSelectedAttachments()',
+      deleteSelected: () => 'crm2PfDeleteSelectedAttachments()',
+      setView: (view) => `crm2PfSetAttachmentView('${escapeAttrCrm2(view)}')`,
+      updateDraftName: (index) => `crm2PfUpdateAttachmentDraft(${index}, 'nome', this.value)`,
+      updateDraftExpiration: (index) => `crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)`,
+      maskDraftDate: (index) => `crm2PfMaskAttachmentDraftDate(${index}, this)`,
+      pickDraftDate: (index) => `crm2PfSetAttachmentDraftDateFromPicker(${index}, this.value)`,
+      view: (source, index) => `crm2PfViewAttachment('${escapeAttrCrm2(source)}', ${index})`,
+      editInline: (source, index) => `crm2PfToggleAttachmentInlineEdit('${escapeAttrCrm2(source)}', ${index})`,
+      updateInlineName: () => "crm2PfUpdateAttachmentInlineDraft('nome', this.value)",
+      maskDate: () => 'crm2PfMaskAttachmentDate(this)',
+      pickDate: () => 'crm2PfSetAttachmentDateFromPicker(this.value)',
+      saveInlineEdit: () => 'crm2PfSaveAttachmentInlineEdit()',
+      cancelInlineEdit: () => 'crm2PfCancelAttachmentInlineEdit()',
+      download: (source, index) => `crm2PfDownloadAttachment('${escapeAttrCrm2(source)}', ${index})`,
+      delete: (source, index) => `crm2PfRemoveAttachment('${escapeAttrCrm2(source)}', ${index})`,
+      toggleSelected: (source, index) => `crm2PfToggleAttachmentSelected('${escapeAttrCrm2(source)}', ${index}, this.checked)`
+    }
+  });
+}
+
 function renderPersonSidebarCrm2(person) {
   const editing = crm2PfState.inlineEditing && crm2CanEdit();
   const values = { ...person, ...crm2PfState.draft };
@@ -634,7 +688,7 @@ function renderPersonSidebarCrm2(person) {
         <div class="crm2-pf-timeline-scroll">${renderTimelineCrm2(person)}</div>
         ${typeof window !== 'undefined' && typeof window.crm2TimelineRenderComposer === 'function' ? window.crm2TimelineRenderComposer(person) : ''}
       </section>
-      ${renderFormAttachmentsCrm2(person, editing, true, true)}
+      ${renderFormAttachmentsCrm2(person, editing)}
     </aside>
   `;
 }
@@ -674,6 +728,12 @@ function renderCompaniesCrm2(person) {
   return renderVinculosCrm2(person);
 }
 
+function openPfOrderCrm2(numero = '') {
+  const order = window.crm2PedidosGetMockItems?.().find((item) => item.numero === numero);
+  if (order?.id && typeof window.crm2PedidosOpenDetail === 'function') window.crm2PedidosOpenDetail(order.id);
+  else window.navegarParaCrm2PedidosRota?.();
+}
+
 function renderOrdersCrm2(person) {
   const orders = person.pedidos || [];
   const search = normalizeSearchCrm2(crm2PfState.orderSearch);
@@ -685,7 +745,7 @@ function renderOrdersCrm2(person) {
           const isPessoaFisica = String(order.tipoPessoa || order.pessoaTipo || '').toUpperCase() === 'PF' || /e-CPF/i.test(String(order.produto || ''));
           const relatedName = isPessoaFisica ? (order.pfNome || person.nome || 'Pessoa física não informada') : (order.pjRazaoSocial || order.empresa || 'Pessoa jurídica não informada');
           return `<tr>
-            <td><strong>${escapeHtmlCrm2(order.numero || '—')}</strong></td>
+            <td>${order.numero ? `<button class="crm2-pf-order-number-link" type="button" onclick="crm2PfOpenOrder('${escapeAttrCrm2(order.numero)}')"><strong>${escapeHtmlCrm2(order.numero)}</strong></button>` : '<strong>—</strong>'}</td>
             <td><strong>${escapeHtmlCrm2(order.produto || '—')}</strong><span class="crm2-pf-order-meta-pill">${escapeHtmlCrm2(relatedName)}</span></td>
             <td><span class="crm2-pf-order-meta-pill">${escapeHtmlCrm2(formatDateCrm2(order.vencimento))}</span></td>
           </tr>`;
@@ -774,7 +834,7 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
   `;
 }
 
-// --- src/hub/crm2Phase2.part3.js ---
+// --- Renderização do formulário ---
 function renderCpfVerificationCrm2(values = {}) {
   const gate = crm2PfState.cpfGate;
   const verified = gate.status === 'not-found';
@@ -827,87 +887,6 @@ function crm2PfPartnerOptions() {
   return options;
 }
 
-function splitAttachmentFileNameCrm2(name = '') {
-  const value = String(name || 'Arquivo selecionado');
-  const dot = value.lastIndexOf('.');
-  return dot > 0 ? { nome: value.slice(0, dot), extensao: value.slice(dot) } : { nome: value, extensao: '' };
-}
-
-function renderFormAttachmentsCrm2(person, editing, verified, enableBatchActions = false) {
-  const canManage = editing === true;
-  const existing = (person?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index }));
-  const pending = (crm2PfState.draftAttachments || []).map((attachment, index) => ({ ...attachment, source: 'draft', index }));
-  const attachments = [...existing, ...pending];
-  const attachmentKey = (attachment) => `${attachment.source}:${attachment.index}`;
-  const selectedKeys = new Set(crm2PfState.selectedAttachmentKeys || []);
-  const selectedCount = attachments.filter((attachment) => selectedKeys.has(attachmentKey(attachment))).length;
-  const allSelected = attachments.length > 0 && selectedCount === attachments.length;
-  const viewMode = enableBatchActions && crm2PfState.attachmentView === 'grid' ? 'grid' : 'list';
-  return `
-    <div class="hub-attachment-manager crm2-pf-attachments-block ${verified ? '' : 'is-disabled'}" data-attachment-manager="HubAttachmentManager">
-      <div class="hub-form-section-title crm2-pf-attachments-header">
-        <strong id="crm2-pf-attachments-title">Anexos</strong>
-        <div class="crm2-pf-attachments-header-actions">
-          ${enableBatchActions ? `
-            <div class="crm2-pf-attachment-batch-toolbar" role="toolbar" aria-label="Ações dos anexos">
-              <button class="icon-btn ${crm2PfState.attachmentSelectionMode ? 'is-active' : ''}" type="button" onclick="crm2PfToggleAttachmentSelection()" aria-label="${crm2PfState.attachmentSelectionMode ? 'Sair do modo de seleção' : 'Selecionar anexos'}" title="${crm2PfState.attachmentSelectionMode ? 'Sair da seleção' : 'Selecionar anexos'}" aria-pressed="${crm2PfState.attachmentSelectionMode ? 'true' : 'false'}"><i data-lucide="list-checks" aria-hidden="true"></i></button>
-              <button class="icon-btn" type="button" onclick="crm2PfDownloadAllAttachments()" aria-label="Baixar todos os anexos" title="Baixar todos os anexos" ${attachments.length ? '' : 'disabled'}><i data-lucide="download" aria-hidden="true"></i></button>
-              ${crm2PfState.attachmentSelectionMode && selectedCount ? '<button class="icon-btn" type="button" onclick="crm2PfDownloadSelectedAttachments()" aria-label="Baixar anexos selecionados" title="Baixar selecionados"><i data-lucide="download-cloud" aria-hidden="true"></i></button>' : ''}
-              <span class="crm2-pf-attachment-toolbar-divider" aria-hidden="true"></span>
-              <button class="icon-btn ${viewMode === 'list' ? 'is-active' : ''}" type="button" onclick="crm2PfSetAttachmentView('list')" aria-label="Exibir anexos em lista" title="Exibir em lista" aria-pressed="${viewMode === 'list' ? 'true' : 'false'}"><i data-lucide="list" aria-hidden="true"></i></button>
-              <button class="icon-btn ${viewMode === 'grid' ? 'is-active' : ''}" type="button" onclick="crm2PfSetAttachmentView('grid')" aria-label="Exibir anexos em miniaturas" title="Exibir em miniaturas" aria-pressed="${viewMode === 'grid' ? 'true' : 'false'}"><i data-lucide="layout-grid" aria-hidden="true"></i></button>
-              <span class="crm2-pf-attachment-toolbar-divider" aria-hidden="true"></span>
-            </div>
-            ${crm2PfState.attachmentSelectionMode && selectedCount ? `<span class="crm2-pf-attachment-selection-count" role="status">${selectedCount} selecionado(s)</span>` : ''}
-          ` : ''}
-          ${canManage && crm2PfState.attachmentDraft.length ? '<button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentDraft()">Cancelar</button><button class="save-btn" type="button" onclick="crm2PfConfirmAttachmentDraft()">Adicionar</button>' : ''}
-          ${canManage && crm2PfState.attachmentSelectionMode && selectedCount && crm2PfState.canDelete ? '<button class="icon-btn crm2-pf-batch-delete" type="button" onclick="crm2PfDeleteSelectedAttachments()" aria-label="Excluir anexos selecionados" title="Excluir selecionados"><i data-lucide="trash-2" aria-hidden="true"></i></button>' : ''}
-          ${canManage ? `<button class="icon-btn crm2-pf-include-attachment" type="button" onclick="crm2PfOpenAttachmentPicker()" aria-label="Incluir anexo" title="Incluir anexo" ${verified && crm2CanEdit() ? '' : 'disabled'}><i data-lucide="file-plus-2" aria-hidden="true"></i></button>` : ''}
-        </div>
-      </div>
-      <section class="crm2-pf-attachments-content" aria-labelledby="crm2-pf-attachments-title">
-        ${canManage ? `<input id="crm2-pf-attachment-picker" class="crm2-visually-hidden-input" type="file" multiple onchange="crm2PfSelectAttachment(this)" ${verified ? '' : 'disabled'}>` : ''}
-        ${canManage && attachments.length === 0 && !crm2PfState.attachmentDraft.length ? `<div class="crm2-pf-attachment-dropzone" role="button" tabindex="0" aria-label="Adicionar anexo por arrastar e soltar ou selecionar arquivo" ondragover="crm2PfDragOverAttachment(event)" ondragleave="crm2PfDragLeaveAttachment(event)" ondrop="crm2PfDropAttachment(event)" onkeydown="crm2PfDropzoneKeydown(event)">
-          <i data-lucide="upload-cloud" aria-hidden="true"></i>
-          <span>Arraste e solte um arquivo aqui</span>
-          <small>ou use o ícone de adicionar anexo</small>
-        </div>` : ''}
-      ${crm2PfState.attachmentDraft.length ? `
-        <div class="crm2-pf-attachment-editor" role="group" aria-label="Configurar anexo selecionado">
-          ${crm2PfState.attachmentDraft.map((draft, index) => `<div class="crm2-pf-attachment-draft-row">
-            <label><span>Nome do arquivo</span><span class="crm2-pf-attachment-name-input"><input class="config-input" type="text" value="${escapeAttrCrm2(draft.nome)}" oninput="crm2PfUpdateAttachmentDraft(${index}, 'nome', this.value)" ${index === 0 ? 'autofocus' : ''}><b aria-hidden="true">${escapeHtmlCrm2(draft.extensao)}</b></span></label>
-            <label><span>Fim de validade</span><input class="config-input" type="date" value="${escapeAttrCrm2(draft.validade)}" onchange="crm2PfUpdateAttachmentDraft(${index}, 'validade', this.value)"></label>
-          </div>`).join('')}
-        </div>
-      ` : ''}
-      ${attachments.length ? `<div class="crm2-pf-form-attachment-list ${viewMode === 'grid' ? 'is-grid-view' : ''}" aria-label="Anexos selecionados">${attachments.map((attachment) => `
-        ${(() => {
-          const confirming = crm2PfState.attachmentConfirm?.source === attachment.source
-            && crm2PfState.attachmentConfirm?.index === attachment.index;
-          const key = attachmentKey(attachment);
-          const selected = selectedKeys.has(key);
-          return `
-        <article class="crm2-pf-form-attachment-row ${confirming ? 'is-confirming' : ''} ${selected ? 'is-selected' : ''}">
-          ${enableBatchActions && crm2PfState.attachmentSelectionMode && !confirming ? `<label class="crm2-pf-attachment-select"><input type="checkbox" aria-label="Selecionar anexo ${escapeAttrCrm2(attachment.nome)}" ${selected ? 'checked' : ''} onchange="crm2PfToggleAttachmentSelected('${attachment.source}', ${attachment.index}, this.checked)"><span aria-hidden="true"></span></label>` : ''}
-          ${viewMode === 'grid' && !confirming ? crm2PfAttachmentPreviewCrm2(attachment) : ''}
-          ${viewMode === 'list' ? '<i data-lucide="archive" aria-hidden="true"></i>' : ''}
-          <div class="crm2-pf-attachment-name-cell">
-            ${confirming ? '<div class="crm2-pf-attachment-confirmation" role="alert"><span>Confirmar exclusão?</span><button class="secondary-btn" type="button" onclick="crm2PfConfirmAttachmentRemoval()">Sim</button><button class="secondary-btn" type="button" onclick="crm2PfCancelAttachmentRemoval()">Não</button></div>' : ''}
-            ${confirming ? '' : `<strong>${escapeHtmlCrm2(attachment.nome)}</strong>`}
-          </div>
-          ${confirming ? '' : `<span class="crm2-pf-attachment-validity-pill">${attachment.validade ? escapeHtmlCrm2(formatDateCrm2(attachment.validade)) : 'Sem validade'}</span>`}
-          <div class="crm2-pf-attachment-row-actions">
-            ${!confirming && crm2PfState.canView && viewMode === 'list' ? `<button class="icon-btn" type="button" aria-label="Visualizar anexo ${escapeAttrCrm2(attachment.nome)}" title="Visualizar" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}
-            ${!confirming && canManage && crm2PfState.canDelete ? `<button class="icon-btn" type="button" aria-label="Excluir anexo ${escapeAttrCrm2(attachment.nome)}" title="Excluir" onclick="crm2PfDeleteFormAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(attachment.nome)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
-          </div>
-        </article>
-          `;
-        })()}
-      `).join('')}</div>` : ''}
-      </section>
-    </div>
-  `;
-}
 
 function renderPersonFormCrm2() {
   const route = currentPfRouteCrm2();
@@ -960,7 +939,7 @@ function renderPersonFormCrm2() {
               ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
             </div>
           </section>
-          ${renderFormAttachmentsCrm2(person, editing, verified)}
+          ${renderFormAttachmentsCrm2(person, editing || crm2PfState.formMode === 'create')}
         </div>
 
         <div class="hub-form-screen-actions crm2-pf-form-footer" data-hub-form-footer>
@@ -1008,6 +987,7 @@ function renderIntoCurrentCrm2Target() {
   portalCrm2Toast();
   window.hubInicializarTabelasRedimensionaveis?.(target.parentElement || document);
   enhancePeopleTableCrm2();
+  window.requestAnimationFrame(() => { void hydrateHubPdfThumbnails(target.parentElement || document); });
   return true;
 }
 
@@ -1135,6 +1115,7 @@ function rerenderCrm2Phase2() {
   portalCrm2Toast();
   window.hubInicializarTabelasRedimensionaveis?.(target.parentElement || document);
   enhancePeopleTableCrm2();
+  window.requestAnimationFrame(() => { void hydrateHubPdfThumbnails(target.parentElement || document); });
 }
 
 function setMessageCrm2(message = '') {
@@ -1169,14 +1150,16 @@ function resetFormCrm2() {
   crm2PfState.companySearch = '';
   crm2PfState.orderSearch = '';
   crm2PfState.draft = {};
-  crm2PfState.draftAttachments = [];
+  crm2PfState.errors = {};
+  crm2PfState.changedFields = [];
   crm2PfState.attachmentDraft = [];
-  crm2PfState.attachmentConfirm = null;
+  crm2PfState.attachmentSelectionDraft = [];
+  crm2PfState.attachmentRemoved = [];
   crm2PfState.attachmentSelectionMode = false;
   crm2PfState.selectedAttachmentKeys = [];
   crm2PfState.attachmentView = 'list';
-  crm2PfState.errors = {};
-  crm2PfState.changedFields = [];
+  crm2PfState.attachmentInlineEditKey = '';
+  crm2PfState.attachmentInlineDraft = null;
   crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
 }
 
@@ -1185,6 +1168,13 @@ function openFormCrm2(mode, id = '') {
   crm2PfState.errors = {};
   crm2PfState.changedFields = [];
   crm2PfState.message = '';
+  crm2PfState.attachmentDraft = [];
+  crm2PfState.attachmentSelectionDraft = [];
+  crm2PfState.attachmentRemoved = [];
+  crm2PfState.attachmentSelectionMode = false;
+  crm2PfState.selectedAttachmentKeys = [];
+  crm2PfState.attachmentInlineEditKey = '';
+  crm2PfState.attachmentInlineDraft = null;
   if (mode === 'edit') {
     const person = getPersonCrm2(id || crm2PfState.detailId);
     if (!person) return;
@@ -1199,8 +1189,6 @@ function openFormCrm2(mode, id = '') {
     crm2PfState.formMode = 'create';
     crm2PfState.cpfGate = { value: '', status: '', personId: '', message: '' };
     crm2PfState.draft = {};
-    crm2PfState.draftAttachments = [];
-    crm2PfState.attachmentDraft = [];
     navigateCrm2Route('201', 'novo');
   }
 }
@@ -1228,103 +1216,6 @@ function describeChangesCrm2(original, updated) {
   });
 }
 
-function fileToAttachmentCrm2(file, expiration = '', customName = '') {
-  const type = file?.type || file?.name?.split('.').pop()?.toUpperCase() || 'Arquivo';
-  const previewable = getHubAttachmentPreviewKind({ nome: file?.name, tipo: type }) !== 'unavailable';
-  return {
-    nome: customName || file?.name || 'Arquivo selecionado',
-    arquivoOriginal: file?.name || '',
-    tipo,
-    arquivo: file || null,
-    previewUrl: previewable && file && typeof URL !== 'undefined' ? URL.createObjectURL(file) : '',
-    incluidoEm: new Date().toISOString(),
-    validade: expiration
-  };
-}
-
-function crm2PfAttachmentPreviewCrm2(attachment) {
-  const name = String(attachment?.nome || attachment?.arquivoOriginal || '');
-  const type = String(attachment?.tipo || '').toLowerCase();
-  const previewKind = getHubAttachmentPreviewKind(attachment);
-  const image = previewKind === 'image';
-  const pdf = previewKind === 'pdf';
-  const source = attachment?.previewUrl || attachment?.url || '';
-  const viewAction = `role="button" tabindex="0" aria-label="Visualizar anexo ${escapeAttrCrm2(name)}" onclick="crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(name)}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); crm2PfViewAttachment('${attachment.source}', ${attachment.index}, '${escapeAttrCrm2(name)}'); }"`;
-  if (image && source) return `<div class="crm2-pf-attachment-preview is-image" ${viewAction}><img src="${escapeAttrCrm2(source)}" alt="Prévia de ${escapeAttrCrm2(name)}" loading="lazy"></div>`;
-  if (pdf && source) return `<div class="crm2-pf-attachment-preview is-pdf" ${viewAction}><iframe src="${escapeAttrCrm2(source)}#toolbar=0&navpanes=0&scrollbar=0" title="Prévia de ${escapeAttrCrm2(name)}" loading="lazy"></iframe></div>`;
-  return `<div class="crm2-pf-attachment-preview is-unavailable" ${viewAction}><i data-lucide="file" aria-hidden="true"></i><span>Prévia indisponível</span></div>`;
-}
-
-function crm2PfAttachmentKey(source, index) {
-  return `${source}:${index}`;
-}
-
-function crm2PfAttachmentRecords(person, includeDraft = false) {
-  const existing = (person?.anexos || []).map((attachment, index) => ({ ...attachment, source: 'existing', index }));
-  const pending = includeDraft
-    ? (crm2PfState.draftAttachments || []).map((attachment, index) => ({ ...attachment, source: 'draft', index }))
-    : [];
-  return [...existing, ...pending];
-}
-
-function crm2PfAttachmentDownloadData(attachment) {
-  const metadata = [
-    `Nome: ${attachment?.nome || 'Anexo'}`,
-    `Tipo: ${attachment?.tipo || 'Arquivo'}`,
-    `Incluído em: ${attachment?.incluidoEm ? formatDateTimeCrm2(attachment.incluidoEm) : '—'}`,
-    `Validade: ${attachment?.validade ? formatDateCrm2(attachment.validade) : 'Sem validade'}`
-  ].join('\n');
-  return new TextEncoder().encode(metadata);
-}
-
-function crm2PfCrc32(bytes) {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function crm2PfZipBlob(entries) {
-  const encoder = new TextEncoder();
-  const chunks = [];
-  const centralDirectory = [];
-  let offset = 0;
-  const write32 = (value) => new Uint8Array([value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255]);
-  const write16 = (value) => new Uint8Array([value & 255, (value >>> 8) & 255]);
-  entries.forEach((entry) => {
-    const name = encoder.encode(entry.name);
-    const data = entry.data;
-    const crc = crm2PfCrc32(data);
-    const local = new Uint8Array(30 + name.length);
-    local.set([0x50, 0x4b, 0x03, 0x04], 0);
-    local.set(write16(20), 4); local.set(write16(0), 6); local.set(write16(0), 8); local.set(write16(0), 10);
-    local.set(write32(crc), 14); local.set(write32(data.length), 18); local.set(write32(data.length), 22);
-    local.set(write16(name.length), 26); local.set(write16(0), 28); local.set(name, 30);
-    chunks.push(local, data);
-    const directory = new Uint8Array(46 + name.length);
-    directory.set([0x50, 0x4b, 0x01, 0x02], 0);
-    directory.set(write16(20), 4); directory.set(write16(20), 6); directory.set(write16(0), 8); directory.set(write16(0), 10); directory.set(write16(0), 12); directory.set(write16(0), 14);
-    directory.set(write32(crc), 16); directory.set(write32(data.length), 20); directory.set(write32(data.length), 24);
-    directory.set(write16(name.length), 28); directory.set(write16(0), 30); directory.set(write16(0), 32); directory.set(write16(0), 34); directory.set(write16(0), 36); directory.set(write32(0), 38); directory.set(write32(offset), 42); directory.set(name, 46);
-    centralDirectory.push(directory);
-    offset += local.length + data.length;
-  });
-  const directorySize = centralDirectory.reduce((total, item) => total + item.length, 0);
-  const end = new Uint8Array(22);
-  end.set([0x50, 0x4b, 0x05, 0x06], 0); end.set(write16(0), 4); end.set(write16(0), 6); end.set(write16(entries.length), 8); end.set(write16(entries.length), 10); end.set(write32(directorySize), 12); end.set(write32(offset), 16); end.set(write16(0), 20);
-  return new Blob([...chunks, ...centralDirectory, end], { type: 'application/zip' });
-}
-
-function crm2PfTriggerDownload(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function savePersonCrm2(event) {
   event?.preventDefault();
@@ -1357,16 +1248,21 @@ function savePersonCrm2(event) {
   }
 
   const now = new Date().toISOString();
-  const pendingAttachments = [...(crm2PfState.draftAttachments || [])];
-
+  const pendingAttachments = [...crm2PfState.attachmentDraft];
+  const removedAttachmentCount = crm2PfState.attachmentRemoved.length;
   if (crm2PfState.formMode === 'edit') {
     if (!person) return;
     const changes = describeChangesCrm2(person, values);
+    person.anexos = (person.anexos || []).filter((attachment, index) => !crm2PfState.attachmentRemoved.includes(index));
+    person.anexos.push(...pendingAttachments);
     Object.assign(person, values, { atualizadoEm: now });
-    if (pendingAttachments.length) person.anexos = [...(person.anexos || []), ...pendingAttachments];
     if (changes.length) registerTimelineCrm2(person, `Dados atualizados. ${changes.join(' | ')}`, 'Atualização');
-    pendingAttachments.forEach((attachment) => registerTimelineCrm2(person, `Anexo incluído: ${attachment.nome}.`, 'Anexo'));
-    setMessageCrm2(changes.length || pendingAttachments.length
+    const attachmentChanges = [
+      ...pendingAttachments.map((attachment) => `Anexo incluído: ${attachment.nome}`),
+      ...(removedAttachmentCount ? [`${removedAttachmentCount} anexo(s) removido(s).`] : [])
+    ];
+    if (attachmentChanges.length) registerTimelineCrm2(person, attachmentChanges.join(' | '), 'Atualização');
+    setMessageCrm2(changes.length || attachmentChanges.length
       ? 'Pessoa física atualizada no estado mockado. Nenhum dado foi persistido.'
       : 'Nenhuma alteração foi identificada.');
   } else {
@@ -1381,7 +1277,6 @@ function savePersonCrm2(event) {
       pedidos: [],
       timeline: [{ data: now, usuario: 'Usuário atual', descricao: 'Cadastro criado.', tipo: 'Cadastro' }]
     };
-    pendingAttachments.forEach((attachment) => person.timeline.push({ data: now, usuario: 'Usuário atual', descricao: `Anexo incluído: ${attachment.nome}.`, tipo: 'Anexo' }));
     crm2PfState.items.unshift(person);
     crm2PfState.detailId = id;
     setMessageCrm2('Pessoa física criada no estado mockado. Nenhum dado foi persistido.');
@@ -1398,7 +1293,7 @@ function saveCurrentCrm2Tab() {
   savePersonCrm2();
 }
 
-// --- src/hub/crm2Phase2.part4.js ---
+// --- Ações do CRM 2.0 ---
 Object.assign(window, {
   crm2PfRender: renderCrm2Phase2,
   crm2PfRerender: rerenderCrm2Phase2,
@@ -1656,6 +1551,184 @@ Object.assign(window, {
     crm2PfState.changedFields = [...fields];
     input.closest('label')?.classList.toggle('is-changed', changed);
   },
+  crm2PfToggleAttachmentInlineEdit(source, index) {
+    if (!crm2PfState.canEdit) return;
+    const item = getPersonCrm2(crm2PfState.detailId || currentPfRouteCrm2().id);
+    const attachment = source === 'draft' ? crm2PfState.attachmentDraft[index] : item?.anexos?.[index];
+    if (!attachment) return;
+    crm2PfState.attachmentInlineEditKey = `${source}:${index}`;
+    const filename = String(attachment.nome || '');
+    const extensionMatch = filename.match(/(\.[^.]+)$/);
+    crm2PfState.attachmentInlineDraft = {
+      nome: extensionMatch ? filename.slice(0, -extensionMatch[1].length) : filename,
+      extensao: extensionMatch?.[1] || '',
+      validade: attachment.validade || '',
+      displayValidade: attachment.validade ? formatDateCrm2(attachment.validade) : ''
+    };
+    rerenderCrm2Phase2();
+  },
+  crm2PfUpdateAttachmentInlineDraft(field, value) {
+    if (!crm2PfState.attachmentInlineDraft || !['nome', 'validade'].includes(field)) return;
+    crm2PfState.attachmentInlineDraft[field] = String(value || '');
+  },
+  crm2PfUpdateAttachmentInlineDateDraft(value) {
+    if (!crm2PfState.attachmentInlineDraft) return;
+    const text = String(value || '').trim();
+    const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    crm2PfState.attachmentInlineDraft.displayValidade = text;
+    crm2PfState.attachmentInlineDraft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+  },
+  crm2PfMaskAttachmentDate(input) {
+    if (!input) return;
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+    const masked = digits.length > 4
+      ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+        : digits;
+    input.value = masked;
+    window.crm2PfUpdateAttachmentInlineDateDraft(masked);
+  },
+  crm2PfSetAttachmentDateFromPicker(value) {
+    if (!crm2PfState.attachmentInlineDraft) return;
+    crm2PfState.attachmentInlineDraft.validade = String(value || '');
+    crm2PfState.attachmentInlineDraft.displayValidade = formatDateCrm2(value);
+    rerenderCrm2Phase2();
+  },
+  crm2PfSaveAttachmentInlineEdit() {
+    const [source, index] = String(crm2PfState.attachmentInlineEditKey || ':').split(':');
+    const draft = crm2PfState.attachmentInlineDraft;
+    const item = getPersonCrm2(crm2PfState.detailId || currentPfRouteCrm2().id);
+    const attachment = source === 'draft' ? crm2PfState.attachmentDraft[Number(index)] : item?.anexos?.[Number(index)];
+    if (!attachment || !draft) return;
+    attachment.nome = `${draft.nome}${draft.extensao || ''}`;
+    attachment.validade = draft.validade;
+    if (item) item.atualizadoEm = new Date().toISOString();
+    crm2PfState.attachmentInlineEditKey = '';
+    crm2PfState.attachmentInlineDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfCancelAttachmentInlineEdit() {
+    crm2PfState.attachmentInlineEditKey = '';
+    crm2PfState.attachmentInlineDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfSelectAttachment(input) {
+    const allowed = crm2PfState.canEdit || (crm2PfState.formMode === 'create' && crm2PfState.canCreate);
+    if (!allowed) return;
+    const attachments = Array.from(input?.files || []).map(fileToAttachmentCrm2).map((attachment) => {
+      const match = String(attachment.nome || '').match(/(\.[^.]+)$/);
+      return { ...attachment, nome: match ? attachment.nome.slice(0, -match[1].length) : attachment.nome, extensao: match?.[1] || '' };
+    });
+    if (!attachments.length) return;
+    crm2PfState.attachmentSelectionDraft.push(...attachments);
+    rerenderCrm2Phase2();
+  },
+  crm2PfUpdateAttachmentDraft(index, field, value) {
+    const attachment = crm2PfState.attachmentSelectionDraft[index];
+    if (!attachment || !['nome', 'validade'].includes(field)) return;
+    attachment[field] = String(value || '');
+  },
+  crm2PfMaskAttachmentDraftDate(index, input) {
+    const draft = crm2PfState.attachmentSelectionDraft?.[index];
+    if (!draft || !input) return;
+    const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+    const masked = digits.length > 4
+      ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+      : digits.length > 2
+        ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+        : digits;
+    input.value = masked;
+    draft.displayValidade = masked;
+    const match = masked.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    draft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+  },
+  crm2PfSetAttachmentDraftDateFromPicker(index, value) {
+    const draft = crm2PfState.attachmentSelectionDraft?.[index];
+    if (!draft) return;
+    const iso = String(value || '');
+    draft.validade = iso;
+    draft.displayValidade = iso ? formatDateCrm2(iso) : '';
+    rerenderCrm2Phase2();
+  },
+  crm2PfRemoveAttachment(source, index) {
+    if (!crm2PfState.canDelete && crm2PfState.formMode === 'edit') return;
+    if (!window.confirm('Remover este anexo do estado mockado?')) return;
+    if (source === 'draft') crm2PfState.attachmentDraft.splice(Number(index), 1);
+    else if (!crm2PfState.attachmentRemoved.includes(Number(index))) crm2PfState.attachmentRemoved.push(Number(index));
+    rerenderCrm2Phase2();
+  },
+  crm2PfCancelAttachmentDraft() {
+    crm2PfState.attachmentSelectionDraft = [];
+    crm2PfState.attachmentInlineEditKey = '';
+    crm2PfState.attachmentInlineDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfConfirmAttachmentDraft() {
+    if (!crm2PfState.attachmentSelectionDraft.length) return;
+    crm2PfState.attachmentDraft.push(...crm2PfState.attachmentSelectionDraft.map((attachment) => ({
+      ...attachment,
+      nome: `${String(attachment.nome || '').trim()}${attachment.extensao || ''}`
+    })));
+    crm2PfState.attachmentSelectionDraft = [];
+    crm2PfState.attachmentInlineEditKey = '';
+    crm2PfState.attachmentInlineDraft = null;
+    rerenderCrm2Phase2();
+  },
+  crm2PfToggleAttachmentSelection() {
+    crm2PfState.attachmentSelectionMode = !crm2PfState.attachmentSelectionMode;
+    if (!crm2PfState.attachmentSelectionMode) crm2PfState.selectedAttachmentKeys = [];
+    rerenderCrm2Phase2();
+  },
+  crm2PfSetAttachmentView(view) {
+    if (!['list', 'grid'].includes(view)) return;
+    crm2PfState.attachmentView = view;
+    rerenderCrm2Phase2();
+  },
+  crm2PfToggleAttachmentSelected(source, index, checked) {
+    const key = `${source}:${index}`;
+    crm2PfState.selectedAttachmentKeys = checked
+      ? [...new Set([...crm2PfState.selectedAttachmentKeys, key])]
+      : crm2PfState.selectedAttachmentKeys.filter((item) => item !== key);
+    rerenderCrm2Phase2();
+  },
+  crm2PfDownloadAllAttachments() {
+    const item = getPersonCrm2(crm2PfState.detailId || currentPfRouteCrm2().id);
+    (item?.anexos || []).forEach((_, index) => window.crm2PfDownloadAttachment('existing', index));
+    crm2PfState.attachmentDraft.forEach((_, index) => window.crm2PfDownloadAttachment('draft', index));
+  },
+  crm2PfDownloadSelectedAttachments() {
+    crm2PfState.selectedAttachmentKeys.forEach((key) => { const [source, index] = key.split(':'); window.crm2PfDownloadAttachment(source, Number(index)); });
+  },
+  crm2PfDeleteSelectedAttachments() {
+    if (!crm2PfState.canDelete) return;
+    [...crm2PfState.selectedAttachmentKeys].forEach((key) => {
+      const [source, index] = key.split(':');
+      if (source === 'draft') crm2PfState.attachmentDraft.splice(Number(index), 1);
+      else if (!crm2PfState.attachmentRemoved.includes(Number(index))) crm2PfState.attachmentRemoved.push(Number(index));
+    });
+    crm2PfState.selectedAttachmentKeys = [];
+    rerenderCrm2Phase2();
+  },
+  crm2PfViewAttachment(source, index) {
+    const item = getPersonCrm2(crm2PfState.detailId || currentPfRouteCrm2().id);
+    const attachment = source === 'draft' ? crm2PfState.attachmentDraft[index] : item?.anexos?.[index];
+    if (attachment?.previewUrl || attachment?.url) window.open(attachment.previewUrl || attachment.url, '_blank', 'noopener,noreferrer');
+  },
+  crm2PfDownloadAttachment(source, index) {
+    const item = getPersonCrm2(crm2PfState.detailId || currentPfRouteCrm2().id);
+    const attachment = source === 'draft' ? crm2PfState.attachmentDraft[index] : item?.anexos?.[index];
+    if (!attachment) return;
+    const blob = typeof File !== 'undefined' && attachment.arquivo instanceof File
+      ? attachment.arquivo
+      : new Blob([`Nome: ${attachment.nome}\nTipo: ${attachment.tipo}\nValidade: ${attachment.validade || 'Sem validade'}`], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.nome || 'anexo-pf';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   crm2PfSave: savePersonCrm2,
   crm2PfSaveCurrentTab: saveCurrentCrm2Tab,
   crm2PfOpenDetail(id) {
@@ -1667,14 +1740,37 @@ Object.assign(window, {
     navigateCrm2Route('201', id);
   },
   crm2PfCloseDetail() {
+    crm2PfState.attachmentDraft = [];
+    crm2PfState.attachmentSelectionDraft = [];
+    crm2PfState.attachmentRemoved = [];
+    crm2PfState.attachmentSelectionMode = false;
+    crm2PfState.selectedAttachmentKeys = [];
+    crm2PfState.attachmentInlineEditKey = '';
+    crm2PfState.attachmentInlineDraft = null;
     crm2PfState.detailId = '';
     crm2PfState.detailTab = 'dados';
     setMessageCrm2('');
     navigateCrm2Route('201');
   },
   crm2PfEdit(id) {
+    if (window.event?.currentTarget?.classList.contains('crm2-pf-include-attachment')) {
+      window.crm2PfOpenAttachmentPicker(id);
+      return;
+    }
     openFormCrm2('edit', id);
   },
+  crm2PfOpenAttachmentPicker(id) {
+    if (!crm2PfState.canEdit || !getPersonCrm2(id)) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = () => {
+      window.crm2PfSelectAttachment(input);
+      input.remove();
+    };
+    input.click();
+  },
+  crm2PfOpenOrder: openPfOrderCrm2,
   crm2PfRemoveCompany(index) {
     if (!crm2PfState.inlineEditing || !crm2PfState.canDelete) return;
     const person = getPersonCrm2(crm2PfState.detailId);
@@ -1741,7 +1837,7 @@ Object.assign(window, {
     });
   },
   crm2PfIncludeCompany() {
-    if (!crm2CanEdit()) return;
+    if (!crm2CanCreate()) return;
     setMessageCrm2('A inclusão de vínculo PJ será disponibilizada na próxima etapa do CRM 2.0.');
     rerenderCrm2Phase2();
   },
@@ -1890,189 +1986,6 @@ Object.assign(window, {
     setMessageCrm2('Observação adicionada à timeline mockada.');
     rerenderCrm2Phase2();
   },
-  crm2PfOpenAttachmentPicker() {
-    if (!crm2CanEdit()) return;
-    document.getElementById('crm2-pf-attachment-picker')?.click();
-  },
-  crm2PfSelectAttachment(input) {
-    if (!crm2CanEdit()) return;
-    const files = Array.from(input?.files || []);
-    if (!files.length) return;
-    crm2PfState.attachmentDraft = files.map((file) => ({
-      file,
-      ...splitAttachmentFileNameCrm2(file.name),
-      validade: ''
-    }));
-    rerenderCrm2Phase2();
-  },
-  crm2PfDragOverAttachment(event) {
-    if (!crm2CanEdit()) return;
-    event.preventDefault();
-    event.currentTarget.classList.add('is-dragging');
-  },
-  crm2PfDragLeaveAttachment(event) {
-    event.currentTarget.classList.remove('is-dragging');
-  },
-  crm2PfDropAttachment(event) {
-    event.preventDefault();
-    event.currentTarget.classList.remove('is-dragging');
-    if (!crm2CanEdit()) return;
-    const files = Array.from(event.dataTransfer?.files || []);
-    if (!files.length) return;
-    crm2PfState.attachmentDraft = files.map((file) => ({
-      file,
-      ...splitAttachmentFileNameCrm2(file.name),
-      validade: ''
-    }));
-    rerenderCrm2Phase2();
-  },
-  crm2PfDropzoneKeydown(event) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    crm2PfOpenAttachmentPicker();
-  },
-  crm2PfUpdateAttachmentDraft(index, field, value) {
-    const draft = crm2PfState.attachmentDraft?.[index];
-    if (!draft || !['nome', 'validade'].includes(field)) return;
-    draft[field] = String(value || '');
-  },
-  crm2PfCancelAttachmentDraft() {
-    crm2PfState.attachmentDraft = [];
-    rerenderCrm2Phase2();
-  },
-  crm2PfConfirmAttachmentDraft() {
-    const drafts = crm2PfState.attachmentDraft || [];
-    if (!drafts.length || drafts.some((draft) => !draft.file || !String(draft.nome || '').trim())) return;
-    crm2PfState.draftAttachments = [
-      ...(crm2PfState.draftAttachments || []),
-      ...drafts.map((draft) => fileToAttachmentCrm2(draft.file, draft.validade, `${String(draft.nome).trim()}${draft.extensao || ''}`))
-    ];
-    crm2PfState.attachmentDraft = [];
-    rerenderCrm2Phase2();
-  },
-  crm2PfToggleAttachmentSelection() {
-    crm2PfState.attachmentSelectionMode = !crm2PfState.attachmentSelectionMode;
-    crm2PfState.selectedAttachmentKeys = [];
-    rerenderCrm2Phase2();
-  },
-  crm2PfSetAttachmentView(view) {
-    crm2PfState.attachmentView = view === 'grid' ? 'grid' : 'list';
-    rerenderCrm2Phase2();
-  },
-  crm2PfToggleAttachmentSelected(source, index, checked) {
-    const key = crm2PfAttachmentKey(source, index);
-    const keys = new Set(crm2PfState.selectedAttachmentKeys || []);
-    if (checked) keys.add(key); else keys.delete(key);
-    crm2PfState.selectedAttachmentKeys = [...keys];
-    rerenderCrm2Phase2();
-  },
-  crm2PfDownloadAttachments(attachments, archiveName = 'anexos-pessoa-fisica.zip') {
-    if (!crm2PfState.canView || !attachments.length) return;
-    const entries = attachments.map((attachment, index) => ({
-      name: `${String(attachment.nome || `anexo-${index + 1}`).replace(/[\\/:*?"<>|]/g, '-')}.txt`.replace(/\.txt\.txt$/i, '.txt'),
-      data: crm2PfAttachmentDownloadData(attachment)
-    }));
-    if (entries.length === 1) {
-      crm2PfTriggerDownload(new Blob([entries[0].data], { type: 'text/plain;charset=utf-8' }), entries[0].name);
-      setMessageCrm2('Download do anexo iniciado.');
-    } else {
-      crm2PfTriggerDownload(crm2PfZipBlob(entries), archiveName);
-      setMessageCrm2('Download dos anexos iniciado em formato ZIP.');
-    }
-    rerenderCrm2Phase2();
-  },
-  crm2PfDownloadAllAttachments() {
-    const person = getPersonCrm2(crm2PfState.detailId);
-    window.crm2PfDownloadAttachments(crm2PfAttachmentRecords(person, crm2PfState.inlineEditing), `anexos-${String(person?.nome || 'pessoa-fisica').toLowerCase().replace(/\s+/g, '-')}.zip`);
-  },
-  crm2PfDownloadSelectedAttachments() {
-    const person = getPersonCrm2(crm2PfState.detailId);
-    const attachments = crm2PfAttachmentRecords(person, crm2PfState.inlineEditing).filter((attachment) => (crm2PfState.selectedAttachmentKeys || []).includes(crm2PfAttachmentKey(attachment.source, attachment.index)));
-    window.crm2PfDownloadAttachments(attachments, `anexos-selecionados-${String(person?.nome || 'pessoa-fisica').toLowerCase().replace(/\s+/g, '-')}.zip`);
-  },
-  crm2PfDeleteSelectedAttachments() {
-    if (!crm2PfState.canDelete) return;
-    const person = getPersonCrm2(crm2PfState.detailId);
-    const selected = crm2PfAttachmentRecords(person, crm2PfState.inlineEditing).filter((attachment) => (crm2PfState.selectedAttachmentKeys || []).includes(crm2PfAttachmentKey(attachment.source, attachment.index)));
-    if (!selected.length) return;
-    crm2PfRequestConfirmationCrm2({
-      title: 'Excluir anexos selecionados?',
-      description: `${selected.length} anexo(s) serão removidos do cadastro. Deseja continuar?`,
-      confirmLabel: 'Excluir',
-      onConfirm: () => {
-        selected.filter((attachment) => attachment.source === 'existing').map((attachment) => attachment.index).sort((a, b) => b - a).forEach((index) => crm2PfRemoveAttachment(crm2PfState.detailId, index, false));
-        selected.filter((attachment) => attachment.source === 'draft').map((attachment) => attachment.index).sort((a, b) => b - a).forEach((index) => crm2PfState.draftAttachments.splice(index, 1));
-        crm2PfState.selectedAttachmentKeys = [];
-        crm2PfState.attachmentSelectionMode = false;
-        setMessageCrm2(`${selected.length} anexo(s) removido(s).`);
-        rerenderCrm2Phase2();
-      }
-    });
-  },
-  crm2PfViewAttachment(source, index, name) {
-    const attachment = source === 'draft'
-      ? crm2PfState.draftAttachments?.[index]
-      : getPersonCrm2(crm2PfState.detailId)?.anexos?.[index];
-    if (!attachment) return;
-    setMessageCrm2(`Visualização mockada: ${name}. Nenhum arquivo é aberto ou enviado.`);
-    rerenderCrm2Phase2();
-  },
-  crm2PfDeleteFormAttachment(source, index, name) {
-    if (!crm2PfState.canDelete) return;
-    crm2PfState.attachmentConfirm = { source, index, name };
-    rerenderCrm2Phase2();
-  },
-  crm2PfCancelAttachmentRemoval() {
-    crm2PfState.attachmentConfirm = null;
-    rerenderCrm2Phase2();
-  },
-  crm2PfConfirmAttachmentRemoval() {
-    const confirmation = crm2PfState.attachmentConfirm;
-    if (!confirmation || !crm2PfState.canDelete) return;
-    crm2PfState.attachmentConfirm = null;
-    if (confirmation.source === 'draft') {
-      crm2PfState.draftAttachments.splice(confirmation.index, 1);
-      setMessageCrm2('Anexo removido apenas do estado local.');
-      rerenderCrm2Phase2();
-      return;
-    }
-    crm2PfRemoveAttachment(crm2PfState.detailId, confirmation.index);
-  },
-  crm2PfAddAttachment(event, personId) {
-    event.preventDefault();
-    if (!crm2CanEdit()) return;
-    const person = getPersonCrm2(personId);
-    const file = event.currentTarget.elements.arquivo?.files?.[0];
-    const expiration = String(event.currentTarget.elements.validade?.value || '');
-    if (!person || !file) return;
-    const attachment = fileToAttachmentCrm2(file, expiration);
-    person.anexos = [...(person.anexos || []), attachment];
-    registerTimelineCrm2(person, `Anexo incluído: ${attachment.nome}.`, 'Anexo');
-    setMessageCrm2('Anexo incluído apenas no estado local.');
-    rerenderCrm2Phase2();
-  },
-  crm2PfReplaceAttachment(input, personId, index) {
-    if (!crm2CanEdit()) return;
-    const person = getPersonCrm2(personId);
-    const file = input?.files?.[0];
-    const previous = person?.anexos?.[index];
-    if (!person || !file || !previous) return;
-    const replacement = fileToAttachmentCrm2(file, previous.validade || '');
-    person.anexos.splice(index, 1, replacement);
-    registerTimelineCrm2(person, `Anexo substituído: ${previous.nome} → ${replacement.nome}.`, 'Anexo');
-    setMessageCrm2('Anexo substituído apenas no estado local.');
-    rerenderCrm2Phase2();
-  },
-  crm2PfRemoveAttachment(personId, index, rerender = true) {
-    if (!crm2PfState.canDelete) return;
-    const person = getPersonCrm2(personId);
-    const attachment = person?.anexos?.[index];
-    if (!person || !attachment) return;
-    person.anexos.splice(index, 1);
-    registerTimelineCrm2(person, `Anexo removido: ${attachment.nome}.`, 'Anexo');
-    setMessageCrm2('Anexo removido apenas do estado local.');
-    if (rerender) rerenderCrm2Phase2();
-  },
   crm2PfViewCompany(index) {
     const person = getPersonCrm2(crm2PfState.detailId);
     const company = person?.empresas?.[index];
@@ -2100,6 +2013,7 @@ function cancelarMontagemCrm2Agendada() {
   window.cancelAnimationFrame(crm2MountFrame);
   crm2MountFrame = 0;
 }
+
 
 function agendarMontagemCrm2() {
   cancelarMontagemCrm2Agendada();
@@ -2141,7 +2055,7 @@ window.addEventListener('beforeunload', (event) => {
 window.addEventListener('DOMContentLoaded', mountCrm2Phase2, { once: true });
 window.setTimeout(mountCrm2Phase2, 0);
 
-// --- src/hub/crm2Phase2Permissions.js ---
+// --- Permissões ---
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
 
@@ -2153,7 +2067,6 @@ import { hasPermission } from './services/permissionService.js';
 
   const originalRenderPeopleListCrm2 = renderPeopleListCrm2;
   const originalRenderPersonDetailCrm2 = renderPersonDetailCrm2;
-  const originalRenderPersonDataCrm2 = renderPersonDataCrm2;
 
   function injectRowPermissionsCrm2(html = '') {
     return String(html).replace(
@@ -2179,24 +2092,12 @@ import { hasPermission } from './services/permissionService.js';
     });
   }
 
-  function applyAttachmentPermissionsCrm2(html = '') {
-    if (crm2PfState.canDelete) return html;
-    return String(html).replace(
-      /<button class="secondary-btn" type="button" onclick="crm2PfRemoveAttachment\('[^']+',\s*\d+\)">Remover<\/button>/g,
-      ''
-    );
-  }
-
   renderPeopleListCrm2 = function renderPeopleListWithPermissionsCrm2() {
     return injectRowPermissionsCrm2(originalRenderPeopleListCrm2());
   };
 
   renderPersonDetailCrm2 = function renderPersonDetailWithPermissionsCrm2(person) {
     return injectDetailPermissionsCrm2(originalRenderPersonDetailCrm2(person), person || {});
-  };
-
-  renderPersonDataCrm2 = function renderPersonDataWithPermissionsCrm2(person) {
-    return applyAttachmentPermissionsCrm2(originalRenderPersonDataCrm2(person));
   };
 
   window.crm2PfDelete = function crm2PfDelete(personId) {
@@ -2217,12 +2118,6 @@ import { hasPermission } from './services/permissionService.js';
     resetFormCrm2();
     setMessageCrm2('Pessoa física excluída apenas do estado mockado. Nenhum dado foi persistido.');
     rerenderCrm2Phase2();
-  };
-
-  const originalRemoveAttachmentCrm2 = window.crm2PfRemoveAttachment;
-  window.crm2PfRemoveAttachment = function crm2PfRemoveAttachmentWithPermission(personId, index) {
-    if (!crm2PfState.canDelete) return;
-    return originalRemoveAttachmentCrm2?.(personId, index);
   };
 
   function renderPermissionDeniedCrm2() {
