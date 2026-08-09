@@ -95,6 +95,7 @@ function escapeHtmlPj(value = '') {
 function escapeAttrPj(value = '') {
   return escapeHtmlPj(value).replaceAll('`', '&#096;');
 }
+function upperPj(value = '') { return String(value ?? '').trim().toLocaleUpperCase('pt-BR'); }
 
 function normalizeSearchPj(value = '') {
   return String(value ?? '')
@@ -388,7 +389,7 @@ function renderListPj() {
         ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PjClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
       </div>
     </form>
-    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(item.razaoSocial)}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : `<div class="crm2-pessoas-state" role="status"><strong>${crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.'}</strong><span>${crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.'}</span><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
+    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(upperPj(item.razaoSocial))}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : `<div class="crm2-pessoas-state" role="status"><strong>${crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.'}</strong><span>${crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.'}</span><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
     ${renderPjFooter(`<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar</button>${crm2PjState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PjOpenCreate()">Incluir</button>' : ''}`)}
   </section>`;
 }
@@ -397,8 +398,9 @@ function renderFieldPj({ label, name, value = '', type = 'text', required = fals
   if (name === 'observacoes' && type === 'textarea') return renderPjObservationField(value, true, changed);
   const error = crm2PjState.errors[name] || '';
   const id = `crm2-pj-${name}`;
+  const displayValue = name === 'razaoSocial' ? upperPj(value) : value;
   const formAttribute = formId ? ` form="${escapeAttrPj(formId)}"` : '';
-  return `<label class="${wide ? 'is-wide ' : ''}${changed ? 'is-changed' : ''}"><span for="${id}">${label}${required ? ' *' : ''}</span>${type === 'textarea' ? `<textarea id="${id}" class="config-input" name="${name}" rows="4" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">${escapeHtmlPj(value)}</textarea>` : `<input id="${id}" class="config-input" type="${type}" name="${name}" value="${escapeAttrPj(value)}" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''} ${extra}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">`}${error ? `<small class="crm2-field-error">${escapeHtmlPj(error)}</small>` : ''}</label>`;
+  return `<label class="${wide ? 'is-wide ' : ''}${changed ? 'is-changed' : ''}"><span for="${id}">${label}${required ? ' *' : ''}</span>${type === 'textarea' ? `<textarea id="${id}" class="config-input" name="${name}" rows="4" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">${escapeHtmlPj(displayValue)}</textarea>` : `<input id="${id}" class="config-input" type="${type}" name="${name}" value="${escapeAttrPj(displayValue)}" placeholder="${escapeAttrPj(placeholder)}" ${required ? 'required' : ''} ${extra}${formAttribute} aria-invalid="${error ? 'true' : 'false'}" oninput="crm2PjTrackChange(this)">`}${error ? `<small class="crm2-field-error">${escapeHtmlPj(error)}</small>` : ''}</label>`;
 }
 
 function renderPjObservationField(value = '', editing = false, changed = false) {
@@ -489,7 +491,7 @@ function renderEditFormPj(item) {
 }
 
 function renderDetailPjLegacy(item) {
-  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button></div></div><div class="crm2-pf-view-form"><section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid"><label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label><label class="is-wide"><span>Endereço</span><textarea class="config-input" readonly>${escapeHtmlPj(item.endereco)}</textarea></label><label class="is-wide"><span>Observações</span><textarea class="config-input" readonly>${escapeHtmlPj(item.observacoes)}</textarea></label></div></section><div class="crm2-pf-summary-grid"><article><span>Status</span><strong>${escapeHtmlPj(item.status)}</strong></article></div></div></section>`;
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-detail-title">${escapeHtmlPj(upperPj(item.razaoSocial))}</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button></div></div><div class="crm2-pf-view-form"><section class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong></div><div class="hub-form-grid"><label><span>CNPJ</span><input class="config-input" value="${escapeAttrPj(maskCnpjPj(item.cnpj))}" readonly></label><label><span>Razão social</span><input class="config-input" value="${escapeAttrPj(item.razaoSocial)}" readonly></label><label class="is-wide"><span>Endereço</span><textarea class="config-input" readonly>${escapeHtmlPj(item.endereco)}</textarea></label><label class="is-wide"><span>Observações</span><textarea class="config-input" readonly>${escapeHtmlPj(item.observacoes)}</textarea></label></div></section><div class="crm2-pf-summary-grid"><article><span>Status</span><strong>${escapeHtmlPj(item.status)}</strong></article></div></div></section>`;
 }
 
 function renderPjDataTabBase(item, editing = false) {
@@ -556,12 +558,12 @@ function openPjOrder(numero = '') {
 }
 
 function renderDetailPjReadOnly(item) {
-  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div>${crm2PjState.message ? `<p class="admin-message" role="status">${escapeHtmlPj(crm2PjState.message)}</p>` : ''}<div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div><p>${escapeHtmlPj(item.observacoes || 'Nenhuma observação registrada.')}</p></section>${renderPjAttachments(item, false)}</aside></div>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button>${crm2PjState.canEdit ? `<button class="save-btn" type="button" onclick="crm2PjOpenEdit('${escapeAttrPj(item.id)}')">Editar</button>` : ''}`)}</section>`;
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(upperPj(item.razaoSocial))}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div>${crm2PjState.message ? `<p class="admin-message" role="status">${escapeHtmlPj(crm2PjState.message)}</p>` : ''}<div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div><p>${escapeHtmlPj(item.observacoes || 'Nenhuma observação registrada.')}</p></section>${renderPjAttachments(item, false)}</aside></div>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCloseDetail()">Voltar</button>${crm2PjState.canEdit ? `<button class="save-btn" type="button" onclick="crm2PjOpenEdit('${escapeAttrPj(item.id)}')">Editar</button>` : ''}`)}</section>`;
 }
 
 function renderDetailPjInlineEdit(item) {
   const values = { ...item, ...crm2PjState.draft };
-  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(item.razaoSocial)}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div><form id="crm2-pj-inline-form" onsubmit="crm2PjSave(event)" novalidate><div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item, true)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div>${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true, changed: String(values.observacoes || '') !== String(item.observacoes || '') })}</section>${renderPjAttachments(item, true)}</aside></div></form>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCancelInlineEdit()">Cancelar</button><button class="save-btn" type="submit" form="crm2-pj-inline-form">Salvar alterações</button>`)}</section>`;
+  return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-detail-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><div class="crm2-pf-detail-title-row"><h3 id="crm2-pj-detail-title">${escapeHtmlPj(upperPj(item.razaoSocial))}</h3>${renderAutomaticStatusPillPj(item)}</div></div></div><form id="crm2-pj-inline-form" onsubmit="crm2PjSave(event)" novalidate><div class="crm2-pf-detail-layout crm2-pj-detail-layout"><main class="crm2-pf-detail-main">${renderPjDataTabBase(item, true)}<div class="crm2-pf-related-sections"><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pessoas vinculadas</strong></div>${renderPjPeopleTab(item)}</section><section class="hub-form-section crm2-pf-detail-section"><div class="hub-form-section-title"><strong>Pedidos</strong></div>${renderPjOrdersTab(item)}</section></div></main><aside class="crm2-pf-detail-sidebar crm2-pj-detail-sidebar"><section class="hub-form-section crm2-pj-observations-section"><div class="hub-form-section-title"><strong>Observações</strong></div>${renderFieldPj({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true, changed: String(values.observacoes || '') !== String(item.observacoes || '') })}</section>${renderPjAttachments(item, true)}</aside></div></form>${renderPjFooter(`<button class="secondary-btn" type="button" onclick="crm2PjCancelInlineEdit()">Cancelar</button><button class="save-btn" type="submit" form="crm2-pj-inline-form">Salvar alterações</button>`)}</section>`;
 }
 
 function renderDetailPj(item) {
@@ -572,6 +574,7 @@ function renderDetailPj(item) {
 
 function renderPj() {
   permissionsPj();
+  crm2PjState.items.forEach((item) => { item.razaoSocial = upperPj(item.razaoSocial); });
   if (!crm2PjState.canView) return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true"><div class="crm2-pessoas-state is-error" role="alert"><strong>Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar Pessoas jurídicas.</span><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></section>`;
   const route = currentPjRoute();
   if (route.view === 'new') {
@@ -616,6 +619,13 @@ Object.assign(window, {
       razaoSocial: item.razaoSocial,
       nomeFantasia: item.nomeFantasia,
       endereco: item.endereco,
+      cep: item.cep,
+      logradouro: item.logradouro,
+      numero: item.numero,
+      complemento: item.complemento,
+      bairro: item.bairro,
+      cidadeEstado: item.cidadeEstado,
+      uf: item.uf,
       observacoes: item.observacoes,
       status: item.status,
       pessoasVinculadas: Array.isArray(item.pessoasVinculadas) ? item.pessoasVinculadas.map((pessoa) => ({ ...pessoa })) : [],
@@ -795,6 +805,7 @@ Object.assign(window, {
   },
   crm2PjTrackChange(input) {
     if (!input?.name) return;
+    if (input.name === 'razaoSocial') input.value = upperPj(input.value);
     crm2PjState.draft[input.name] = input.value;
     if (crm2PjState.formMode !== 'edit') return;
     const original = getPj(crm2PjState.detailId || currentPjRoute().id);
@@ -976,7 +987,7 @@ Object.assign(window, {
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     values.cnpj = String(values.cnpj || crm2PjState.cnpjGate.value || '').replace(/\D/g, '');
     values.cep = String(values.cep || '').replace(/\D/g, '');
-    values.razaoSocial = String(values.razaoSocial || '').trim();
+    values.razaoSocial = upperPj(values.razaoSocial);
     const errors = {};
     if (!validateCnpjPj(values.cnpj)) errors.cnpj = 'Informe um CNPJ válido.';
     if (crm2PjState.formMode === 'create' && crm2PjState.cnpjGate.status !== 'not-found') errors.cnpj = 'Consulte o CNPJ antes de salvar o cadastro.';

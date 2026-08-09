@@ -261,6 +261,10 @@ function crm2CanEdit() {
   return crm2PfState.canEdit === true;
 }
 
+function crm2CanComment() {
+  return crm2PfState.canView === true || crm2PfState.canEdit === true || crm2PfState.canDelete === true;
+}
+
 function crm2CanCreate() {
   return crm2PfState.canCreate === true || crm2CanEdit();
 }
@@ -277,6 +281,8 @@ function escapeHtmlCrm2(value = '') {
 function escapeAttrCrm2(value = '') {
   return escapeHtmlCrm2(value).replaceAll('`', '&#096;');
 }
+
+function upperCrm2(value = '') { return String(value ?? '').trim().toLocaleUpperCase('pt-BR'); }
 
 function normalizeSearchCrm2(value = '') {
   return String(value)
@@ -562,7 +568,7 @@ function renderPeopleListCrm2() {
 }
 
 function renderReadOnlyCrm2({ label, value = '', type = 'text', className = '' }) {
-  const safeValue = value ?? '';
+  const safeValue = label === 'Nome' ? upperCrm2(value) : value ?? '';
   return `<label class="crm2-pf-readonly-field ${escapeAttrCrm2(className)}"><span>${escapeHtmlCrm2(label)}</span>${type === 'textarea'
     ? `<textarea class="config-input" readonly aria-readonly="true">${escapeHtmlCrm2(safeValue)}</textarea>`
     : `<input class="config-input" type="${escapeAttrCrm2(type)}" value="${escapeAttrCrm2(safeValue)}" readonly aria-readonly="true">`}</label>`;
@@ -820,11 +826,12 @@ function formFieldCrm2({ label, name, value = '', type = 'text', required = fals
   const describedBy = error ? `aria-describedby="${errorId}"` : '';
   const invalid = error ? 'true' : 'false';
   const locked = crm2PfState.formMode === 'create' && crm2PfState.cpfGate.status !== 'not-found';
+  const displayValue = name === 'nome' ? upperCrm2(value) : value;
   const input = type === 'textarea'
     ? `<div id="${fieldId}" class="config-input crm2-pf-rich-text-target" contenteditable="${locked ? 'false' : 'true'}" role="textbox" aria-multiline="true" data-field-name="${escapeAttrCrm2(name)}" data-value-target="${fieldId}-value" data-placeholder="${escapeAttrCrm2(placeholder)}" aria-invalid="${invalid}" ${describedBy} oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)">${escapeHtmlCrm2(value)}</div><textarea id="${fieldId}-value" class="crm2-pf-rich-text-value" name="${name}" hidden ${formId ? `form="${formId}"` : ''}>${escapeHtmlCrm2(value)}</textarea>${renderTextFormatToolbarCrm2(name, `Formatação de ${label}`)}`
     : type === 'select'
       ? `<div class="hub-filter-combobox crm2-pf-select"><input id="${fieldId}" class="config-input crm2-pf-select-trigger" type="text" name="${name}" value="${escapeAttrCrm2(value)}" data-dropdown-menu-id="${fieldId}-menu" data-selected-value="${escapeAttrCrm2(value)}" aria-label="${escapeAttrCrm2(label)}" aria-controls="${fieldId}-menu" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${locked ? 'disabled' : ''} onfocus="crm2PfToggleDropdown(this, event)" oninput="crm2PfFilterDropdown(this, event)" onkeydown="crm2PfDropdownKeydown(event, this)"><span class="hub-filter-chevron crm2-pf-select-chevron" aria-hidden="true">⌄</span><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${escapeAttrCrm2(label)}" data-dropdown-input-id="${fieldId}" hidden>${options.map((option) => `<button class="hub-filter-dropdown-option ${String(option.value) === String(value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${String(option.value) === String(value) ? 'true' : 'false'}" data-value="${escapeAttrCrm2(option.value)}" data-label="${escapeAttrCrm2(option.label)}" onclick="crm2PfSelectDropdown(this)" onkeydown="crm2PfDropdownKeydown(event, this)">${escapeHtmlCrm2(option.label)}</button>`).join('')}</div></div>`
-    : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(value)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
+    : `<input id="${fieldId}" class="config-input" type="${type}" name="${name}" autocomplete="off" value="${escapeAttrCrm2(displayValue)}" placeholder="${escapeAttrCrm2(placeholder)}" ${required ? 'required' : ''} ${extra} aria-invalid="${invalid}" ${describedBy} ${formId ? `form="${formId}"` : ''} ${locked ? 'disabled' : ''} oninput="crm2PfTrackChange(this)">`;
   return `
     <label class="${wide ? 'is-wide' : ''} ${changed} ${className}">
       <span for="${fieldId}">${escapeHtmlCrm2(label)}${required ? ' *' : ''}</span>
@@ -953,6 +960,7 @@ function renderPersonFormCrm2() {
 }
 
 function renderCrm2Phase2() {
+  crm2PfState.items.forEach((item) => { item.nome = upperCrm2(item.nome); });
   const route = currentPfRouteCrm2();
   if (route.view === 'new') {
     crm2PfState.formMode = 'create';
@@ -1225,7 +1233,7 @@ function savePersonCrm2(event) {
   const values = form
     ? Object.fromEntries(new FormData(form).entries())
     : { ...(person || {}), ...crm2PfState.draft };
-  values.nome = String(values.nome || '').trim();
+  values.nome = upperCrm2(values.nome);
   values.cpf = String(values.cpf || crm2PfState.cpfGate.value || '').replace(/\D/g, '');
   values.telefone = maskPhoneCrm2(values.telefone || '');
   values.email = String(values.email || '').trim();
@@ -1541,6 +1549,7 @@ Object.assign(window, {
   },
   crm2PfTrackChange(input) {
     if (!input?.name) return;
+    if (input.name === 'nome') input.value = upperCrm2(input.value);
     crm2PfState.draft[input.name] = input.value;
     if (crm2PfState.formMode !== 'edit') return;
     const person = getPersonCrm2(crm2PfState.detailId);
@@ -1977,11 +1986,16 @@ Object.assign(window, {
     rerenderCrm2Phase2();
   },
   crm2PfAddNote(event, personId) {
-    event.preventDefault();
-    if (!crm2CanEdit()) return;
+    event?.preventDefault();
+    if (!crm2CanComment()) return;
     const person = getPersonCrm2(personId);
-    const note = String(new FormData(event.currentTarget).get('observacao') || '').trim();
+    const trigger = event?.currentTarget;
+    const form = trigger?.closest('form') || trigger;
+    const editor = form?.querySelector('.crm2-pf-rich-text-target');
+    const note = String(editor?.innerText || form?.querySelector('textarea[name="observacao"]')?.value || '').trim();
     if (!person || !note) return;
+    const target = form?.querySelector('textarea[name="observacao"]');
+    if (target) target.value = note;
     registerTimelineCrm2(person, `Observação interna adicionada: ${note}`, 'Observação interna');
     setMessageCrm2('Observação adicionada à timeline mockada.');
     rerenderCrm2Phase2();

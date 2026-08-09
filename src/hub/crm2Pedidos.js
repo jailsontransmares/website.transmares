@@ -394,7 +394,7 @@ Object.assign(window, {
       pfNome: payload.pfNome, pfCpf: String(payload.pfCpf).replace(/\D/g, ''),
       pjRazaoSocial: payload.pjRazaoSocial || '', pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''),
       produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: 'Em cadastro',
-      origem: 'Conversão de oportunidade', dataSolicitacao: now.slice(0, 10), vencimento: payload.vencimento || now.slice(0, 10),
+      origem: 'Conversão de oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
       financeiro: 'Pendente', valor: payload.valor || '0,00', pendencias: 0, atualizadoEm: now,
       oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '',
       historico: [{ data: now, usuario: payload.responsavel || 'Usuário mockado', tipo: 'Conversão', descricao: 'Pedido gerado pela conversão da oportunidade.', alteracoes: `Origem: Conversão de oportunidade · Item: ${payload.produto}` }]

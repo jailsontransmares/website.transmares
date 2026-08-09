@@ -7507,9 +7507,7 @@ function renderCrm2Phase1() {
             <span class="crm2-phase1-roadmap-code">${escapeHtml(codigo)}</span>
             <div>
               <strong>${escapeHtml(titulo)}</strong>
-              <p>${escapeHtml(descricao)}</p>
             </div>
-            <span class="crm2-phase1-roadmap-status">${rotasCrm2Disponiveis.includes(codigo) ? 'Disponível' : 'Planejada'}</span>
           </article>
         `).join('')}
       </div>
@@ -13395,6 +13393,7 @@ function aplicarIconesDataHub(root = document) {
   ];
 
   campos.forEach(campo => {
+    if (campo.classList.contains('crm2-opp-next-action-native-date')) return;
     if (campo.closest('.hub-date-input')) return;
 
     const wrapper = document.createElement('span');
@@ -14370,4 +14369,33 @@ document.addEventListener('keydown', event => {
     renderizarRotaAtual();
     window.requestAnimationFrame(() => document.querySelector('.hub-mobile-menu-toggle')?.focus());
   }
+});
+
+document.addEventListener('keydown', event => {
+  if (!event.ctrlKey || event.altKey || event.metaKey) return;
+  const match = window.location.pathname.match(/\/painel-ar\/(201|202|203|204|205|206)(?:\/|$)/);
+  if (!match) return;
+  const target = event.target;
+  const isTextEntry = target?.matches?.('input, textarea, select, [contenteditable="true"]');
+  const key = String(event.key || '').toLowerCase();
+  if (key === 'e') {
+    if (isTextEntry) return;
+    const editButtons = Array.from(document.querySelectorAll('button:not([disabled])')).filter((button) => {
+      if (button.offsetParent === null) return false;
+      const label = String(button.textContent || '').trim().toLowerCase();
+      return ['editar', 'editar cadastro', 'nova versão'].includes(label);
+    });
+    if (editButtons.length !== 1) return;
+    event.preventDefault();
+    editButtons[0].click();
+    return;
+  }
+  if (key !== 's') return;
+  const saveButtons = Array.from(document.querySelectorAll('button[type="submit"]:not([disabled]), button.save-btn:not([disabled])')).filter((button) => {
+    if (button.offsetParent === null) return false;
+    return String(button.textContent || '').trim().toLowerCase().startsWith('salvar');
+  });
+  if (saveButtons.length !== 1) return;
+  event.preventDefault();
+  saveButtons[0].click();
 });

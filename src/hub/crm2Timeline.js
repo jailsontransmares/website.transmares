@@ -43,7 +43,7 @@ function formatTimelineDate(value = '') {
 
 function canEditTimeline() {
   const permissions = obterContextoAcessoHub()?.permissions || {};
-  return hasPermission(permissions, 'painel_ar', 'update') || hasPermission(permissions, 'painel_ar', 'create');
+  return ['view', 'update', 'delete'].some((action) => hasPermission(permissions, 'painel_ar', action));
 }
 
 function resetTimelineState() {
@@ -250,7 +250,7 @@ function renderTimelineFormatToolbar() {
 
 function renderTimelineComposer(person) {
   if (!person || !canEditTimeline()) return '';
-  return `<form class="crm2-unified-timeline-composer" onsubmit="crm2PfAddNote(event, '${escapeTimelineAttr(person.id)}')"><label><div id="crm2-timeline-observacao" class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacao" data-value-target="crm2-timeline-observacao-value" data-placeholder="Registre uma interação mockada" aria-label="Observação interna" oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)"></div><textarea id="crm2-timeline-observacao-value" class="crm2-pf-rich-text-value" name="observacao" hidden></textarea></label><div class="crm2-unified-timeline-composer-actions">${renderTimelineFormatToolbar()}<button class="secondary-btn" type="submit">Comentar</button></div></form>`;
+  return `<form class="crm2-unified-timeline-composer"><label><div id="crm2-timeline-observacao" class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-field-name="observacao" data-value-target="crm2-timeline-observacao-value" data-placeholder="Registre uma interação mockada" aria-label="Observação interna" oninput="crm2PfSyncFormattedField(this)" onkeydown="crm2PfFormatKeydown(event, this)"></div><textarea id="crm2-timeline-observacao-value" class="crm2-pf-rich-text-value" name="observacao" hidden></textarea></label><div class="crm2-unified-timeline-composer-actions">${renderTimelineFormatToolbar()}<button class="secondary-btn" type="button" onmousedown="event.preventDefault()" onclick="crm2PfAddNote(event, '${escapeTimelineAttr(person.id)}')">Comentar</button></div></form>`;
 }
 
 function renderTimelineCounter(person) {
