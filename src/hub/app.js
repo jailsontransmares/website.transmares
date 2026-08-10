@@ -378,6 +378,8 @@ const state = {
   listaAc: '',
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
+  largurasColunasProdutos: null,
+  redimensionamentoColunaProdutos: null,
   modalVisualizacaoProdutos: false,
   mensagemProdutosLista: '',
   tipoMensagemProdutosLista: '',
@@ -629,6 +631,8 @@ document.addEventListener('DOMContentLoaded', iniciarApp);
 document.addEventListener('DOMContentLoaded', iniciarIconesLucideHub);
 document.addEventListener('DOMContentLoaded', iniciarTooltipsGlobais);
 document.addEventListener('click', fecharFiltrosListaAoClicarForaAr);
+document.addEventListener('pointerdown', iniciarRedimensionamentoColunaProdutosAr);
+document.addEventListener('keydown', ajustarColunaProdutosComTecladoAr);
 document.addEventListener('click', fecharDropdownCrmAr);
 document.addEventListener('click', fecharDropdownLogsAdmin);
 window.addEventListener('resize', reposicionarDropdownsCrmAr);
@@ -10347,13 +10351,13 @@ function renderTabelaProdutosAr() {
             open
           >
             <summary><span>${escapeHtml(grupo.nome)}</span></summary>
-            <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}">
+            <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}" style="${obterEstiloLargurasColunasProdutosAr()}">
               <div class="ar-products-row ar-products-head" role="row">
-                <span></span>
-                <span>Descrição do produto</span>
-                <span>$ Com Desconto</span>
-                <span>$ Padrão</span>
-                <span>SKU</span>
+                ${renderCabecalhoColunaProdutosAr('', 0)}
+                ${renderCabecalhoColunaProdutosAr('Descrição do produto', 1)}
+                ${renderCabecalhoColunaProdutosAr('$ Com Desconto', 2)}
+                ${renderCabecalhoColunaProdutosAr('$ Padrão', 3)}
+                ${renderCabecalhoColunaProdutosAr('SKU', 4)}
               </div>
               ${grupo.produtos.map(produto => {
                 const temPrecoComDesconto = parseMoedaAr(produto.preco_com_desconto) != null;
@@ -10418,6 +10422,104 @@ function renderTabelaProdutosAr() {
     </div>
   `;
 }
+
+const LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR = [42, 360, 114, 114, 150];
+const LARGURA_MINIMA_COLUNAS_PRODUTOS_AR = [42, 180, 90, 90, 90];
+const LARGURA_MAXIMA_COLUNA_PRODUTOS_AR = 560;
+const CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR = 'hub-ar-produtos-larguras-colunas';
+
+function obterLargurasColunasProdutosAr() {
+  if (Array.isArray(state.ar.largurasColunasProdutos)) return state.ar.largurasColunasProdutos;
+
+  try {
+    const salvas = JSON.parse(window.localStorage.getItem(CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR) || 'null');
+    if (Array.isArray(salvas) && salvas.length === LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR.length) {
+      state.ar.largurasColunasProdutos = salvas.map((largura, indice) => Math.min(
+        LARGURA_MAXIMA_COLUNA_PRODUTOS_AR,
+        Math.max(LARGURA_MINIMA_COLUNAS_PRODUTOS_AR[indice], Number(largura) || LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR[indice])
+      ));
+      return state.ar.largurasColunasProdutos;
+    }
+  } catch { /* preferências locais podem estar indisponíveis */ }
+
+  state.ar.largurasColunasProdutos = [...LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR];
+  return state.ar.largurasColunasProdutos;
+}
+
+function obterEstiloLargurasColunasProdutosAr() {
+  return `--ar-products-columns: ${obterLargurasColunasProdutosAr().map(largura => `${largura}px`).join(' ')};`;
+}
+
+function renderCabecalhoColunaProdutosAr(rotulo, indice) {
+  return `<span>${rotulo}<button class="ar-products-column-resizer" type="button" data-column-index="${indice}" aria-label="Redimensionar coluna${rotulo ? ` ${escapeAttr(rotulo)}` : ''}" title="Arraste para redimensionar a coluna"></button></span>`;
+}
+
+function salvarLargurasColunasProdutosAr() {
+  try {
+    window.localStorage.setItem(CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR, JSON.stringify(obterLargurasColunasProdutosAr()));
+  } catch { /* preferências locais podem estar indisponíveis */ }
+}
+
+function aplicarLargurasColunasProdutosAr() {
+  const estilo = obterEstiloLargurasColunasProdutosAr();
+  document.querySelectorAll('.ar-products-table').forEach(tabela => tabela.setAttribute('style', estilo));
+}
+
+function ajustarLarguraColunaProdutosAr(indice, largura) {
+  const larguras = obterLargurasColunasProdutosAr();
+  larguras[indice] = Math.min(
+    LARGURA_MAXIMA_COLUNA_PRODUTOS_AR,
+    Math.max(LARGURA_MINIMA_COLUNAS_PRODUTOS_AR[indice], largura)
+  );
+  aplicarLargurasColunasProdutosAr();
+}
+
+function iniciarRedimensionamentoColunaProdutosAr(event) {
+  const alca = event.target.closest?.('.ar-products-column-resizer');
+  if (!alca || !alca.closest('.ar-products-table')) return;
+
+  const indice = Number(alca.dataset.columnIndex);
+  const celula = alca.closest('.ar-products-head > span');
+  if (!Number.isInteger(indice) || !celula) return;
+
+  event.preventDefault();
+  state.ar.redimensionamentoColunaProdutos = {
+    indice,
+    inicioX: event.clientX,
+    inicioLargura: celula.getBoundingClientRect().width
+  };
+  document.body.classList.add('is-resizing-ar-products-column');
+  alca.setPointerCapture?.(event.pointerId);
+}
+
+function moverRedimensionamentoColunaProdutosAr(event) {
+  const redimensionamento = state.ar.redimensionamentoColunaProdutos;
+  if (!redimensionamento) return;
+  ajustarLarguraColunaProdutosAr(
+    redimensionamento.indice,
+    redimensionamento.inicioLargura + event.clientX - redimensionamento.inicioX
+  );
+}
+
+function finalizarRedimensionamentoColunaProdutosAr() {
+  if (!state.ar.redimensionamentoColunaProdutos) return;
+  salvarLargurasColunasProdutosAr();
+  state.ar.redimensionamentoColunaProdutos = null;
+  document.body.classList.remove('is-resizing-ar-products-column');
+}
+
+function ajustarColunaProdutosComTecladoAr(event) {
+  const alca = event.target.closest?.('.ar-products-column-resizer');
+  if (!alca || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  const indice = Number(alca.dataset.columnIndex);
+  ajustarLarguraColunaProdutosAr(indice, obterLargurasColunasProdutosAr()[indice] + (event.key === 'ArrowRight' ? 12 : -12));
+  salvarLargurasColunasProdutosAr();
+}
+
+document.addEventListener('pointermove', moverRedimensionamentoColunaProdutosAr);
+document.addEventListener('pointerup', finalizarRedimensionamentoColunaProdutosAr);
+document.addEventListener('pointercancel', finalizarRedimensionamentoColunaProdutosAr);
 
 function renderMensagemListaProdutosAr() {
   if (!state.ar.mensagemProdutosLista) return '';

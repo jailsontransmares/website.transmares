@@ -5963,7 +5963,7 @@ body.dark .ar-products-edit-feedback.is-error {
 
 .ar-products-row {
   display: grid;
-  grid-template-columns: 42px minmax(360px, 1fr) 114px 114px 150px;
+  grid-template-columns: var(--ar-products-columns, 42px 360px 114px 114px 150px);
 }
 
 .ar-products-row span {
@@ -5997,6 +5997,36 @@ body.dark .ar-products-edit-feedback.is-error {
   letter-spacing: 0.02em;
   text-align: center;
   text-transform: uppercase;
+}
+
+.ar-products-head > span {
+  position: relative;
+}
+
+.ar-products-column-resizer {
+  align-self: stretch;
+  background: transparent;
+  border: 0;
+  border-right: 3px solid transparent;
+  cursor: col-resize;
+  margin: -7px -10px -7px auto;
+  min-height: 100%;
+  padding: 0;
+  position: relative;
+  width: 12px;
+  z-index: 1;
+}
+
+.ar-products-column-resizer:hover,
+.ar-products-column-resizer:focus-visible {
+  border-right-color: color-mix(in srgb, var(--cor-principal) 75%, white);
+  outline: 0;
+}
+
+body.is-resizing-ar-products-column,
+body.is-resizing-ar-products-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .ar-products-head span:nth-child(3) {
