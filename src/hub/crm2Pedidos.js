@@ -2,23 +2,30 @@
 // Fases 7.1 a 7.7: shell, lista, filtros, estados, permissões, inclusão, detalhe e edição mockados.
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
+import { abrirConsultaCnpj } from './cnpjLookupModal.js';
 
 const CRM2_PEDIDOS_INITIAL_ITEMS = [
-  { id: 'pedido-001', numero: 'PED-2401', pfNome: 'Mariana Alves de Souza', pfCpf: '12345678909', pjRazaoSocial: 'Transmares Tecnologia Ltda.', pjCnpj: '04252011000110', produto: 'e-CNPJ A3', responsavel: 'Ana Martins', status: 'Ativo', origem: 'Indicação', dataSolicitacao: '2026-07-18', vencimento: '2027-07-18', financeiro: 'Pago', valor: '890,00', pendencias: 0, atualizadoEm: '2026-08-04T09:20:00' },
-  { id: 'pedido-002', numero: 'PED-2390', pfNome: 'Rafael Nogueira Lima', pfCpf: '98765432100', pjRazaoSocial: 'Transmares Tecnologia Ltda.', pjCnpj: '04252011000110', produto: 'e-CNPJ A1', responsavel: 'Carlos Oliveira', status: 'Em validação', origem: 'Site', dataSolicitacao: '2026-07-02', vencimento: '2027-02-10', financeiro: 'Pendente', valor: '540,00', pendencias: 2, atualizadoEm: '2026-08-02T11:08:00' },
+  { id: 'pedido-001', numero: 'PED-2401', pfNome: 'Mariana Alves de Souza', pfCpf: '12345678909', pjRazaoSocial: 'Transmares Tecnologia Ltda.', pjCnpj: '04252011000110', produto: 'e-CNPJ A3', responsavel: 'Ana Martins', status: 'Pedido emitido', origem: 'Indicação', dataSolicitacao: '2026-07-18', vencimento: '2027-07-18', financeiro: 'Pago', valor: '890,00', pendencias: 0, atualizadoEm: '2026-08-04T09:20:00' },
+  { id: 'pedido-002', numero: 'PED-2390', pfNome: 'Rafael Nogueira Lima', pfCpf: '98765432100', pjRazaoSocial: 'Transmares Tecnologia Ltda.', pjCnpj: '04252011000110', produto: 'e-CNPJ A1', responsavel: 'Carlos Oliveira', status: 'Aguardando validação', origem: 'Site', dataSolicitacao: '2026-07-02', vencimento: '2027-02-10', financeiro: 'Pendente', valor: '540,00', pendencias: 2, atualizadoEm: '2026-08-02T11:08:00' },
   { id: 'pedido-003', numero: 'PED-2389', pfNome: 'Camila Ferreira Rocha', pfCpf: '45678912364', pjRazaoSocial: 'Alves Consultoria Ltda.', pjCnpj: '12345678000195', produto: 'e-CPF A3', responsavel: 'Ana Martins', status: 'Vencido', origem: 'Parceiro', dataSolicitacao: '2025-12-20', vencimento: '2026-01-20', financeiro: 'Pendente', valor: '390,00', pendencias: 1, atualizadoEm: '2026-07-28T10:05:00' },
-  { id: 'pedido-004', numero: 'PED-2377', pfNome: 'Beatriz Costa Menezes', pfCpf: '36925814700', pjRazaoSocial: 'Norte Serviços Empresariais S.A.', pjCnpj: '27865757000102', produto: 'Renovação de certificado', responsavel: 'Fernanda Lima', status: 'Aguardando documentação', origem: 'Atendimento interno', dataSolicitacao: '2026-06-22', vencimento: '2026-09-22', financeiro: 'Pendente', valor: '480,00', pendencias: 3, atualizadoEm: '2026-07-31T14:16:00' },
+  { id: 'pedido-004', numero: 'PED-2377', pfNome: 'Beatriz Costa Menezes', pfCpf: '36925814700', pjRazaoSocial: 'Norte Serviços Empresariais S.A.', pjCnpj: '27865757000102', produto: 'Renovação de certificado', responsavel: 'Fernanda Lima', status: 'Em qualificação', origem: 'Atendimento interno', dataSolicitacao: '2026-06-22', vencimento: '2026-09-22', financeiro: 'Pendente', valor: '480,00', pendencias: 3, atualizadoEm: '2026-07-31T14:16:00' },
   { id: 'pedido-005', numero: 'PED-2366', pfNome: 'Lucas Henrique Barros', pfCpf: '85274196300', pjRazaoSocial: 'Maré Alta Comércio Ltda.', pjCnpj: '36711234000180', produto: 'e-CNPJ A3', responsavel: 'Fernanda Lima', status: 'Concluído', origem: 'Indicação', dataSolicitacao: '2026-05-21', vencimento: '2027-05-21', financeiro: 'Pago', valor: '890,00', pendencias: 0, atualizadoEm: '2026-06-01T08:45:00' },
   { id: 'pedido-006', numero: 'PED-2354', pfNome: 'Renata Cristina Alves', pfCpf: '15935748600', pjRazaoSocial: 'Maré Alta Comércio Ltda.', pjCnpj: '36711234000180', produto: 'e-CNPJ A1', responsavel: 'Carlos Oliveira', status: 'Cancelado', origem: 'Site', dataSolicitacao: '2026-04-10', vencimento: '2026-05-10', financeiro: 'Estornado', valor: '540,00', pendencias: 0, atualizadoEm: '2026-05-12T16:40:00' },
-  { id: 'pedido-007', numero: 'PED-2341', pfNome: 'Diego Martins da Silva', pfCpf: '25814736900', pjRazaoSocial: 'Litoral Logística e Transportes Ltda.', pjCnpj: '50123456000173', produto: 'e-CPF A3', responsavel: 'Ana Martins', status: 'Em cadastro', origem: 'Atendimento interno', dataSolicitacao: '2026-03-08', vencimento: '2026-09-08', financeiro: 'Pendente', valor: '390,00', pendencias: 1, atualizadoEm: '2026-05-02T13:15:00' },
+  { id: 'pedido-007', numero: 'PED-2341', pfNome: 'Diego Martins da Silva', pfCpf: '25814736900', pjRazaoSocial: 'Litoral Logística e Transportes Ltda.', pjCnpj: '50123456000173', produto: 'e-CPF A3', responsavel: 'Ana Martins', status: 'Novo', origem: 'Atendimento interno', dataSolicitacao: '2026-03-08', vencimento: '2026-09-08', financeiro: 'Pendente', valor: '390,00', pendencias: 1, atualizadoEm: '2026-05-02T13:15:00' },
   { id: 'pedido-008', numero: 'PED-2320', pfNome: 'João Pedro Ribeiro', pfCpf: '74185296300', pjRazaoSocial: '', pjCnpj: '', produto: 'Renovação de certificado', responsavel: 'Carlos Oliveira', status: 'Aguardando pagamento', origem: 'Parceiro', dataSolicitacao: '2026-02-14', vencimento: '2026-08-14', financeiro: 'Pendente', valor: '480,00', pendencias: 1, atualizadoEm: '2026-04-20T09:30:00' }
 ];
 
-const PEDIDO_STATUS_OPTIONS = ['Em cadastro', 'Aguardando documentação', 'Em validação', 'Aguardando pagamento', 'Ativo', 'Concluído', 'Cancelado', 'Vencido'];
+const PEDIDO_STAGE_OPTIONS = ['Novo', 'Em qualificação', 'Em Negociação', 'Aguardando pagamento', 'Aguardando validação', 'Pedido validado', 'Pedido emitido'];
+const PEDIDO_STATUS_OPTIONS = [...PEDIDO_STAGE_OPTIONS, 'Concluído', 'Cancelado', 'Vencido'];
 const PEDIDO_PRODUCT_OPTIONS = ['e-CPF A3', 'e-CNPJ A1', 'e-CNPJ A3', 'Renovação de certificado'];
 const PEDIDO_RESPONSIBLE_OPTIONS = ['Ana Martins', 'Carlos Oliveira', 'Fernanda Lima'];
 const PEDIDO_ORIGIN_OPTIONS = ['Atendimento interno', 'Indicação', 'Parceiro', 'Site'];
 const PEDIDO_FINANCIAL_OPTIONS = ['Pago', 'Pendente', 'Estornado'];
+
+function normalizePedidoStatus(value = '') {
+  const legacyMap = { 'Em cadastro': 'Novo', 'Aguardando documentação': 'Em qualificação', 'Em validação': 'Aguardando validação', Ativo: 'Pedido emitido' };
+  return legacyMap[value] || value || 'Novo';
+}
 
 const crm2PedidosState = {
   canView: false,
@@ -133,7 +140,7 @@ function pedidoDefaults(item = {}) {
     pjCnpj: item.pjCnpj || '',
     produto: item.produto || '',
     responsavel: item.responsavel || '',
-    status: item.status || 'Em cadastro',
+    status: normalizePedidoStatus(item.status),
     origem: item.origem || 'Atendimento interno',
     dataSolicitacao: item.dataSolicitacao || new Date().toISOString().slice(0, 10),
     vencimento: item.vencimento || '',
@@ -199,7 +206,7 @@ function renderStatePedidos() {
 }
 
 function renderPedidoMetrics() {
-  const active = crm2PedidosState.items.filter((item) => ['Ativo', 'Em validação', 'Em cadastro', 'Aguardando documentação', 'Aguardando pagamento'].includes(item.status)).length;
+  const active = crm2PedidosState.items.filter((item) => PEDIDO_STAGE_OPTIONS.includes(item.status)).length;
   const pending = crm2PedidosState.items.filter((item) => Number(item.pendencias) > 0).length;
   const overdue = crm2PedidosState.items.filter((item) => item.status === 'Vencido').length;
   return `<div class="crm2-pedidos-metrics" aria-label="Resumo dos pedidos"><article><small>Total</small><strong>${crm2PedidosState.items.length}</strong><span>Pedidos mockados</span></article><article><small>Em andamento</small><strong>${active}</strong><span>Sem encerramento</span></article><article><small>Com pendências</small><strong>${pending}</strong><span>Requerem atenção</span></article><article><small>Vencidos</small><strong>${overdue}</strong><span>Prazo ultrapassado</span></article></div>`;
@@ -230,13 +237,17 @@ function renderPedidosList() {
 function renderPedidoField({ label, name, value = '', type = 'text', required = false, wide = false, options = [], placeholder = '' }) {
   const error = crm2PedidosState.errors[name] || '';
   const id = `crm2-pedido-${name}`;
+  const automaticStatus = name === 'status' && value === 'Pedido emitido';
   const common = `id="${id}" class="config-input" name="${name}" ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}" ${error ? `aria-describedby="${id}-error"` : ''}`;
   const input = type === 'textarea'
     ? `<textarea ${common} rows="4" placeholder="${escapeAttrPedido(placeholder)}">${escapeHtmlPedido(value)}</textarea>`
     : type === 'select'
-      ? `<select ${common}><option value="">Selecione</option>${options.map((option) => `<option value="${escapeAttrPedido(option)}" ${String(value) === String(option) ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select>`
-      : `<input ${common} type="${type}" value="${escapeAttrPedido(value)}" placeholder="${escapeAttrPedido(placeholder)}">`;
-  return `<label class="${wide ? 'is-wide' : ''}"><span>${escapeHtmlPedido(label)}${required ? ' *' : ''}</span>${input}${error ? `<small id="${id}-error" class="crm2-field-error">${escapeHtmlPedido(error)}</small>` : ''}</label>`;
+      ? `<select ${common}${automaticStatus ? ' disabled aria-disabled="true"' : ''}><option value="">Selecione</option>${options.map((option) => `<option value="${escapeAttrPedido(option)}" ${String(value) === String(option) ? 'selected' : ''}${name === 'status' && option === 'Pedido emitido' ? ' disabled' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select>`
+      : name === 'pjCnpj'
+        ? `<span class="crm2-pedido-cnpj-control"><input ${common} type="text" inputmode="numeric" maxlength="18" value="${escapeAttrPedido(maskCnpjPedido(value))}" placeholder="${escapeAttrPedido(placeholder)}" oninput="this.value = window.crm2PedidosMaskCnpj(this.value)"><button class="icon-btn" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="window.crm2PedidosLookupCnpj(this)"><i data-lucide="search" aria-hidden="true"></i></button></span>`
+        : `<input ${common} type="${type}" value="${escapeAttrPedido(value)}" placeholder="${escapeAttrPedido(placeholder)}">`;
+  const field = `<label class="${wide ? 'is-wide ' : ''}${name === 'observacoes' ? 'crm2-shared-observation-field' : ''}"><span>${escapeHtmlPedido(label)}${required ? ' *' : ''}</span>${input}${error ? `<small id="${id}-error" class="crm2-field-error">${escapeHtmlPedido(error)}</small>` : ''}</label>`;
+  return name === 'observacoes' ? `${field}${renderPedidoAttachments(crm2PedidosState.draft)}` : field;
 }
 
 function renderPedidoForm() {
@@ -282,6 +293,17 @@ function renderPedidoRelatedLinks(item) {
   return `<section class="crm2-pedido-integrations" aria-labelledby="crm2-pedido-integrations-title"><div class="hub-form-section-title"><strong id="crm2-pedido-integrations-title">Integrações visuais do CRM 2.0</strong><span>Atalhos para os registros relacionados</span></div><div class="crm2-pedido-integrations-grid"><article><span>Pessoa Física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenPf('${escapeAttrPedido(pf?.id || '')}')">${pf ? 'Abrir cadastro PF' : 'Abrir lista PF'}</button></article><article><span>Pessoa Jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ vinculada')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Etapa opcional'}</small>${item.pjRazaoSocial ? `<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj('${escapeAttrPedido(pj?.id || '')}')">${pj ? 'Abrir cadastro PJ' : 'Abrir lista PJ'}</button>` : '<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj(\'\')">Incluir ou vincular PJ</button>'}</article><article><span>Fluxo sequencial</span><strong>PF → PJ → Pedido</strong><small>Retome o cadastro mockado por etapas.</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenFlow()">Abrir fluxo sequencial</button></article></div></section>`;
 }
 
+function renderPedidoAttachments(item = {}) {
+  const pf = findRelatedPfPedido(item);
+  const pj = item.pjRazaoSocial ? findRelatedPjPedido(item) : null;
+  const attachments = [
+    ...(pf?.anexos || []).map((attachment) => ({ ...attachment, origem: `PF · ${pf.nome}` })),
+    ...(pj?.anexos || []).map((attachment) => ({ ...attachment, origem: `PJ · ${pj.razaoSocial}` }))
+  ];
+
+  return `<section class="hub-attachment-container crm2-unified-attachments crm2-pedido-attachments-container" aria-labelledby="crm2-pedido-attachments-title"><div class="hub-form-section-title"><strong id="crm2-pedido-attachments-title">Anexos espelhados</strong><span>${attachments.length} anexo(s) relacionado(s)</span></div>${attachments.length ? `<div class="crm2-pedido-attachments-list">${attachments.map((attachment) => `<div><strong>${escapeHtmlPedido(attachment.nome || 'Anexo')}</strong><small>${escapeHtmlPedido(attachment.origem)}</small></div>`).join('')}</div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum anexo espelhado.</strong><span>Os anexos dos cadastros relacionados aparecerão aqui.</span></div>'}</section>`;
+}
+
 function renderPedidoDetail(item) {
   const tabs = [['dados', 'Dados do pedido'], ['pendencias', 'Pendências'], ['historico', 'Histórico']];
   const history = [...pedidoHistory(item)].sort((a, b) => new Date(b.data) - new Date(a.data));
@@ -290,7 +312,7 @@ function renderPedidoDetail(item) {
     ? `<div class="crm2-pedido-related-list">${pendingCount ? Array.from({ length: pendingCount }, (_, index) => `<article><strong>Pendência ${index + 1}</strong><span>Validação operacional mockada aguardando tratamento.</span><small>Responsável: ${escapeHtmlPedido(item.responsavel)}</small></article>`).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pendência.</strong><span>Este pedido não possui pendências mockadas abertas.</span></div>'}</div>`
     : crm2PedidosState.detailTab === 'historico'
       ? `<div class="crm2-pedido-timeline">${history.map(renderPedidoHistoryEvent).join('')}</div>`
-      : `<div class="crm2-pedido-detail-grid"><div><span>Número</span><strong>${escapeHtmlPedido(item.numero)}</strong></div><div><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></div><div><span>Pessoa física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span><strong>${escapeHtmlPedido(item.produto)}</strong></div><div><span>Responsável</span><strong>${escapeHtmlPedido(item.responsavel)}</strong></div><div><span>Solicitação</span><strong>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</strong></div><div><span>Vencimento</span><strong>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</strong></div><div><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong><small>R$ ${escapeHtmlPedido(item.valor)}</small></div><div><span>Pendências</span><strong>${pendingCount}</strong></div><div class="is-wide"><span>Observações</span><strong>${escapeHtmlPedido(item.observacoes || 'Nenhuma observação registrada.')}</strong></div></div>`;
+      : `<div class="crm2-pedido-detail-grid"><div><span>Número</span><strong>${escapeHtmlPedido(item.numero)}</strong></div><div><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></div><div><span>Pessoa física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span><strong>${escapeHtmlPedido(item.produto)}</strong></div><div><span>Responsável</span><strong>${escapeHtmlPedido(item.responsavel)}</strong></div><div><span>Solicitação</span><strong>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</strong></div><div><span>Vencimento</span><strong>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</strong></div><div><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong><small>R$ ${escapeHtmlPedido(item.valor)}</small></div><div><span>Pendências</span><strong>${pendingCount}</strong></div><div class="is-wide"><span>Observações</span><strong>${escapeHtmlPedido(item.observacoes || 'Nenhuma observação registrada.')}</strong></div></div>${renderPedidoAttachments(item)}`;
   const closed = isPedidoEncerrado(item);
   const actions = crm2PedidosState.canEdit && !closed ? `<button class="save-btn" type="button" onclick="crm2PedidosOpenEdit('${escapeAttrPedido(item.id)}')">Editar</button><button class="secondary-btn crm2-pedido-cancel-action" type="button" onclick="crm2PedidosCancel('${escapeAttrPedido(item.id)}')">Cancelar pedido</button><button class="secondary-btn crm2-pedido-close-action" type="button" onclick="crm2PedidosClose('${escapeAttrPedido(item.id)}')">Encerrar pedido</button>` : '';
   return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-detail-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-detail-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedido-detail-title">${escapeHtmlPedido(item.numero)}</h3><p class="crm2-pedidos-subtitle">${escapeHtmlPedido(item.pfNome)} · atualizado em ${escapeHtmlPedido(formatDateTimePedido(item.atualizadoEm))}</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosBackToList()">Voltar à lista</button>${actions}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${closed ? '<p class="crm2-pedido-closed-notice" role="status">Este pedido está encerrado e não pode mais ser editado. O histórico permanece disponível para consulta.</p>' : ''}<div class="crm2-pedidos-detail-summary"><article><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></article><article><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong></article><article><span>Pendências</span><strong>${pendingCount}</strong></article><article><span>Origem</span><strong>${escapeHtmlPedido(item.origem)}</strong></article></div><div class="module-tabs crm2-pedido-tabs" role="tablist" aria-label="Detalhes do pedido">${tabs.map(([id, label]) => `<button class="${crm2PedidosState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PedidosState.detailTab === id}" onclick="crm2PedidosSelectTab('${id}')">${label}</button>`).join('')}</div><div class="crm2-pedido-tab-content">${content}${crm2PedidosState.detailTab === 'dados' ? renderPedidoRelatedLinks(item) : ''}</div></section>`;
@@ -376,6 +398,19 @@ function changePedidoStatus(id, status, actionLabel) {
 }
 
 Object.assign(window, {
+  crm2PedidosMaskCnpj(value) { return maskCnpjPedido(value); },
+  crm2PedidosLookupCnpj(button) {
+    const form = button?.closest('form');
+    const input = form?.querySelector('[name="pjCnpj"]');
+    if (!input) return;
+    const existing = { cnpj: digitsPedido(input.value), razaoSocial: form.querySelector('[name="pjRazaoSocial"]')?.value || '' };
+    abrirConsultaCnpj({ value: input.value, existing, onConfirm: (data) => {
+      input.value = maskCnpjPedido(data.cnpj);
+      const company = form.querySelector('[name="pjRazaoSocial"]');
+      if (company) company.value = data.razaoSocial || '';
+      crm2PedidosState.draft = { ...crm2PedidosState.draft, pjCnpj: data.cnpj, pjRazaoSocial: data.razaoSocial || '' };
+    } });
+  },
   crm2PedidosRender: renderPedidos,
   crm2PedidosGetMockItems() {
     return crm2PedidosState.items.map((item) => ({
@@ -393,7 +428,7 @@ Object.assign(window, {
       numero: `PED-CONV-${String(crm2PedidosState.items.length + 1).padStart(3, '0')}`,
       pfNome: payload.pfNome, pfCpf: String(payload.pfCpf).replace(/\D/g, ''),
       pjRazaoSocial: payload.pjRazaoSocial || '', pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''),
-      produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: 'Em cadastro',
+      produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: payload.dataEmissao ? 'Pedido emitido' : 'Pedido validado',
       origem: 'Conversão de oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
       financeiro: 'Pendente', valor: payload.valor || '0,00', pendencias: 0, atualizadoEm: now,
       oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '',

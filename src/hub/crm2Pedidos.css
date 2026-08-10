@@ -309,6 +309,7 @@
 }
 
 .crm2-pedidos-status.is-ativo,
+.crm2-pedidos-status.is-pedido-emitido,
 .crm2-pedidos-financial.is-pago {
   background: #e8f6ee;
   border-color: #b7e4c9;
@@ -323,7 +324,8 @@
   color: #a13b42;
 }
 
-.crm2-pedidos-status.is-concluido {
+.crm2-pedidos-status.is-concluido,
+.crm2-pedidos-status.is-pedido-validado {
   background: #e9eefb;
   border-color: #c9d5f5;
   color: #36569a;
@@ -332,7 +334,11 @@
 .crm2-pedidos-status.is-em-validacao,
 .crm2-pedidos-status.is-em-cadastro,
 .crm2-pedidos-status.is-aguardando-documentacao,
+.crm2-pedidos-status.is-novo,
+.crm2-pedidos-status.is-em-qualificacao,
+.crm2-pedidos-status.is-em-negociacao,
 .crm2-pedidos-status.is-aguardando-pagamento,
+.crm2-pedidos-status.is-aguardando-validacao,
 .crm2-pedidos-financial.is-pendente {
   background: #fff5df;
   border-color: #f0d59b;

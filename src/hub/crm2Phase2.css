@@ -1441,16 +1441,24 @@
   min-width: 0;
 }
 
-.crm2-pf-notes-block > .hub-form-grid {
+.crm2-pf-observations-container {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
+  border-radius: var(--radius-card-compact, 14px);
+  background: #fff;
+}
+
+.crm2-pf-observations-container > .hub-form-grid {
   grid-template-columns: 1fr;
 }
 
-.crm2-pf-notes-block > .hub-form-grid,
-.crm2-pf-notes-block label {
+.crm2-pf-observations-container > .hub-form-grid,
+.crm2-pf-observations-container label {
   height: auto;
 }
 
-.crm2-pf-notes-block textarea {
+.crm2-pf-observations-container textarea {
   height: 80px;
   min-height: 80px;
   resize: vertical;
@@ -1464,6 +1472,120 @@
 
 .crm2-pf-attachments-block {
   min-height: 0;
+  min-width: 0;
+}
+
+.crm2-pf-attachments-container {
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
+  border-radius: var(--radius-card-compact, 14px);
+  background: #fff;
+}
+
+.hub-attachment-container {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
+  border-radius: var(--radius-card-compact, 14px);
+  background: #fff;
+}
+
+.crm2-unified-side-stack {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crm2-unified-observations,
+.crm2-unified-attachments {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.crm2-unified-observations {
+  background: #fff;
+}
+
+.crm2-pj-observations-section,
+.crm2-opp-sidebar-observations,
+.crm2-opp-form-observations,
+.crm2-pj-observation-field,
+.crm2-pf-readonly-field,
+.crm2-shared-observation-field,
+.crm2-pedido-form [name="observacoes"],
+.crm2-pf-observations-container textarea,
+.crm2-pf-observations-container .crm2-pf-rich-text-target,
+.crm2-pj-observation-field .crm2-pf-rich-text-target,
+.crm2-pf-readonly-field textarea,
+.crm2-opp-form-observations textarea,
+.crm2-opp-sidebar-observations textarea,
+.crm2-shared-observation-field textarea {
+  background: #fff;
+}
+
+.crm2-pedido-attachments-container {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.crm2-pedido-form .crm2-pedido-attachments-container {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.crm2-pedido-attachments-container small {
+  color: var(--texto-suave);
+  font-size: 11px;
+}
+
+.crm2-pj-observations-section,
+.crm2-opp-sidebar-observations,
+.crm2-opp-form-observations,
+.crm2-pedido-form .crm2-shared-observation-field,
+.crm2-pf-notes-block,
+.crm2-pf-notes-attachments-grid > .crm2-pf-notes-block {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
+  border-radius: var(--radius-card-compact, 14px);
+  background: #fff;
+}
+
+.crm2-pj-observations-section .crm2-pj-observation-field,
+.crm2-pf-notes-attachments-grid > .crm2-pf-notes-block .crm2-pj-observation-field,
+.crm2-pf-readonly-field,
+.crm2-pf-notes-block .crm2-pf-observations-container,
+.crm2-pedido-form .crm2-shared-observation-field .crm2-pedido-attachments-container {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.crm2-pf-notes-block .crm2-pf-observations-container {
+  border-radius: 0;
+}
+
+.crm2-opp-form-sidebar,
+.crm2-opp-detail-sidebar,
+.crm2-pj-detail-sidebar,
+.crm2-pf-detail-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.crm2-opp-form-sidebar .crm2-opp-form-observations,
+.crm2-opp-detail-sidebar .crm2-opp-sidebar-observations,
+.crm2-pj-detail-sidebar .crm2-pj-observations-section,
+.crm2-pf-detail-sidebar .crm2-pf-notes-block {
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -2120,9 +2242,9 @@
 }
 
 .crm2-pj-observations-section > p {
-  background: var(--color-surface-muted);
-  border: var(--border-subtle);
-  border-radius: var(--radius-input);
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 12%, var(--borda));
+  border-radius: var(--radius-card-compact, 14px);
   box-sizing: border-box;
   color: var(--texto);
   display: block;
@@ -2130,9 +2252,10 @@
   font-size: 13px;
   margin: 0;
   min-height: 80px;
-  padding: 8px 10px;
+  padding: 10px;
   white-space: pre-wrap;
 }
+
 
 .crm2-pf-attachment-confirmation .secondary-btn {
   font-size: 10px;
@@ -2401,6 +2524,12 @@
   z-index: 2147483000;
 }
 
+/* Modais do CRM 2 devem liberar a área inferior da tela para o diálogo. */
+body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop) [data-hub-form-footer],
+body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop) .crm2-cadastro-footer {
+  display: none !important;
+}
+
 @media (max-width: 700px) {
   .crm2-pf-cpf-verification > .hub-form-grid.crm2-pf-cpf-has-found-actions {
     grid-template-columns: minmax(0, 1fr);
@@ -2505,14 +2634,14 @@
   .crm2-pf-notes-attachments-grid > .hub-form-section,
   .crm2-pf-attachments-block,
   .crm2-pf-attachments-content,
-  .crm2-pf-notes-block > .hub-form-grid,
-  .crm2-pf-notes-block label,
-  .crm2-pf-notes-block textarea {
+  .crm2-pf-observations-container > .hub-form-grid,
+  .crm2-pf-observations-container label,
+  .crm2-pf-observations-container textarea {
     height: auto;
     min-height: 0;
   }
 
-  .crm2-pf-notes-block textarea {
+  .crm2-pf-observations-container textarea {
     min-height: 80px;
   }
 
@@ -2696,6 +2825,19 @@
   align-items: end;
   display: flex;
   margin: 0 0 6px;
+}
+
+.crm2-pj-title-row {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  min-width: min(100%, 620px);
+}
+
+.crm2-pj-title-row h2,
+.crm2-pj-title-row h3 {
+  margin: 0;
 }
 
 .crm2-pf-status-pill.is-empresa-ativa {

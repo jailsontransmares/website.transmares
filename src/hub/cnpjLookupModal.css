@@ -1,0 +1,27 @@
+.cnpj-lookup-backdrop { background: rgba(15, 23, 42, .48); display: grid; inset: 0; padding: 16px; place-items: center; position: fixed; z-index: 1200; }
+.cnpj-lookup-modal { background: var(--hub-surface, #fff); border: 1px solid var(--hub-border, #dbe3ef); border-radius: 12px; box-shadow: 0 20px 60px rgba(15, 23, 42, .22); max-height: min(620px, 88vh); overflow: auto; padding: 14px; width: min(640px, 100%); }
+.cnpj-lookup-modal > header, .cnpj-lookup-modal > footer { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
+.cnpj-lookup-modal h3 { font-size: 16px; margin: 2px 0 0; }
+.cnpj-lookup-modal footer { justify-content: flex-end; margin-top: 10px; }
+.cnpj-lookup-source { color: #64748b; font-size: 10px; margin-left: auto; white-space: nowrap; }
+.cnpj-lookup-section { border-top: 1px solid #e5eaf1; margin-top: 10px; padding-top: 9px; }
+.cnpj-lookup-section h4 { color: #172033; font-size: 12px; margin: 0 0 8px; }
+.cnpj-lookup-grid { display: grid; gap: 6px 10px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.cnpj-lookup-field { display: grid; gap: 3px; min-width: 0; }
+.cnpj-lookup-field-cnpj { grid-column: span 3; }
+.cnpj-lookup-field-razaoSocial { grid-column: span 6; }
+.cnpj-lookup-field-situacao { grid-column: span 3; }
+.cnpj-lookup-field-cep { grid-column: span 3; }
+.cnpj-lookup-field-endereco { grid-column: span 6; }
+.cnpj-lookup-field-numero { grid-column: span 3; }
+.cnpj-lookup-field-complemento { grid-column: span 4; }
+.cnpj-lookup-field-bairro { grid-column: span 4; }
+.cnpj-lookup-field-municipio { grid-column: span 3; }
+.cnpj-lookup-field-uf { grid-column: span 1; }
+.cnpj-lookup-field.is-changed { background: #fff7d6; border-radius: 7px; margin: -3px; padding: 3px; }
+.cnpj-lookup-field span { color: #64748b; font-size: 9px; font-weight: 700; line-height: 1.1; }
+.cnpj-lookup-field .config-input { background: #f5f7fa; border: 1px solid #dce3ec; border-radius: 8px; box-sizing: border-box; color: #263449; font-size: 11px; min-height: 31px; padding: 6px 8px; width: 100%; }
+.cnpj-lookup-field .config-input:focus { background: #fff; }
+.cnpj-lookup-field .config-input[readonly] { background: #eef2f6; }
+.cnpj-lookup-modal .admin-message { font-size: 11px; margin: 10px 0 0; padding: 8px 10px; }
+@media (max-width: 640px) { .cnpj-lookup-modal { padding: 14px; } .cnpj-lookup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cnpj-lookup-field { grid-column: span 1; } .cnpj-lookup-field-razaoSocial, .cnpj-lookup-field-endereco, .cnpj-lookup-field-complemento, .cnpj-lookup-field-bairro, .cnpj-lookup-field-municipio { grid-column: 1 / -1; } .cnpj-lookup-source { display: none; } }

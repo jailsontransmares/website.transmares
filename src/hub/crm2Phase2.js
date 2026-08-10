@@ -111,6 +111,27 @@ const CRM2_PF_INITIAL_ITEMS = [
     timeline: [
       { data: '2026-06-20T14:20:00', usuario: 'Sistema', descricao: 'Cadastro criado.', tipo: 'Cadastro' }
     ]
+  },
+  {
+    id: 'pf-004',
+    nome: 'Fernanda Martins de Castro',
+    cpf: '74125896300',
+    cei: '',
+    nascimento: '',
+    telefone: '(85) 99912-2200',
+    email: 'fernanda.castro@example.com',
+    origem: 'Site',
+    parceiro: '',
+    observacoes: 'Solicitou contato sobre certificado.',
+    cadastroEm: '2026-08-01T09:20:00',
+    atualizadoEm: '2026-08-04T10:15:00',
+    anexos: [],
+    empresas: [],
+    vinculos: [],
+    pedidos: [],
+    timeline: [
+      { data: '2026-08-01T09:20:00', usuario: 'Sistema', descricao: 'Cadastro criado a partir da migração do registro comercial.', tipo: 'Cadastro' }
+    ]
   }
 ];
 
@@ -634,7 +655,7 @@ function renderFormAttachmentsCrm2(item, editing = false) {
   const pending = crm2PfState.attachmentDraft.map((attachment, index) => ({ ...attachment, source: 'draft', index }));
   return renderHubAttachmentManager({
     id: 'crm2-pf-attachments-title',
-    className: 'crm2-pj-attachments',
+    className: 'crm2-pj-attachments crm2-pf-attachments-container',
     attachments: [...existing, ...pending],
     drafts: crm2PfState.attachmentSelectionDraft,
     editing,
@@ -681,12 +702,14 @@ function renderPersonSidebarCrm2(person) {
   const editing = crm2PfState.inlineEditing && crm2CanEdit();
   const values = { ...person, ...crm2PfState.draft };
   return `
-    <aside class="crm2-pf-detail-sidebar" aria-label="Informações complementares">
-      <section class="hub-form-section crm2-pf-notes-block" aria-label="Observações">
-        <div class="hub-form-grid">
-          ${editing
-            ? formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', formId: 'crm2-pf-inline-form' })
-            : renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
+    <aside class="crm2-pf-detail-sidebar crm2-unified-side-stack" aria-label="Informações complementares">
+      <section class="hub-form-section crm2-pf-notes-block crm2-unified-observations" aria-label="Observações">
+        <div class="crm2-pf-observations-container">
+          <div class="hub-form-grid">
+            ${editing
+              ? formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', formId: 'crm2-pf-inline-form' })
+              : renderReadOnlyCrm2({ label: 'Observações', value: person.observacoes, type: 'textarea' })}
+          </div>
         </div>
       </section>
       <section class="hub-form-section crm2-pf-history-section" aria-labelledby="crm2-pf-timeline-title">
@@ -941,9 +964,11 @@ function renderPersonFormCrm2() {
         </section>` : ''}
 
         <div class="crm2-pf-notes-attachments-grid">
-          <section class="hub-form-section crm2-pf-notes-block ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
-            <div class="hub-form-grid">
-              ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+          <section class="hub-form-section crm2-pf-notes-block crm2-unified-observations ${verified ? '' : 'is-disabled'}" aria-labelledby="crm2-pf-notes-title">
+            <div class="crm2-pf-observations-container">
+              <div class="hub-form-grid">
+                ${formFieldCrm2({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea' })}
+              </div>
             </div>
           </section>
           ${renderFormAttachmentsCrm2(person, editing || crm2PfState.formMode === 'create')}
@@ -1317,8 +1342,22 @@ Object.assign(window, {
       origem: item.origem,
       parceiro: item.parceiro,
       observacoes: item.observacoes,
+      anexos: Array.isArray(item.anexos) ? item.anexos.map((anexo) => ({ ...anexo })) : [],
       pedidos: Array.isArray(item.pedidos) ? item.pedidos.map((pedido) => ({ ...pedido })) : []
     }));
+  },
+  crm2PfMutateMockAttachments(id, payload = {}) {
+    const person = crm2PfState.items.find((item) => item.id === id);
+    if (!person) return false;
+    const action = payload.action || '';
+    const index = Number(payload.index);
+    person.anexos = Array.isArray(person.anexos) ? person.anexos : [];
+    if (action === 'add' && payload.attachment) person.anexos.push({ ...payload.attachment });
+    if (action === 'remove' && Number.isInteger(index) && index >= 0) person.anexos.splice(index, 1);
+    if (action === 'update' && Number.isInteger(index) && person.anexos[index]) person.anexos[index] = { ...person.anexos[index], ...payload.changes };
+    person.atualizadoEm = new Date().toISOString();
+    rerenderCrm2Phase2();
+    return true;
   },
   crm2PfCreateMockFromConversion(payload = {}) {
     if (!payload.nome || String(payload.cpf || '').replace(/\D/g, '').length !== 11) return null;
@@ -1329,7 +1368,7 @@ Object.assign(window, {
       cpf: String(payload.cpf).replace(/\D/g, ''),
       cei: '', nascimento: '', telefone: payload.telefone || '', email: payload.email || '',
       origem: 'Conversão de oportunidade', parceiro: '', observacoes: payload.observacoes || '',
-      cadastroEm: now, atualizadoEm: now, anexos: [], empresas: [], vinculos: [], pedidos: [],
+      cadastroEm: now, atualizadoEm: now, anexos: Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [], empresas: [], vinculos: [], pedidos: [],
       timeline: [{ data: now, usuario: payload.usuario || 'Usuário mockado', descricao: 'Pessoa Física criada pela conversão de oportunidade.', tipo: 'Conversão' }]
     };
     crm2PfState.items.unshift(item);
@@ -1449,8 +1488,10 @@ Object.assign(window, {
     const top = openAbove
       ? Math.max(viewportPadding, rect.top - menuHeight - gap)
       : Math.min(rect.bottom + gap, window.innerHeight - menuHeight - viewportPadding);
-    const centeredLeft = rect.left + ((rect.width - menuWidth) / 2);
-    const left = Math.min(Math.max(viewportPadding, centeredLeft), window.innerWidth - menuWidth - viewportPadding);
+    const preferredLeft = menu.dataset.dropdownAnchor === 'start' || trigger.dataset.dropdownAnchor === 'start'
+      ? rect.left
+      : rect.left + ((rect.width - menuWidth) / 2);
+    const left = Math.min(Math.max(viewportPadding, preferredLeft), window.innerWidth - menuWidth - viewportPadding);
     menu.style.left = `${left}px`;
     menu.style.top = `${Math.max(viewportPadding, top)}px`;
   },
@@ -1538,7 +1579,7 @@ Object.assign(window, {
     options[next].focus();
   },
   crm2PfCloseDropdowns(event) {
-    if (event?.target?.closest('.crm2-pf-select') && event.target.closest('.crm2-pf-select').contains(event.target)) return;
+    if (event?.target?.closest('.crm2-pf-select, .hub-filter-dropdown-menu')) return;
     document.querySelectorAll('.crm2-pf-select .hub-filter-dropdown-menu:not([hidden]), body > .hub-filter-dropdown-menu[data-dropdown-input-id]:not([hidden])').forEach((menu) => {
       menu.hidden = true;
       const trigger = document.getElementById(menu.dataset.dropdownInputId || '');

@@ -7,6 +7,8 @@ import './crm2Vinculos.js';
 import './crm2Vinculos.css';
 import './crm2Pedidos.js';
 import './crm2Pedidos.css';
+import './cnpjLookupModal.js';
+import './cnpjLookupModal.css';
 import './crm2Timeline.js';
 import './crm2Timeline.css';
 import './crm2Oportunidades.js';
@@ -42,6 +44,10 @@ import {
   Bold,
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Check,
   Circle,
   CircleHelp,
@@ -73,6 +79,7 @@ import {
   RemoveFormatting,
   Search,
   Settings,
+  Settings2,
   Sun,
   Trash2,
   RotateCcw,
@@ -92,6 +99,10 @@ const HUB_LUCIDE_ICONS = {
   Bold,
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Check,
   Circle,
   CircleAlert,
@@ -120,6 +131,7 @@ const HUB_LUCIDE_ICONS = {
   RemoveFormatting,
   Search,
   Settings,
+  Settings2,
   Sun,
   Trash2,
   Unlink,
@@ -137,6 +149,37 @@ const HUB_LUCIDE_ICONS = {
 
 const CRM_STATUS_OPTIONS = ['em prospecção', 'cliente ativo', 'finalizado', 'lead perdido'];
 const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
+
+// Mock visual da central de avisos. Substituir pela fonte de dados quando a integração for criada.
+const MOCK_CENTRAL_AVISOS = [
+  {
+    id: 'mock-aviso-1',
+    categoria: 'Comunicado',
+    titulo: 'Reunião geral da equipe',
+    descricao: 'A reunião mensal acontecerá na próxima sexta-feira, às 9h.',
+    quando: 'Hoje, 08:30',
+    prioridade: 'Alta',
+    lido: false
+  },
+  {
+    id: 'mock-aviso-2',
+    categoria: 'Operacional',
+    titulo: 'Atualização dos procedimentos internos',
+    descricao: 'Os procedimentos revisados já estão disponíveis para consulta.',
+    quando: 'Ontem, 16:10',
+    prioridade: 'Normal',
+    lido: false
+  },
+  {
+    id: 'mock-aviso-3',
+    categoria: 'Confraternização',
+    titulo: 'Aniversário da empresa',
+    descricao: 'Reserve a data para a confraternização da Transmares.',
+    quando: '05/08/2026',
+    prioridade: 'Normal',
+    lido: true
+  }
+];
 
 function sidebarMobileHub() {
   return typeof window !== 'undefined'
@@ -1989,8 +2032,8 @@ function selecionarDropdownLogsAdmin(opcao) {
 }
 
 function fecharDropdownLogsAdmin(event) {
-  if (event?.target?.closest?.('.hub-filter-combobox')) return;
-  document.querySelectorAll('.hub-filter-dropdown-menu').forEach(menu => {
+  if (event?.target?.closest?.('.hub-filter-combobox, .hub-filter-dropdown-menu')) return;
+  document.querySelectorAll('.hub-filter-dropdown-menu[data-trigger-id^="admin-log-filter-"]').forEach(menu => {
     menu.hidden = true;
     const trigger = document.getElementById(menu.dataset.triggerId || '');
     trigger?.setAttribute('aria-expanded', 'false');
@@ -7485,7 +7528,7 @@ function renderCrm2Phase1() {
     ['202', 'Pessoas jurídicas', 'Empresas, documentos e pessoas vinculadas.'],
     ['203', 'Vínculos', 'Relacionamentos entre PF e PJ, com histórico de inativação.'],
     ['204', 'Pedidos', 'Cadastro, detalhe, status, vencimento e histórico.'],
-    ['205', 'Oportunidades', 'Leads, negociações, itens e conversão.'],
+    ['205', 'Oportunidades', 'Negociações, itens e conversão.'],
     ['206', 'Configurações', 'Comunicação, automações e modelos mockados.']
   ];
 
@@ -12870,9 +12913,23 @@ function renderHubTopbar() {
         <p>${escapeHtml(subtitulo)}</p>
       </div>
 
-      ${renderHubNotificationBell()}
+      <div class="hub-header-notification-actions">
+        ${renderHubNotificationBell()}
+        ${renderHubInternalNoticesBell()}
+      </div>
       ${renderHubUserBox()}
     </header>
+  `;
+}
+
+function renderHubInternalNoticesBell() {
+  const naoLidos = MOCK_CENTRAL_AVISOS.filter(aviso => !aviso.lido).length;
+
+  return `
+    <button class="hub-notification-bell hub-internal-notices-bell" type="button" onclick="abrirPainelAvisosInternosHub()" aria-label="Avisos internos" title="Avisos internos">
+      <span aria-hidden="true">📣</span>
+      <span class="hub-notification-count" data-hub-internal-notice-count ${naoLidos ? '' : 'hidden'}>${naoLidos}</span>
+    </button>
   `;
 }
 
@@ -13257,9 +13314,11 @@ function fecharPainelFlutuanteSidebarHub() {
 
 let tooltipGlobalElemento = null;
 let tooltipGlobalAlvo = null;
+let tooltipGlobalPonto = null;
 
 function esconderTooltipGlobal() {
   tooltipGlobalAlvo = null;
+  tooltipGlobalPonto = null;
   tooltipGlobalElemento?.classList.remove('is-visible');
 }
 
@@ -13280,27 +13339,36 @@ function posicionarTooltipGlobal() {
   const altura = tooltip.offsetHeight;
 
   let left;
-  if (viewportLargura - rect.right >= largura + margem + limite) {
-    left = rect.right + margem;
-  } else if (rect.left >= largura + margem + limite) {
-    left = rect.left - largura - margem;
+  let top;
+  if (alvo.getAttribute('data-tooltip-anchor') === 'pointer' && tooltipGlobalPonto) {
+    left = tooltipGlobalPonto.x + margem;
+    if (left + largura > viewportLargura - limite) left = tooltipGlobalPonto.x - largura - margem;
+    top = tooltipGlobalPonto.y + margem;
+    if (top + altura > viewportAltura - limite) top = tooltipGlobalPonto.y - altura - margem;
   } else {
-    left = Math.max(limite, Math.min(rect.left, viewportLargura - largura - limite));
+    if (viewportLargura - rect.right >= largura + margem + limite) {
+      left = rect.right + margem;
+    } else if (rect.left >= largura + margem + limite) {
+      left = rect.left - largura - margem;
+    } else {
+      left = Math.max(limite, Math.min(rect.left, viewportLargura - largura - limite));
+    }
+
+    top = rect.top + (rect.height - altura) / 2;
+    if (top < limite) {
+      top = rect.bottom + margem;
+    } else if (top + altura > viewportAltura - limite) {
+      top = rect.top - altura - margem;
+    }
   }
 
-  let top = rect.top + (rect.height - altura) / 2;
-  if (top < limite) {
-    top = rect.bottom + margem;
-  } else if (top + altura > viewportAltura - limite) {
-    top = rect.top - altura - margem;
-  }
-
+  left = Math.max(limite, Math.min(left, viewportLargura - largura - limite));
   top = Math.max(limite, Math.min(top, viewportAltura - altura - limite));
   tooltip.style.left = `${Math.round(left)}px`;
   tooltip.style.top = `${Math.round(top)}px`;
 }
 
-function mostrarTooltipGlobal(alvo) {
+function mostrarTooltipGlobal(alvo, event = null) {
   if (alvo?.closest?.('.hub-sidebar:not(.is-collapsed)')) {
     esconderTooltipGlobal();
     return;
@@ -13317,6 +13385,9 @@ function mostrarTooltipGlobal(alvo) {
   }
 
   tooltipGlobalAlvo = alvo;
+  tooltipGlobalPonto = alvo.getAttribute('data-tooltip-anchor') === 'pointer' && Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)
+    ? { x: event.clientX, y: event.clientY }
+    : null;
   tooltipGlobalElemento.textContent = texto;
   tooltipGlobalElemento.classList.add('is-visible');
   posicionarTooltipGlobal();
@@ -13330,7 +13401,14 @@ function iniciarTooltipVisualGlobal() {
   document.addEventListener('pointerover', event => {
     const alvo = obterAlvoTooltipGlobal(event);
     if (!alvo || (event.relatedTarget && alvo.contains(event.relatedTarget))) return;
-    mostrarTooltipGlobal(alvo);
+    mostrarTooltipGlobal(alvo, event);
+  });
+
+  document.addEventListener('pointermove', event => {
+    const alvo = obterAlvoTooltipGlobal(event);
+    if (alvo !== tooltipGlobalAlvo || alvo?.getAttribute('data-tooltip-anchor') !== 'pointer') return;
+    tooltipGlobalPonto = { x: event.clientX, y: event.clientY };
+    posicionarTooltipGlobal();
   });
 
   document.addEventListener('pointerout', event => {
@@ -13393,7 +13471,7 @@ function aplicarIconesDataHub(root = document) {
   ];
 
   campos.forEach(campo => {
-    if (campo.classList.contains('crm2-opp-next-action-native-date')) return;
+    if (campo.classList.contains('crm2-opp-next-action-native-date') || campo.classList.contains('crm2-opp-filter-native-date')) return;
     if (campo.closest('.hub-date-input')) return;
 
     const wrapper = document.createElement('span');
@@ -13986,6 +14064,137 @@ function escapeAttr(texto) {
   return escapeHtml(texto).replace(/`/g, '&#096;');
 }
 
+function renderCentralAvisosMock() {
+  const naoLidos = MOCK_CENTRAL_AVISOS.filter(aviso => !aviso.lido).length;
+
+  return `
+    <section class="hub-internal-notices" aria-labelledby="hub-internal-notices-title">
+      <div class="hub-internal-notices-header">
+        <div class="hub-internal-notices-heading">
+          <span class="hub-internal-notices-icon" aria-hidden="true">📣</span>
+          <div>
+            <span class="hub-page-kicker">Central de comunicação</span>
+            <h2 id="hub-internal-notices-title">Avisos internos</h2>
+            <p>Comunicados importantes para a equipe.</p>
+          </div>
+        </div>
+        <span class="hub-internal-notices-counter">${naoLidos} não lido${naoLidos === 1 ? '' : 's'}</span>
+      </div>
+
+      <div class="hub-internal-notices-filters" role="tablist" aria-label="Filtros de avisos internos">
+        <span class="is-active" role="tab" aria-selected="true">Todos</span>
+        <span role="tab" aria-selected="false">Não lidos</span>
+        <span role="tab" aria-selected="false">Comunicados</span>
+      </div>
+
+      <div class="hub-internal-notices-list">
+        ${MOCK_CENTRAL_AVISOS.map(aviso => `
+          <article class="hub-internal-notice ${aviso.lido ? 'is-read' : 'is-unread'}" data-notice-id="${escapeAttr(aviso.id)}">
+            <span class="hub-internal-notice-marker" aria-hidden="true"></span>
+            <div class="hub-internal-notice-copy">
+              <div class="hub-internal-notice-meta">
+                <span>${escapeHtml(aviso.categoria)}</span>
+                <span>${escapeHtml(aviso.quando)}</span>
+              </div>
+              <strong>${escapeHtml(aviso.titulo)}</strong>
+              <p>${escapeHtml(aviso.descricao)}</p>
+            </div>
+            <span class="hub-internal-notice-priority is-${aviso.prioridade === 'Alta' ? 'high' : 'normal'}">${escapeHtml(aviso.prioridade)}</span>
+          </article>
+        `).join('')}
+      </div>
+
+      <div class="hub-internal-notices-footer">
+        <span>Prévia demonstrativa</span>
+        <button type="button" class="text-btn" disabled>Ver todos os avisos</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderPainelAvisosInternosMock() {
+  return `
+    <div class="hub-notification-backdrop hub-internal-notices-backdrop" id="hub-internal-notices-backdrop" onclick="fecharPainelAvisosInternosHub()"></div>
+    <aside class="hub-notifications-popover hub-internal-notices-popover" id="hub-internal-notices-popover" role="dialog" aria-modal="false" aria-labelledby="hub-internal-notices-title">
+      <div class="hub-notifications-popover-head">
+        <div><strong id="hub-internal-notices-title">Avisos internos</strong></div>
+        <button type="button" class="hub-notification-close" onclick="fecharPainelAvisosInternosHub()" aria-label="Fechar avisos internos">×</button>
+      </div>
+      <div class="hub-notification-tabs" role="tablist" aria-label="Filtro de avisos internos">
+        <button type="button" role="tab" aria-selected="true" class="is-active">Todos</button>
+        <button type="button" role="tab" aria-selected="false">Não lidos</button>
+        <button type="button" role="tab" aria-selected="false">Comunicados</button>
+      </div>
+      <div class="hub-notifications-popover-list hub-internal-notices-popover-list">
+        ${MOCK_CENTRAL_AVISOS.map(aviso => `
+          <article class="hub-internal-notice ${aviso.lido ? 'is-read' : 'is-unread'}">
+            <span class="hub-internal-notice-marker" aria-hidden="true"></span>
+            <div class="hub-internal-notice-copy">
+              <div class="hub-internal-notice-meta"><span>${escapeHtml(aviso.categoria)}</span><span>${escapeHtml(aviso.quando)}</span></div>
+              <strong>${escapeHtml(aviso.titulo)}</strong>
+              <p>${escapeHtml(aviso.descricao)}</p>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+      <div class="hub-notifications-popover-footer"><span class="hub-internal-notices-mock-label">Prévia demonstrativa</span></div>
+    </aside>
+  `;
+}
+
+function posicionarPainelAvisosInternosHub() {
+  const botao = document.querySelector('.hub-internal-notices-bell');
+  const painel = document.getElementById('hub-internal-notices-popover');
+  if (!painel) return;
+
+  if (!botao) {
+    painel.style.setProperty('--hub-notification-panel-top', '76px');
+    painel.style.setProperty('--hub-notification-panel-left', 'auto');
+    painel.style.setProperty('--hub-notification-panel-width', 'min(340px, calc(100vw - 24px))');
+    painel.style.right = '12px';
+    return;
+  }
+
+  if (window.innerWidth <= 800) {
+    painel.style.setProperty('--hub-notification-panel-top', '68px');
+    painel.style.setProperty('--hub-notification-panel-left', '12px');
+    painel.style.setProperty('--hub-notification-panel-width', 'auto');
+    painel.style.right = '12px';
+    return;
+  }
+
+  const margem = 12;
+  const rect = botao.getBoundingClientRect();
+  const largura = Math.min(340, window.innerWidth - margem * 2);
+  const esquerda = Math.min(Math.max(margem, rect.right - largura), window.innerWidth - largura - margem);
+  painel.style.setProperty('--hub-notification-panel-top', `${rect.bottom + 10}px`);
+  painel.style.setProperty('--hub-notification-panel-left', `${esquerda}px`);
+  painel.style.setProperty('--hub-notification-panel-width', `${largura}px`);
+  painel.style.right = 'auto';
+}
+
+function tratarTecladoPainelAvisosInternosHub(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    fecharPainelAvisosInternosHub();
+  }
+}
+
+function abrirPainelAvisosInternosHub() {
+  if (document.getElementById('hub-internal-notices-popover')) return;
+  document.body.insertAdjacentHTML('beforeend', renderPainelAvisosInternosMock());
+  posicionarPainelAvisosInternosHub();
+  window.addEventListener('resize', posicionarPainelAvisosInternosHub);
+  window.addEventListener('keydown', tratarTecladoPainelAvisosInternosHub);
+}
+
+function fecharPainelAvisosInternosHub() {
+  document.getElementById('hub-internal-notices-backdrop')?.remove();
+  document.getElementById('hub-internal-notices-popover')?.remove();
+  window.removeEventListener('resize', posicionarPainelAvisosInternosHub);
+  window.removeEventListener('keydown', tratarTecladoPainelAvisosInternosHub);
+}
+
 function hubAtualizarBuscaAoDigitar(input, atualizarValor, rerenderizar, localizarInput) {
   if (!input || typeof atualizarValor !== 'function' || typeof rerenderizar !== 'function') return;
   atualizarValor(String(input.value || ''));
@@ -14060,6 +14269,8 @@ Object.assign(window, {
   hubPode: pode,
   hubAtualizarBuscaAoDigitar,
   hubLimparDropdowns,
+  abrirPainelAvisosInternosHub,
+  fecharPainelAvisosInternosHub,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,
