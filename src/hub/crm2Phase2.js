@@ -3,6 +3,7 @@
 // --- Estado e renderização da Fase 2 ---
 import { portalHubFormFooter, removeHubFormFooterPortals } from './formFooterPortal.js';
 import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
+import { CRM2_ORIGIN_OPTIONS, normalizarOrigemCrm2 } from './crm2OriginOptions.js';
 
 const CRM2_PF_ROUTE_CODES = new Set(['200', '201']);
 
@@ -629,7 +630,7 @@ function renderPersonDataEditCrm2(person) {
           ${formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, className: 'crm2-pf-grid-cei' })}
           ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', className: 'crm2-pf-grid-phone' })}
           ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', className: 'crm2-pf-grid-email' })}
-          ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], className: 'crm2-pf-grid-origin' })}
+          ${formFieldCrm2({ label: 'Origem', name: 'origem', value: normalizarOrigemCrm2(values.origem), type: 'select', options: CRM2_ORIGIN_OPTIONS.map((value) => ({ value, label: value })), className: 'crm2-pf-grid-origin' })}
           ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), className: 'crm2-pf-grid-partner' })}
         </div>
       </section>
@@ -891,7 +892,7 @@ function renderCpfVerificationCrm2(values = {}) {
         ${showPersonalFields ? formFieldCrm2({ label: 'CEI/CAEPF', name: 'cei', value: values.cei, formId: 'crm2-pf-form', className: 'crm2-pf-grid-cei' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"', formId: 'crm2-pf-form', className: 'crm2-pf-grid-phone crm2-pf-grid-row-2' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email', formId: 'crm2-pf-form', className: 'crm2-pf-grid-email crm2-pf-grid-row-2' }) : ''}
-        ${showPersonalFields ? formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }], formId: 'crm2-pf-form', className: 'crm2-pf-grid-origin' }) : ''}
+        ${showPersonalFields ? formFieldCrm2({ label: 'Origem', name: 'origem', value: normalizarOrigemCrm2(values.origem), type: 'select', options: CRM2_ORIGIN_OPTIONS.map((value) => ({ value, label: value })), formId: 'crm2-pf-form', className: 'crm2-pf-grid-origin' }) : ''}
         ${showPersonalFields ? formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions(), formId: 'crm2-pf-form', className: 'crm2-pf-grid-partner' }) : ''}
         ${gate.status === 'found' ? `
           <div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF">
@@ -958,7 +959,7 @@ function renderPersonFormCrm2() {
           <div class="hub-form-grid">
             ${formFieldCrm2({ label: 'Telefone', name: 'telefone', value: maskPhoneCrm2(values.telefone), extra: 'inputmode="tel" maxlength="24" onkeyup="crm2PfMaskPhone(this)"' })}
             ${formFieldCrm2({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}
-            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: values.origem, type: 'select', options: [{ value: 'Indicação', label: 'Indicação' }, { value: 'Site', label: 'Site' }, { value: 'Parceiro', label: 'Parceiro' }, { value: 'Evento', label: 'Evento' }, { value: 'Outro', label: 'Outro' }] })}
+            ${formFieldCrm2({ label: 'Origem', name: 'origem', value: normalizarOrigemCrm2(values.origem), type: 'select', options: CRM2_ORIGIN_OPTIONS.map((value) => ({ value, label: value })) })}
             ${formFieldCrm2({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2PfPartnerOptions() })}
           </div>
         </section>` : ''}
@@ -1336,6 +1337,7 @@ Object.assign(window, {
       id: item.id,
       nome: item.nome,
       cpf: item.cpf,
+      cei: item.cei,
       telefone: item.telefone,
       email: item.email,
       nascimento: item.nascimento,
@@ -1366,8 +1368,8 @@ Object.assign(window, {
       id: `pf-conv-${Date.now()}`,
       nome: String(payload.nome).trim(),
       cpf: String(payload.cpf).replace(/\D/g, ''),
-      cei: '', nascimento: '', telefone: payload.telefone || '', email: payload.email || '',
-      origem: 'Conversão de oportunidade', parceiro: '', observacoes: payload.observacoes || '',
+      cei: payload.cei || '', nascimento: payload.nascimento || '', telefone: payload.telefone || '', email: payload.email || '',
+      origem: normalizarOrigemCrm2(payload.origem), parceiro: payload.parceiro || '', observacoes: payload.observacoes || '',
       cadastroEm: now, atualizadoEm: now, anexos: Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [], empresas: [], vinculos: [], pedidos: [],
       timeline: [{ data: now, usuario: payload.usuario || 'Usuário mockado', descricao: 'Pessoa Física criada pela conversão de oportunidade.', tipo: 'Conversão' }]
     };
