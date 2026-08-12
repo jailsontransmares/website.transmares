@@ -34,6 +34,9 @@ const crm2PedidosState = {
   canDelete: false,
   items: structuredClone(CRM2_PEDIDOS_INITIAL_ITEMS),
   search: '',
+  searchExpanded: false,
+  filterModalOpen: false,
+  filterDraft: {},
   statusFilter: '',
   productFilter: '',
   responsibleFilter: '',
@@ -205,18 +208,49 @@ function renderStatePedidos() {
   return `<div class="crm2-pessoas-state crm2-pedidos-state ${crm2PedidosState.listState === 'error' ? 'is-error' : ''}" role="${crm2PedidosState.listState === 'error' ? 'alert' : 'status'}" ${crm2PedidosState.listState === 'loading' ? 'aria-busy="true"' : ''}><strong>${copy[0]}</strong><span>${copy[1]}</span><button class="secondary-btn" type="button" onclick="crm2PedidosSetListState('normal')">Voltar à lista</button></div>`;
 }
 
-function renderPedidoMetrics() {
-  const active = crm2PedidosState.items.filter((item) => PEDIDO_STAGE_OPTIONS.includes(item.status)).length;
-  const pending = crm2PedidosState.items.filter((item) => Number(item.pendencias) > 0).length;
-  const overdue = crm2PedidosState.items.filter((item) => item.status === 'Vencido').length;
-  return `<div class="crm2-pedidos-metrics" aria-label="Resumo dos pedidos"><article><small>Total</small><strong>${crm2PedidosState.items.length}</strong><span>Pedidos mockados</span></article><article><small>Em andamento</small><strong>${active}</strong><span>Sem encerramento</span></article><article><small>Com pendências</small><strong>${pending}</strong><span>Requerem atenção</span></article><article><small>Vencidos</small><strong>${overdue}</strong><span>Prazo ultrapassado</span></article></div>`;
+function currentPedidoFilterValues() {
+  return {
+    status: crm2PedidosState.statusFilter,
+    product: crm2PedidosState.productFilter,
+    responsible: crm2PedidosState.responsibleFilter,
+    origin: crm2PedidosState.originFilter,
+    financial: crm2PedidosState.financialFilter,
+    dateFrom: crm2PedidosState.dateFrom,
+    dateTo: crm2PedidosState.dateTo
+  };
+}
+
+function hasPedidoFilters() {
+  return Boolean(crm2PedidosState.search || Object.values(currentPedidoFilterValues()).some(Boolean));
+}
+
+function renderPedidoFilterModal() {
+  if (!crm2PedidosState.filterModalOpen) return '';
+  const values = crm2PedidosState.filterDraft || currentPedidoFilterValues();
+  const options = (items, selected, emptyLabel) => `<option value="">${emptyLabel}</option>${items.map((item) => `<option value="${escapeAttrPedido(item)}" ${selected === item ? 'selected' : ''}>${escapeHtmlPedido(item)}</option>`).join('')}`;
+  const field = (label, name, items, emptyLabel) => `<label><span>${label}</span><select class="config-input" name="${name}">${options(items, values[name], emptyLabel)}</select></label>`;
+  return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2PedidosCloseFilterModal(event)"><section id="crm2-pedidos-filter-modal" class="crm2-opp-filter-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-pedidos-filter-modal-title" onclick="event.stopPropagation()"><header class="crm2-opp-filter-modal-header"><div><h3 id="crm2-pedidos-filter-modal-title">Filtrar pedidos</h3></div><button id="crm2-pedidos-filter-modal-close" class="icon-btn" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2PedidosCloseFilterModal()">×</button></header><form class="crm2-opp-filter-modal-form crm2-opp-filter-modal-form-grouped" onsubmit="crm2PedidosApplyModalFilters(event)"><fieldset class="crm2-opp-filter-group"><legend>Pedido</legend><div class="crm2-opp-filter-group-grid">${field('Status', 'status', PEDIDO_STATUS_OPTIONS, 'Todos os status')}${field('Produto', 'product', PEDIDO_PRODUCT_OPTIONS, 'Todos os produtos')}${field('Responsável', 'responsible', PEDIDO_RESPONSIBLE_OPTIONS, 'Todos os responsáveis')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Origem e financeiro</legend><div class="crm2-opp-filter-group-grid">${field('Origem', 'origin', PEDIDO_ORIGIN_OPTIONS, 'Todas as origens')}${field('Financeiro', 'financial', PEDIDO_FINANCIAL_OPTIONS, 'Todas as situações')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Período da solicitação</legend><div class="crm2-opp-filter-group-grid"><label><span>Solicitação desde</span><input class="config-input" name="dateFrom" type="date" value="${escapeAttrPedido(values.dateFrom)}"></label><label><span>Solicitação até</span><input class="config-input" name="dateTo" type="date" value="${escapeAttrPedido(values.dateTo)}"></label></div></fieldset><div class="crm2-opp-filter-modal-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilterDraft()">Limpar</button><div><button class="secondary-btn" type="button" onclick="crm2PedidosCloseFilterModal()">Cancelar</button><button class="save-btn" type="submit">Aplicar filtros</button></div></div></form></section></div>`;
+}
+
+function renderPedidosFiltersLegacy() {
+  const active = hasPedidoFilters();
+  const searchExpanded = Boolean(crm2PedidosState.searchExpanded);
+  return `<form class="crm2-opp-filter-bar crm2-pedidos-filter-bar" role="search" onsubmit="event.preventDefault()" aria-label="Buscar e filtrar pedidos"><div class="crm2-opp-filter-actions"><button id="crm2-pedidos-filter-trigger" class="icon-btn ${Object.values(currentPedidoFilterValues()).some(Boolean) ? 'is-active' : ''}" type="button" aria-haspopup="dialog" aria-expanded="${crm2PedidosState.filterModalOpen ? 'true' : 'false'}" aria-controls="crm2-pedidos-filter-modal" title="Filtrar pedidos" aria-label="Filtrar pedidos" onclick="crm2PedidosToggleFilterModal()"><i data-lucide="filter" aria-hidden="true"></i></button><div class="crm2-opp-search-control ${searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar pedidos" placeholder="Número, PF/PJ, CPF, CNPJ ou produto" value="${escapeAttrPedido(crm2PedidosState.search)}" ${searchExpanded ? '' : 'hidden'} oninput="crm2PedidosSetSearch(this.value, this)" onfocusout="crm2PedidosHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') event.preventDefault()"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${searchExpanded ? 'true' : 'false'}" onclick="crm2PedidosToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>${active ? '<button class="icon-btn crm2-opp-clear-filter" type="button" onclick="crm2PedidosClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}</div></form>${renderPedidoFilterModal()}`;
+}
+
+function renderPedidosFilters() {
+  const active = hasPedidoFilters();
+  const searchExpanded = Boolean(crm2PedidosState.searchExpanded);
+  const search = `<div class="crm2-opp-search-control ${searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar pedidos" placeholder="Número, PF/PJ, CPF, CNPJ ou produto" value="${escapeAttrPedido(crm2PedidosState.search)}" ${searchExpanded ? '' : 'hidden'} oninput="crm2PedidosSetSearch(this.value, this)" onfocusout="crm2PedidosHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') event.preventDefault()"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${searchExpanded ? 'true' : 'false'}" onclick="crm2PedidosToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>`;
+  const filter = `<button id="crm2-pedidos-filter-trigger" class="icon-btn ${Object.values(currentPedidoFilterValues()).some(Boolean) ? 'is-active' : ''}" type="button" aria-haspopup="dialog" aria-expanded="${crm2PedidosState.filterModalOpen ? 'true' : 'false'}" aria-controls="crm2-pedidos-filter-modal" title="Filtrar pedidos" aria-label="Filtrar pedidos" onclick="crm2PedidosToggleFilterModal()"><i data-lucide="filter" aria-hidden="true"></i></button>`;
+  return `<form class="crm2-opp-filter-bar crm2-pedidos-filter-bar" role="search" onsubmit="event.preventDefault()" aria-label="Buscar e filtrar pedidos"><div class="crm2-opp-filter-actions">${search}${filter}${active ? '<button class="icon-btn crm2-opp-clear-filter" type="button" onclick="crm2PedidosClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}</div></form>${renderPedidoFilterModal()}`;
 }
 
 function renderPedidoRow(item) {
-  return `<tr><td><button class="crm2-pedido-number-link" type="button" onclick="crm2PedidosOpenDetail('${escapeAttrPedido(item.id)}')"><strong>${escapeHtmlPedido(item.numero)}</strong></button><small>${escapeHtmlPedido(item.origem)}</small></td><td><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')} · ${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></td><td>${escapeHtmlPedido(item.produto)}</td><td>${escapeHtmlPedido(item.responsavel)}</td><td>${renderStatusPedido(item.status)}${Number(item.pendencias) > 0 ? `<small class="crm2-pedidos-pending">${item.pendencias} pendência(s)</small>` : ''}</td><td>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</td><td>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</td><td>${renderStatusPedido(item.financeiro, true)}<small>R$ ${escapeHtmlPedido(item.valor)}</small></td><td><div class="crm2-pedidos-row-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosOpenDetail('${escapeAttrPedido(item.id)}')">Visualizar</button>${crm2PedidosState.canEdit && !isPedidoEncerrado(item) ? `<button class="secondary-btn" type="button" onclick="crm2PedidosOpenEdit('${escapeAttrPedido(item.id)}')">Editar</button>` : ''}</div></td></tr>`;
+  return `<tr><td><button class="crm2-pedido-number-link" type="button" onclick="crm2PedidosOpenDetail('${escapeAttrPedido(item.id)}')"><strong>${escapeHtmlPedido(item.numero)}</strong></button><small>${escapeHtmlPedido(item.origem)}</small></td><td><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')} · ${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></td><td>${escapeHtmlPedido(item.produto)}</td><td>${renderStatusPedido(item.status)}${Number(item.pendencias) > 0 ? `<small class="crm2-pedidos-pending">${item.pendencias} pendência(s)</small>` : ''}</td><td>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</td></tr>`;
 }
 
-function renderPedidosList() {
+function renderPedidosListLegacy() {
   const filtered = filteredPedidos();
   const totalPages = Math.max(1, Math.ceil(filtered.length / crm2PedidosState.perPage));
   crm2PedidosState.page = Math.min(Math.max(1, crm2PedidosState.page), totalPages);
@@ -293,6 +327,40 @@ function renderPedidoRelatedLinks(item) {
   return `<section class="crm2-pedido-integrations" aria-labelledby="crm2-pedido-integrations-title"><div class="hub-form-section-title"><strong id="crm2-pedido-integrations-title">Integrações visuais do CRM 2.0</strong><span>Atalhos para os registros relacionados</span></div><div class="crm2-pedido-integrations-grid"><article><span>Pessoa Física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenPf('${escapeAttrPedido(pf?.id || '')}')">${pf ? 'Abrir cadastro PF' : 'Abrir lista PF'}</button></article><article><span>Pessoa Jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ vinculada')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Etapa opcional'}</small>${item.pjRazaoSocial ? `<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj('${escapeAttrPedido(pj?.id || '')}')">${pj ? 'Abrir cadastro PJ' : 'Abrir lista PJ'}</button>` : '<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj(\'\')">Incluir ou vincular PJ</button>'}</article><article><span>Fluxo sequencial</span><strong>PF → PJ → Pedido</strong><small>Retome o cadastro mockado por etapas.</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenFlow()">Abrir fluxo sequencial</button></article></div></section>`;
 }
 
+function renderPedidoMetrics() { return ''; }
+
+function renderPedidosListLegacy2() {
+  const filtered = filteredPedidos();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / crm2PedidosState.perPage));
+  crm2PedidosState.page = Math.min(Math.max(1, crm2PedidosState.page), totalPages);
+  const pageItems = filtered.slice((crm2PedidosState.page - 1) * crm2PedidosState.perPage, crm2PedidosState.page * crm2PedidosState.perPage);
+  const hasFilters = hasPedidoFilters();
+  const listContent = crm2PedidosState.listState !== 'normal'
+    ? renderStatePedidos()
+    : pageItems.length
+      ? `<div class="ar-crm-phase1-table-wrap crm2-pedidos-table-wrap"><table class="ar-crm-phase1-table crm2-pedidos-table" aria-describedby="crm2-pedidos-caption"><caption id="crm2-pedidos-caption" class="crm2-pessoas-table-caption">Pedidos cadastrados no CRM 2.0</caption><thead><tr><th scope="col">Pedido</th><th scope="col">PF / PJ</th><th scope="col">Produto</th><th scope="col">Responsável</th><th scope="col">Status</th><th scope="col">Solicitação</th><th scope="col">Vencimento</th><th scope="col">Financeiro</th><th scope="col">Ações</th></tr></thead><tbody>${pageItems.map(renderPedidoRow).join('')}</tbody></table></div><div class="crm2-pedidos-pagination" aria-label="Paginação de pedidos"><span>Página <strong>${crm2PedidosState.page}</strong> de <strong>${totalPages}</strong> · ${filtered.length} pedido(s)</span><div><button class="secondary-btn" type="button" onclick="crm2PedidosSetPage(${crm2PedidosState.page - 1})" ${crm2PedidosState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2PedidosSetPage(${crm2PedidosState.page + 1})" ${crm2PedidosState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`
+      : `<div class="crm2-pessoas-state crm2-pedidos-state" role="status"><strong>${crm2PedidosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum pedido cadastrado.'}</strong><span>${crm2PedidosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui pedidos.'}</span><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`;
+  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedidos-title">Pedidos</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>${crm2PedidosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PedidosOpenCreate()">+ Incluir pedido</button>' : ''}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${renderPedidosFilters()}${listContent}</section>`;
+}
+
+function renderPedidoTable(pageItems, totalPages, filtered) {
+  return `<div class="ar-crm-phase1-table-wrap crm2-pedidos-table-wrap"><table class="ar-crm-phase1-table crm2-pedidos-table" aria-describedby="crm2-pedidos-caption"><caption id="crm2-pedidos-caption" class="crm2-pessoas-table-caption">Pedidos cadastrados no CRM 2.0</caption><thead><tr><th scope="col">Pedido</th><th scope="col">PF / PJ</th><th scope="col">Produto</th><th scope="col">Status</th><th scope="col">Vencimento</th></tr></thead><tbody>${pageItems.map(renderPedidoRow).join('')}</tbody></table></div><div class="crm2-pedidos-pagination" aria-label="Paginação de pedidos"><span>Página <strong>${crm2PedidosState.page}</strong> de <strong>${totalPages}</strong> · ${filtered.length} pedido(s)</span><div><button class="secondary-btn" type="button" onclick="crm2PedidosSetPage(${crm2PedidosState.page - 1})" ${crm2PedidosState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2PedidosSetPage(${crm2PedidosState.page + 1})" ${crm2PedidosState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`;
+}
+
+function renderPedidosList() {
+  const filtered = filteredPedidos();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / crm2PedidosState.perPage));
+  crm2PedidosState.page = Math.min(Math.max(1, crm2PedidosState.page), totalPages);
+  const pageItems = filtered.slice((crm2PedidosState.page - 1) * crm2PedidosState.perPage, crm2PedidosState.page * crm2PedidosState.perPage);
+  const hasFilters = hasPedidoFilters();
+  const listContent = crm2PedidosState.listState !== 'normal'
+    ? renderStatePedidos()
+    : pageItems.length
+      ? renderPedidoTable(pageItems, totalPages, filtered)
+      : `<div class="crm2-pessoas-state crm2-pedidos-state" role="status"><strong>${crm2PedidosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum pedido cadastrado.'}</strong><span>${crm2PedidosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui pedidos.'}</span><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`;
+  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedidos-title">Pedidos</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>${crm2PedidosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PedidosOpenCreate()">+ Incluir pedido</button>' : ''}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${renderPedidosFilters()}${listContent}</section>`;
+}
+
 function renderPedidoAttachments(item = {}) {
   const pf = findRelatedPfPedido(item);
   const pj = item.pjRazaoSocial ? findRelatedPjPedido(item) : null;
@@ -312,10 +380,10 @@ function renderPedidoDetail(item) {
     ? `<div class="crm2-pedido-related-list">${pendingCount ? Array.from({ length: pendingCount }, (_, index) => `<article><strong>Pendência ${index + 1}</strong><span>Validação operacional mockada aguardando tratamento.</span><small>Responsável: ${escapeHtmlPedido(item.responsavel)}</small></article>`).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pendência.</strong><span>Este pedido não possui pendências mockadas abertas.</span></div>'}</div>`
     : crm2PedidosState.detailTab === 'historico'
       ? `<div class="crm2-pedido-timeline">${history.map(renderPedidoHistoryEvent).join('')}</div>`
-      : `<div class="crm2-pedido-detail-grid"><div><span>Número</span><strong>${escapeHtmlPedido(item.numero)}</strong></div><div><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></div><div><span>Pessoa física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span><strong>${escapeHtmlPedido(item.produto)}</strong></div><div><span>Responsável</span><strong>${escapeHtmlPedido(item.responsavel)}</strong></div><div><span>Solicitação</span><strong>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</strong></div><div><span>Vencimento</span><strong>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</strong></div><div><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong><small>R$ ${escapeHtmlPedido(item.valor)}</small></div><div><span>Pendências</span><strong>${pendingCount}</strong></div><div class="is-wide"><span>Observações</span><strong>${escapeHtmlPedido(item.observacoes || 'Nenhuma observação registrada.')}</strong></div></div>${renderPedidoAttachments(item)}`;
+      : `<div class="crm2-pedido-detail-grid"><div><span>Número</span><strong>${escapeHtmlPedido(item.numero)}</strong></div><div><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></div><div><span>Pessoa física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span><strong>${escapeHtmlPedido(item.produto)}</strong></div><div><span>Responsável</span><strong>${escapeHtmlPedido(item.responsavel)}</strong></div><div><span>Solicitação</span><strong>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</strong></div><div><span>Vencimento</span><strong>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</strong></div><div><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong><small>R$ ${escapeHtmlPedido(item.valor)}</small></div><div><span>Pendências</span><strong>${pendingCount}</strong></div><div class="is-wide"><span>Observações</span><strong>${escapeHtmlPedido(item.observacoes || 'Nenhuma observação registrada.')}</strong></div></div>`;
   const closed = isPedidoEncerrado(item);
   const actions = crm2PedidosState.canEdit && !closed ? `<button class="save-btn" type="button" onclick="crm2PedidosOpenEdit('${escapeAttrPedido(item.id)}')">Editar</button><button class="secondary-btn crm2-pedido-cancel-action" type="button" onclick="crm2PedidosCancel('${escapeAttrPedido(item.id)}')">Cancelar pedido</button><button class="secondary-btn crm2-pedido-close-action" type="button" onclick="crm2PedidosClose('${escapeAttrPedido(item.id)}')">Encerrar pedido</button>` : '';
-  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-detail-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-detail-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedido-detail-title">${escapeHtmlPedido(item.numero)}</h3><p class="crm2-pedidos-subtitle">${escapeHtmlPedido(item.pfNome)} · atualizado em ${escapeHtmlPedido(formatDateTimePedido(item.atualizadoEm))}</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosBackToList()">Voltar à lista</button>${actions}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${closed ? '<p class="crm2-pedido-closed-notice" role="status">Este pedido está encerrado e não pode mais ser editado. O histórico permanece disponível para consulta.</p>' : ''}<div class="crm2-pedidos-detail-summary"><article><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></article><article><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong></article><article><span>Pendências</span><strong>${pendingCount}</strong></article><article><span>Origem</span><strong>${escapeHtmlPedido(item.origem)}</strong></article></div><div class="module-tabs crm2-pedido-tabs" role="tablist" aria-label="Detalhes do pedido">${tabs.map(([id, label]) => `<button class="${crm2PedidosState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PedidosState.detailTab === id}" onclick="crm2PedidosSelectTab('${id}')">${label}</button>`).join('')}</div><div class="crm2-pedido-tab-content">${content}${crm2PedidosState.detailTab === 'dados' ? renderPedidoRelatedLinks(item) : ''}</div></section>`;
+  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-detail-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-detail-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedido-detail-title">${escapeHtmlPedido(item.numero)}</h3><p class="crm2-pedidos-subtitle">${escapeHtmlPedido(item.pfNome)} · atualizado em ${escapeHtmlPedido(formatDateTimePedido(item.atualizadoEm))}</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosBackToList()">Voltar à lista</button>${actions}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${closed ? '<p class="crm2-pedido-closed-notice" role="status">Este pedido está encerrado e não pode mais ser editado. O histórico permanece disponível para consulta.</p>' : ''}<div class="module-tabs crm2-pedido-tabs" role="tablist" aria-label="Detalhes do pedido">${tabs.map(([id, label]) => `<button class="${crm2PedidosState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PedidosState.detailTab === id}" onclick="crm2PedidosSelectTab('${id}')">${label}</button>`).join('')}</div><div class="crm2-pedido-tab-content">${content}${crm2PedidosState.detailTab === 'dados' ? renderPedidoRelatedLinks(item) : ''}</div></section>`;
 }
 
 function renderPedidoMissing() {
@@ -328,12 +396,10 @@ function renderPedidos() {
   if (!crm2PedidosState.canView) return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-denied-title"><div class="crm2-pessoas-state crm2-pedidos-state is-error" role="alert"><strong id="crm2-pedidos-denied-title">Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar Pedidos.</span><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></section>`;
   if (route.view === 'new') {
     if (!crm2PedidosState.canCreate) return renderPedidoMissing();
-    if (crm2PedidosState.formMode !== 'create') {
-      crm2PedidosState.formMode = 'create';
-      crm2PedidosState.draft = pedidoDefaults();
-      crm2PedidosState.errors = {};
-    }
-    return renderPedidoForm();
+    window.setTimeout(() => {
+      if (currentPedidosRoute().view === 'new') window.navegarParaCrm2Cadastro?.();
+    }, 0);
+    return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true"><div class="crm2-pessoas-state" role="status"><strong>Abrindo cadastro sequencial...</strong><span>O pedido será criado pelo fluxo PF → PJ → Pedido.</span></div></section>`;
   }
   if (route.view === 'edit') {
     const item = getPedido(route.id);
@@ -418,7 +484,7 @@ Object.assign(window, {
       historico: Array.isArray(item.historico) ? item.historico.map((event) => ({ ...event })) : []
     }));
   },
-  crm2PedidosCreateMockFromConversion(payload = {}) {
+  crm2PedidosCreateMockFromOpportunity(payload = {}) {
     permissionsPedidos();
     if (!crm2PedidosState.canCreate || !payload.pfNome || !payload.pfCpf || !payload.produto) return null;
     const now = new Date().toISOString();
@@ -429,13 +495,56 @@ Object.assign(window, {
       pfNome: payload.pfNome, pfCpf: String(payload.pfCpf).replace(/\D/g, ''),
       pjRazaoSocial: payload.pjRazaoSocial || '', pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''),
       produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: payload.dataEmissao ? 'Pedido emitido' : 'Pedido validado',
-      origem: 'Conversão de oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
+      origem: 'Pedido gerado pela oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
       financeiro: 'Pendente', valor: payload.valor || '0,00', pendencias: 0, atualizadoEm: now,
       oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '',
-      historico: [{ data: now, usuario: payload.responsavel || 'Usuário mockado', tipo: 'Conversão', descricao: 'Pedido gerado pela conversão da oportunidade.', alteracoes: `Origem: Conversão de oportunidade · Item: ${payload.produto}` }]
+      historico: [{ data: now, usuario: payload.responsavel || 'Usuário mockado', tipo: 'Pedido gerado', descricao: 'Pedido gerado a partir da oportunidade.', alteracoes: `Origem: Oportunidade · Item: ${payload.produto}` }]
     };
     crm2PedidosState.items.unshift(item);
-    crm2PedidosState.message = 'Pedido gerado pela conversão no conjunto mockado.';
+    crm2PedidosState.message = 'Pedido gerado a partir da oportunidade no conjunto mockado.';
+    rerenderPedidos();
+    return { ...item, historico: item.historico.map((event) => ({ ...event })) };
+  },
+  crm2PedidosCreateMockFromConversion(payload = {}) {
+    return window.crm2PedidosCreateMockFromOpportunity?.(payload) || null;
+  },
+  crm2PedidosCreateMockFromSequential(payload = {}) {
+    permissionsPedidos();
+    if (!crm2PedidosState.canCreate || !payload.pfNome || !payload.pfCpf || !payload.produto) return null;
+    const now = new Date().toISOString();
+    const sequence = crm2PedidosState.items.length + 1;
+    const item = {
+      id: `pedido-${Date.now()}-${sequence}`,
+      numero: `PED-${2401 + sequence}`,
+      pfId: payload.pfId || '',
+      pfNome: payload.pfNome,
+      pfCpf: digitsPedido(payload.pfCpf),
+      pjId: payload.pjId || '',
+      pjRazaoSocial: payload.pjRazaoSocial || '',
+      pjCnpj: digitsPedido(payload.pjCnpj || ''),
+      vinculoTipo: payload.vinculoTipo || '',
+      produto: payload.produto,
+      tipoAtendimento: payload.tipoAtendimento || '',
+      responsavel: payload.responsavel || 'Usuário mockado',
+      status: normalizePedidoStatus(payload.status || 'Novo'),
+      origem: payload.origem || 'Atendimento interno',
+      dataSolicitacao: payload.dataSolicitacao || now.slice(0, 10),
+      vencimento: payload.vencimento || now.slice(0, 10),
+      financeiro: payload.financeiro || 'Pendente',
+      valor: payload.valor || '0,00',
+      pendencias: String(payload.pendencias || '0'),
+      observacoes: payload.observacoes || '',
+      atualizadoEm: now,
+      historico: [{
+        data: now,
+        usuario: payload.responsavel || 'Usuário mockado',
+        tipo: 'Pedido criado',
+        descricao: 'Pedido criado pelo cadastro sequencial.',
+        alteracoes: `Origem: Cadastro sequencial · Produto: ${payload.produto}`
+      }]
+    };
+    crm2PedidosState.items.unshift(item);
+    crm2PedidosState.message = 'Pedido incluído com sucesso no conjunto mockado.';
     rerenderPedidos();
     return { ...item, historico: item.historico.map((event) => ({ ...event })) };
   },
@@ -451,8 +560,7 @@ Object.assign(window, {
   crm2PedidosOpenCreate() {
     permissionsPedidos();
     if (!crm2PedidosState.canCreate) return;
-    crm2PedidosState.message = '';
-    navigatePedidos('novo');
+    window.navegarParaCrm2Cadastro?.();
   },
   crm2PedidosOpenDetail(id) {
     if (!getPedido(id)) return;
@@ -558,11 +666,65 @@ Object.assign(window, {
     crm2PedidosState.financialFilter = String(values.financial || '');
     crm2PedidosState.dateFrom = String(values.dateFrom || '');
     crm2PedidosState.dateTo = String(values.dateTo || '');
+    crm2PedidosState.filterModalOpen = false;
+    crm2PedidosState.filterDraft = {};
     crm2PedidosState.page = 1;
     rerenderPedidos();
   },
+  crm2PedidosApplyModalFilters(event) {
+    window.crm2PedidosApplyFilters?.(event);
+  },
+  crm2PedidosToggleFilterModal() {
+    crm2PedidosState.filterModalOpen = !crm2PedidosState.filterModalOpen;
+    crm2PedidosState.filterDraft = crm2PedidosState.filterModalOpen ? currentPedidoFilterValues() : {};
+    rerenderPedidos();
+    if (crm2PedidosState.filterModalOpen) window.requestAnimationFrame(() => document.getElementById('crm2-pedidos-filter-modal-close')?.focus());
+  },
+  crm2PedidosCloseFilterModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    crm2PedidosState.filterModalOpen = false;
+    crm2PedidosState.filterDraft = {};
+    rerenderPedidos();
+  },
+  crm2PedidosClearFilterDraft() {
+    crm2PedidosState.filterDraft = { status: '', product: '', responsible: '', origin: '', financial: '', dateFrom: '', dateTo: '' };
+    rerenderPedidos();
+  },
+  crm2PedidosSetSearch(value, input) {
+    window.hubAtualizarBuscaAoDigitar(input, (search) => {
+      crm2PedidosState.search = search;
+      crm2PedidosState.searchExpanded = true;
+      crm2PedidosState.page = 1;
+    }, rerenderPedidos, () => document.querySelector('.crm2-opp-search-control input[type="search"]'));
+  },
+  crm2PedidosToggleSearch(button) {
+    const control = button?.closest('.crm2-opp-search-control');
+    const input = control?.querySelector('input[type="search"]');
+    if (!control || !input) return;
+    const expanded = !control.classList.contains('is-expanded');
+    crm2PedidosState.searchExpanded = expanded;
+    control.classList.toggle('is-expanded', expanded);
+    input.hidden = !expanded;
+    button.setAttribute('aria-expanded', String(expanded));
+    if (expanded) input.focus({ preventScroll: true });
+  },
+  crm2PedidosHandleSearchBlur(event) {
+    const input = event?.currentTarget;
+    const control = input?.closest('.crm2-opp-search-control');
+    if (!control || control.contains(event.relatedTarget)) return;
+    window.setTimeout(() => {
+      if (control.contains(document.activeElement)) return;
+      crm2PedidosState.searchExpanded = false;
+      control.classList.remove('is-expanded');
+      input.hidden = true;
+      control.querySelector('button')?.setAttribute('aria-expanded', 'false');
+    }, 0);
+  },
   crm2PedidosClearFilters() {
     crm2PedidosState.search = '';
+    crm2PedidosState.searchExpanded = false;
+    crm2PedidosState.filterModalOpen = false;
+    crm2PedidosState.filterDraft = {};
     crm2PedidosState.statusFilter = '';
     crm2PedidosState.productFilter = '';
     crm2PedidosState.responsibleFilter = '';

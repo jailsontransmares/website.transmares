@@ -1361,7 +1361,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
     return true;
   },
-  crm2PfCreateMockFromConversion(payload = {}) {
+  crm2PfCreateMockFromOpportunity(payload = {}) {
     if (!payload.nome || String(payload.cpf || '').replace(/\D/g, '').length !== 11) return null;
     const now = new Date().toISOString();
     const item = {
@@ -1377,7 +1377,7 @@ Object.assign(window, {
     rerenderCrm2Phase2();
     return { ...item, pedidos: [], timeline: item.timeline.map((event) => ({ ...event })) };
   },
-  crm2PfApplyConversionMock(id, payload = {}) {
+  crm2PfApplyOpportunityGenerationMock(id, payload = {}) {
     const person = crm2PfState.items.find((item) => item.id === id);
     if (!person) return false;
     const now = new Date().toISOString();
@@ -1391,6 +1391,12 @@ Object.assign(window, {
     }];
     rerenderCrm2Phase2();
     return true;
+  },
+  crm2PfCreateMockFromConversion(payload = {}) {
+    return window.crm2PfCreateMockFromOpportunity?.(payload) || null;
+  },
+  crm2PfApplyConversionMock(id, payload = {}) {
+    return window.crm2PfApplyOpportunityGenerationMock?.(id, payload) || false;
   },
   navegarParaCrm2Rota: navigateCrm2Route,
   crm2PfOpenForm: openFormCrm2,

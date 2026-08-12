@@ -7,6 +7,14 @@
   align-items: end;
 }
 
+.crm2-pedidos-filter-bar {
+  justify-content: flex-end;
+}
+
+.crm2-pedidos-filter-bar .crm2-opp-filter-actions {
+  margin-left: auto;
+}
+
 .crm2-pedidos-filter-actions {
   display: flex;
   flex-wrap: wrap;

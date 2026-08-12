@@ -48,21 +48,59 @@
   gap: 6px;
 }
 
+.crm2-cadastro-existing-summary {
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.crm2-cadastro-existing-summary-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.crm2-cadastro-existing-summary h3 {
+  color: var(--color-navy);
+  font-size: 17px;
+  margin: 3px 0 0;
+}
+
+.crm2-cadastro-existing-summary dl {
+  display: grid;
+  gap: 10px 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.crm2-cadastro-existing-summary dl div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.crm2-cadastro-existing-summary dt {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.crm2-cadastro-existing-summary dd {
+  color: var(--texto);
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .crm2-cadastro-header-actions,
 .crm2-cadastro-section-header > :last-child,
 .crm2-cadastro-selected > :last-child {
   margin-left: auto;
-}
-
-.crm2-cadastro-mock-pill {
-  background: color-mix(in srgb, var(--color-primary) 11%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--borda));
-  border-radius: 999px;
-  color: var(--color-primary);
-  font-size: 10px;
-  font-weight: 800;
-  padding: 7px 10px;
-  text-transform: uppercase;
 }
 
 .crm2-cadastro-steps {
@@ -140,6 +178,10 @@ button.crm2-cadastro-step:disabled {
   display: grid;
   gap: 18px;
   min-width: 0;
+}
+
+.crm2-cadastro-pf-step > .crm2-cadastro-section-header {
+  display: none;
 }
 
 .crm2-cadastro-section-header {
@@ -435,6 +477,10 @@ button.crm2-cadastro-step:disabled {
 }
 
 @media (max-width: 760px) {
+  .crm2-cadastro-existing-summary dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .crm2-cadastro-header-actions {
     align-items: stretch;
     margin-left: 0;

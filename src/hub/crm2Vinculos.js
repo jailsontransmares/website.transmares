@@ -454,7 +454,7 @@ Object.assign(window, {
   crm2VinculosGetMockItems() {
     return crm2VinculosState.items.map((item) => ({ ...item }));
   },
-  crm2VinculosCreateMockFromConversion(payload = {}) {
+  crm2VinculosCreateMockFromOpportunity(payload = {}) {
     permissionsVinculos();
     if (!crm2VinculosState.canCreate || !payload.pfNome || !payload.pjRazaoSocial || !CRM2_VINCULOS_TYPES.includes(payload.tipo)) return null;
     const duplicate = crm2VinculosState.items.find((item) => item.status === 'Ativo' && item.pfNome === payload.pfNome && item.pjRazaoSocial === payload.pjRazaoSocial && item.tipo === payload.tipo);
@@ -463,14 +463,17 @@ Object.assign(window, {
     const item = {
       id: `vinculo-conv-${Date.now()}`, pfNome: payload.pfNome, pfCpf: String(payload.pfCpf || '').replace(/\D/g, ''),
       pjRazaoSocial: payload.pjRazaoSocial, pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''), tipo: payload.tipo,
-      status: 'Ativo', inicioEm: now.slice(0, 10), encerramentoEm: '', motivoInativacao: '', observacoes: payload.observacoes || 'Vínculo criado pela conversão de oportunidade.',
+      status: 'Ativo', inicioEm: now.slice(0, 10), encerramentoEm: '', motivoInativacao: '', observacoes: payload.observacoes || 'Vínculo criado ao gerar pedido pela oportunidade.',
       atualizadoPor: payload.usuario || 'Usuário mockado', atualizadoEm: now,
-      historico: [{ data: now, usuario: payload.usuario || 'Usuário mockado', tipo: 'Conversão', descricao: 'Vínculo criado pela conversão de oportunidade.' }]
+      historico: [{ data: now, usuario: payload.usuario || 'Usuário mockado', tipo: 'Pedido gerado', descricao: 'Vínculo criado ao gerar pedido pela oportunidade.' }]
     };
     crm2VinculosState.items.unshift(item);
-    crm2VinculosState.message = 'Vínculo gerado pela conversão no conjunto mockado.';
+    crm2VinculosState.message = 'Vínculo criado ao gerar pedido pela oportunidade no conjunto mockado.';
     rerenderVinculos();
     return { ...item, historico: item.historico.map((event) => ({ ...event })) };
+  },
+  crm2VinculosCreateMockFromConversion(payload = {}) {
+    return window.crm2VinculosCreateMockFromOpportunity?.(payload) || null;
   },
   navegarParaCrm2VinculosRota() { navigateVinculos(); },
   crm2VinculosOpenCreate() {
