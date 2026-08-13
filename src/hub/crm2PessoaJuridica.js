@@ -99,6 +99,14 @@ const crm2PjState = {
   listState: 'normal'
 };
 
+const CRM2_PJ_RFB_STATUS_OPTIONS = [
+  { value: 'Ativa', label: 'Ativa' },
+  { value: 'Suspensa', label: 'Suspensa' },
+  { value: 'Inapta', label: 'Inapta' },
+  { value: 'Baixada', label: 'Baixada' },
+  { value: 'Nula', label: 'Nula' }
+];
+
 let pendingLeaveActionPj = null;
 let crm2PjSearchTimer = null;
 
@@ -226,7 +234,22 @@ function automaticStatusPj(item = {}) {
 }
 
 function displayedStatusPj(item = {}) {
-  return item.statusManual || automaticStatusPj(item) || item.status || 'empresa inativa';
+  return item.status || automaticStatusPj(item) || 'empresa inativa';
+}
+
+function normalizeRfbStatusPj(value = '') {
+  const normalized = normalizeSearchPj(value);
+  if (!normalized || normalized.includes('inativa')) return '';
+  if (normalized.includes('suspens')) return 'Suspensa';
+  if (normalized.includes('inapt')) return 'Inapta';
+  if (normalized.includes('baixad')) return 'Baixada';
+  if (normalized.includes('nul')) return 'Nula';
+  if (normalized.includes('ativa')) return 'Ativa';
+  return '';
+}
+
+function rfbStatusLabelPj(item = {}) {
+  return normalizeRfbStatusPj(item.situacaoRfb || item.statusManual || item.situacao) || 'Não consultada';
 }
 
 function renderAutomaticStatusPillPj(item = {}) {
@@ -236,15 +259,12 @@ function renderAutomaticStatusPillPj(item = {}) {
     'empresa ativa': 'Empresa ativa',
     'empresa inativa': 'Empresa inativa'
   }[status] || status.charAt(0).toUpperCase() + status.slice(1);
-  return `<span class="crm2-pf-status-pill is-${escapeAttrPj(slug)}" role="status">${escapeHtmlPj(label)}</span>`;
+  return `<span class="crm2-pf-status-pill is-${escapeAttrPj(slug)}" role="status" title="Status comercial calculado pelos pedidos">Comercial: ${escapeHtmlPj(label)}</span>`;
 }
 
 
 function mapApiStatusPj(value = '') {
-  const normalized = normalizeSearchPj(value);
-  if (normalized.includes('baixad')) return 'empresa baixada';
-  if (normalized.includes('ativ')) return 'empresa ativa';
-  return normalized ? 'empresa inativa' : '';
+  return normalizeRfbStatusPj(value);
 }
 
 function peopleCountPj(item = {}) {
@@ -284,7 +304,7 @@ function filteredPj() {
   return crm2PjState.items.filter((item) => {
     const matchesSearch = !search || [item.razaoSocial, item.cnpj, maskCnpjPj(item.cnpj)]
       .some((value) => normalizeSearchPj(value).includes(search));
-    return matchesSearch && (!crm2PjState.statusFilter || displayedStatusPj(item) === crm2PjState.statusFilter);
+    return matchesSearch && (!crm2PjState.statusFilter || rfbStatusLabelPj(item) === crm2PjState.statusFilter);
   });
 }
 
@@ -411,7 +431,7 @@ function renderListPj() {
     <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2PjApplyFilters(event)">
       <div class="crm2-pf-filter-actions">
         ${crm2PjState.canCreate ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="crm2PjOpenCreate()">+Incluir</button>' : ''}
-        <div class="crm2-pf-select"><button id="crm2-pj-status-filter" class="icon-btn ${crm2PjState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pj-status-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2PjToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-pj-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-pj-status-filter" data-dropdown-width="180" hidden>${[['', 'Todos'], ['empresa ativa', 'Empresa ativa'], ['empresa inativa', 'Empresa inativa'], ['empresa baixada', 'Empresa baixada']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PjState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PjState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrPj(value)}" onclick="crm2PjSelectStatusFilter(this)">${escapeHtmlPj(label)}</button>`).join('')}</div></div>
+        <div class="crm2-pf-select"><button id="crm2-pj-status-filter" class="icon-btn ${crm2PjState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pj-status-filter-menu" title="Filtrar por situação na RFB" aria-label="Filtrar por situação na RFB" onclick="crm2PjToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-pj-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por situação na RFB" data-dropdown-input-id="crm2-pj-status-filter" data-dropdown-width="180" hidden>${[['', 'Todas'], ...CRM2_PJ_RFB_STATUS_OPTIONS.map(({ value, label }) => [value, label])].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PjState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PjState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrPj(value)}" onclick="crm2PjSelectStatusFilter(this)">${escapeHtmlPj(label)}</button>`).join('')}</div></div>
         <div class="crm2-pf-search-control ${crm2PjState.searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar pessoa jurídica" placeholder="Busca por razão social ou CNPJ" value="${escapeAttrPj(crm2PjState.search)}" ${crm2PjState.searchExpanded ? '' : 'hidden'} oninput="crm2PjSetSearch(this.value, this)" onfocusout="crm2PjHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${crm2PjState.searchExpanded ? 'true' : 'false'}" onclick="crm2PjToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>
         ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PjClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
       </div>
@@ -448,10 +468,10 @@ function pjAddressValues(item = {}) {
 }
 
 function renderPjStatusField(item = {}, editing = false, formId = '') {
-  if (!editing) return `<label><span>Situação na RFB</span><input class="config-input" value="${escapeAttrPj(displayedStatusPj(item))}" readonly></label>`;
-  const value = item.statusManual || '';
+  if (!editing) return `<label><span>Situação na RFB</span><input class="config-input" value="${escapeAttrPj(rfbStatusLabelPj(item))}" readonly></label>`;
+  const value = normalizeRfbStatusPj(item.situacaoRfb || item.statusManual || item.situacao);
   const formAttribute = formId ? ` form="${escapeAttrPj(formId)}"` : '';
-  return `<label><span>Situação na RFB</span><select class="config-input" name="statusManual"${formAttribute} onchange="crm2PjTrackChange(this)"><option value="" ${!value ? 'selected' : ''}>Usar status automático</option><option value="empresa ativa" ${value === 'empresa ativa' ? 'selected' : ''}>Empresa ativa</option><option value="empresa inativa" ${value === 'empresa inativa' ? 'selected' : ''}>Empresa inativa</option><option value="empresa baixada" ${value === 'empresa baixada' ? 'selected' : ''}>Empresa baixada</option></select></label>`;
+  return `<label><span>Situação na RFB</span><select class="config-input" name="statusManual"${formAttribute} onchange="crm2PjTrackChange(this)"><option value="" ${!value ? 'selected' : ''}>Selecione</option>${CRM2_PJ_RFB_STATUS_OPTIONS.map(({ value: optionValue, label }) => `<option value="${optionValue}" ${value === optionValue ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
 }
 
 function renderPjAddressFields(item = {}, editing = false, formId = '') {
@@ -509,8 +529,8 @@ function renderEditFormPjBase(item) {
 }
 
 function renderManualStatusPj(item) {
-  const value = item.statusManual || '';
-  return `<section class="hub-form-section crm2-pj-status-section"><div class="hub-form-section-title"><strong>Status da empresa</strong></div><div class="hub-form-grid"><label><span>Status manual</span><select class="config-input" name="statusManual" onchange="crm2PjTrackChange(this)"><option value="" ${!value ? 'selected' : ''}>Usar status automático</option><option value="empresa ativa" ${value === 'empresa ativa' ? 'selected' : ''}>Empresa ativa</option><option value="empresa inativa" ${value === 'empresa inativa' ? 'selected' : ''}>Empresa inativa</option><option value="empresa baixada" ${value === 'empresa baixada' ? 'selected' : ''}>Empresa baixada</option></select><small>Status automático atual: ${escapeHtmlPj(automaticStatusPj(item))}. Uma definição manual prevalece sobre o cálculo.</small></label></div></section>`;
+  const value = normalizeRfbStatusPj(item.situacaoRfb || item.statusManual || item.situacao);
+  return `<section class="hub-form-section crm2-pj-status-section"><div class="hub-form-section-title"><strong>Situação cadastral RFB</strong></div><div class="hub-form-grid"><label><span>Situação na RFB</span><select class="config-input" name="statusManual" onchange="crm2PjTrackChange(this)"><option value="" ${!value ? 'selected' : ''}>Selecione</option>${CRM2_PJ_RFB_STATUS_OPTIONS.map(({ value: optionValue, label }) => `<option value="${optionValue}" ${value === optionValue ? 'selected' : ''}>${label}</option>`).join('')}</select></label></div></section>`;
 }
 
 function renderEditFormPj(item) {
@@ -689,6 +709,67 @@ Object.assign(window, {
     rerenderPj();
     return { ...item, pessoasVinculadas: [], pedidos: [] };
   },
+  crm2PjCreateMockFromSequential(payload = {}) {
+    const cnpj = String(payload.cnpj || '').replace(/\D/g, '');
+    if (!payload.razaoSocial || cnpj.length !== 14) return null;
+    const existing = crm2PjState.items.find((item) => item.id === payload.id || item.cnpj === cnpj);
+    if (existing) {
+      const incomingAttachments = Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [];
+      const attachmentKey = (attachment = {}) => [attachment.nome, attachment.tipo, attachment.validade, attachment.incluidoEm].map((value) => String(value || '')).join('|');
+      const existingKeys = new Set((existing.anexos || []).map(attachmentKey));
+      existing.anexos = [...(existing.anexos || []), ...incomingAttachments.filter((attachment) => !existingKeys.has(attachmentKey(attachment)))];
+      existing.pedidos = [...(existing.pedidos || []), ...(payload.pedidos || []).filter((pedido) => !existing.pedidos.some((item) => item.id === pedido.id)).map((pedido) => ({ ...pedido }))];
+      existing.pessoasVinculadas = [...(existing.pessoasVinculadas || []), ...(payload.pessoasVinculadas || []).filter((pessoa) => !existing.pessoasVinculadas.some((item) => item.vinculoId === pessoa.vinculoId || item.vinculoId === pessoa.id)).map((pessoa) => ({ ...pessoa }))];
+      existing.atualizadoEm = new Date().toISOString();
+      rerenderPj();
+      return { ...existing, anexos: existing.anexos.map((anexo) => ({ ...anexo })), pedidos: existing.pedidos.map((pedido) => ({ ...pedido })) };
+    }
+    const now = new Date().toISOString();
+    const logradouro = payload.logradouro || payload.endereco || '';
+    const item = {
+      id: payload.id || `pj-seq-${Date.now()}`,
+      cnpj,
+      razaoSocial: String(payload.razaoSocial).trim(),
+      porte: payload.porte || '',
+      endereco: logradouro,
+      logradouro,
+      numero: payload.numero || '',
+      complemento: payload.complemento || '',
+      cep: payload.cep || '',
+      bairro: payload.bairro || '',
+      cidadeEstado: payload.cidadeEstado || '',
+      uf: payload.uf || '',
+      observacoes: payload.observacoes || '',
+      cadastroEm: payload.cadastroEm || now,
+      atualizadoEm: now,
+      anexos: Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [],
+      status: payload.status || 'empresa inativa',
+      statusAutomatico: payload.statusAutomatico || 'empresa inativa',
+      statusManual: payload.statusManual || payload.situacaoRfb || '',
+      situacaoRfb: payload.situacaoRfb || payload.statusManual || '',
+      pessoasVinculadas: Array.isArray(payload.pessoasVinculadas) ? payload.pessoasVinculadas.map((pessoa) => ({ ...pessoa })) : [],
+      pedidos: Array.isArray(payload.pedidos) ? payload.pedidos.map((pedido) => ({ ...pedido })) : []
+    };
+    crm2PjState.items.unshift(item);
+    rerenderPj();
+    return { ...item, anexos: item.anexos.map((anexo) => ({ ...anexo })), pedidos: item.pedidos.map((pedido) => ({ ...pedido })) };
+  },
+  crm2PjApplySequentialOrder(id, payload = {}) {
+    const company = crm2PjState.items.find((item) => item.id === id);
+    if (!company) return false;
+    const now = new Date().toISOString();
+    const pedido = payload.pedido;
+    if (Array.isArray(payload.anexos) && payload.anexos.length) {
+      const attachmentKey = (attachment = {}) => [attachment.nome, attachment.tipo, attachment.validade, attachment.incluidoEm].map((value) => String(value || '')).join('|');
+      const existingKeys = new Set((company.anexos || []).map(attachmentKey));
+      company.anexos = [...(company.anexos || []), ...payload.anexos.map((anexo) => ({ ...anexo })).filter((anexo) => !existingKeys.has(attachmentKey(anexo)))];
+    }
+    if (pedido && !company.pedidos?.some((item) => item.id === pedido.id)) company.pedidos = [...(company.pedidos || []), { ...pedido }];
+    if (payload.vinculo && !company.pessoasVinculadas?.some((item) => item.vinculoId === payload.vinculo.vinculoId || item.vinculoId === payload.vinculo.id)) company.pessoasVinculadas = [...(company.pessoasVinculadas || []), { ...payload.vinculo }];
+    company.atualizadoEm = now;
+    rerenderPj();
+    return true;
+  },
   crm2PjApplyOpportunityGenerationMock(id, payload = {}) {
     const company = crm2PjState.items.find((item) => item.id === id);
     if (!company) return false;
@@ -811,7 +892,7 @@ Object.assign(window, {
         try {
           const result = await consultarCnpj(value);
           const data = result.found && result.data ? result.data : null;
-          crm2PjState.draft = { ...crm2PjState.draft, cnpj: value, razaoSocial: data?.razaoSocial || '', porte: data?.porte || '', statusManual: mapApiStatusPj(data?.situacao), cep: data?.cep || '', logradouro: data?.endereco || '', endereco: data?.endereco || '', numero: data?.numero || '', complemento: data?.complemento || '', bairro: data?.bairro || '', cidadeEstado: [data?.municipio, data?.uf].filter(Boolean).join('/'), uf: data?.uf || '' };
+          crm2PjState.draft = { ...crm2PjState.draft, cnpj: value, razaoSocial: data?.razaoSocial || '', porte: data?.porte || '', statusManual: mapApiStatusPj(data?.situacao), situacaoRfb: mapApiStatusPj(data?.situacao), cep: data?.cep || '', logradouro: data?.endereco || '', endereco: data?.endereco || '', numero: data?.numero || '', complemento: data?.complemento || '', bairro: data?.bairro || '', cidadeEstado: [data?.municipio, data?.uf].filter(Boolean).join('/'), uf: data?.uf || '' };
           crm2PjState.cnpjGate = { value, status: 'not-found', companyId: '', message: data ? 'Dados carregados pela API. Confirme e complete o cadastro.' : 'CNPJ não localizado. O preenchimento manual está disponível.' };
         } catch (error) {
           crm2PjState.cnpjGate = { value, status: 'not-found', companyId: '', message: 'API indisponível. O preenchimento manual está disponível.' };
@@ -1060,8 +1141,9 @@ Object.assign(window, {
       if (!item) return;
       item.anexos = (item.anexos || []).filter((attachment, index) => !crm2PjState.attachmentRemoved.includes(index));
       item.anexos.push(...crm2PjState.attachmentDraft);
-      item.statusManual = ['empresa ativa', 'empresa inativa', 'empresa baixada'].includes(values.statusManual) ? values.statusManual : '';
-      Object.assign(item, { razaoSocial: values.razaoSocial, porte: values.porte || '', endereco: values.logradouro || values.endereco || '', cep: values.cep || '', logradouro: values.logradouro || '', numero: values.numero || '', complemento: values.complemento || '', bairro: values.bairro || '', cidadeEstado: values.cidadeEstado || '', uf: values.uf || '', observacoes: values.observacoes || '', status: displayedStatusPj(item), atualizadoEm: now });
+      item.statusManual = normalizeRfbStatusPj(values.statusManual);
+      item.situacaoRfb = item.statusManual;
+      Object.assign(item, { razaoSocial: values.razaoSocial, porte: values.porte || '', endereco: values.logradouro || values.endereco || '', cep: values.cep || '', logradouro: values.logradouro || '', numero: values.numero || '', complemento: values.complemento || '', bairro: values.bairro || '', cidadeEstado: values.cidadeEstado || '', uf: values.uf || '', observacoes: values.observacoes || '', status: automaticStatusPj(item), statusAutomatico: automaticStatusPj(item), atualizadoEm: now });
       crm2PjState.formMode = '';
       crm2PjState.inlineEditing = false;
       crm2PjState.draft = {};
@@ -1073,8 +1155,8 @@ Object.assign(window, {
       navigatePj(item.id);
       return;
     }
-    const manualStatus = ['empresa ativa', 'empresa inativa', 'empresa baixada'].includes(values.statusManual) ? values.statusManual : '';
-    const item = { ...values, id: `pj-mock-${Date.now()}`, cadastroEm: now, atualizadoEm: now, status: manualStatus || 'empresa inativa', statusAutomatico: manualStatus || 'empresa inativa', statusManual: manualStatus, anexos: [...crm2PjState.attachmentDraft], pessoasVinculadas: [], pedidos: [] };
+    const manualStatus = normalizeRfbStatusPj(values.statusManual);
+    const item = { ...values, id: `pj-mock-${Date.now()}`, cadastroEm: now, atualizadoEm: now, status: 'empresa inativa', statusAutomatico: 'empresa inativa', statusManual: manualStatus, situacaoRfb: manualStatus, anexos: [...crm2PjState.attachmentDraft], pessoasVinculadas: [], pedidos: [] };
     crm2PjState.items.unshift(item); crm2PjState.formMode = ''; crm2PjState.draft = {}; crm2PjState.attachmentDraft = []; crm2PjState.attachmentSelectionDraft = []; crm2PjState.attachmentRemoved = []; crm2PjState.message = 'Pessoa jurídica criada no estado mockado. Nenhum dado foi persistido.'; navigatePj(item.id);
   }
 });

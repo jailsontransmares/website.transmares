@@ -4,13 +4,35 @@ import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hu
 import { hasPermission } from './services/permissionService.js';
 import { CRM2_ORIGIN_OPTIONS, normalizarOrigemCrm2 } from './crm2OriginOptions.js';
 import { consultarCnpj } from './services/cnpjService.js';
+import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
 
 const CRM2_CADASTRO_DRAFT_STORAGE_KEY = 'crm2-cadastro-sequencial-draft-v1';
+
+const CRM2_CADASTRO_PJ_RFB_STATUS_OPTIONS = [
+  { value: '', label: 'Selecione' },
+  { value: 'Ativa', label: 'Ativa' },
+  { value: 'Suspensa', label: 'Suspensa' },
+  { value: 'Inapta', label: 'Inapta' },
+  { value: 'Baixada', label: 'Baixada' },
+  { value: 'Nula', label: 'Nula' }
+];
+
+function mapApiStatusCadastro(value = '') {
+  const normalized = normalizeCadastro(value);
+  if (!normalized || normalized.includes('inativa')) return '';
+  if (normalized.includes('suspens')) return 'Suspensa';
+  if (normalized.includes('inapt')) return 'Inapta';
+  if (normalized.includes('baixad')) return 'Baixada';
+  if (normalized.includes('nul')) return 'Nula';
+  if (normalized.includes('ativa')) return 'Ativa';
+  return '';
+}
 
 const crm2CadastroState = {
   canView: false,
   canCreate: false,
   canEdit: false,
+  canDelete: false,
   currentStep: 'pf',
   pfMode: 'lookup',
   pfSearch: '',
@@ -19,9 +41,16 @@ const crm2CadastroState = {
   pfPage: 1,
   pfPerPage: 5,
   pfSelectedId: '',
-  pfDraft: {},
+  pfDraft: { anexos: [] },
   pfErrors: {},
   pfCpfGate: { value: '', status: '', personId: '' },
+  pfAttachmentDraft: [],
+  pfAttachmentSelectionDraft: [],
+  pfAttachmentSelectionMode: false,
+  pfSelectedAttachmentKeys: [],
+  pfAttachmentView: 'list',
+  pfAttachmentInlineEditKey: '',
+  pfAttachmentInlineDraft: null,
   pfListState: 'normal',
   pjMode: 'lookup',
   pjSearch: '',
@@ -32,9 +61,16 @@ const crm2CadastroState = {
   pjSkipped: false,
   vinculoTipo: '',
   vinculoError: '',
-  pjDraft: {},
+  pjDraft: { anexos: [] },
   pjErrors: {},
   pjCnpjGate: { value: '', status: '', companyId: '' },
+  pjAttachmentDraft: [],
+  pjAttachmentSelectionDraft: [],
+  pjAttachmentSelectionMode: false,
+  pjSelectedAttachmentKeys: [],
+  pjAttachmentView: 'list',
+  pjAttachmentInlineEditKey: '',
+  pjAttachmentInlineDraft: null,
   pedidoDraft: {},
   pedidoErrors: {},
   pedidoCreated: null,
@@ -78,6 +114,8 @@ function crm2CadastroSerializeDraft() {
     pfSelectedId: crm2CadastroState.pfSelectedId,
     pfDraft: crm2CadastroState.pfDraft,
     pfCpfGate: crm2CadastroState.pfCpfGate,
+    pfAttachmentDraft: crm2CadastroState.pfAttachmentDraft,
+    pfAttachmentSelectionDraft: crm2CadastroState.pfAttachmentSelectionDraft,
     pjMode: crm2CadastroState.pjMode,
     pjSearch: crm2CadastroState.pjSearch,
     pjSelectedId: crm2CadastroState.pjSelectedId,
@@ -85,6 +123,8 @@ function crm2CadastroSerializeDraft() {
     vinculoTipo: crm2CadastroState.vinculoTipo,
     pjDraft: crm2CadastroState.pjDraft,
     pjCnpjGate: crm2CadastroState.pjCnpjGate,
+    pjAttachmentDraft: crm2CadastroState.pjAttachmentDraft,
+    pjAttachmentSelectionDraft: crm2CadastroState.pjAttachmentSelectionDraft,
     pedidoDraft: crm2CadastroState.pedidoDraft,
     pedidoCreated: crm2CadastroState.pedidoCreated,
     createdPfs: crm2CadastroCreatedPfs,
@@ -103,6 +143,9 @@ function crm2CadastroRestoreStoredDraft() {
   crm2CadastroState.pfSelectedId = String(draft.pfSelectedId || '');
   crm2CadastroState.pfDraft = { ...(draft.pfDraft || {}) };
   crm2CadastroState.pfCpfGate = { value: String(draft.pfCpfGate?.value || ''), status: String(draft.pfCpfGate?.status || ''), personId: String(draft.pfCpfGate?.personId || '') };
+  crm2CadastroState.pfAttachmentDraft = Array.isArray(draft.pfAttachmentDraft) ? draft.pfAttachmentDraft : (Array.isArray(draft.pfDraft?.anexos) ? draft.pfDraft.anexos : []);
+  crm2CadastroState.pfAttachmentSelectionDraft = Array.isArray(draft.pfAttachmentSelectionDraft) ? draft.pfAttachmentSelectionDraft : [];
+  crm2CadastroState.pfDraft.anexos = cloneCadastroAttachments(crm2CadastroState.pfAttachmentDraft);
   crm2CadastroState.pjMode = draft.pjMode === 'create' ? 'create' : 'lookup';
   crm2CadastroState.pjSearch = String(draft.pjSearch || '');
   crm2CadastroState.pjSelectedId = String(draft.pjSelectedId || '');
@@ -111,6 +154,9 @@ function crm2CadastroRestoreStoredDraft() {
   crm2CadastroState.vinculoError = '';
   crm2CadastroState.pjDraft = { ...(draft.pjDraft || {}) };
   crm2CadastroState.pjCnpjGate = { value: String(draft.pjCnpjGate?.value || ''), status: String(draft.pjCnpjGate?.status || ''), companyId: String(draft.pjCnpjGate?.companyId || '') };
+  crm2CadastroState.pjAttachmentDraft = Array.isArray(draft.pjAttachmentDraft) ? draft.pjAttachmentDraft : (Array.isArray(draft.pjDraft?.anexos) ? draft.pjDraft.anexos : []);
+  crm2CadastroState.pjAttachmentSelectionDraft = Array.isArray(draft.pjAttachmentSelectionDraft) ? draft.pjAttachmentSelectionDraft : [];
+  crm2CadastroState.pjDraft.anexos = cloneCadastroAttachments(crm2CadastroState.pjAttachmentDraft);
   crm2CadastroState.pedidoDraft = { ...(draft.pedidoDraft || {}) };
   crm2CadastroState.pedidoCreated = draft.pedidoCreated || null;
   crm2CadastroCreatedPfs.splice(0, crm2CadastroCreatedPfs.length, ...(Array.isArray(draft.createdPfs) ? draft.createdPfs : []));
@@ -247,6 +293,7 @@ function permissionsCadastro() {
   crm2CadastroState.canView = resolve('view');
   crm2CadastroState.canCreate = resolve('create') || resolve('update');
   crm2CadastroState.canEdit = resolve('update');
+  crm2CadastroState.canDelete = resolve('delete');
 }
 
 function getMockPfsCadastro() {
@@ -445,12 +492,22 @@ function crm2CadastroPartnerOptions() {
     .map((value) => ({ value, label: value }));
 }
 
+function renderPfCreateCadastroLegacySimple() {
+  const values = crm2CadastroState.pfDraft;
+  const gate = crm2CadastroState.pfCpfGate;
+  const verified = gate.status === 'not-found';
+  const origins = CRM2_ORIGIN_OPTIONS;
+  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pf-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 1 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pf-create-title">Cadastrar Pessoa Física</h2><p>Consulte o CPF antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}<section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-cadastro-pf-cpf-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pf-cpf-title">Dados pessoais</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPfCpf(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CPF *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="Consulte o CPF antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCpfCadastro(gate.value))}" oninput="crm2CadastroMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePfCpf()" aria-label="Alterar CPF" title="Alterar CPF"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CPF" title="Consultar CPF"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}</label>${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenExistingPf()">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2CadastroChangePfCpf()">Consultar outro CPF</button></div>` : ''}</form></section>${verified ? `<form id="crm2-cadastro-pf-form" class="crm2-cadastro-form" onsubmit="crm2CadastroSavePf(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPfFieldCadastro({ label: 'Nome', name: 'nome', value: values.nome, required: true })}${renderPfFieldCadastro({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}${renderPfFieldCadastro({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}${renderPfFieldCadastro({ label: 'Telefone', name: 'telefone', value: values.telefone, extra: 'inputmode="tel" maxlength="24"' })}${renderPfFieldCadastro({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}${renderPfFieldCadastro({ label: 'Origem', name: 'origem', value: values.origem || '', type: 'select', options: origins })}${renderPfFieldCadastro({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2CadastroPartnerOptions() })}${renderPfFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div>${renderCadastroAttachments('pf')}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroCancelPfCreate()">Voltar para busca</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Salvar e selecionar</button></div></form>` : ''}</section>`;
+}
+
 function renderPfCreateCadastro() {
   const values = crm2CadastroState.pfDraft;
   const gate = crm2CadastroState.pfCpfGate;
   const verified = gate.status === 'not-found';
   const origins = CRM2_ORIGIN_OPTIONS;
-  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pf-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 1 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pf-create-title">Cadastrar Pessoa Física</h2><p>Consulte o CPF antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}<section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-cadastro-pf-cpf-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pf-cpf-title">Dados pessoais</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPfCpf(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CPF *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="Consulte o CPF antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCpfCadastro(gate.value))}" oninput="crm2CadastroMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePfCpf()" aria-label="Alterar CPF" title="Alterar CPF"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CPF" title="Consultar CPF"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}</label>${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenExistingPf()">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2CadastroChangePfCpf()">Consultar outro CPF</button></div>` : ''}</form></section>${verified ? `<form id="crm2-cadastro-pf-form" class="crm2-cadastro-form" onsubmit="crm2CadastroSavePf(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados cadastrais</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPfFieldCadastro({ label: 'Nome', name: 'nome', value: values.nome, required: true })}${renderPfFieldCadastro({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}${renderPfFieldCadastro({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}${renderPfFieldCadastro({ label: 'Telefone', name: 'telefone', value: values.telefone, extra: 'inputmode="tel" maxlength="24"' })}${renderPfFieldCadastro({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}${renderPfFieldCadastro({ label: 'Origem', name: 'origem', value: values.origem || '', type: 'select', options: origins })}${renderPfFieldCadastro({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2CadastroPartnerOptions() })}${renderPfFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div><div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroCancelPfCreate()">Voltar para busca</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Salvar e selecionar</button></div></form>` : ''}</section>`;
+  const verification = `<section class="hub-form-section crm2-pf-cpf-verification" aria-labelledby="crm2-cadastro-pf-cpf-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pf-cpf-title">Dados pessoais</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPfCpf(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CPF *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="Consulte o CPF antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCpfCadastro(gate.value))}" oninput="crm2CadastroMaskCpf(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePfCpf()" aria-label="Alterar CPF" title="Alterar CPF"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CPF" title="Consultar CPF"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CPF válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CPF</small>' : ''}</label>${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CPF"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenExistingPf()">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2CadastroChangePfCpf()">Consultar outro CPF</button></div>` : ''}</form></section>`;
+  const form = verified ? `<form id="crm2-cadastro-pf-form" class="hub-form-screen-content crm2-cadastro-form crm2-pf-form" onsubmit="crm2CadastroSavePf(event)" novalidate><section class="hub-form-section" aria-labelledby="crm2-cadastro-pf-data-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pf-data-title">Dados cadastrais</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPfFieldCadastro({ label: 'Nome', name: 'nome', value: values.nome, required: true })}${renderPfFieldCadastro({ label: 'Data de nascimento', name: 'nascimento', value: values.nascimento, type: 'date' })}${renderPfFieldCadastro({ label: 'CEI/CAEPF', name: 'cei', value: values.cei })}${renderPfFieldCadastro({ label: 'Telefone', name: 'telefone', value: values.telefone, extra: 'inputmode="tel" maxlength="24"' })}${renderPfFieldCadastro({ label: 'E-mail', name: 'email', value: values.email, type: 'email' })}${renderPfFieldCadastro({ label: 'Origem', name: 'origem', value: values.origem || '', type: 'select', options: origins })}${renderPfFieldCadastro({ label: 'Parceiro de indicação', name: 'parceiro', value: values.parceiro, type: 'select', options: crm2CadastroPartnerOptions() })}</div></section><div class="crm2-pf-notes-attachments-grid"><section class="hub-form-section crm2-pf-notes-block crm2-unified-observations" aria-labelledby="crm2-cadastro-pf-notes-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pf-notes-title">Observações</strong></div><div class="crm2-pf-observations-container"><div class="hub-form-grid">${renderPfFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div></section>${renderCadastroAttachments('pf')}</div><div class="hub-form-screen-actions crm2-pf-form-footer" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2CadastroCancelPfCreate()">Voltar para busca</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Salvar e selecionar</button></div></form>` : '';
+  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pf-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 1 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pf-create-title">Cadastrar Pessoa Física</h2><p>Consulte o CPF antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}${verification}${form}</section>`;
 }
 
 function renderPjListStateCadastro() {
@@ -469,7 +526,8 @@ function renderPjSummaryCadastro(company) {
 }
 
 function renderVinculoCadastro() {
-  if (!getSelectedPjCadastro()) return '';
+  const canRender = getSelectedPjCadastro() || ['found', 'not-found'].includes(crm2CadastroState.pjCnpjGate.status);
+  if (!canRender) return '';
   return `<div class="crm2-cadastro-vinculo-field ${crm2CadastroState.vinculoError ? 'has-error' : ''}"><label for="crm2-cadastro-vinculo-tipo"><span>Tipo de vínculo com a PJ *</span><select id="crm2-cadastro-vinculo-tipo" class="config-input" onchange="crm2CadastroSetVinculoTipo(this.value)" aria-invalid="${crm2CadastroState.vinculoError ? 'true' : 'false'}"><option value="">Selecione o vínculo</option>${CRM2_CADASTRO_VINCULO_TYPES.map((tipo) => `<option value="${escapeAttrCadastro(tipo)}" ${crm2CadastroState.vinculoTipo === tipo ? 'selected' : ''}>${escapeHtmlCadastro(tipo)}</option>`).join('')}</select>${crm2CadastroState.vinculoError ? `<small class="crm2-field-error">${escapeHtmlCadastro(crm2CadastroState.vinculoError)}</small>` : ''}</label></div>`;
 }
 
@@ -507,12 +565,23 @@ function renderPjFieldCadastro({ label, name, value = '', type = 'text', require
   return `<label class="${wide ? 'is-wide ' : ''}${error ? 'has-error' : ''}" for="${id}"><span>${label}${required ? ' *' : ''}</span>${control}${error ? `<small class="crm2-field-error">${escapeHtmlCadastro(error)}</small>` : ''}</label>`;
 }
 
+function renderPjCreateCadastroLegacy() {
+  const values = crm2CadastroState.pjDraft;
+  const gate = crm2CadastroState.pjCnpjGate;
+  const verified = gate.status === 'not-found';
+  const statusOptions = CRM2_CADASTRO_PJ_RFB_STATUS_OPTIONS;
+    return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pj-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 2 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pj-create-title">Novo cadastro PJ</h2><p>Consulte o CNPJ antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}<section class="hub-form-section crm2-pj-cnpj-verification" aria-labelledby="crm2-cadastro-pj-cnpj-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-cnpj-title">Dados da empresa</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPjCnpj(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CNPJ *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cnpj" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="Consulte o CNPJ antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCnpjCadastro(gate.value))}" oninput="crm2CadastroMaskCnpjGate(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePjCnpj()" aria-label="Alterar CNPJ" title="Alterar CNPJ"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CNPJ" title="Consultar CNPJ"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CNPJ válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CNPJ.</small>' : ''}</label>${verified ? renderPjFieldCadastro({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true }) : ''}${verified ? renderPjFieldCadastro({ label: 'Situação na RFB', name: 'statusManual', value: values.statusManual, type: 'select', options: statusOptions }) : ''}${verified ? `<div class="crm2-pj-data-row crm2-pj-data-row-address">${renderPjFieldCadastro({ label: 'CEP', name: 'cep', value: values.cep, extra: 'inputmode="numeric" maxlength="9"' })}${renderPjFieldCadastro({ label: 'Logradouro', name: 'logradouro', value: values.logradouro })}${renderPjFieldCadastro({ label: 'Número', name: 'numero', value: values.numero })}</div><div class="crm2-pj-data-row crm2-pj-data-row-complement">${renderPjFieldCadastro({ label: 'Complemento', name: 'complemento', value: values.complemento })}${renderPjFieldCadastro({ label: 'Bairro', name: 'bairro', value: values.bairro })}${renderPjFieldCadastro({ label: 'Cidade', name: 'cidadeEstado', value: values.cidadeEstado })}${renderPjFieldCadastro({ label: 'UF', name: 'uf', value: values.uf })}</div>` : ''}${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CNPJ"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenExistingPj()">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2CadastroChangePjCnpj()">Consultar outro CNPJ</button></div>` : ''}</form></section>${verified ? `<form id="crm2-cadastro-pj-form" class="crm2-cadastro-form" onsubmit="crm2CadastroSavePj(event)" novalidate><input type="hidden" name="cnpj" value="${escapeAttrCadastro(gate.value)}"><div class="crm2-pf-notes-attachments-grid"><section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-cadastro-pj-notes-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-notes-title">Observações</strong></div><div class="hub-form-grid">${renderPjFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></section>${renderCadastroAttachments('pj')}</div><div class="hub-form-screen-actions"><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Salvar e selecionar</button></div></form>` : ''}</section>`;
+}
+
 function renderPjCreateCadastro() {
   const values = crm2CadastroState.pjDraft;
   const gate = crm2CadastroState.pjCnpjGate;
   const verified = gate.status === 'not-found';
-  const statusOptions = [{ value: '', label: 'Usar status automático' }, 'empresa ativa', 'empresa inativa', 'empresa baixada'];
-    return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pj-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 2 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pj-create-title">Novo cadastro PJ</h2><p>Consulte o CNPJ antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}<section class="hub-form-section crm2-pj-cnpj-verification" aria-labelledby="crm2-cadastro-pj-cnpj-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-cnpj-title">Dados da empresa</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPjCnpj(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CNPJ *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cnpj" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="Consulte o CNPJ antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCnpjCadastro(gate.value))}" oninput="crm2CadastroMaskCnpjGate(this)" ${verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePjCnpj()" aria-label="Alterar CNPJ" title="Alterar CNPJ"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CNPJ" title="Consultar CNPJ"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CNPJ válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CNPJ.</small>' : ''}</label>${verified ? renderPjFieldCadastro({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true }) : ''}${verified ? renderPjFieldCadastro({ label: 'Situação na RFB', name: 'statusManual', value: values.statusManual, type: 'select', options: statusOptions }) : ''}${verified ? `<div class="crm2-pj-data-row crm2-pj-data-row-address">${renderPjFieldCadastro({ label: 'CEP', name: 'cep', value: values.cep, extra: 'inputmode="numeric" maxlength="9"' })}${renderPjFieldCadastro({ label: 'Logradouro', name: 'logradouro', value: values.logradouro })}${renderPjFieldCadastro({ label: 'Número', name: 'numero', value: values.numero })}</div><div class="crm2-pj-data-row crm2-pj-data-row-complement">${renderPjFieldCadastro({ label: 'Complemento', name: 'complemento', value: values.complemento })}${renderPjFieldCadastro({ label: 'Bairro', name: 'bairro', value: values.bairro })}${renderPjFieldCadastro({ label: 'Cidade', name: 'cidadeEstado', value: values.cidadeEstado })}${renderPjFieldCadastro({ label: 'UF', name: 'uf', value: values.uf })}</div>` : ''}${gate.status === 'found' ? `<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CNPJ"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenExistingPj()">Abrir cadastro</button><button class="secondary-btn" type="button" onclick="crm2CadastroChangePjCnpj()">Consultar outro CNPJ</button></div>` : ''}</form></section>${verified ? `<form id="crm2-cadastro-pj-form" class="crm2-cadastro-form" onsubmit="crm2CadastroSavePj(event)" novalidate><input type="hidden" name="cnpj" value="${escapeAttrCadastro(gate.value)}"><div class="crm2-pf-notes-attachments-grid"><section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-cadastro-pj-notes-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-notes-title">Observações</strong></div><div class="hub-form-grid">${renderPjFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></section></div><div class="hub-form-screen-actions"><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Salvar e selecionar</button></div></form>` : ''}</section>`;
+  const statusOptions = CRM2_CADASTRO_PJ_RFB_STATUS_OPTIONS;
+  const cnpjVerification = `<section class="hub-form-section crm2-pj-cnpj-verification" aria-labelledby="crm2-cadastro-pj-cnpj-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-cnpj-title">Dados da empresa</strong></div><form class="hub-form-grid ${gate.status === 'found' ? 'crm2-pf-cpf-has-found-actions' : ''}" onsubmit="crm2CadastroSearchPjCnpj(event)" novalidate><label class="${gate.status === 'invalid' ? 'is-invalid' : ''}"><span>CNPJ *</span><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="cnpj" inputmode="numeric" autocomplete="off" maxlength="18" placeholder="Consulte o CNPJ antes de iniciar o cadastro." value="${escapeAttrCadastro(maskCnpjCadastro(gate.value))}" oninput="crm2CadastroMaskCnpjGate(this)" ${gate.status === 'found' || verified ? 'readonly' : ''} required autofocus aria-invalid="${gate.status === 'invalid' ? 'true' : 'false'}">${gate.status === 'found' || verified ? '<button class="crm2-pf-cpf-icon" type="button" onclick="crm2CadastroChangePjCnpj()" aria-label="Alterar CNPJ" title="Alterar CNPJ"><i data-lucide="eraser" aria-hidden="true"></i></button>' : '<button class="crm2-pf-cpf-icon" type="submit" aria-label="Consultar CNPJ" title="Consultar CNPJ"><i data-lucide="search" aria-hidden="true"></i></button>'}</span>${gate.status === 'invalid' ? '<small class="crm2-field-error">Informe um CNPJ válido para continuar.</small>' : ''}${gate.status === 'found' ? '<small class="crm2-pf-cpf-found-message" role="alert">Já existe cadastro para este CNPJ.</small>' : ''}</label>${verified ? renderPjFieldCadastro({ label: 'Razão social', name: 'razaoSocial', value: values.razaoSocial, required: true }) : ''}${verified ? renderPjFieldCadastro({ label: 'Situação na RFB', name: 'statusManual', value: values.statusManual, type: 'select', options: statusOptions }) : ''}${verified ? `<div class="crm2-pj-data-row crm2-pj-data-row-address">${renderPjFieldCadastro({ label: 'CEP', name: 'cep', value: values.cep, extra: 'inputmode="numeric" maxlength="9"' })}${renderPjFieldCadastro({ label: 'Logradouro', name: 'logradouro', value: values.logradouro })}${renderPjFieldCadastro({ label: 'Número', name: 'numero', value: values.numero })}</div><div class="crm2-pj-data-row crm2-pj-data-row-complement">${renderPjFieldCadastro({ label: 'Complemento', name: 'complemento', value: values.complemento })}${renderPjFieldCadastro({ label: 'Bairro', name: 'bairro', value: values.bairro })}${renderPjFieldCadastro({ label: 'Cidade', name: 'cidadeEstado', value: values.cidadeEstado })}${renderPjFieldCadastro({ label: 'UF', name: 'uf', value: values.uf })}</div>` : ''}${gate.status === 'found' ? `${renderVinculoCadastro()}<div class="crm2-pf-cpf-found-actions" role="group" aria-label="Ações do CNPJ"><button class="secondary-btn" type="button" onclick="crm2CadastroSkipPj()">Continuar sem PJ</button><button class="save-btn" type="button" onclick="crm2CadastroConfirmExistingPj()" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Confirmar e avançar</button></div>` : ''}</form></section>`;
+  const createForm = verified ? `<form id="crm2-cadastro-pj-form" class="crm2-cadastro-form" onsubmit="crm2CadastroSavePj(event)" novalidate><input type="hidden" name="cnpj" value="${escapeAttrCadastro(gate.value)}"><div class="crm2-pf-notes-attachments-grid"><section class="hub-form-section crm2-pf-notes-block" aria-labelledby="crm2-cadastro-pj-notes-title"><div class="hub-form-section-title"><strong id="crm2-cadastro-pj-notes-title">Observações</strong></div><div class="hub-form-grid">${renderPjFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></section>${renderCadastroAttachments('pj')}</div>${renderVinculoCadastro()}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroSkipPj()">Continuar sem PJ</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Cadastrar e avançar</button></div></form>` : '';
+  const normalizedCreateForm = createForm.replace('class="crm2-cadastro-form"', 'class="hub-form-screen-content crm2-cadastro-form crm2-pf-form crm2-pj-form-layout"');
+  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pj-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 2 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pj-create-title">Novo cadastro PJ</h2><p>Consulte o CNPJ antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}${cnpjVerification}${normalizedCreateForm}</section>`;
 }
 
 function renderPedidoFieldCadastro({ label, name, value = '', type = 'text', required = false, wide = false, options = [] }) {
@@ -535,16 +604,16 @@ function renderPedidoResumoCadastro() {
 
 function renderPedidoReviewCadastro() {
   const pedido = crm2CadastroState.pedidoDraft;
-  return `<section class="crm2-cadastro-review-section" aria-labelledby="crm2-cadastro-review-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">CONFERÊNCIA FINAL</span><h3 id="crm2-cadastro-review-title">Revise os dados antes de criar</h3><p>Confira as informações do pedido e retorne às etapas anteriores se precisar ajustar algo.</p></div></div><div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto ou serviço</small><strong>${escapeHtmlCadastro(pedido.produto || 'Não informado')}</strong></div><div><small>Tipo de atendimento</small><strong>${escapeHtmlCadastro(pedido.tipoAtendimento || 'Não informado')}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel || 'Não informado')}</strong></div><div><small>Origem</small><strong>${escapeHtmlCadastro(pedido.origem || 'Não informado')}</strong></div><div><small>Solicitação</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div><div><small>Situação financeira</small><strong>${escapeHtmlCadastro(pedido.financeiro || 'Pendente')}</strong></div><div><small>Valor</small><strong>${escapeHtmlCadastro(pedido.valor ? `R$ ${pedido.valor}` : 'Não informado')}</strong></div><div><small>Pendências</small><strong>${escapeHtmlCadastro(pedido.pendencias || 'Nenhuma informada')}</strong></div><div class="is-wide"><small>Observações</small><strong>${escapeHtmlCadastro(pedido.observacoes || 'Nenhuma informada')}</strong></div></div></section>`;
+  return `<section class="crm2-cadastro-review-section" aria-labelledby="crm2-cadastro-review-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">CONFERÊNCIA FINAL</span><h3 id="crm2-cadastro-review-title">Revise os dados antes de criar</h3><p>Confira as informações do pedido e retorne às etapas anteriores se precisar ajustar algo.</p></div></div><div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto ou serviço</small><strong>${escapeHtmlCadastro(pedido.produto || 'Não informado')}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel || 'Não informado')}</strong></div><div><small>Origem</small><strong>${escapeHtmlCadastro(pedido.origem || 'Não informado')}</strong></div><div><small>Data de cadastro</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div><div><small>Valor</small><strong>${escapeHtmlCadastro(pedido.valor ? `R$ ${pedido.valor}` : 'Não informado')}</strong></div><div class="is-wide"><small>Observações</small><strong>${escapeHtmlCadastro(pedido.observacoes || 'Nenhuma informada')}</strong></div></div></section>`;
 }
 
 function renderPedidoCadastro() {
   const values = crm2CadastroState.pedidoDraft;
   if (crm2CadastroState.pedidoCreated) {
     const pedido = crm2CadastroState.pedidoCreated;
-    return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-success-title"><div class="crm2-cadastro-success" role="status"><span class="crm2-cadastro-success-icon" aria-hidden="true">✓</span><div><span class="ar-crm-phase1-kicker">FLUXO CONCLUÍDO · MOCKADO</span><h2 id="crm2-cadastro-pedido-success-title">Pedido criado com sucesso</h2><p>${escapeHtmlCadastro(pedido.numero)} foi incluído na lista de pedidos.</p></div></div>${renderPedidoResumoCadastro()}<div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto</small><strong>${escapeHtmlCadastro(pedido.produto)}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel)}</strong></div><div><small>Data de solicitação</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div></div><div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenCreatedPedido()">Abrir pedido</button></div></section>`;
+    return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-success-title"><div class="crm2-cadastro-success" role="status"><span class="crm2-cadastro-success-icon" aria-hidden="true">✓</span><div><span class="ar-crm-phase1-kicker">FLUXO CONCLUÍDO · MOCKADO</span><h2 id="crm2-cadastro-pedido-success-title">Pedido criado com sucesso</h2><p>${escapeHtmlCadastro(pedido.numero)} foi incluído na lista de pedidos.</p></div></div>${renderPedidoResumoCadastro()}<div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto</small><strong>${escapeHtmlCadastro(pedido.produto)}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel)}</strong></div><div><small>Data de cadastro</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div></div><div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenCreatedPedido()">Abrir pedido</button></div></section>`;
   }
-  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-title">${renderPedidoResumoCadastro()}<div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 3 DE 3</span><h2 id="crm2-cadastro-pedido-title">Pedido</h2><p>Informe os dados iniciais do pedido para concluir o cadastro sequencial.</p></div></div><form class="crm2-cadastro-form" onsubmit="crm2CadastroSavePedido(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados do pedido</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPedidoFieldCadastro({ label: 'Produto ou serviço', name: 'produto', value: values.produto, required: true, options: ['e-CPF A3', 'e-CNPJ A3', 'e-CNPJ A1', 'Renovação de certificado'] })}${renderPedidoFieldCadastro({ label: 'Tipo de atendimento', name: 'tipoAtendimento', value: values.tipoAtendimento, required: true, options: ['Emissão', 'Renovação', 'Revogação', 'Suporte'] })}${renderPedidoFieldCadastro({ label: 'Responsável', name: 'responsavel', value: values.responsavel, required: true })}${renderPedidoFieldCadastro({ label: 'Origem do pedido', name: 'origem', value: values.origem, required: true, options: ['Atendimento interno', 'Indicação', 'Site', 'Parceiro'] })}${renderPedidoFieldCadastro({ label: 'Data de solicitação', name: 'dataSolicitacao', value: values.dataSolicitacao, type: 'date', required: true })}${renderPedidoFieldCadastro({ label: 'Vencimento', name: 'vencimento', value: values.vencimento, type: 'date', required: true })}${renderPedidoFieldCadastro({ label: 'Situação financeira', name: 'financeiro', value: values.financeiro || 'Pendente', required: true, options: ['Pago', 'Pendente', 'Estornado'] })}${renderPedidoFieldCadastro({ label: 'Valor', name: 'valor', value: values.valor, type: 'number' })}${renderPedidoFieldCadastro({ label: 'Pendências', name: 'pendencias', value: values.pendencias, type: 'number' })}${renderPedidoFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div>${renderPedidoReviewCadastro()}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pj')">Voltar</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Criar pedido</button></div></form></section>`;
+  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-title">${renderPedidoResumoCadastro()}<div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 3 DE 3</span><h2 id="crm2-cadastro-pedido-title">Pedido</h2><p>Informe os dados iniciais do pedido para concluir o cadastro sequencial.</p></div></div><form class="crm2-cadastro-form" onsubmit="crm2CadastroSavePedido(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados do pedido</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPedidoFieldCadastro({ label: 'Produto ou serviço', name: 'produto', value: values.produto, required: true, options: ['e-CPF A3', 'e-CNPJ A3', 'e-CNPJ A1', 'Renovação de certificado'] })}${renderPedidoFieldCadastro({ label: 'Responsável', name: 'responsavel', value: values.responsavel, required: true })}${renderPedidoFieldCadastro({ label: 'Origem do pedido', name: 'origem', value: values.origem, required: true, options: ['Atendimento interno', 'Indicação', 'Site', 'Parceiro'] })}${renderPedidoFieldCadastro({ label: 'Vencimento', name: 'vencimento', value: values.vencimento, type: 'date', required: true })}${renderPedidoFieldCadastro({ label: 'Valor', name: 'valor', value: values.valor, type: 'number' })}${renderPedidoFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div>${renderPedidoReviewCadastro()}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pj')">Voltar</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Criar pedido</button></div></form></section>`;
 }
 
 function renderCadastroFooter() {
@@ -552,7 +621,7 @@ function renderCadastroFooter() {
     return '';
   }
   if (crm2CadastroState.currentStep === 'pj') {
-    return `<button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pf')">Voltar para PF</button><button class="secondary-btn" type="button" onclick="crm2CadastroSkipPj()" ${crm2CadastroState.pjSelectedId ? 'disabled' : ''}>Continuar sem Pessoa Jurídica</button><span class="crm2-cadastro-footer-hint">A Pessoa Jurídica é opcional neste fluxo.</span><button class="save-btn" type="button" onclick="crm2CadastroNextStep()" ${canContinuePjCadastro() ? '' : 'disabled'}>Avançar para Pedido</button>`;
+    return '';
   }
   return `<button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pj')">Voltar para Pessoa Jurídica</button><span class="crm2-cadastro-footer-hint">Revise PF, PJ e pedido antes de concluir.</span>`;
 }
@@ -620,6 +689,8 @@ function rerenderCadastro() {
   if (currentCadastroRoute().active && document.querySelector('[data-crm2-cadastro="true"]')) {
     const target = document.querySelector('[data-crm2-cadastro="true"]');
     target.outerHTML = renderCadastroShell();
+    const rendered = document.querySelector('[data-crm2-cadastro="true"]');
+    window.requestAnimationFrame(() => void hydrateHubPdfThumbnails(rendered));
   }
 }
 
@@ -634,11 +705,299 @@ function collectPfFormValues(form) {
   return values;
 }
 
+function cloneCadastroAttachments(attachments = []) {
+  return attachments.map((attachment) => ({ ...attachment }));
+}
+
+function commitCadastroAttachmentSelection(kind) {
+  const prefix = kind === 'pj' ? 'pj' : 'pf';
+  const selectionDraft = crm2CadastroState[`${prefix}AttachmentSelectionDraft`];
+  if (!selectionDraft.length) return;
+  crm2CadastroState[`${prefix}AttachmentDraft`].push(...selectionDraft.map((attachment) => ({
+    ...attachment,
+    nome: `${String(attachment.nome || '').trim()}${attachment.extensao || ''}`
+  })));
+  crm2CadastroState[`${prefix}AttachmentSelectionDraft`] = [];
+  syncCadastroAttachmentMirror(kind);
+}
+
+function syncCadastroAttachmentMirror(kind) {
+  const prefix = kind === 'pj' ? 'pj' : 'pf';
+  const attachments = cloneCadastroAttachments(crm2CadastroState[`${prefix}AttachmentDraft`]);
+  crm2CadastroState[`${prefix}Draft`] = {
+    ...crm2CadastroState[`${prefix}Draft`],
+    anexos: attachments
+  };
+  return attachments;
+}
+
+function resetCadastroAttachments(kind) {
+  const prefix = kind === 'pj' ? 'pj' : 'pf';
+  crm2CadastroState[`${prefix}AttachmentDraft`] = [];
+  crm2CadastroState[`${prefix}AttachmentSelectionDraft`] = [];
+  crm2CadastroState[`${prefix}AttachmentSelectionMode`] = false;
+  crm2CadastroState[`${prefix}SelectedAttachmentKeys`] = [];
+  crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = '';
+  crm2CadastroState[`${prefix}AttachmentInlineDraft`] = null;
+  crm2CadastroState[`${prefix}Draft`] = {
+    ...crm2CadastroState[`${prefix}Draft`],
+    anexos: []
+  };
+}
+
+function fileToCadastroAttachment(file) {
+  const kind = getHubAttachmentPreviewKind({ nome: file?.name, tipo: file?.type });
+  const filename = file?.name || 'Arquivo selecionado';
+  const match = String(filename).match(/(\.[^.]+)$/);
+  return {
+    nome: match ? filename.slice(0, -match[1].length) : filename,
+    extensao: match?.[1] || '',
+    tipo: file?.type || 'application/octet-stream',
+    validade: '',
+    incluidoEm: new Date().toISOString(),
+    arquivo: file || null,
+    previewUrl: kind !== 'unavailable' && file && typeof URL !== 'undefined' ? URL.createObjectURL(file) : ''
+  };
+}
+
+function renderCadastroAttachments(kind) {
+  const prefix = kind === 'pj' ? 'pj' : 'pf';
+  const pending = crm2CadastroState[`${prefix}AttachmentDraft`].map((attachment, index) => ({
+    ...attachment,
+    source: 'draft',
+    index
+  }));
+  const handlerName = (action) => `crm2Cadastro${prefix === 'pj' ? 'Pj' : 'Pf'}${action}`;
+  return renderHubAttachmentManager({
+    id: prefix === 'pj' ? 'crm2-pj-attachments-title' : 'crm2-pf-attachments-title',
+    className: 'crm2-pj-attachments crm2-pf-attachments-container',
+    attachments: pending,
+    drafts: crm2CadastroState[`${prefix}AttachmentSelectionDraft`],
+    editing: true,
+    canView: crm2CadastroState.canView,
+    canInclude: crm2CadastroState.canCreate,
+    canEdit: crm2CadastroState.canEdit,
+    canDelete: crm2CadastroState.canDelete,
+    showBatchActions: crm2CadastroState.canView && !crm2CadastroState[`${prefix}AttachmentSelectionDraft`].length,
+    selectionMode: crm2CadastroState[`${prefix}AttachmentSelectionMode`],
+    selectedKeys: crm2CadastroState[`${prefix}SelectedAttachmentKeys`],
+    viewMode: crm2CadastroState[`${prefix}AttachmentView`],
+    inlineEditKey: crm2CadastroState[`${prefix}AttachmentInlineEditKey`],
+    inlineDraft: crm2CadastroState[`${prefix}AttachmentInlineDraft`],
+    formatDate: (value) => value ? formatDateCadastro(value) : 'Sem validade',
+    emptyMessage: 'Nenhum anexo.',
+    emptyHint: 'Os anexos podem ser incluídos durante a edição.',
+    includePickerId: `crm2-cadastro-${prefix}-attachment-picker`,
+    handlers: {
+      selectFiles: () => `${handlerName('SelectAttachment')}(this)`,
+      cancelDraft: () => `${handlerName('CancelAttachmentDraft')}()`,
+      confirmDraft: () => `${handlerName('ConfirmAttachmentDraft')}()`,
+      toggleSelection: () => `${handlerName('ToggleAttachmentSelection')}()`,
+      downloadAll: () => `${handlerName('DownloadAllAttachments')}()`,
+      downloadSelected: () => `${handlerName('DownloadSelectedAttachments')}()`,
+      deleteSelected: () => `${handlerName('DeleteSelectedAttachments')}()`,
+      setView: (view) => `${handlerName('SetAttachmentView')}('${escapeAttrCadastro(view)}')`,
+      updateDraftName: (index) => `${handlerName('UpdateAttachmentDraft')}(${index}, 'nome', this.value)`,
+      maskDraftDate: (index) => `${handlerName('MaskAttachmentDraftDate')}(${index}, this)`,
+      pickDraftDate: (index) => `${handlerName('SetAttachmentDraftDateFromPicker')}(${index}, this.value)`,
+      view: (source, index) => `${handlerName('ViewAttachment')}('${escapeAttrCadastro(source)}', ${index})`,
+      editInline: (source, index) => `${handlerName('ToggleAttachmentInlineEdit')}('${escapeAttrCadastro(source)}', ${index})`,
+      updateInlineName: () => `${handlerName('UpdateAttachmentInlineDraft')}('nome', this.value)`,
+      maskDate: () => `${handlerName('MaskAttachmentDate')}(this)`,
+      pickDate: () => `${handlerName('SetAttachmentDateFromPicker')}(this.value)`,
+      saveInlineEdit: () => `${handlerName('SaveAttachmentInlineEdit')}()`,
+      cancelInlineEdit: () => `${handlerName('CancelAttachmentInlineEdit')}()`,
+      download: (source, index) => `${handlerName('DownloadAttachment')}('${escapeAttrCadastro(source)}', ${index})`,
+      toggleSelected: (source, index) => `${handlerName('ToggleAttachmentSelected')}('${escapeAttrCadastro(source)}', ${index}, this.checked)`
+    }
+  });
+}
+
+function createCadastroAttachmentHandlers() {
+  const handlers = {};
+  ['pf', 'pj'].forEach((kind) => {
+    const prefix = kind === 'pj' ? 'pj' : 'pf';
+    const namePrefix = `crm2Cadastro${kind === 'pj' ? 'Pj' : 'Pf'}`;
+    const getDrafts = () => crm2CadastroState[`${prefix}AttachmentDraft`];
+    const getSelectionDrafts = () => crm2CadastroState[`${prefix}AttachmentSelectionDraft`];
+    const mark = () => {
+      syncCadastroAttachmentMirror(kind);
+      crm2CadastroMarkDirty();
+    };
+    const rerender = () => rerenderCadastro();
+    handlers[`${namePrefix}SelectAttachment`] = (input) => {
+      if (!crm2CadastroState.canCreate) return;
+      const attachments = Array.from(input?.files || []).map(fileToCadastroAttachment);
+      if (!attachments.length) return;
+      getSelectionDrafts().push(...attachments);
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}UpdateAttachmentDraft`] = (index, field, value) => {
+      const attachment = getSelectionDrafts()[Number(index)];
+      if (!attachment || !['nome', 'validade'].includes(field)) return;
+      attachment[field] = String(value || '');
+      mark();
+    };
+    handlers[`${namePrefix}MaskAttachmentDraftDate`] = (index, input) => {
+      const draft = getSelectionDrafts()[Number(index)];
+      if (!draft || !input) return;
+      const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+      const masked = digits.length > 4 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}` : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+      input.value = masked;
+      draft.displayValidade = masked;
+      const match = masked.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      draft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+      mark();
+    };
+    handlers[`${namePrefix}SetAttachmentDraftDateFromPicker`] = (index, value) => {
+      const draft = getSelectionDrafts()[Number(index)];
+      if (!draft) return;
+      draft.validade = String(value || '');
+      draft.displayValidade = draft.validade ? formatDateCadastro(draft.validade) : '';
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}CancelAttachmentDraft`] = () => {
+      crm2CadastroState[`${prefix}AttachmentSelectionDraft`] = [];
+      crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = '';
+      crm2CadastroState[`${prefix}AttachmentInlineDraft`] = null;
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}ConfirmAttachmentDraft`] = () => {
+      if (!getSelectionDrafts().length) return;
+      getDrafts().push(...getSelectionDrafts().map((attachment) => ({
+        ...attachment,
+        nome: `${String(attachment.nome || '').trim()}${attachment.extensao || ''}`
+      })));
+      crm2CadastroState[`${prefix}AttachmentSelectionDraft`] = [];
+      crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = '';
+      crm2CadastroState[`${prefix}AttachmentInlineDraft`] = null;
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}ToggleAttachmentSelection`] = () => {
+      const selectionModeKey = `${prefix}AttachmentSelectionMode`;
+      crm2CadastroState[selectionModeKey] = !crm2CadastroState[selectionModeKey];
+      if (!crm2CadastroState[selectionModeKey]) crm2CadastroState[`${prefix}SelectedAttachmentKeys`] = [];
+      rerender();
+    };
+    handlers[`${namePrefix}SetAttachmentView`] = (view) => {
+      if (!['list', 'grid'].includes(view)) return;
+      crm2CadastroState[`${prefix}AttachmentView`] = view;
+      rerender();
+    };
+    handlers[`${namePrefix}ToggleAttachmentInlineEdit`] = (source, index) => {
+      if (source !== 'draft' || (!crm2CadastroState.canCreate && !crm2CadastroState.canEdit)) return;
+      const attachment = getDrafts()[Number(index)];
+      if (!attachment) return;
+      const filename = String(attachment.nome || '');
+      const match = filename.match(/(\.[^.]+)$/);
+      crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = `${source}:${Number(index)}`;
+      crm2CadastroState[`${prefix}AttachmentInlineDraft`] = {
+        nome: match ? filename.slice(0, -match[1].length) : filename,
+        extensao: match?.[1] || '',
+        validade: attachment.validade || '',
+        displayValidade: attachment.validade ? formatDateCadastro(attachment.validade) : ''
+      };
+      rerender();
+    };
+    handlers[`${namePrefix}UpdateAttachmentInlineDraft`] = (field, value) => {
+      const draft = crm2CadastroState[`${prefix}AttachmentInlineDraft`];
+      if (draft && ['nome', 'validade'].includes(field)) draft[field] = String(value || '');
+    };
+    handlers[`${namePrefix}MaskAttachmentDate`] = (input) => {
+      const draft = crm2CadastroState[`${prefix}AttachmentInlineDraft`];
+      if (!draft || !input) return;
+      const digits = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+      const masked = digits.length > 4 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}` : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+      input.value = masked;
+      draft.displayValidade = masked;
+      const match = masked.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      draft.validade = match ? `${match[3]}-${match[2]}-${match[1]}` : '';
+      mark();
+    };
+    handlers[`${namePrefix}SetAttachmentDateFromPicker`] = (value) => {
+      const draft = crm2CadastroState[`${prefix}AttachmentInlineDraft`];
+      if (!draft) return;
+      draft.validade = String(value || '');
+      draft.displayValidade = draft.validade ? formatDateCadastro(draft.validade) : '';
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}SaveAttachmentInlineEdit`] = () => {
+      const [source, index] = String(crm2CadastroState[`${prefix}AttachmentInlineEditKey`] || ':').split(':');
+      const draft = crm2CadastroState[`${prefix}AttachmentInlineDraft`];
+      const attachment = source === 'draft' ? getDrafts()[Number(index)] : null;
+      if (!attachment || !draft) return;
+      attachment.nome = `${String(draft.nome || '').trim()}${draft.extensao || ''}`;
+      attachment.validade = draft.validade || '';
+      crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = '';
+      crm2CadastroState[`${prefix}AttachmentInlineDraft`] = null;
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}CancelAttachmentInlineEdit`] = () => {
+      crm2CadastroState[`${prefix}AttachmentInlineEditKey`] = '';
+      crm2CadastroState[`${prefix}AttachmentInlineDraft`] = null;
+      rerender();
+    };
+    handlers[`${namePrefix}ViewAttachment`] = (source, index) => {
+      const attachment = source === 'draft' ? getDrafts()[Number(index)] : null;
+      if (attachment?.previewUrl || attachment?.url) window.open(attachment.previewUrl || attachment.url, '_blank', 'noopener,noreferrer');
+    };
+    handlers[`${namePrefix}DownloadAttachment`] = (source, index) => {
+      const attachment = source === 'draft' ? getDrafts()[Number(index)] : null;
+      if (!attachment) return;
+      const blob = typeof File !== 'undefined' && attachment.arquivo instanceof File
+        ? attachment.arquivo
+        : new Blob([`Nome: ${attachment.nome}\nTipo: ${attachment.tipo}\nValidade: ${attachment.validade || 'Sem validade'}`], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.nome || `anexo-${prefix}`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    handlers[`${namePrefix}DownloadAllAttachments`] = () => {
+      getDrafts().forEach((_, index) => handlers[`${namePrefix}DownloadAttachment`]('draft', index));
+    };
+    handlers[`${namePrefix}DownloadSelectedAttachments`] = () => {
+      crm2CadastroState[`${prefix}SelectedAttachmentKeys`].forEach((key) => {
+        const [source, index] = key.split(':');
+        handlers[`${namePrefix}DownloadAttachment`](source, Number(index));
+      });
+    };
+    handlers[`${namePrefix}DeleteSelectedAttachments`] = () => {
+      if (!crm2CadastroState.canDelete) return;
+      [...crm2CadastroState[`${prefix}SelectedAttachmentKeys`]].forEach((key) => {
+        const [source, index] = key.split(':');
+        if (source === 'draft') getDrafts().splice(Number(index), 1);
+      });
+      crm2CadastroState[`${prefix}SelectedAttachmentKeys`] = [];
+      mark();
+      rerender();
+    };
+    handlers[`${namePrefix}ToggleAttachmentSelected`] = (source, index, checked) => {
+      const key = `${source}:${Number(index)}`;
+      const stateKey = `${prefix}SelectedAttachmentKeys`;
+      crm2CadastroState[stateKey] = checked ? [...new Set([...crm2CadastroState[stateKey], key])] : crm2CadastroState[stateKey].filter((item) => item !== key);
+      rerender();
+    };
+  });
+  return handlers;
+}
+
 Object.assign(window, {
   crm2CadastroRender: renderCadastroShell,
   crm2CadastroMount() {
     const target = document.querySelector('[data-crm2-cadastro="true"]');
-    if (target) target.outerHTML = renderCadastroShell();
+    if (target) {
+      target.outerHTML = renderCadastroShell();
+      const rendered = document.querySelector('[data-crm2-cadastro="true"]');
+      window.requestAnimationFrame(() => void hydrateHubPdfThumbnails(rendered));
+    }
   },
   navegarParaCrm2Cadastro() {
     permissionsCadastro();
@@ -660,6 +1019,8 @@ Object.assign(window, {
     crm2CadastroState.vinculoError = '';
     crm2CadastroState.pfDraft = {};
     crm2CadastroState.pjDraft = {};
+    resetCadastroAttachments('pf');
+    resetCadastroAttachments('pj');
     crm2CadastroState.pedidoDraft = {};
     crm2CadastroState.pfErrors = {};
     crm2CadastroState.pjErrors = {};
@@ -690,6 +1051,8 @@ Object.assign(window, {
     crm2CadastroState.vinculoError = '';
     crm2CadastroState.pfDraft = {};
     crm2CadastroState.pjDraft = {};
+    resetCadastroAttachments('pf');
+    resetCadastroAttachments('pj');
     crm2CadastroState.pedidoDraft = {};
     crm2CadastroState.pfErrors = {};
     crm2CadastroState.pjErrors = {};
@@ -792,8 +1155,8 @@ Object.assign(window, {
     crm2CadastroState.vinculoTipo = '';
     crm2CadastroState.vinculoError = '';
     crm2CadastroMarkDirty();
-    crm2CadastroState.message = 'O fluxo seguirá sem Pessoa Jurídica.';
-    rerenderCadastro();
+    crm2CadastroState.message = '';
+    window.crm2CadastroGoToStep('pedido');
   },
   crm2CadastroOpenPfCreate() {
     permissionsCadastro();
@@ -944,7 +1307,8 @@ Object.assign(window, {
         cnpj: value,
         razaoSocial: data?.razaoSocial || '',
         porte: data?.porte || '',
-        statusManual: data?.situacao || '',
+        statusManual: mapApiStatusCadastro(data?.situacao),
+        situacaoRfb: mapApiStatusCadastro(data?.situacao),
         cep: data?.cep || '',
         logradouro: data?.endereco || '',
         endereco: data?.endereco || '',
@@ -963,6 +1327,7 @@ Object.assign(window, {
   crm2CadastroChangePjCnpj() {
     crm2CadastroState.pjCnpjGate = { value: '', status: '', companyId: '' };
     crm2CadastroState.pjDraft = {};
+    resetCadastroAttachments('pj');
     crm2CadastroState.pjErrors = {};
     rerenderCadastro();
   },
@@ -976,12 +1341,14 @@ Object.assign(window, {
     if (!company) return;
     crm2CadastroState.pjSelectedId = id;
     crm2CadastroState.pjSkipped = false;
-    crm2CadastroState.vinculoTipo = '';
-    crm2CadastroState.vinculoError = '';
+    if (!validatePjFlowCadastro()) {
+      rerenderCadastro();
+      return;
+    }
     crm2CadastroState.pjCnpjGate = { value: digitsCadastro(company.cnpj), status: 'confirmed', companyId: id };
     crm2CadastroMarkDirty();
     crm2CadastroState.message = '';
-    rerenderCadastro();
+    window.crm2CadastroGoToStep('pedido');
   },
   crm2CadastroSearchPfCpf(event) {
     event?.preventDefault();
@@ -1000,6 +1367,7 @@ Object.assign(window, {
   crm2CadastroChangePfCpf() {
     crm2CadastroState.pfCpfGate = { value: '', status: '', personId: '' };
     crm2CadastroState.pfDraft = {};
+    resetCadastroAttachments('pf');
     crm2CadastroState.pfErrors = {};
     rerenderCadastro();
   },
@@ -1021,6 +1389,7 @@ Object.assign(window, {
     event?.preventDefault();
     permissionsCadastro();
     if (!crm2CadastroState.canCreate) return;
+    commitCadastroAttachmentSelection('pf');
     const values = collectPfFormValues(event?.currentTarget);
     values.cpf = digitsCadastro(crm2CadastroState.pfCpfGate.value || values.cpf);
     const errors = {};
@@ -1031,18 +1400,20 @@ Object.assign(window, {
     if (getMockPfsCadastro().some((item) => digitsCadastro(item.cpf) === values.cpf)) errors.cpf = 'Já existe uma pessoa física mockada com este CPF.';
     if (Object.keys(errors).length) {
       crm2CadastroState.pfErrors = errors;
-      crm2CadastroState.pfDraft = values;
+      crm2CadastroState.pfDraft = { ...values, anexos: cloneCadastroAttachments(crm2CadastroState.pfAttachmentDraft) };
       crm2CadastroState.message = 'Revise os campos destacados.';
       rerenderCadastro();
       return;
     }
     const now = new Date().toISOString();
+    const attachments = syncCadastroAttachmentMirror('pf');
     const person = {
       id: `fluxo-pf-${Date.now()}`,
       ...values,
       nome: String(values.nome || '').trim().toLocaleUpperCase('pt-BR'),
       origem: normalizarOrigemCrm2(values.origem),
       parceiro: values.parceiro || '',
+      anexos: attachments,
       pedidos: [],
       timeline: [{ data: now, usuario: 'Usuário atual', descricao: 'Cadastro criado.', tipo: 'Cadastro' }],
       criadoNoFluxo: true,
@@ -1056,6 +1427,7 @@ Object.assign(window, {
     crm2CadastroState.pfMode = 'create';
     crm2CadastroState.pfCpfGate = { value: '', status: '', personId: '' };
     crm2CadastroState.pfDraft = {};
+    resetCadastroAttachments('pf');
     crm2CadastroState.pfErrors = {};
     crm2CadastroState.pfSearch = '';
     crm2CadastroState.pfSearchExpanded = false;
@@ -1133,6 +1505,7 @@ Object.assign(window, {
     event?.preventDefault();
     permissionsCadastro();
     if (!crm2CadastroState.canCreate || !crm2CadastroState.pfSelectedId) return;
+    commitCadastroAttachmentSelection('pj');
     const values = { ...crm2CadastroState.pjDraft, ...Object.fromEntries(new FormData(event.currentTarget).entries()) };
     values.razaoSocial = String(values.razaoSocial || '').trim().toLocaleUpperCase('pt-BR');
     values.cnpj = digitsCadastro(values.cnpj || crm2CadastroState.pjCnpjGate.value);
@@ -1144,20 +1517,26 @@ Object.assign(window, {
     if (!validateCnpjCadastro(values.cnpj)) errors.cnpj = 'Informe um CNPJ válido.';
     if (crm2CadastroState.pjCnpjGate.status !== 'not-found') errors.cnpj = 'Consulte o CNPJ antes de salvar o cadastro.';
     if (getMockPjsCadastro().some((item) => digitsCadastro(item.cnpj) === values.cnpj)) errors.cnpj = 'Já existe uma pessoa jurídica mockada com este CNPJ.';
-    if (Object.keys(errors).length) {
+    crm2CadastroState.vinculoError = CRM2_CADASTRO_VINCULO_TYPES.includes(crm2CadastroState.vinculoTipo)
+      ? ''
+      : 'Informe o tipo de vínculo com a Pessoa Jurídica.';
+    if (Object.keys(errors).length || crm2CadastroState.vinculoError) {
       crm2CadastroState.pjErrors = errors;
-      crm2CadastroState.pjDraft = values;
+      crm2CadastroState.pjDraft = { ...values, anexos: cloneCadastroAttachments(crm2CadastroState.pjAttachmentDraft) };
       crm2CadastroState.message = 'Revise os campos destacados.';
       rerenderCadastro();
       return;
     }
     const now = new Date().toISOString();
+    const attachments = syncCadastroAttachmentMirror('pj');
     const company = {
       id: `fluxo-pj-${Date.now()}`,
       ...values,
-      status: values.statusManual || 'empresa inativa',
-      statusAutomatico: values.statusManual || 'empresa inativa',
+      situacaoRfb: values.statusManual || '',
+      status: 'empresa inativa',
+      statusAutomatico: 'empresa inativa',
       origem: 'Cadastro sequencial',
+      anexos: attachments,
       pedidos: [],
       pessoasVinculadas: [],
       criadoNoFluxo: true,
@@ -1168,15 +1547,15 @@ Object.assign(window, {
     crm2CadastroState.pjSelectedId = company.id;
     crm2CadastroState.pjSkipped = false;
     crm2CadastroMarkDirty();
-    crm2CadastroState.currentStep = 'pj';
     crm2CadastroState.pjMode = 'create';
     crm2CadastroState.pjCnpjGate = { value: digitsCadastro(company.cnpj), status: 'confirmed', companyId: company.id };
     crm2CadastroState.pjDraft = {};
+    resetCadastroAttachments('pj');
     crm2CadastroState.pjErrors = {};
     crm2CadastroState.pjSearch = '';
     crm2CadastroState.pjPage = 1;
     crm2CadastroState.message = '';
-    rerenderCadastro();
+    window.crm2CadastroGoToStep('pedido');
   },
   crm2CadastroOpenCreatedPedido() {
     const id = crm2CadastroState.pedidoCreated?.id;
@@ -1186,6 +1565,8 @@ Object.assign(window, {
     event?.preventDefault();
     permissionsCadastro();
     if (!crm2CadastroState.canCreate) return;
+    commitCadastroAttachmentSelection('pf');
+    commitCadastroAttachmentSelection('pj');
     if (!getSelectedPfCadastro()) {
       crm2CadastroState.message = 'Selecione uma Pessoa Física antes de criar o pedido.';
       rerenderCadastro();
@@ -1202,11 +1583,12 @@ Object.assign(window, {
     }
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     Object.keys(values).forEach((key) => { values[key] = String(values[key] ?? '').trim(); });
+    values.dataSolicitacao = new Date().toISOString().slice(0, 10);
     const errors = {};
-    ['produto', 'tipoAtendimento', 'responsavel', 'origem', 'dataSolicitacao', 'vencimento', 'financeiro'].forEach((field) => {
+    ['produto', 'responsavel', 'origem', 'vencimento'].forEach((field) => {
       if (!values[field]) errors[field] = 'Preencha este campo.';
     });
-    if (values.dataSolicitacao && values.vencimento && values.vencimento < values.dataSolicitacao) errors.vencimento = 'O vencimento não pode ser anterior à solicitação.';
+    if (values.dataSolicitacao && values.vencimento && values.vencimento < values.dataSolicitacao) errors.vencimento = 'O vencimento não pode ser anterior à data de cadastro.';
     if (values.valor && Number(values.valor) < 0) errors.valor = 'Informe um valor igual ou maior que zero.';
     if (Object.keys(errors).length) {
       crm2CadastroState.pedidoErrors = errors;
@@ -1226,14 +1608,54 @@ Object.assign(window, {
       pjRazaoSocial: pj?.razaoSocial || '',
       pjCnpj: pj?.cnpj || '',
       vinculoTipo: crm2CadastroState.vinculoTipo,
-      status: 'Novo',
-      pendencias: values.pendencias || '0'
+      status: 'Novo'
     });
     if (!pedido) {
       crm2CadastroState.message = 'Não foi possível incluir o pedido na lista principal.';
       rerenderCadastro();
       return;
     }
+    const vinculoId = pj ? `vinculo-seq-${pedido.id}` : '';
+    const vinculo = pj ? {
+      id: vinculoId,
+      vinculoId,
+      pfId: pf.id,
+      pfNome: pf.nome,
+      pfCpf: pf.cpf,
+      pjId: pj.id,
+      pjRazaoSocial: pj.razaoSocial,
+      pjCnpj: pj.cnpj,
+      nome: pf.nome,
+      cpf: pf.cpf,
+      tipo: crm2CadastroState.vinculoTipo,
+      status: 'Ativo',
+      inicioEm: values.dataSolicitacao,
+      encerramentoEm: ''
+    } : null;
+    const persistedPf = pf.criadoNoFluxo
+      ? window.crm2PfCreateMockFromSequential?.({ ...pf, id: pf.id, anexos: cloneCadastroAttachments(pf.anexos || []), pedidos: [pedido], vinculos: vinculo ? [vinculo] : [], usuario: 'Usuário atual' })
+      : window.crm2PfApplySequentialOrder?.(pf.id, { pedido, vinculo, anexos: cloneCadastroAttachments(pf.anexos || []), usuario: 'Usuário atual' });
+    const pessoaVinculada = vinculo ? {
+      nome: pf.nome,
+      cpf: pf.cpf,
+      tipo: crm2CadastroState.vinculoTipo,
+      status: 'Ativo',
+      vinculoId,
+      inicioEm: values.dataSolicitacao,
+      encerramentoEm: ''
+    } : null;
+    const persistedPj = pj
+      ? (pj.criadoNoFluxo
+        ? window.crm2PjCreateMockFromSequential?.({ ...pj, id: pj.id, anexos: cloneCadastroAttachments(pj.anexos || []), pedidos: [pedido], pessoasVinculadas: pessoaVinculada ? [pessoaVinculada] : [] })
+        : window.crm2PjApplySequentialOrder?.(pj.id, { pedido, vinculo: pessoaVinculada, anexos: cloneCadastroAttachments(pj.anexos || []) }))
+      : true;
+    if (!persistedPf || !persistedPj) {
+      crm2CadastroState.message = 'O pedido foi criado, mas não foi possível sincronizar o cadastro PF/PJ.';
+      rerenderCadastro();
+      return;
+    }
+    if (pf.criadoNoFluxo) crm2CadastroCreatedPfs.splice(crm2CadastroCreatedPfs.findIndex((item) => item.id === pf.id), 1);
+    if (pj?.criadoNoFluxo) crm2CadastroCreatedPjs.splice(crm2CadastroCreatedPjs.findIndex((item) => item.id === pj.id), 1);
     crm2CadastroState.pedidoCreated = pedido;
     crm2CadastroState.dirty = false;
     crm2CadastroState.draftSavedAt = '';
@@ -1249,6 +1671,8 @@ Object.assign(window, {
     rerenderCadastro();
   }
 });
+
+Object.assign(window, createCadastroAttachmentHandlers());
 
 observarContextoAcessoHub(() => {
   permissionsCadastro();

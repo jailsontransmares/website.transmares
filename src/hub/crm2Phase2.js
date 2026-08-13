@@ -1377,6 +1377,62 @@ Object.assign(window, {
     rerenderCrm2Phase2();
     return { ...item, pedidos: [], timeline: item.timeline.map((event) => ({ ...event })) };
   },
+  crm2PfCreateMockFromSequential(payload = {}) {
+    const cpf = String(payload.cpf || '').replace(/\D/g, '');
+    if (!payload.nome || cpf.length !== 11) return null;
+    const existing = crm2PfState.items.find((item) => item.id === payload.id || item.cpf === cpf);
+    if (existing) {
+      const incomingAttachments = Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [];
+      const attachmentKey = (attachment = {}) => [attachment.nome, attachment.tipo, attachment.validade, attachment.incluidoEm].map((value) => String(value || '')).join('|');
+      const existingKeys = new Set((existing.anexos || []).map(attachmentKey));
+      existing.anexos = [...(existing.anexos || []), ...incomingAttachments.filter((attachment) => !existingKeys.has(attachmentKey(attachment)))];
+      existing.pedidos = [...(existing.pedidos || []), ...(payload.pedidos || []).filter((pedido) => !existing.pedidos.some((item) => item.id === pedido.id)).map((pedido) => ({ ...pedido }))];
+      existing.vinculos = [...(existing.vinculos || []), ...(payload.vinculos || []).filter((vinculo) => !existing.vinculos.some((item) => item.id === vinculo.id)).map((vinculo) => ({ ...vinculo }))];
+      existing.atualizadoEm = new Date().toISOString();
+      rerenderCrm2Phase2();
+      return { ...existing, anexos: existing.anexos.map((anexo) => ({ ...anexo })), pedidos: existing.pedidos.map((pedido) => ({ ...pedido })) };
+    }
+    const now = new Date().toISOString();
+    const item = {
+      id: payload.id || `pf-seq-${Date.now()}`,
+      nome: String(payload.nome).trim(),
+      cpf,
+      cei: payload.cei || '',
+      nascimento: payload.nascimento || '',
+      telefone: payload.telefone || '',
+      email: payload.email || '',
+      origem: normalizarOrigemCrm2(payload.origem),
+      parceiro: payload.parceiro || '',
+      observacoes: payload.observacoes || '',
+      cadastroEm: payload.cadastroEm || now,
+      atualizadoEm: now,
+      anexos: Array.isArray(payload.anexos) ? payload.anexos.map((anexo) => ({ ...anexo })) : [],
+      empresas: [],
+      vinculos: Array.isArray(payload.vinculos) ? payload.vinculos.map((vinculo) => ({ ...vinculo })) : [],
+      pedidos: Array.isArray(payload.pedidos) ? payload.pedidos.map((pedido) => ({ ...pedido })) : [],
+      timeline: [{ data: now, usuario: payload.usuario || 'Usuário atual', descricao: 'Cadastro criado pelo cadastro sequencial.', tipo: 'Cadastro' }]
+    };
+    crm2PfState.items.unshift(item);
+    rerenderCrm2Phase2();
+    return { ...item, anexos: item.anexos.map((anexo) => ({ ...anexo })), pedidos: item.pedidos.map((pedido) => ({ ...pedido })) };
+  },
+  crm2PfApplySequentialOrder(id, payload = {}) {
+    const person = crm2PfState.items.find((item) => item.id === id);
+    if (!person) return false;
+    const now = new Date().toISOString();
+    const pedido = payload.pedido;
+    if (Array.isArray(payload.anexos) && payload.anexos.length) {
+      const attachmentKey = (attachment = {}) => [attachment.nome, attachment.tipo, attachment.validade, attachment.incluidoEm].map((value) => String(value || '')).join('|');
+      const existingKeys = new Set((person.anexos || []).map(attachmentKey));
+      person.anexos = [...(person.anexos || []), ...payload.anexos.map((anexo) => ({ ...anexo })).filter((anexo) => !existingKeys.has(attachmentKey(anexo)))];
+    }
+    if (pedido && !person.pedidos?.some((item) => item.id === pedido.id)) person.pedidos = [...(person.pedidos || []), { ...pedido }];
+    if (payload.vinculo && !person.vinculos?.some((item) => item.id === payload.vinculo.id)) person.vinculos = [...(person.vinculos || []), { ...payload.vinculo }];
+    person.atualizadoEm = now;
+    person.timeline = [...(person.timeline || []), { data: now, usuario: payload.usuario || 'Usuário atual', descricao: 'Pedido criado pelo cadastro sequencial.', tipo: 'Pedido' }];
+    rerenderCrm2Phase2();
+    return true;
+  },
   crm2PfApplyOpportunityGenerationMock(id, payload = {}) {
     const person = crm2PfState.items.find((item) => item.id === id);
     if (!person) return false;
