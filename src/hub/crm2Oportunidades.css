@@ -972,12 +972,6 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   color: #a13b42;
 }
 
-.crm2-opp-pill.is-ganha,
-.crm2-opp-pill.is-negociacao {
-  background: #e8f6ee;
-  color: #1f7141;
-}
-
 .crm2-opp-pill.is-novo {
   background: #e8f0ff;
   color: #2856a6;
@@ -1381,16 +1375,15 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 
 .crm2-opp-form-footer {
   align-items: center;
-  background: var(--hub-surface, #fff);
-  border-top: 1px solid var(--border-color, #dfe4ec);
-  bottom: 0;
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  margin-top: 18px;
-  padding: 10px 0;
-  position: sticky;
-  z-index: 5;
+  margin-top: 0;
+}
+
+.crm2-oportunidades-page .hub-form-screen-actions,
+.crm2-oportunidades-page .crm2-opp-form-footer {
+  min-height: 40px;
 }
 
 .crm2-opp-save-error {
@@ -1628,6 +1621,26 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   padding: 4px 8px;
 }
 
+.crm2-opp-conversion-inline-btn.save-btn {
+  box-shadow: var(--shadow-button, 0 4px 12px rgba(40, 86, 166, .16));
+}
+
+.crm2-oportunidades-page.hub-form-screen {
+  min-height: auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.crm2-oportunidades-page.hub-form-screen > * {
+  min-width: 0;
+}
+
+.crm2-opp-sidebar-observations textarea[readonly] {
+  background: var(--surface-muted, #f6f8fb);
+  cursor: default;
+  resize: vertical;
+}
+
 .crm2-opp-scheduling-btn {
   align-self: end;
   min-height: 24px;
@@ -1750,6 +1763,22 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 .crm2-opp-detail-main,
 .crm2-opp-detail-sidebar {
   min-width: 0;
+}
+
+.crm2-opp-customer-data {
+  display: grid;
+  gap: 12px;
+}
+
+.crm2-opp-detail-section-heading {
+  align-items: end;
+  display: flex;
+  justify-content: space-between;
+}
+
+.crm2-opp-detail-section-heading strong {
+  color: var(--texto, #172033);
+  font-size: 14px;
 }
 
 .crm2-opp-detail-sidebar {
@@ -2049,21 +2078,31 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 
 .crm2-opp-items-sheet.is-readonly th:first-child,
 .crm2-opp-items-sheet.is-readonly td:first-child {
-  width: 16%;
+  width: 14%;
 }
 
 .crm2-opp-items-sheet.is-readonly th:nth-child(2),
 .crm2-opp-items-sheet.is-readonly td:nth-child(2) {
-  width: 50%;
+  width: 28%;
 }
 
 .crm2-opp-items-sheet.is-readonly th:nth-child(3),
 .crm2-opp-items-sheet.is-readonly td:nth-child(3) {
-  width: 26%;
+  width: 8%;
 }
 
-.crm2-opp-items-sheet.is-readonly th:last-child,
-.crm2-opp-items-sheet.is-readonly td:last-child {
+.crm2-opp-items-sheet.is-readonly th:nth-child(4),
+.crm2-opp-items-sheet.is-readonly td:nth-child(4) {
+  width: 18%;
+}
+
+.crm2-opp-items-sheet.is-readonly th:nth-child(5),
+.crm2-opp-items-sheet.is-readonly td:nth-child(5) {
+  width: 24%;
+}
+
+.crm2-opp-items-sheet.is-readonly th:nth-child(6),
+.crm2-opp-items-sheet.is-readonly td:nth-child(6) {
   width: 8%;
 }
 
@@ -2089,21 +2128,31 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 
 .crm2-opp-items-sheet.is-editable th:first-child,
 .crm2-opp-items-sheet.is-editable td:first-child {
-  width: 16%;
+  width: 14%;
 }
 
 .crm2-opp-items-sheet.is-editable th:nth-child(2),
 .crm2-opp-items-sheet.is-editable td:nth-child(2) {
-  width: 50%;
+  width: 30%;
 }
 
 .crm2-opp-items-sheet.is-editable th:nth-child(3),
 .crm2-opp-items-sheet.is-editable td:nth-child(3) {
+  width: 8%;
+}
+
+.crm2-opp-items-sheet.is-editable th:nth-child(4),
+.crm2-opp-items-sheet.is-editable td:nth-child(4) {
+  width: 14%;
+}
+
+.crm2-opp-items-sheet.is-editable th:nth-child(5),
+.crm2-opp-items-sheet.is-editable td:nth-child(5) {
   width: 26%;
 }
 
-.crm2-opp-items-sheet.is-editable th:last-child,
-.crm2-opp-items-sheet.is-editable td:last-child {
+.crm2-opp-items-sheet.is-editable th:nth-child(6),
+.crm2-opp-items-sheet.is-editable td:nth-child(6) {
   width: 8%;
 }
 
@@ -2116,11 +2165,43 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 }
 
 .crm2-opp-items-sheet th:last-child {
-  font-size: 0;
+  font-size: 11px;
 }
 
 .crm2-opp-items-sheet td {
   font-size: 13px;
+}
+
+.crm2-opp-items-sheet.is-readonly,
+.crm2-opp-items-sheet.is-editable {
+  min-width: 760px;
+}
+
+.crm2-opp-table-value {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crm2-opp-item-total {
+  color: var(--muted-text, #64748b);
+  display: block;
+  font-size: 10px;
+  margin-top: 3px;
+}
+
+.crm2-opp-item-quantity {
+  max-width: 74px;
+}
+
+.crm2-opp-derived-value {
+  color: var(--text-color, #25314a);
+  display: inline-flex;
+  font-size: 13px;
+  min-height: 32px;
+  align-items: center;
 }
 
 .crm2-opp-items-sheet.is-readonly th:last-child,
@@ -2157,6 +2238,17 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   display: flex;
   gap: 10px;
   justify-content: flex-start;
+}
+
+.crm2-opp-items-form-header > div {
+  display: grid;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.crm2-opp-items-form-header small {
+  color: var(--muted-text, #64748b);
+  font-size: 11px;
 }
 
 .crm2-opp-pj-cell {
@@ -2468,7 +2560,8 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   }
 
   .crm2-opp-form-footer button {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 120px;
   }
 
   .crm2-opp-form-grid,
