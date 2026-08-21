@@ -52,11 +52,14 @@ import {
 import { isSupabaseConfigured } from './supabaseClient.js';
 import {
   createConsultoria360Atendimento,
+  addConsultoria360Event,
+  deleteConsultoria360Atendimento,
   getConsultoria360Atendimento,
   getConsultoria360Dashboard,
   listConsultoria360Clients,
   listConsultoria360Companies,
   saveConsultoria360Dimensioning,
+  saveConsultoria360Opportunity,
   saveConsultoria360Proposal,
   saveConsultoria360Responses,
   updateConsultoria360Atendimento
@@ -122,6 +125,9 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'saveConsultoria360Responses') return { ok: true, data: await saveConsultoria360Responses(payload) };
     if (action === 'saveConsultoria360Dimensioning') return { ok: true, data: await saveConsultoria360Dimensioning(payload) };
     if (action === 'saveConsultoria360Proposal') return { ok: true, data: await saveConsultoria360Proposal(payload) };
+    if (action === 'saveConsultoria360Opportunity') return { ok: true, data: await saveConsultoria360Opportunity(payload) };
+    if (action === 'addConsultoria360Event') return { ok: true, data: await addConsultoria360Event(payload) };
+    if (action === 'deleteConsultoria360Atendimento') return { ok: true, data: await deleteConsultoria360Atendimento(payload.id, payload.empresaId) };
 
     if (action === 'getArCrmFormOptions') {
       const dados = await carregarOpcoesCadastroCrmAr();

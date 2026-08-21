@@ -1,6 +1,7 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
 
 const ATENDIMENTO_COLUMNS = 'id, empresa_id, pessoa_id, status, responsavel_usuario_id, prioridade_final, scores, consorcio_fit, cliente_snapshot, contexto, iniciado_em, concluido_em, proxima_revisao, observacoes, created_by, created_at, updated_at';
+const OPPORTUNITY_COLUMNS = 'id, atendimento_id, pilar, score, status, ativa, proxima_acao, proxima_acao_em, responsavel_usuario_id, created_by, created_at, updated_at';
 
 function assertResponse(response, message) {
   if (response.error) throw new Error(response.error.message || message);
@@ -56,29 +57,36 @@ export async function getConsultoria360Dashboard(empresaId) {
 export async function getConsultoria360Atendimento(id, empresaId) {
   if (!id || !empresaId) throw new Error('Atendimento inválido.');
   const supabase = exigirSupabaseConfigurado();
-  const [atendimento, respostas, dimensionamentos, propostas] = await Promise.all([
+  const [atendimento, respostas, dimensionamentos, propostas, oportunidades, eventos] = await Promise.all([
     supabase.from('consultoria_360_atendimentos').select(ATENDIMENTO_COLUMNS).eq('id', id).eq('empresa_id', empresaId).single(),
     supabase.from('consultoria_360_respostas').select('*').eq('atendimento_id', id).maybeSingle(),
     supabase.from('consultoria_360_dimensionamentos').select('*').eq('atendimento_id', id).order('tipo'),
-    supabase.from('consultoria_360_propostas').select('*').eq('atendimento_id', id).order('versao', { ascending: false })
+    supabase.from('consultoria_360_propostas').select('*').eq('atendimento_id', id).order('versao', { ascending: false }),
+    supabase.from('consultoria_360_oportunidades').select(OPPORTUNITY_COLUMNS).eq('atendimento_id', id).order('pilar'),
+    supabase.from('consultoria_360_eventos').select('*').eq('atendimento_id', id).order('created_at', { ascending: false })
   ]);
 
   return {
     atendimento: assertResponse(atendimento, 'Não foi possível carregar o atendimento.'),
     respostas: assertResponse(respostas, 'Não foi possível carregar as respostas.'),
     dimensionamentos: assertResponse(dimensionamentos, 'Não foi possível carregar os dimensionamentos.') || [],
-    propostas: assertResponse(propostas, 'Não foi possível carregar as propostas.') || []
+    propostas: assertResponse(propostas, 'Não foi possível carregar as propostas.') || [],
+    oportunidades: assertResponse(oportunidades, 'Não foi possível carregar as oportunidades.') || [],
+    eventos: assertResponse(eventos, 'Não foi possível carregar o histórico.') || []
   };
 }
 
 export async function createConsultoria360Atendimento(payload = {}) {
-  if (!payload.empresa_id || !payload.pessoa_id) throw new Error('Selecione uma empresa e um cliente.');
+  if (!payload.empresa_id) throw new Error('Selecione uma empresa.');
+  if (!payload.pessoa_id && !String(payload.cliente_snapshot?.nome_razao_social || '').trim()) {
+    throw new Error('Informe o nome para iniciar um diagnóstico sem cadastro.');
+  }
   const supabase = exigirSupabaseConfigurado();
   return assertResponse(await supabase
     .from('consultoria_360_atendimentos')
     .insert({
       empresa_id: payload.empresa_id,
-      pessoa_id: payload.pessoa_id,
+      pessoa_id: payload.pessoa_id || null,
       status: payload.status || 'rascunho',
       responsavel_usuario_id: payload.responsavel_usuario_id || null,
       cliente_snapshot: payload.cliente_snapshot || {},
@@ -102,7 +110,9 @@ export async function updateConsultoria360Atendimento(payload = {}) {
     ...(payload.contexto !== undefined ? { contexto: payload.contexto } : {}),
     ...(payload.concluido_em !== undefined ? { concluido_em: payload.concluido_em } : {}),
     ...(payload.proxima_revisao !== undefined ? { proxima_revisao: payload.proxima_revisao } : {}),
-    ...(payload.observacoes !== undefined ? { observacoes: payload.observacoes } : {})
+    ...(payload.observacoes !== undefined ? { observacoes: payload.observacoes } : {}),
+    updated_by: payload.updated_by || null,
+    updated_at: new Date().toISOString()
   };
   return assertResponse(await supabase
     .from('consultoria_360_atendimentos')
@@ -122,7 +132,8 @@ export async function saveConsultoria360Responses(payload = {}) {
       atendimento_id: payload.atendimento_id,
       versao_questionario: payload.versao_questionario || 'diagnostico-360-v1',
       respostas: payload.respostas || {},
-      updated_by: payload.updated_by || null
+      updated_by: payload.updated_by || null,
+      updated_at: new Date().toISOString()
     }, { onConflict: 'atendimento_id' })
     .select('*')
     .single(), 'Não foi possível salvar as respostas.');
@@ -139,7 +150,8 @@ export async function saveConsultoria360Dimensioning(payload = {}) {
       premissas: payload.premissas || {},
       resultado: payload.resultado || {},
       versao_regra: payload.versao_regra,
-      updated_by: payload.updated_by || null
+      updated_by: payload.updated_by || null,
+      updated_at: new Date().toISOString()
     }, { onConflict: 'atendimento_id,tipo' })
     .select('*')
     .single(), 'Não foi possível salvar o dimensionamento.');
@@ -165,4 +177,49 @@ export async function saveConsultoria360Proposal(payload = {}) {
     }, { onConflict: 'atendimento_id,versao' })
     .select('*')
     .single(), 'Não foi possível salvar a proposta.');
+}
+
+export async function saveConsultoria360Opportunity(payload = {}) {
+  if (!payload.atendimento_id || !payload.pilar) throw new Error('Oportunidade inválida.');
+  const supabase = exigirSupabaseConfigurado();
+  return assertResponse(await supabase
+    .from('consultoria_360_oportunidades')
+    .upsert({
+      atendimento_id: payload.atendimento_id,
+      pilar: payload.pilar,
+      score: payload.score ?? null,
+      status: payload.status || 'Acompanhar',
+      ativa: payload.ativa !== false,
+      proxima_acao: payload.proxima_acao || null,
+      proxima_acao_em: payload.proxima_acao_em || null,
+      responsavel_usuario_id: payload.responsavel_usuario_id || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'atendimento_id,pilar' })
+    .select(OPPORTUNITY_COLUMNS)
+    .single(), 'Não foi possível salvar a oportunidade.');
+}
+
+export async function addConsultoria360Event(payload = {}) {
+  if (!payload.atendimento_id || !payload.tipo || !payload.descricao) throw new Error('Evento inválido.');
+  const supabase = exigirSupabaseConfigurado();
+  return assertResponse(await supabase
+    .from('consultoria_360_eventos')
+    .insert({
+      atendimento_id: payload.atendimento_id,
+      tipo: payload.tipo,
+      descricao: payload.descricao,
+      metadata: payload.metadata || {}
+    })
+    .select('*')
+    .single(), 'Não foi possível registrar o evento.');
+}
+
+export async function deleteConsultoria360Atendimento(id, empresaId) {
+  if (!id || !empresaId) throw new Error('Atendimento inválido.');
+  const supabase = exigirSupabaseConfigurado();
+  return assertResponse(await supabase
+    .from('consultoria_360_atendimentos')
+    .delete()
+    .eq('id', id)
+    .eq('empresa_id', empresaId), 'Não foi possível excluir o atendimento.');
 }

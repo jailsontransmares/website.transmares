@@ -290,6 +290,345 @@
   line-height: 1.4;
 }
 
+.consultoria360-triage-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.consultoria360-subpanel {
+  background: color-mix(in srgb, var(--fundo) 78%, var(--card));
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  min-width: 0;
+  padding: 16px;
+}
+
+.consultoria360-subpanel.is-wide {
+  grid-column: 1 / -1;
+}
+
+.consultoria360-subpanel h4 {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.consultoria360-subpanel h4 svg {
+  color: var(--cor-principal);
+  height: 18px;
+  width: 18px;
+}
+
+.consultoria360-muted,
+.consultoria360-subpanel > p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0 0 14px;
+}
+
+.consultoria360-priority-card {
+  display: grid;
+  gap: 7px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.consultoria360-priority-card.is-selected {
+  border-color: var(--cor-principal);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cor-principal) 16%, transparent);
+}
+
+.consultoria360-priority-score {
+  color: var(--cor-principal);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.consultoria360-priority-score small {
+  display: inline;
+  font-size: 12px;
+  margin-left: 3px;
+}
+
+.consultoria360-radio,
+.consultoria360-check {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+}
+
+.consultoria360-result-grid,
+.consultoria360-review-grid,
+.consultoria360-detail-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 16px;
+}
+
+.consultoria360-result-grid article,
+.consultoria360-review-grid article,
+.consultoria360-detail-summary article {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  min-width: 0;
+  padding: 14px;
+}
+
+.consultoria360-result-grid span,
+.consultoria360-result-grid small,
+.consultoria360-review-grid span,
+.consultoria360-review-grid small,
+.consultoria360-detail-summary span {
+  color: var(--texto-suave);
+  display: block;
+  font-size: 12px;
+}
+
+.consultoria360-result-grid strong,
+.consultoria360-review-grid strong,
+.consultoria360-detail-summary strong {
+  display: block;
+  margin: 5px 0 2px;
+}
+
+.consultoria360-dimension-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.consultoria360-alternatives {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.consultoria360-alternatives article {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.consultoria360-scope-field {
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  padding: 14px;
+}
+
+.consultoria360-scope-field legend {
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 6px;
+}
+
+.consultoria360-disclaimer {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--cor-secundaria) 8%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-secundaria) 24%, var(--borda));
+  border-radius: 12px;
+  color: var(--texto-suave);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.45;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.consultoria360-disclaimer svg {
+  color: var(--cor-principal);
+  flex: 0 0 16px;
+  height: 16px;
+  width: 16px;
+}
+
+.consultoria360-status {
+  background: color-mix(in srgb, var(--cor-principal) 10%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 20%, var(--borda));
+  border-radius: 999px;
+  color: var(--cor-principal);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.consultoria360-status.concluido,
+.consultoria360-status.contratado {
+  color: var(--cor-sucesso, #16794c);
+}
+
+.consultoria360-status.rascunho,
+.consultoria360-status.em-andamento {
+  color: var(--cor-alerta, #9b6500);
+}
+
+.consultoria360-filter-bar {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
+  margin: 0 0 18px;
+}
+
+.consultoria360-table td small {
+  color: var(--texto-suave);
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+}
+
+.consultoria360-review-alert {
+  color: var(--cor-alerta, #9b6500);
+  font-weight: 750;
+}
+
+.consultoria360-detail-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.consultoria360-tabs {
+  border-bottom: 1px solid var(--borda);
+  display: flex;
+  gap: 6px;
+  margin: 20px 0 16px;
+  overflow-x: auto;
+}
+
+.consultoria360-tabs button {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--texto-suave);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.consultoria360-tabs button.is-active {
+  border-color: var(--cor-principal);
+  color: var(--cor-principal);
+}
+
+.consultoria360-detail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.consultoria360-detail-grid article,
+.consultoria360-detail-list article,
+.consultoria360-opportunity-grid article,
+.consultoria360-proposal-preview {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  min-width: 0;
+  padding: 15px;
+}
+
+.consultoria360-detail-grid article.is-wide {
+  grid-column: 1 / -1;
+}
+
+.consultoria360-detail-grid article > span,
+.consultoria360-detail-list article span,
+.consultoria360-opportunity-grid article span {
+  color: var(--texto-suave);
+  display: block;
+  font-size: 12px;
+}
+
+.consultoria360-detail-grid article > strong {
+  display: block;
+  margin-top: 5px;
+}
+
+.consultoria360-detail-grid pre,
+.consultoria360-detail-list pre {
+  background: color-mix(in srgb, var(--fundo) 85%, var(--card));
+  border-radius: 8px;
+  font-size: 11px;
+  margin: 10px 0 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+.consultoria360-detail-list,
+.consultoria360-opportunity-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.consultoria360-detail-list article > div,
+.consultoria360-opportunity-grid article > div {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.consultoria360-proposal-toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.consultoria360-proposal-preview h3 {
+  margin-top: 0;
+}
+
+.consultoria360-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.consultoria360-timeline article {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  padding: 12px 0;
+}
+
+.consultoria360-timeline-marker {
+  background: var(--cor-principal);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cor-principal) 12%, transparent);
+  height: 9px;
+  margin-top: 5px;
+  width: 9px;
+}
+
+.consultoria360-timeline article p,
+.consultoria360-timeline article small {
+  color: var(--texto-suave);
+  display: block;
+  margin: 3px 0 0;
+}
+
 .consultoria360-investigation-grid,
 .consultoria360-priority-grid {
   display: grid;
@@ -392,7 +731,21 @@
 @media (max-width: 760px) {
   .consultoria360-metrics,
   .consultoria360-investigation-grid,
-  .consultoria360-priority-grid {
+  .consultoria360-priority-grid,
+  .consultoria360-result-grid,
+  .consultoria360-review-grid,
+  .consultoria360-detail-summary,
+  .consultoria360-detail-grid,
+  .consultoria360-detail-list,
+  .consultoria360-opportunity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .consultoria360-triage-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .consultoria360-filter-bar {
     grid-template-columns: 1fr;
   }
 
@@ -428,5 +781,20 @@
 
   .consultoria360-error .secondary-btn {
     margin-left: 32px;
+  }
+}
+
+@media print {
+  .hub-sidebar,
+  .hub-topbar,
+  .consultoria360-detail-actions,
+  .consultoria360-tabs,
+  .consultoria360-proposal-toolbar button {
+    display: none !important;
+  }
+
+  .consultoria360-proposal-preview {
+    border: 0;
+    box-shadow: none;
   }
 }

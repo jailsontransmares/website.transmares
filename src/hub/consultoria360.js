@@ -1,5 +1,17 @@
 import './consultoria360.css';
 import { chamarApi } from './api.js';
+import {
+  calculateConsortiumReference,
+  calculatePriorityScores,
+  calculateProtectionReference,
+  compareHealthPlans,
+  selectInvestigationPillars,
+  triageToScores,
+  DIAGNOSTICO_RULES_VERSION,
+  PROTECTION_RULES_VERSION,
+  HEALTH_MATCH_RULES_VERSION,
+  CONSORTIUM_RULES_VERSION
+} from './consultoria360Rules.js';
 
 export const CONSULTORIA360_ROUTE = 'operacoes/corretora/consultoria-360';
 export const CONSULTORIA360_PERMISSION = 'consultoria_360';
@@ -8,391 +20,116 @@ const STEPS = [
   { id: 1, label: 'Cliente e contexto' },
   { id: 2, label: 'Triagem' },
   { id: 3, label: 'Investigação' },
-  { id: 4, label: 'Prioridades' }
+  { id: 4, label: 'Prioridades' },
+  { id: 5, label: 'Dimensionamentos' },
+  { id: 6, label: 'Proposta' },
+  { id: 7, label: 'Revisão' }
+];
+const PILLARS = [
+  { id: 'protecao', label: 'Proteção financeira' },
+  { id: 'saude', label: 'Saúde' },
+  { id: 'patrimonio', label: 'Patrimônio / projetos' }
+];
+const TRIAGE_FIELDS = [
+  ['p1', 'A renda familiar ficaria comprometida se você precisasse parar?'],
+  ['p2', 'Há dependentes ou compromissos que exigem continuidade financeira?'],
+  ['p3', 'A reserva atual cobre uma reorganização de curto prazo?'],
+  ['p4', 'As coberturas existentes estão claras e atualizadas?'],
+  ['s1', 'A rede atual atende bem às necessidades da família?'],
+  ['s2', 'O custo atual do plano ou atendimento é confortável?'],
+  ['s3', 'Existe alguma mudança de cidade, família ou uso prevista?'],
+  ['s4', 'Você deseja comparar alternativas de saúde agora?'],
+  ['c1', 'Existe um projeto patrimonial relevante no horizonte?'],
+  ['c2', 'O prazo desejado para esse projeto é curto?'],
+  ['c3', 'Há capacidade mensal confortável para planejar?'],
+  ['c4', 'O objetivo ainda é flexível quanto a prazo ou valor?']
 ];
 
-const uiState = {
-  view: 'cockpit',
-  step: 1,
-  notice: '',
-  loading: false,
-  error: '',
-  data: {
-    companies: [],
-    clients: [],
-    atendimentos: []
-  },
-  draft: {
-    clientSource: 'avulso',
-    clientId: '',
-    clientName: '',
-    occupation: '',
-    mainInterest: '',
-    protectionSignal: '',
-    healthSignal: '',
-    patrimonySignal: '',
-    investigationNotes: ''
-  }
-};
+const emptyDraft = () => ({
+  atendimentoId: '', clientMode: 'cadastro', clientSource: 'cadastro_crm', clientId: '', clientName: '', occupation: '', mainInterest: '',
+  p1: '0', p2: '0', p3: '0', p4: '0', s1: '0', s2: '0', s3: '0', s4: '0', c1: '0', c2: '0', c3: '0', c4: '0',
+  reserveMonths: '0', existingProtection: '0', incomeImpact: '0', debt: '0', healthHasPlan: '0', healthSatisfaction: '0', healthImprove: '0', healthIntent: '0', patrimonyHorizon: '0', patrimonyPlanning: '0', patrimonyMonthlyCapacity: '0', patrimonyProjectValue: '0', patrimonyFlexibility: '0', patrimonyReserve: '0', investigationNotes: '', selectedPriority: '',
+  selectedScope: ['protecao'],
+  protection: { expenses: '', supportYears: '', debt: '', education: '', otherGoals: '', immediateReserve: '', liquidReserve: '', existingLife: '', netIncome: '', maintainedIncome: '', replacementPct: '0.8', recoveryMonths: '', extraDG: '', existingDG: '', disabilityYears: '' },
+  healthCriteria: { budget: '', desiredScope: 'Nacional', desiredAccommodation: 'Indiferente', copayPreference: 'Talvez', essentialNetwork: '', weights: { network: 5, price: 5, scope: 4, accommodation: 3, copay: 2, reimbursement: 2 } },
+  healthPlans: [
+    { name: 'Alternativa A', price: '', network: 3, scope: 'Nacional', accommodation: 'Apartamento', copay: 'Sim', reimbursement: 3 },
+    { name: 'Alternativa B', price: '', network: 3, scope: 'Nacional', accommodation: 'Apartamento', copay: 'Não', reimbursement: 3 },
+    { name: 'Alternativa C', price: '', network: 3, scope: 'Nordeste', accommodation: 'Enfermaria', copay: 'Talvez', reimbursement: 2 }
+  ],
+  consortium: { credit: '', term: '', adminFee: '', reserveFund: '', otherFee: '', comfort: '', bid: '', bidType: 'own', adjustment: '0.05', targetMonths: '', flexibility: '1' },
+  proposalTitle: '', proposalStatus: 'rascunho', proposalVersion: 0, recommendation: '', nextSteps: '', observations: '', proximaRevisao: ''
+});
 
+const uiState = { view: 'cockpit', detailTab: 'resumo', step: 1, notice: '', loading: false, saving: false, error: '', filters: { search: '', status: '', priority: '', review: '' }, data: { companies: [], clients: [], atendimentos: [] }, detail: null, draft: emptyDraft() };
 let activeContext = null;
 
-function escapeHtml(value = '') {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+function escapeHtml(value = '') { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+function escapeAttr(value = '') { return escapeHtml(value).replace(/`/g, '&#096;'); }
+function num(value) { return Number.isFinite(Number(value)) ? Number(value) : 0; }
+function money(value) { return num(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function date(value) { return value ? new Date(`${String(value).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—'; }
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+function statusClass(value = '') { return String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+function pillarLabel(value) { return PILLARS.find(item => item.id === value)?.label || value || '—'; }
+function selectOptions(options, selected) { return options.map(option => `<option value="${escapeAttr(option.value)}" ${String(option.value) === String(selected) ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join(''); }
+function inputField(label, name, value, { type = 'text', placeholder = '', wide = false, step = 'any' } = {}) { return `<label class="consultoria360-field ${wide ? 'is-wide' : ''}"><span>${escapeHtml(label)}</span><input class="config-input" type="${escapeAttr(type)}" name="${escapeAttr(name)}" value="${escapeAttr(value)}" ${type === 'number' ? `step="${step}"` : ''} placeholder="${escapeAttr(placeholder)}" oninput="consultoria360AtualizarCampo(this.name, this.value)"></label>`; }
+function nestedInput(label, path, value, { type = 'text', placeholder = '', step = 'any' } = {}) { return `<label class="consultoria360-field"><span>${escapeHtml(label)}</span><input class="config-input" type="${escapeAttr(type)}" value="${escapeAttr(value)}" ${type === 'number' ? `step="${step}"` : ''} placeholder="${escapeAttr(placeholder)}" oninput="consultoria360AtualizarCampo('${escapeAttr(path)}', this.value)"></label>`; }
+function nestedSelect(label, path, value, options) { return `<label class="consultoria360-field"><span>${escapeHtml(label)}</span><select class="config-input" onchange="consultoria360AtualizarCampo('${escapeAttr(path)}', this.value)">${selectOptions(options, value)}</select></label>`; }
 
-function escapeAttr(value = '') {
-  return escapeHtml(value).replace(/`/g, '&#096;');
-}
+function renderAccessDenied(renderShell) { return renderShell({ tituloPagina: 'Consultoria 360°', descricaoPagina: 'Acesso controlado pela permissão do Hub.', classeConteudo: 'consultoria360-page', conteudo: `<section class="admin-panel consultoria360-access-state" role="alert"><div class="admin-panel-header"><div><span class="hub-page-kicker">Consultoria consultiva</span><h2>Acesso não autorizado</h2><p>É necessária a permissão Visualizar para acessar o Diagnóstico 360°.</p></div></div><button class="secondary-btn" type="button" onclick="navegarHome()">Voltar para o início</button></section>` }); }
+function renderLoading(renderShell, message = 'Carregando dados da Consultoria 360°...') { return renderShell({ tituloPagina: 'Consultoria 360°', descricaoPagina: 'Carregando o cockpit consultivo.', classeConteudo: 'consultoria360-page', conteudo: `<section class="admin-panel" aria-busy="true"><div class="admin-panel-header"><div><span class="hub-page-kicker">Consultoria consultiva</span><h2>Carregando</h2><p>${escapeHtml(message)}</p></div></div><div class="consultoria360-loading"><span class="hub-loading-spinner" aria-hidden="true"></span><span>Buscando dados do Hub...</span></div></section>` }); }
+function renderStepper() { return `<ol class="consultoria360-stepper" aria-label="Etapas do diagnóstico">${STEPS.map(step => `<li class="${uiState.step === step.id ? 'is-current' : ''} ${uiState.step > step.id ? 'is-complete' : ''}"><span>${step.id}</span><strong>${escapeHtml(step.label)}</strong></li>`).join('')}</ol>`; }
+function renderError() { return uiState.error ? `<div class="consultoria360-error" role="alert"><i data-lucide="circle-alert" aria-hidden="true"></i><div><strong>Não foi possível concluir a operação.</strong><p>${escapeHtml(uiState.error)}</p></div><button class="secondary-btn" type="button" onclick="consultoria360LimparErro()">Fechar</button></div>` : ''; }
+function triageValueOptions(selected) { return selectOptions([{ value: '0', label: '0 · Sem sinal' }, { value: '1', label: '1 · Acompanhar' }, { value: '2', label: '2 · Merece aprofundamento' }], selected); }
+function triageScores() { return triageToScores(Object.fromEntries(['p1', 'p2', 'p3', 'p4', 's1', 's2', 's3', 's4', 'c1', 'c2', 'c3', 'c4'].map(key => [key, num(uiState.draft[key])] ))); }
+function priorityResults() { const d = uiState.draft; return calculatePriorityScores({ triage: triageScores(), reserveMonths: num(d.reserveMonths), existingProtection: num(d.existingProtection), incomeImpact: num(d.incomeImpact), debt: num(d.debt), mainInterest: d.mainInterest, healthHasPlan: num(d.healthHasPlan), healthSatisfaction: num(d.healthSatisfaction), healthImprove: num(d.healthImprove), healthIntent: num(d.healthIntent), patrimonyHorizon: num(d.patrimonyHorizon), patrimonyPlanning: num(d.patrimonyPlanning), patrimonyMonthlyCapacity: num(d.patrimonyMonthlyCapacity), patrimonyProjectValue: num(d.patrimonyProjectValue), patrimonyFlexibility: num(d.patrimonyFlexibility), patrimonyReserve: num(d.patrimonyReserve) }); }
+function dimensionResults() { const d = uiState.draft; const protection = calculateProtectionReference(Object.fromEntries(Object.entries(d.protection).map(([key, value]) => [key, num(value)]))); const health = compareHealthPlans({ criteria: { ...d.healthCriteria, budget: num(d.healthCriteria.budget), weights: d.healthCriteria.weights }, plans: d.healthPlans }); const consortium = calculateConsortiumReference({ ...Object.fromEntries(Object.entries(d.consortium).map(([key, value]) => [key, key === 'bidType' ? value : num(value)])), diagnosticFit: priorityResults().consortiumFit }); return { protection, health, consortium }; }
 
-function selectOptions(options, selected) {
-  return options.map(option => `
-    <option value="${escapeAttr(option.value)}" ${option.value === selected ? 'selected' : ''}>${escapeHtml(option.label)}</option>
-  `).join('');
-}
+function renderContextStep() { const d = uiState.draft; const hasCadastro = d.clientMode !== 'sem_cadastro'; return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Contexto</span><h3>Comece pelo momento do cliente</h3><p>Use um cadastro existente quando possível. Se a conversa ainda não tiver cadastro, registre um contato provisório sem criar uma ficha paralela.</p></div><div class="consultoria360-form-grid"><label class="consultoria360-field is-wide"><span>Como iniciar?</span><select class="config-input" name="clientMode" onchange="consultoria360AlternarModoCliente(this.value)">${selectOptions([{ value: 'cadastro', label: 'Vincular cliente existente' }, { value: 'sem_cadastro', label: 'Iniciar sem cadastro' }], d.clientMode)}</select></label>${hasCadastro ? `<label class="consultoria360-field is-wide"><span>Cliente vinculado</span><select class="config-input" name="clientId" onchange="consultoria360AtualizarCampo(this.name, this.value)"><option value="">Selecione um cliente existente</option>${(uiState.data.clients || []).map(client => `<option value="${escapeAttr(client.id)}" ${client.id === d.clientId ? 'selected' : ''}>${escapeHtml(client.nome_razao_social)}</option>`).join('')}</select><small>O Hub reutiliza cad_pessoas; nenhum cliente paralelo é criado.</small></label>` : `${inputField('Nome para identificação', 'clientName', d.clientName, { placeholder: 'Ex.: Contato recebido por indicação', wide: true })}<div class="consultoria360-disclaimer is-wide"><i data-lucide="info" aria-hidden="true"></i><span>O diagnóstico ficará vinculado à empresa e ao usuário, com o nome informado no snapshot. O cadastro poderá ser associado depois.</span></div>`}${inputField('Atividade profissional', 'occupation', d.occupation, { placeholder: 'Ex.: Empresária' })}<label class="consultoria360-field"><span>Interesse principal declarado</span><select class="config-input" name="mainInterest" onchange="consultoria360AtualizarCampo(this.name, this.value)">${selectOptions([{ value: '', label: 'Ainda não sabe' }, { value: 'protecao', label: 'Proteção financeira' }, { value: 'saude', label: 'Saúde' }, { value: 'patrimonio', label: 'Patrimônio / projeto' }], d.mainInterest)}</select></label>${inputField('Origem', 'clientSource', d.clientSource, { placeholder: 'Cliente da corretora, indicação...' })}</div>`; }
+function renderTriageStep() { return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Triagem · ${DIAGNOSTICO_RULES_VERSION}</span><h3>Uma leitura curta orienta a conversa</h3><p>As respostas organizam a investigação; não substituem julgamento consultivo nem diagnóstico clínico.</p></div><div class="consultoria360-triage-grid">${TRIAGE_FIELDS.map(([name, label]) => `<label class="consultoria360-field"><span>${escapeHtml(label)}</span><select class="config-input" name="${name}" onchange="consultoria360AtualizarCampo(this.name, this.value)">${triageValueOptions(uiState.draft[name])}</select></label>`).join('')}</div>`; }
+function renderInvestigationStep() { const d = uiState.draft; const selected = selectInvestigationPillars({ triage: triageScores(), mainInterest: d.mainInterest }); return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Investigação direcionada</span><h3>Aprofunde apenas o que merece atenção</h3><p>“Não sabe” também é informação útil: pode gerar uma solicitação de apólice, certificado ou contrato antes da recomendação.</p></div><div class="consultoria360-form-grid">${selected.protecao ? `<section class="consultoria360-subpanel is-wide"><h4><i data-lucide="shield-check" aria-hidden="true"></i> Proteção financeira</h4><div class="consultoria360-form-grid">${nestedSelect('Reserva em meses', 'reserveMonths', d.reserveMonths, [{ value: '0', label: 'Até 2 meses' }, { value: '1', label: '3 a 5 meses' }, { value: '2', label: 'Mais de 5 meses' }])}${nestedSelect('Proteção existente', 'existingProtection', d.existingProtection, [{ value: '0', label: 'Não sabe / não possui' }, { value: '1', label: 'Parcial' }, { value: '2', label: 'Conhecida e revisada' }])}${nestedSelect('Impacto de uma pausa na renda', 'incomeImpact', d.incomeImpact, [{ value: '0', label: 'Baixo' }, { value: '1', label: 'Médio' }, { value: '2', label: 'Alto' }])}${nestedInput('Dívidas e financiamentos', 'debt', d.debt, { type: 'number', placeholder: 'R$' })}</div></section>` : ''}${selected.saude ? `<section class="consultoria360-subpanel is-wide"><h4><i data-lucide="heart-pulse" aria-hidden="true"></i> Saúde</h4><div class="consultoria360-form-grid">${nestedSelect('Possui plano?', 'healthHasPlan', d.healthHasPlan, [{ value: '0', label: 'Não' }, { value: '1', label: 'Sim' }, { value: '2', label: 'Não sabe' }])}${nestedSelect('Satisfação atual', 'healthSatisfaction', d.healthSatisfaction, [{ value: '0', label: 'Satisfeito' }, { value: '1', label: 'Parcialmente' }, { value: '2', label: 'Insatisfeito' }])}${nestedSelect('Deseja melhorar?', 'healthImprove', d.healthImprove, [{ value: '0', label: 'Não' }, { value: '1', label: 'Talvez' }, { value: '2', label: 'Sim' }])}${nestedSelect('Intenção de comparar', 'healthIntent', d.healthIntent, [{ value: '0', label: 'Sem intenção agora' }, { value: '1', label: 'Acompanhar' }, { value: '2', label: 'Quero comparar' }])}</div></section>` : ''}${selected.patrimonio ? `<section class="consultoria360-subpanel is-wide"><h4><i data-lucide="house" aria-hidden="true"></i> Patrimônio / projetos</h4><div class="consultoria360-form-grid">${nestedSelect('Horizonte', 'patrimonyHorizon', d.patrimonyHorizon, [{ value: '0', label: 'Até 12 meses' }, { value: '1', label: '1 a 3 anos' }, { value: '2', label: 'Mais de 3 anos' }])}${nestedSelect('Já existe planejamento?', 'patrimonyPlanning', d.patrimonyPlanning, [{ value: '0', label: 'Não' }, { value: '1', label: 'Parcial' }, { value: '2', label: 'Sim' }])}${nestedInput('Capacidade mensal confortável', 'patrimonyMonthlyCapacity', d.patrimonyMonthlyCapacity, { type: 'number', placeholder: 'R$' })}${nestedInput('Valor estimado do projeto', 'patrimonyProjectValue', d.patrimonyProjectValue, { type: 'number', placeholder: 'R$' })}${nestedSelect('Flexibilidade do objetivo', 'patrimonyFlexibility', d.patrimonyFlexibility, [{ value: '0', label: 'Rígido' }, { value: '1', label: 'Flexível' }])}${nestedInput('Reserva disponível', 'patrimonyReserve', d.patrimonyReserve, { type: 'number', placeholder: 'R$' })}</div></section>` : ''}${inputField('Observações da investigação', 'investigationNotes', d.investigationNotes, { placeholder: 'Documentos a solicitar, contexto e percepções.', wide: true })}</div>`; }
+function renderPrioritiesStep() { const result = priorityResults(); const chosen = uiState.draft.selectedPriority || result.suggestedPriority; return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Mapa de prioridades</span><h3>A escolha consciente do cliente prevalece</h3><p>O score orienta a conversa. Quando prioridades estiverem próximas, o consultor pode substituir a sugestão e registrar a decisão.</p></div><div class="consultoria360-priority-grid">${PILLARS.map(pillar => `<article class="consultoria360-priority-card ${chosen === pillar.id ? 'is-selected' : ''}"><div class="consultoria360-priority-score">${result.scores[pillar.id]}<small>/100</small></div><strong>${pillar.label}</strong><span class="consultoria360-status ${statusClass(result.statuses[pillar.id])}">${escapeHtml(result.statuses[pillar.id])}</span><small>Necessidade, lacuna, urgência e intenção.</small><label class="consultoria360-radio"><input type="radio" name="selectedPriority" value="${pillar.id}" ${chosen === pillar.id ? 'checked' : ''} onchange="consultoria360AtualizarCampo(this.name, this.value)"> Usar como prioridade atual</label></article>`).join('')}</div><div class="consultoria360-result-grid"><article><span>Prioridade sugerida</span><strong>${pillarLabel(result.suggestedPriority)}</strong><small>${result.suggestedScore}/100 · aderência patrimonial preliminar ${result.consortiumFit}%</small></article><article><span>Investigação</span><strong>${Object.values(selectInvestigationPillars({ triage: triageScores(), mainInterest: uiState.draft.mainInterest })).filter(Boolean).length} pilares</strong><small>Os demais podem ficar em acompanhamento.</small></article></div>`; }
+function renderProtectionPanel() { const p = uiState.draft.protection; return `<section class="consultoria360-subpanel"><h4><i data-lucide="shield-check" aria-hidden="true"></i> Proteção financeira</h4><p class="consultoria360-muted">Referência preliminar; não é ordem de contratação.</p><div class="consultoria360-form-grid">${nestedInput('Despesas essenciais mensais', 'protection.expenses', p.expenses, { type: 'number' })}${nestedInput('Anos de suporte familiar', 'protection.supportYears', p.supportYears, { type: 'number' })}${nestedInput('Dívidas / financiamentos', 'protection.debt', p.debt, { type: 'number' })}${nestedInput('Educação / dependentes', 'protection.education', p.education, { type: 'number' })}${nestedInput('Outros objetivos', 'protection.otherGoals', p.otherGoals, { type: 'number' })}${nestedInput('Reserva imediata adicional', 'protection.immediateReserve', p.immediateReserve, { type: 'number' })}${nestedInput('Reserva líquida utilizável', 'protection.liquidReserve', p.liquidReserve, { type: 'number' })}${nestedInput('Capital de vida existente', 'protection.existingLife', p.existingLife, { type: 'number' })}${nestedInput('Renda líquida mensal', 'protection.netIncome', p.netIncome, { type: 'number' })}${nestedInput('Renda mantida no afastamento', 'protection.maintainedIncome', p.maintainedIncome, { type: 'number' })}${nestedInput('Reposição de renda (0 a 1)', 'protection.replacementPct', p.replacementPct, { type: 'number', step: '0.05' })}${nestedInput('Meses de recuperação', 'protection.recoveryMonths', p.recoveryMonths, { type: 'number' })}${nestedInput('Despesas extras DG', 'protection.extraDG', p.extraDG, { type: 'number' })}${nestedInput('Cobertura DG existente', 'protection.existingDG', p.existingDG, { type: 'number' })}${nestedInput('Anos de invalidez', 'protection.disabilityYears', p.disabilityYears, { type: 'number' })}</div></section>`; }
+function renderHealthPanel() { const c = uiState.draft.healthCriteria; const optionsScope = [{ value: 'Maceió', label: 'Maceió' }, { value: 'Alagoas', label: 'Alagoas' }, { value: 'Nordeste', label: 'Nordeste' }, { value: 'Nacional', label: 'Nacional' }]; return `<section class="consultoria360-subpanel"><h4><i data-lucide="heart-pulse" aria-hidden="true"></i> Comparação de saúde</h4><p class="consultoria360-muted">Aderência não significa “melhor plano do mercado”. Rede, elegibilidade, carências e reajustes precisam ser confirmados.</p><div class="consultoria360-form-grid">${nestedInput('Orçamento mensal de referência', 'healthCriteria.budget', c.budget, { type: 'number' })}${nestedSelect('Abrangência desejada', 'healthCriteria.desiredScope', c.desiredScope, optionsScope)}${nestedSelect('Acomodação', 'healthCriteria.desiredAccommodation', c.desiredAccommodation, [{ value: 'Indiferente', label: 'Indiferente' }, { value: 'Enfermaria', label: 'Enfermaria' }, { value: 'Apartamento', label: 'Apartamento' }])}${nestedSelect('Coparticipação', 'healthCriteria.copayPreference', c.copayPreference, [{ value: 'Talvez', label: 'Talvez' }, { value: 'Sim', label: 'Prefere sim' }, { value: 'Não', label: 'Prefere não' }])}${nestedInput('Rede / hospital indispensável', 'healthCriteria.essentialNetwork', c.essentialNetwork, { placeholder: 'Ex.: Hospital X' })}</div><div class="consultoria360-alternatives">${uiState.draft.healthPlans.map((plan, index) => `<article><strong>${escapeHtml(plan.name || `Alternativa ${String.fromCharCode(65 + index)}`)}</strong><div class="consultoria360-form-grid">${nestedInput('Nome', `healthPlans.${index}.name`, plan.name)}${nestedInput('Mensalidade', `healthPlans.${index}.price`, plan.price, { type: 'number' })}${nestedInput('Rede (0–5)', `healthPlans.${index}.network`, plan.network, { type: 'number', step: '1' })}${nestedSelect('Abrangência', `healthPlans.${index}.scope`, plan.scope, optionsScope)}${nestedSelect('Acomodação', `healthPlans.${index}.accommodation`, plan.accommodation, [{ value: 'Enfermaria', label: 'Enfermaria' }, { value: 'Apartamento', label: 'Apartamento' }])}${nestedSelect('Coparticipação', `healthPlans.${index}.copay`, plan.copay, [{ value: 'Sim', label: 'Sim' }, { value: 'Não', label: 'Não' }, { value: 'Talvez', label: 'Talvez' }])}${nestedInput('Reembolso (0–5)', `healthPlans.${index}.reimbursement`, plan.reimbursement, { type: 'number', step: '1' })}</div></article>`).join('')}</div></section>`; }
+function renderConsortiumPanel() { const c = uiState.draft.consortium; return `<section class="consultoria360-subpanel"><h4><i data-lucide="landmark" aria-hidden="true"></i> Simulação patrimonial / consórcio</h4><p class="consultoria360-muted">A simulação não estima chance ou prazo de contemplação. Taxas, índices e regras dependem do grupo e do contrato.</p><div class="consultoria360-form-grid">${nestedInput('Crédito desejado', 'consortium.credit', c.credit, { type: 'number' })}${nestedInput('Prazo do grupo (meses)', 'consortium.term', c.term, { type: 'number' })}${nestedInput('Taxa de administração total', 'consortium.adminFee', c.adminFee, { type: 'number', step: '0.01' })}${nestedInput('Fundo de reserva', 'consortium.reserveFund', c.reserveFund, { type: 'number', step: '0.01' })}${nestedInput('Outros custos contratuais', 'consortium.otherFee', c.otherFee, { type: 'number', step: '0.01' })}${nestedInput('Parcela confortável', 'consortium.comfort', c.comfort, { type: 'number' })}${nestedInput('Lance considerado', 'consortium.bid', c.bid, { type: 'number' })}${nestedSelect('Origem do lance', 'consortium.bidType', c.bidType, [{ value: 'own', label: 'Recursos próprios' }, { value: 'embedded', label: 'Embutido' }])}${nestedInput('Reajuste anual de estresse', 'consortium.adjustment', c.adjustment, { type: 'number', step: '0.01' })}${nestedInput('Horizonte desejado (meses)', 'consortium.targetMonths', c.targetMonths, { type: 'number' })}${nestedSelect('Flexibilidade do objetivo', 'consortium.flexibility', c.flexibility, [{ value: '0', label: 'Rígido' }, { value: '1', label: 'Flexível' }])}</div></section>`; }
+function renderDimensioningStep() { return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Dimensionamentos de referência</span><h3>Aprofunde o pilar prioritário sem obrigar os três</h3><p>Preencha os dados disponíveis. Cada resultado guarda premissas e versão da regra usada.</p></div><div class="consultoria360-dimension-grid">${renderProtectionPanel()}${renderHealthPanel()}${renderConsortiumPanel()}</div>`; }
+function buildRecommendation() { const priority = uiState.draft.selectedPriority || priorityResults().suggestedPriority; const dimensions = dimensionResults(); return { text: `Nossa leitura indica ${pillarLabel(priority)} como prioridade atual. Os resultados apresentados são referências para orientar a conversa e dependem de validação documental e contratual do consultor.`, next: priority === 'protecao' ? `Validar as premissas de proteção e solicitar documentos das coberturas existentes. Referência familiar: ${money(dimensions.protection.familyGap)} de gap adicional estimado.` : priority === 'saude' ? `Confirmar rede, elegibilidade, carências e reajustes antes de comparar alternativas. A alternativa mais aderente nesta análise é ${dimensions.health.recommended || 'a definir'}.` : `Validar grupo, administradora, regras de reajuste e horizonte. Crédito compatível com a parcela informada: ${money(dimensions.consortium.maxCredit)}.` }; }
+function renderProposalStep() { const d = uiState.draft; const generated = buildRecommendation(); if (!d.recommendation) d.recommendation = generated.text; if (!d.nextSteps) d.nextSteps = generated.next; return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Proposta consultiva</span><h3>Edite e valide antes de gerar</h3><p>A proposta é um snapshot versionado do diagnóstico. O botão de impressão usa o preview nativo do Hub.</p></div><div class="consultoria360-form-grid"><fieldset class="consultoria360-scope-field is-wide"><legend>Escopo da proposta</legend>${PILLARS.map(pillar => `<label class="consultoria360-check"><input type="checkbox" ${d.selectedScope.includes(pillar.id) ? 'checked' : ''} onchange="consultoria360AlternarEscopo('${pillar.id}', this.checked)"> ${pillar.label}</label>`).join('')}</fieldset>${inputField('Título', 'proposalTitle', d.proposalTitle || `Diagnóstico 360° · ${d.clientName || 'Cliente'}`, { wide: true })}<label class="consultoria360-field is-wide"><span>Nossa recomendação</span><textarea class="config-input" rows="5" name="recommendation" oninput="consultoria360AtualizarCampo(this.name, this.value)">${escapeHtml(d.recommendation)}</textarea></label><label class="consultoria360-field is-wide"><span>Próximos passos</span><textarea class="config-input" rows="4" name="nextSteps" oninput="consultoria360AtualizarCampo(this.name, this.value)">${escapeHtml(d.nextSteps)}</textarea></label>${inputField('Observações adicionais', 'observations', d.observations, { placeholder: 'Notas internas da proposta.', wide: true })}</div><div class="consultoria360-disclaimer"><i data-lucide="info" aria-hidden="true"></i><span>Resultados indicativos. Não substituem análise técnica, regras da seguradora, operadora ou administradora, nem validação do consultor.</span></div>`; }
+function renderReviewStep() { const priority = priorityResults(); const dimensions = dimensionResults(); const d = uiState.draft; return `<div class="consultoria360-copy-block"><span class="hub-page-kicker">Revisão e acompanhamento</span><h3>Feche o ciclo sem perder a próxima conversa</h3><p>Ao concluir, o diagnóstico entra no cockpit com prioridade, oportunidades e data de revisão.</p></div><div class="consultoria360-review-grid"><article><span>Cliente</span><strong>${escapeHtml(d.clientName || '—')}</strong><small>${escapeHtml(d.occupation || 'Atividade não informada')}</small></article><article><span>Prioridade</span><strong>${pillarLabel(d.selectedPriority || priority.suggestedPriority)}</strong><small>${priority.scores[d.selectedPriority || priority.suggestedPriority]}/100</small></article><article><span>Proteção</span><strong>${money(dimensions.protection.familyGap)}</strong><small>Gap adicional estimado</small></article><article><span>Saúde</span><strong>${escapeHtml(dimensions.health.recommended || 'A definir')}</strong><small>${dimensions.health.closeDecision ? 'Diferença pequena entre as melhores' : 'Comparação configurada'}</small></article><article><span>Patrimônio</span><strong>${money(dimensions.consortium.maxCredit)}</strong><small>Crédito compatível com a parcela</small></article></div><div class="consultoria360-form-grid">${inputField('Próxima revisão', 'proximaRevisao', d.proximaRevisao || todayIso(), { type: 'date' })}<label class="consultoria360-field"><span>Status da proposta</span><select class="config-input" name="proposalStatus" onchange="consultoria360AtualizarCampo(this.name, this.value)">${selectOptions([{ value: 'rascunho', label: 'Em elaboração' }, { value: 'validada', label: 'Proposta validada' }, { value: 'enviada', label: 'Proposta enviada' }], d.proposalStatus)}</select></label></div><div class="consultoria360-disclaimer"><i data-lucide="calendar-clock" aria-hidden="true"></i><span>A revisão é uma data de acompanhamento, não uma promessa de contratação ou contemplação.</span></div>`; }
+function renderEditor(canEdit) { return `<section class="admin-panel consultoria360-workspace" aria-labelledby="consultoria360-workspace-title"><div class="admin-panel-header"><div><span class="hub-page-kicker">${uiState.draft.atendimentoId ? 'Atendimento reaberto' : 'Novo diagnóstico'}</span><h2 id="consultoria360-workspace-title">${escapeHtml(uiState.draft.clientName || 'Organizar uma conversa consultiva')}</h2><p>Dados e cálculos oficiais são persistidos no Supabase; nenhuma etapa depende de localStorage.</p></div><span class="consultoria360-status-chip">${uiState.draft.atendimentoId ? 'Persistido' : 'Rascunho de tela'}</span></div>${renderStepper()}${renderError()}<div class="consultoria360-workspace-body">${uiState.step === 1 ? renderContextStep() : ''}${uiState.step === 2 ? renderTriageStep() : ''}${uiState.step === 3 ? renderInvestigationStep() : ''}${uiState.step === 4 ? renderPrioritiesStep() : ''}${uiState.step === 5 ? renderDimensioningStep() : ''}${uiState.step === 6 ? renderProposalStep() : ''}${uiState.step === 7 ? renderReviewStep() : ''}</div><div class="consultoria360-actions"><button class="secondary-btn" type="button" onclick="consultoria360VoltarCockpit()">Cancelar</button><div>${uiState.step > 1 ? '<button class="secondary-btn" type="button" onclick="consultoria360VoltarEtapa()">Voltar</button>' : ''}<button class="save-btn" type="button" ${canEdit && !uiState.saving ? '' : 'disabled'} onclick="consultoria360Continuar()">${uiState.saving ? 'Salvando…' : uiState.step === 7 ? 'Concluir e acompanhar' : 'Salvar e continuar'}</button></div></div></section>`; }
+function reviewDue(item) { return item.proxima_revisao && new Date(`${item.proxima_revisao}T12:00:00`) <= new Date(Date.now() + 30 * 86400000); }
+function filteredAtendimentos() { const f = uiState.filters; return (uiState.data.atendimentos || []).filter(item => { const name = item.cliente_snapshot?.nome_razao_social || ''; return (!f.search || `${name} ${item.status} ${item.prioridade_final}`.toLowerCase().includes(f.search.toLowerCase())) && (!f.status || item.status === f.status) && (!f.priority || item.prioridade_final === f.priority) && (!f.review || (f.review === 'proximas' ? reviewDue(item) : !item.proxima_revisao)); }); }
+function renderCockpit(renderShell, canEdit) { const all = uiState.data.atendimentos || []; const items = filteredAtendimentos(); const active = all.filter(item => ['rascunho', 'em_andamento'].includes(item.status)).length; const reviews = all.filter(reviewDue).length; const completed = all.filter(item => item.status === 'concluido').length; return renderShell({ tituloPagina: 'Consultoria 360°', descricaoPagina: 'Proteção, planejamento e próximos passos em uma visão consultiva.', classeConteudo: 'consultoria360-page', conteudo: `<section class="admin-panel consultoria360-cockpit" aria-labelledby="consultoria360-title"><div class="admin-panel-header consultoria360-cockpit-header"><div><span class="hub-page-kicker">Proteja · Planeje · Construa</span><h2 id="consultoria360-title">Diagnóstico 360°</h2><p>Carteira persistida de atendimentos, propostas e revisões.</p></div><button class="save-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360NovoDiagnostico()"><i data-lucide="plus" aria-hidden="true"></i> Novo diagnóstico</button></div>${renderError()}${uiState.notice ? `<p class="consultoria360-feedback" role="status"><i data-lucide="check-circle-2" aria-hidden="true"></i>${escapeHtml(uiState.notice)}</p>` : ''}<div class="consultoria360-metrics"><article><span>Diagnósticos ativos</span><strong>${active}</strong><small>Rascunhos e análises em andamento</small></article><article><span>Revisões nos próximos 30 dias</span><strong>${reviews}</strong><small>Carteira que merece contato</small></article><article><span>Diagnósticos concluídos</span><strong>${completed}</strong><small>Com prioridade registrada</small></article></div><form class="consultoria360-filter-bar" onsubmit="consultoria360AplicarFiltros(event)" role="search"><input class="config-input" type="search" name="search" value="${escapeAttr(uiState.filters.search)}" placeholder="Buscar cliente, status ou prioridade"><select class="config-input" name="status"><option value="">Todos os status</option>${selectOptions([{ value: 'rascunho', label: 'Rascunho' }, { value: 'em_andamento', label: 'Em andamento' }, { value: 'concluido', label: 'Concluído' }, { value: 'arquivado', label: 'Arquivado' }], uiState.filters.status)}</select><select class="config-input" name="priority"><option value="">Todas as prioridades</option>${PILLARS.map(item => `<option value="${item.id}" ${uiState.filters.priority === item.id ? 'selected' : ''}>${item.label}</option>`).join('')}</select><select class="config-input" name="review">${selectOptions([{ value: '', label: 'Todas as revisões' }, { value: 'proximas', label: 'Próximas revisões' }, { value: 'sem_data', label: 'Sem revisão agendada' }], uiState.filters.review)}</select><button class="secondary-btn" type="submit">Filtrar</button></form>${items.length ? `<div class="consultoria360-table-wrap"><table class="ar-crm-phase1-table consultoria360-table"><caption class="consultoria360-table-caption">${items.length} atendimento(s) na carteira</caption><thead><tr><th>Cliente</th><th>Status</th><th>Prioridade</th><th>Revisão</th><th>Ação</th></tr></thead><tbody>${items.map(item => `<tr><td><strong>${escapeHtml(item.cliente_snapshot?.nome_razao_social || 'Cliente vinculado')}</strong><small>${escapeHtml(item.cliente_snapshot?.tipo_pessoa || 'Cadastro central')}</small></td><td><span class="consultoria360-status ${statusClass(item.status)}">${escapeHtml(item.status || '—')}</span></td><td>${escapeHtml(pillarLabel(item.prioridade_final))}</td><td>${reviewDue(item) ? `<span class="consultoria360-review-alert">${date(item.proxima_revisao)}</span>` : date(item.proxima_revisao)}</td><td><button class="secondary-btn" type="button" onclick="consultoria360AbrirAtendimento('${escapeAttr(item.id)}')">Abrir</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="consultoria360-empty-state" role="status"><i data-lucide="clipboard-list" aria-hidden="true"></i><strong>${all.length ? 'Nenhum resultado para os filtros' : 'Nenhum diagnóstico nesta visão'}</strong><p>${all.length ? 'Ajuste os filtros da carteira.' : 'Inicie uma análise vinculada a um cliente existente do Hub.'}</p><button class="secondary-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360NovoDiagnostico()">Abrir novo diagnóstico</button></div>`}</section>` }); }
+function renderDetail(renderShell, canEdit) { const at = uiState.detail.atendimento || {}; const scores = at.scores || {}; return renderShell({ tituloPagina: 'Atendimento Consultoria 360°', descricaoPagina: 'Resumo, dimensionamentos, proposta e histórico.', classeConteudo: 'consultoria360-page', conteudo: `<section class="admin-panel consultoria360-detail"><div class="admin-panel-header"><div><span class="hub-page-kicker">Consultoria 360° · atendimento</span><h2>${escapeHtml(at.cliente_snapshot?.nome_razao_social || 'Cliente')}</h2><p>${escapeHtml(at.status || '—')} · atualizado em ${date(at.updated_at)}</p></div><div class="consultoria360-detail-actions"><button class="secondary-btn" type="button" onclick="consultoria360VoltarCockpit()">Voltar</button><button class="save-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360ContinuarAtendimento()">Continuar atendimento</button></div></div>${renderError()}<div class="consultoria360-detail-summary"><article><span>Prioridade</span><strong>${pillarLabel(at.prioridade_final)}</strong></article><article><span>Revisão</span><strong>${date(at.proxima_revisao)}</strong></article><article><span>Proteção</span><strong>${scores.protecao ?? '—'}</strong></article><article><span>Saúde</span><strong>${scores.saude ?? '—'}</strong></article><article><span>Patrimônio</span><strong>${scores.patrimonio ?? '—'}</strong></article></div><nav class="consultoria360-tabs" aria-label="Detalhes do atendimento">${[['resumo', 'Resumo'], ['diagnostico', 'Diagnóstico'], ['dimensionamentos', 'Dimensionamentos'], ['proposta', 'Proposta'], ['oportunidades', 'Oportunidades'], ['historico', 'Histórico']].map(([id, label]) => `<button class="${uiState.detailTab === id ? 'is-active' : ''}" type="button" onclick="consultoria360SelecionarAba('${id}')">${label}</button>`).join('')}</nav>${renderDetailTab(uiState.detail)}</section>` }); }
+function renderDetailTab(detail) { const at = detail.atendimento || {}; if (uiState.detailTab === 'diagnostico') return `<div class="consultoria360-detail-grid"><article><span>Contexto</span><pre>${escapeHtml(JSON.stringify(at.contexto || {}, null, 2))}</pre></article><article><span>Respostas e versão</span><strong>${escapeHtml(detail.respostas?.versao_questionario || DIAGNOSTICO_RULES_VERSION)}</strong><pre>${escapeHtml(JSON.stringify(detail.respostas?.respostas || {}, null, 2))}</pre></article></div>`; if (uiState.detailTab === 'dimensionamentos') return `<div class="consultoria360-detail-list">${(detail.dimensionamentos || []).map(item => `<article><div><span>${pillarLabel(item.tipo === 'consorcio' ? 'patrimonio' : item.tipo)}</span><strong>${escapeHtml(item.versao_regra)}</strong></div><pre>${escapeHtml(JSON.stringify(item.resultado || {}, null, 2))}</pre></article>`).join('') || '<div class="consultoria360-empty-state">Nenhum dimensionamento salvo.</div>'}</div>`; if (uiState.detailTab === 'proposta') { const proposal = (detail.propostas || [])[0]; return proposal ? `<div class="consultoria360-proposal-preview"><div class="consultoria360-proposal-toolbar"><span>Versão ${proposal.versao} · ${escapeHtml(proposal.status)}</span><button class="secondary-btn" type="button" onclick="consultoria360ImprimirProposta()">Imprimir / salvar PDF</button></div><h3>${escapeHtml(proposal.titulo || 'Proposta consultiva')}</h3><p>${escapeHtml(proposal.recomendacao || '')}</p><h4>Próximos passos</h4><p>${escapeHtml(proposal.proximos_passos || '')}</p><small>Escopo: ${escapeHtml(Object.keys(proposal.escopo || {}).filter(key => proposal.escopo[key]).map(pillarLabel).join(', ') || 'Não informado')}</small><div class="consultoria360-disclaimer">Referências indicativas sujeitas à validação do consultor e dos contratos aplicáveis.</div></div>` : '<div class="consultoria360-empty-state">Nenhuma proposta versionada.</div>'; } if (uiState.detailTab === 'oportunidades') return `<div class="consultoria360-opportunity-grid">${(detail.oportunidades || []).map(item => `<article><div><strong>${pillarLabel(item.pilar)}</strong><span class="consultoria360-status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></div><strong>${item.score ?? '—'}/100</strong><p>${escapeHtml(item.proxima_acao || 'Sem próxima ação')}</p><small>${date(item.proxima_acao_em)}</small></article>`).join('') || '<div class="consultoria360-empty-state">As oportunidades serão criadas ao concluir as prioridades.</div>'}</div>`; if (uiState.detailTab === 'historico') return `<div class="consultoria360-timeline">${(detail.eventos || []).map(item => `<article><span class="consultoria360-timeline-marker"></span><div><strong>${escapeHtml(item.tipo)}</strong><p>${escapeHtml(item.descricao)}</p><small>${date(item.created_at)}</small></div></article>`).join('') || '<div class="consultoria360-empty-state">Nenhum evento registrado.</div>'}</div>`; return `<div class="consultoria360-detail-grid"><article><span>Cliente</span><strong>${escapeHtml(at.cliente_snapshot?.nome_razao_social || '—')}</strong><small>${escapeHtml(at.cliente_snapshot?.tipo_pessoa || '')}</small></article><article><span>Responsável</span><strong>${escapeHtml(at.responsavel_usuario_id || 'Usuário atual')}</strong></article><article class="is-wide"><span>Observações</span><p>${escapeHtml(at.observacoes || 'Nenhuma observação registrada.')}</p></article><article class="is-wide"><span>Propostas salvas</span><strong>${(detail.propostas || []).length}</strong></article></div>`; }
+function rerender() { if (!activeContext) return; const app = document.getElementById('app'); if (app) app.innerHTML = renderConsultoria360Page(activeContext); }
+export function renderConsultoria360Page(context = {}) { activeContext = context; const { renderShell, pode = () => false } = context; const canView = pode(CONSULTORIA360_PERMISSION, 'view'); const canEdit = pode(CONSULTORIA360_PERMISSION, 'create') || pode(CONSULTORIA360_PERMISSION, 'update'); if (!canView) return renderAccessDenied(renderShell); if (uiState.loading) return renderLoading(renderShell); if (uiState.view === 'editor') return renderShell({ tituloPagina: 'Diagnóstico 360°', descricaoPagina: 'Fluxo persistido da Consultoria 360°.', classeConteudo: 'consultoria360-page', conteudo: renderEditor(canEdit) }); if (uiState.view === 'detail' && uiState.detail) return renderDetail(renderShell, canEdit); return renderCockpit(renderShell, canEdit); }
 
-function field(label, name, value, { type = 'text', placeholder = '', wide = false } = {}) {
-  const control = type === 'textarea'
-    ? `<textarea class="config-input" name="${escapeAttr(name)}" rows="4" placeholder="${escapeAttr(placeholder)}" oninput="consultoria360AtualizarCampo(this.name, this.value)">${escapeHtml(value)}</textarea>`
-    : `<input class="config-input" type="${escapeAttr(type)}" name="${escapeAttr(name)}" value="${escapeAttr(value)}" placeholder="${escapeAttr(placeholder)}" oninput="consultoria360AtualizarCampo(this.name, this.value)">`;
+async function carregarDados() { uiState.loading = true; uiState.error = ''; rerender(); try { const companiesResponse = await chamarApi('listConsultoria360Companies'); if (!companiesResponse.ok) throw new Error(companiesResponse.message); uiState.data.companies = companiesResponse.data || []; activeContext.empresaId = uiState.data.companies[0]?.id || ''; if (!activeContext.empresaId) { uiState.data.atendimentos = []; } else { const dashboardResponse = await chamarApi('getConsultoria360Dashboard', { empresaId: activeContext.empresaId }); if (!dashboardResponse.ok) throw new Error(dashboardResponse.message); uiState.data.atendimentos = dashboardResponse.data || []; } } catch (error) { uiState.error = error.message || 'Não foi possível carregar a carteira.'; } finally { uiState.loading = false; rerender(); } }
+function draftFromDetail(detail) { const draft = { ...emptyDraft(), ...(detail.respostas?.respostas || {}) }; draft.atendimentoId = detail.atendimento?.id || ''; draft.clientId = detail.atendimento?.pessoa_id || ''; draft.clientMode = draft.clientId ? 'cadastro' : 'sem_cadastro'; draft.clientName = detail.atendimento?.cliente_snapshot?.nome_razao_social || ''; draft.occupation = detail.atendimento?.contexto?.occupation || ''; draft.mainInterest = detail.atendimento?.contexto?.mainInterest || draft.mainInterest; draft.proximaRevisao = detail.atendimento?.proxima_revisao || draft.proximaRevisao; draft.observations = detail.atendimento?.observacoes || draft.observations; draft.proposalVersion = detail.propostas?.[0]?.versao || 0; return draft; }
+async function carregarClientes() { if (!activeContext?.empresaId) return; const response = await chamarApi('listConsultoria360Clients', { empresaId: activeContext.empresaId }); if (!response.ok) throw new Error(response.message || 'Não foi possível carregar os clientes.'); uiState.data.clients = response.data || []; }
+async function ensureAtendimento() { const d = uiState.draft; if (d.atendimentoId) return d.atendimentoId; if (!activeContext?.empresaId) throw new Error('Selecione uma empresa.'); const hasCadastro = d.clientMode !== 'sem_cadastro'; if (hasCadastro && !d.clientId) throw new Error('Selecione um cliente ou escolha iniciar sem cadastro.'); if (!hasCadastro && !String(d.clientName || '').trim()) throw new Error('Informe um nome para iniciar sem cadastro.'); const client = hasCadastro ? (uiState.data.clients.find(item => item.id === d.clientId) || {}) : { nome_razao_social: d.clientName, tipo_pessoa: 'CONTATO_SEM_CADASTRO', status: 'provisorio' }; const response = await chamarApi('createConsultoria360Atendimento', { empresa_id: activeContext.empresaId, pessoa_id: hasCadastro ? d.clientId : null, cliente_snapshot: { ...client, nome_razao_social: d.clientName || client.nome_razao_social, cadastro_central: hasCadastro, origem: d.clientSource }, contexto: { clientSource: d.clientSource, occupation: d.occupation, mainInterest: d.mainInterest, clientMode: d.clientMode } }); if (!response.ok) throw new Error(response.message); d.atendimentoId = response.data.id; d.clientName = d.clientName || client.nome_razao_social || ''; uiState.data.atendimentos = [response.data, ...uiState.data.atendimentos]; await chamarApi('addConsultoria360Event', { atendimento_id: d.atendimentoId, tipo: 'Cadastro', descricao: hasCadastro ? 'Atendimento de Consultoria 360° iniciado a partir do cadastro central.' : 'Atendimento de Consultoria 360° iniciado sem cadastro; associação posterior permitida.' }); return d.atendimentoId; }
+async function saveResponses() { const response = await chamarApi('saveConsultoria360Responses', { atendimento_id: uiState.draft.atendimentoId, versao_questionario: DIAGNOSTICO_RULES_VERSION, respostas: uiState.draft }); if (!response.ok) throw new Error(response.message); }
+async function savePriorities() { const result = priorityResults(); const selected = uiState.draft.selectedPriority || result.suggestedPriority; uiState.draft.selectedPriority = selected; const update = await chamarApi('updateConsultoria360Atendimento', { id: uiState.draft.atendimentoId, empresa_id: activeContext.empresaId, status: 'em_andamento', prioridade_final: selected, scores: { ...result.scores, statuses: result.statuses, rulesVersion: DIAGNOSTICO_RULES_VERSION }, consorcio_fit: result.consortiumFit, contexto: { clientSource: uiState.draft.clientSource, occupation: uiState.draft.occupation, mainInterest: uiState.draft.mainInterest }, observacoes: uiState.draft.observations }); if (!update.ok) throw new Error(update.message); const resultOpportunities = await Promise.all(PILLARS.map(pillar => chamarApi('saveConsultoria360Opportunity', { atendimento_id: uiState.draft.atendimentoId, pilar: pillar.id, score: result.scores[pillar.id], status: result.statuses[pillar.id], ativa: true, proxima_acao: pillar.id === selected ? 'Validar premissas e definir próximo passo com o cliente.' : 'Acompanhar na próxima revisão.', proxima_acao_em: uiState.draft.proximaRevisao || null }))); const failed = resultOpportunities.find(response => !response.ok); if (failed) throw new Error(failed.message); await chamarApi('addConsultoria360Event', { atendimento_id: uiState.draft.atendimentoId, tipo: 'Prioridade', descricao: `Prioridade consultiva definida: ${pillarLabel(selected)}.` }); }
+async function saveDimensionings() { const results = dimensionResults(); const entries = [['protecao', results.protection, PROTECTION_RULES_VERSION, uiState.draft.protection], ['saude', results.health, HEALTH_MATCH_RULES_VERSION, { criteria: uiState.draft.healthCriteria, plans: uiState.draft.healthPlans }], ['consorcio', results.consortium, CONSORTIUM_RULES_VERSION, uiState.draft.consortium]]; for (const [tipo, resultado, versao, premissas] of entries) { const response = await chamarApi('saveConsultoria360Dimensioning', { atendimento_id: uiState.draft.atendimentoId, tipo, premissas, resultado, versao_regra: versao }); if (!response.ok) throw new Error(response.message); } await chamarApi('addConsultoria360Event', { atendimento_id: uiState.draft.atendimentoId, tipo: 'Dimensionamento', descricao: 'Dimensionamentos de referência atualizados.' }); }
+async function saveProposal() { const d = uiState.draft; const version = num(d.proposalVersion) + 1; const response = await chamarApi('saveConsultoria360Proposal', { atendimento_id: d.atendimentoId, versao: version, status: d.proposalStatus || 'rascunho', titulo: d.proposalTitle || `Diagnóstico 360° · ${d.clientName}`, escopo: Object.fromEntries(d.selectedScope.map(key => [key, true])), recomendacao: d.recommendation, proximos_passos: d.nextSteps, observacoes: d.observations, snapshot: { draft: d, dimensions: dimensionResults(), rules: { diagnostico: DIAGNOSTICO_RULES_VERSION, protection: PROTECTION_RULES_VERSION, health: HEALTH_MATCH_RULES_VERSION, consortium: CONSORTIUM_RULES_VERSION } } }); if (!response.ok) throw new Error(response.message); d.proposalVersion = version; await chamarApi('addConsultoria360Event', { atendimento_id: d.atendimentoId, tipo: 'Proposta', descricao: `Versão ${version} da proposta consultiva salva.` }); }
+async function finishAtendimento() { const d = uiState.draft; const response = await chamarApi('updateConsultoria360Atendimento', { id: d.atendimentoId, empresa_id: activeContext.empresaId, status: 'concluido', concluido_em: new Date().toISOString(), proxima_revisao: d.proximaRevisao || null, prioridade_final: d.selectedPriority || priorityResults().suggestedPriority, observacoes: d.observations }); if (!response.ok) throw new Error(response.message); await chamarApi('addConsultoria360Event', { atendimento_id: d.atendimentoId, tipo: 'Revisão', descricao: `Atendimento concluído; próxima revisão em ${date(d.proximaRevisao)}.` }); }
 
-  return `<label class="consultoria360-field ${wide ? 'is-wide' : ''}"><span>${escapeHtml(label)}</span>${control}</label>`;
-}
+export async function mountConsultoria360Page(context = {}) { activeContext = { ...context }; if (!context.pode?.(CONSULTORIA360_PERMISSION, 'view')) { document.getElementById('app').innerHTML = renderConsultoria360Page(activeContext); return; } document.getElementById('app').innerHTML = renderConsultoria360Page(activeContext); await carregarDados(); }
+export function renderCorretoraOperationalPage({ renderShell }) { return renderShell({ tituloPagina: 'Operações da Corretora', descricaoPagina: 'Acesso às ferramentas operacionais da corretora.', classeConteudo: 'consultoria360-page', conteudo: `<section class="admin-panel consultoria360-cockpit"><div class="admin-panel-header"><div><span class="hub-page-kicker">Operações</span><h2>Corretora</h2><p>Escolha uma ferramenta para continuar.</p></div></div><button class="consultoria360-module-entry" type="button" onclick="navegarParaRota('/operacoes/corretora/consultoria-360')"><span><i data-lucide="compass" aria-hidden="true"></i></span><strong>Consultoria 360°</strong><small>Diagnóstico de proteção, saúde e patrimônio.</small><i data-lucide="arrow-right" aria-hidden="true"></i></button></section>` }); }
 
-function renderAccessDenied(renderShell) {
-  return renderShell({
-    tituloPagina: 'Consultoria 360°',
-    descricaoPagina: 'Acesso controlado pela permissão do Hub.',
-    classeConteudo: 'consultoria360-page',
-    conteudo: `
-      <section class="admin-panel consultoria360-access-state" role="alert">
-        <div class="admin-panel-header">
-          <div>
-            <span class="hub-page-kicker">Consultoria consultiva</span>
-            <h2>Acesso não autorizado</h2>
-            <p>É necessária a permissão Visualizar para acessar o Diagnóstico 360°.</p>
-          </div>
-        </div>
-        <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar para o início</button>
-      </section>
-    `
-  });
-}
-
-function renderLoading(renderShell, message = 'Carregando dados da Consultoria 360°...') {
-  return renderShell({
-    tituloPagina: 'Consultoria 360°',
-    descricaoPagina: 'Carregando o cockpit consultivo.',
-    classeConteudo: 'consultoria360-page',
-    conteudo: `<section class="admin-panel" aria-busy="true" aria-live="polite"><div class="admin-panel-header"><div><span class="hub-page-kicker">Consultoria consultiva</span><h2>Carregando</h2><p>${escapeHtml(message)}</p></div></div><div class="consultoria360-loading"><span class="hub-loading-spinner" aria-hidden="true"></span><span>Buscando dados do Hub...</span></div></section>`
-  });
-}
-
-function renderStepper() {
-  return `
-    <ol class="consultoria360-stepper" aria-label="Etapas do diagnóstico">
-      ${STEPS.map(step => `
-        <li class="${uiState.step === step.id ? 'is-current' : ''} ${uiState.step > step.id ? 'is-complete' : ''}">
-          <span>${step.id}</span><strong>${escapeHtml(step.label)}</strong>
-        </li>
-      `).join('')}
-    </ol>
-  `;
-}
-
-function renderNewDiagnostic(canEdit) {
-  const draft = uiState.draft;
-  const isLast = uiState.step === STEPS.length;
-  const clients = uiState.data.clients || [];
-
-  return `
-    <section class="admin-panel consultoria360-workspace" aria-labelledby="consultoria360-workspace-title">
-      <div class="admin-panel-header">
-        <div>
-          <span class="hub-page-kicker">Novo diagnóstico · Fase 1</span>
-          <h2 id="consultoria360-workspace-title">Organizar uma conversa consultiva</h2>
-          <p>Fluxo demonstrativo para validar a entrada do módulo no Hub. Ainda não salva dados no banco.</p>
-        </div>
-        <span class="consultoria360-status-chip">Mock de UX</span>
-      </div>
-
-      ${renderStepper()}
-
-      <div class="consultoria360-workspace-body">
-        ${uiState.step === 1 ? `
-          <div class="consultoria360-copy-block">
-            <span class="hub-page-kicker">Contexto</span>
-            <h3>Comece pelo momento do cliente</h3>
-            <p>O diagnóstico deve partir de um cadastro existente quando essa integração estiver disponível.</p>
-          </div>
-          <div class="consultoria360-form-grid">
-            <label class="consultoria360-field is-wide"><span>Cliente vinculado</span><select class="config-input" name="clientId" onchange="consultoria360AtualizarCampo(this.name, this.value)"><option value="">Selecione um cliente existente</option>${clients.map(client => `<option value="${escapeAttr(client.id)}" ${client.id === draft.clientId ? 'selected' : ''}>${escapeHtml(client.nome_razao_social)}</option>`).join('')}</select><small>O diagnóstico usa o cadastro central de pessoas; nenhum cliente é duplicado.</small></label>
-            ${field('Nome do cliente', 'clientName', draft.clientName, { placeholder: 'Ex.: Ana Carolina' })}
-            ${field('Atividade profissional', 'occupation', draft.occupation, { placeholder: 'Ex.: Empresária' })}
-            <label class="consultoria360-field"><span>Interesse principal declarado</span><select class="config-input" name="mainInterest" onchange="consultoria360AtualizarCampo(this.name, this.value)">${selectOptions([
-              { value: '', label: 'Ainda não sabe' },
-              { value: 'protecao', label: 'Proteção financeira' },
-              { value: 'saude', label: 'Saúde' },
-              { value: 'patrimonio', label: 'Patrimônio / projeto' }
-            ], draft.mainInterest)}</select></label>
-          </div>
-        ` : ''}
-
-        ${uiState.step === 2 ? `
-          <div class="consultoria360-copy-block">
-            <span class="hub-page-kicker">Triagem</span>
-            <h3>Proteja. Planeje. Construa.</h3>
-            <p>Uma leitura curta orienta quais frentes merecem investigação. A recomendação continua sendo do consultor.</p>
-          </div>
-          <div class="consultoria360-form-grid">
-            ${['protectionSignal', 'healthSignal', 'patrimonySignal'].map((name, index) => {
-              const labels = [
-                ['Proteção financeira', 'Como você avalia hoje a proteção da renda e da família?'],
-                ['Saúde', 'Como você avalia hoje acesso, rede e custo de saúde?'],
-                ['Patrimônio / projetos', 'Existe uma aquisição ou projeto relevante no horizonte?']
-              ];
-              return `<label class="consultoria360-field is-wide"><span>${labels[index][0]}</span><small>${labels[index][1]}</small><select class="config-input" name="${name}" onchange="consultoria360AtualizarCampo(this.name, this.value)">${selectOptions([
-                { value: '', label: 'Selecione uma leitura' },
-                { value: 'baixo', label: 'Sem sinal relevante agora' },
-                { value: 'medio', label: 'Vale acompanhar' },
-                { value: 'alto', label: 'Merece aprofundamento' }
-              ], draft[name])}</select></label>`;
-            }).join('')}
-          </div>
-        ` : ''}
-
-        ${uiState.step === 3 ? `
-          <div class="consultoria360-copy-block">
-            <span class="hub-page-kicker">Investigação direcionada</span>
-            <h3>Registre o que precisa ser aprofundado</h3>
-            <p>Na próxima fase, esta etapa será dinâmica e preservará as perguntas do standalone por pilar.</p>
-          </div>
-          <div class="consultoria360-investigation-grid">
-            <article><i data-lucide="shield-check" aria-hidden="true"></i><strong>Proteção financeira</strong><span>Reserva, compromissos e coberturas conhecidas.</span></article>
-            <article><i data-lucide="heart-pulse" aria-hidden="true"></i><strong>Saúde</strong><span>Perfil de utilização, rede e orçamento.</span></article>
-            <article><i data-lucide="house" aria-hidden="true"></i><strong>Patrimônio / projetos</strong><span>Objetivo, horizonte e capacidade confortável.</span></article>
-          </div>
-          ${field('Observações iniciais', 'investigationNotes', draft.investigationNotes, { type: 'textarea', placeholder: 'Anote percepções para a próxima conversa.', wide: true })}
-        ` : ''}
-
-        ${uiState.step === 4 ? `
-          <div class="consultoria360-copy-block">
-            <span class="hub-page-kicker">Mapa de prioridades</span>
-            <h3>Uma prioridade por vez</h3>
-            <p>Os scores e a devolutiva consultiva entram na Fase 2, com regras puras versionadas e testes.</p>
-          </div>
-          <div class="consultoria360-priority-grid">
-            ${['Proteção financeira', 'Saúde', 'Patrimônio / projetos'].map(label => `<article><span class="consultoria360-priority-placeholder">—</span><strong>${label}</strong><small>Indicador pendente da Fase 2</small></article>`).join('')}
-          </div>
-          <div class="consultoria360-notice" role="status"><i data-lucide="info" aria-hidden="true"></i><span>Este marco valida apenas a navegação e a linguagem da experiência. Nenhuma resposta será persistida.</span></div>
-        ` : ''}
-      </div>
-
-      <div class="consultoria360-actions">
-        <button class="secondary-btn" type="button" onclick="consultoria360VoltarCockpit()">Cancelar</button>
-        <div>
-          ${uiState.step === 1 && draft.clientId ? `<button class="secondary-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360SalvarRascunho()">Salvar rascunho</button>` : ''}
-          ${uiState.step > 1 ? '<button class="secondary-btn" type="button" onclick="consultoria360VoltarEtapa()">Voltar</button>' : ''}
-          <button class="save-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="${isLast ? 'consultoria360ConcluirMock()' : 'consultoria360AvancarEtapa()'}">${isLast ? 'Concluir demonstração' : 'Continuar'}</button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderCockpit(renderShell, canEdit) {
-  const atendimentos = Array.isArray(uiState.data.atendimentos) ? uiState.data.atendimentos : [];
-  const activeCount = atendimentos.filter(item => ['rascunho', 'em_andamento'].includes(item.status)).length;
-  const reviewCount = atendimentos.filter(item => item.proxima_revisao).length;
-  const priorityCount = atendimentos.filter(item => item.prioridade_final).length;
-  return renderShell({
-    tituloPagina: 'Consultoria 360°',
-    descricaoPagina: 'Proteção, planejamento e próximos passos em uma visão consultiva.',
-    classeConteudo: 'consultoria360-page',
-    conteudo: `
-      <section class="admin-panel consultoria360-cockpit" aria-labelledby="consultoria360-title">
-        <div class="admin-panel-header consultoria360-cockpit-header">
-          <div>
-            <span class="hub-page-kicker">Proteja · Planeje · Construa</span>
-            <h2 id="consultoria360-title">Diagnóstico 360°</h2>
-            <p>Uma leitura estruturada do momento do cliente para decidir o que merece atenção agora.</p>
-          </div>
-          <button class="save-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360NovoDiagnostico()"><i data-lucide="plus" aria-hidden="true"></i> Novo diagnóstico</button>
-        </div>
-
-        <div class="consultoria360-intro-card">
-          <div><i data-lucide="compass" aria-hidden="true"></i></div>
-          <div><strong>Consultoria orientada por contexto</strong><p>O sistema organiza informações e referências. A recomendação final continua sendo validada pelo consultor.</p></div>
-        </div>
-
-        <div class="consultoria360-metrics" aria-label="Resumo da carteira de consultoria">
-          <article><span>Diagnósticos ativos</span><strong>${activeCount}</strong><small>${activeCount ? 'Em andamento no Hub' : 'Aguardando a primeira análise'}</small></article>
-          <article><span>Revisões próximas</span><strong>${reviewCount}</strong><small>Serão acompanhadas no Cockpit</small></article>
-          <article><span>Prioridades em acompanhamento</span><strong>${priorityCount}</strong><small>Com prioridade consultiva definida</small></article>
-        </div>
-
-        ${uiState.error ? `<div class="consultoria360-error" role="alert"><i data-lucide="circle-alert" aria-hidden="true"></i><div><strong>Não foi possível carregar o cockpit.</strong><p>${escapeHtml(uiState.error)}</p></div><button class="secondary-btn" type="button" onclick="consultoria360Recarregar()">Tentar novamente</button></div>` : ''}
-
-        ${atendimentos.length ? `<div class="consultoria360-table-wrap"><table class="ar-crm-phase1-table consultoria360-table"><caption class="consultoria360-table-caption">Atendimentos persistidos no Hub</caption><thead><tr><th scope="col">Cliente</th><th scope="col">Status</th><th scope="col">Prioridade</th><th scope="col">Atualizado em</th></tr></thead><tbody>${atendimentos.map(item => `<tr><td><strong>${escapeHtml(item.cliente_snapshot?.nome_razao_social || 'Cliente vinculado')}</strong></td><td>${escapeHtml(item.status || '—')}</td><td>${escapeHtml(item.prioridade_final || 'A definir')}</td><td>${escapeHtml(item.updated_at ? new Date(item.updated_at).toLocaleDateString('pt-BR') : '—')}</td></tr>`).join('')}</tbody></table></div>` : `<div class="consultoria360-empty-state" role="status"><i data-lucide="clipboard-list" aria-hidden="true"></i><strong>Nenhum diagnóstico nesta visão</strong><p>Inicie uma análise para testar o fluxo nativo do Hub. A persistência real será usada a partir de um cliente existente.</p><button class="secondary-btn" type="button" ${canEdit ? '' : 'disabled'} onclick="consultoria360NovoDiagnostico()">Abrir fluxo demonstrativo</button></div>`}
-
-        ${uiState.notice ? `<p class="consultoria360-feedback" role="status"><i data-lucide="check-circle-2" aria-hidden="true"></i>${escapeHtml(uiState.notice)}</p>` : ''}
-      </section>
-    `
-  });
-}
-
-function rerender() {
-  if (!activeContext) return;
-  const app = document.getElementById('app');
-  if (!app) return;
-
-  app.innerHTML = renderConsultoria360Page(activeContext);
-}
-
-export function renderConsultoria360Page(context = {}) {
-  activeContext = context;
-  const { renderShell, pode = () => false } = context;
-  const canView = pode(CONSULTORIA360_PERMISSION, 'view');
-  const canEdit = pode(CONSULTORIA360_PERMISSION, 'create') || pode(CONSULTORIA360_PERMISSION, 'update');
-
-  if (!canView) return renderAccessDenied(renderShell);
-  if (uiState.loading) return renderLoading(renderShell);
-  if (uiState.view === 'new') return renderShell({
-    tituloPagina: 'Novo diagnóstico',
-    descricaoPagina: 'Fluxo inicial da Consultoria 360°.',
-    classeConteudo: 'consultoria360-page',
-    conteudo: renderNewDiagnostic(canEdit)
-  });
-
-  return renderCockpit(renderShell, canEdit);
-}
-
-async function carregarDados() {
-  uiState.loading = true;
-  uiState.error = '';
-  rerender();
-
-  try {
-    const companiesResponse = await chamarApi('listConsultoria360Companies');
-    if (!companiesResponse.ok) throw new Error(companiesResponse.message || 'Não foi possível carregar as empresas.');
-    uiState.data.companies = companiesResponse.data || [];
-    const companyId = uiState.data.companies[0]?.id || '';
-    activeContext.empresaId = companyId;
-
-    if (companyId) {
-      const dashboardResponse = await chamarApi('getConsultoria360Dashboard', { empresaId: companyId });
-      if (!dashboardResponse.ok) throw new Error(dashboardResponse.message || 'Não foi possível carregar os atendimentos.');
-      uiState.data.atendimentos = dashboardResponse.data || [];
-    } else {
-      uiState.data.atendimentos = [];
-    }
-  } catch (error) {
-    uiState.error = error.message || 'Não foi possível carregar os dados da Consultoria 360°.';
-  } finally {
-    uiState.loading = false;
-    rerender();
-  }
-}
-
-export async function mountConsultoria360Page(context = {}) {
-  activeContext = { ...context };
-  const canView = context.pode?.(CONSULTORIA360_PERMISSION, 'view');
-  if (!canView) {
-    document.getElementById('app').innerHTML = renderConsultoria360Page(activeContext);
-    return;
-  }
-  document.getElementById('app').innerHTML = renderConsultoria360Page(activeContext);
-  await carregarDados();
-}
-
-export function renderCorretoraOperationalPage({ renderShell }) {
-  return renderShell({
-    tituloPagina: 'Operações da Corretora',
-    descricaoPagina: 'Acesso às ferramentas operacionais da corretora.',
-    classeConteudo: 'consultoria360-page',
-    conteudo: `
-      <section class="admin-panel consultoria360-cockpit">
-        <div class="admin-panel-header">
-          <div><span class="hub-page-kicker">Operações</span><h2>Corretora</h2><p>Escolha uma ferramenta para continuar.</p></div>
-        </div>
-        <button class="consultoria360-module-entry" type="button" onclick="navegarParaRota('/operacoes/corretora/consultoria-360')">
-          <span><i data-lucide="compass" aria-hidden="true"></i></span><strong>Consultoria 360°</strong><small>Diagnóstico de proteção, saúde e patrimônio.</small><i data-lucide="arrow-right" aria-hidden="true"></i>
-        </button>
-      </section>
-    `
-  });
-}
-
-window.consultoria360NovoDiagnostico = () => {
-  uiState.view = 'new';
-  uiState.step = 1;
-  uiState.notice = '';
-  uiState.error = '';
-  uiState.draft.clientId = '';
-  uiState.data.clients = [];
-  rerender();
-  if (activeContext?.empresaId) {
-    chamarApi('listConsultoria360Clients', { empresaId: activeContext.empresaId }).then(response => {
-      if (response.ok) {
-        uiState.data.clients = response.data || [];
-        rerender();
-      } else {
-        uiState.error = response.message || 'Não foi possível carregar os clientes.';
-        rerender();
-      }
-    });
-  }
-};
-window.consultoria360VoltarCockpit = () => {
-  uiState.view = 'cockpit';
-  uiState.step = 1;
-  rerender();
-};
-window.consultoria360AvancarEtapa = () => {
-  uiState.step = Math.min(STEPS.length, uiState.step + 1);
-  rerender();
-};
-window.consultoria360VoltarEtapa = () => {
-  uiState.step = Math.max(1, uiState.step - 1);
-  rerender();
-};
-window.consultoria360AtualizarCampo = (name, value) => {
-  if (Object.prototype.hasOwnProperty.call(uiState.draft, name)) uiState.draft[name] = String(value ?? '');
-};
-window.consultoria360SalvarRascunho = async () => {
-  if (!activeContext?.empresaId || !uiState.draft.clientId) return;
-  uiState.loading = true;
-  rerender();
-  const client = uiState.data.clients.find(item => item.id === uiState.draft.clientId);
-  const response = await chamarApi('createConsultoria360Atendimento', {
-    empresa_id: activeContext.empresaId,
-    pessoa_id: uiState.draft.clientId,
-    cliente_snapshot: client || {},
-    contexto: {
-      occupation: uiState.draft.occupation,
-      mainInterest: uiState.draft.mainInterest
-    }
-  });
-  uiState.loading = false;
-  if (!response.ok) {
-    uiState.error = response.message || 'Não foi possível salvar o rascunho.';
-    rerender();
-    return;
-  }
-  uiState.view = 'cockpit';
-  uiState.notice = 'Rascunho salvo no Supabase e vinculado ao cadastro existente.';
-  uiState.data.atendimentos = [response.data, ...uiState.data.atendimentos];
-  rerender();
-};
+window.consultoria360NovoDiagnostico = async () => { uiState.view = 'editor'; uiState.step = 1; uiState.notice = ''; uiState.error = ''; uiState.detail = null; uiState.draft = emptyDraft(); rerender(); try { await carregarClientes(); rerender(); } catch (error) { uiState.error = error.message; rerender(); } };
+window.consultoria360AtualizarCampo = (name, value) => { const d = uiState.draft; if (name.includes('.')) { const [root, key, index] = name.split('.'); if (root === 'healthPlans') d.healthPlans[Number(key)][index] = value; else if (d[root] && typeof d[root] === 'object') d[root][key] = value; return; } if (name === 'clientId' && value) { const client = uiState.data.clients.find(item => item.id === value); d.clientName = client?.nome_razao_social || d.clientName; } if (name === 'selectedPriority' || Object.prototype.hasOwnProperty.call(d, name)) d[name] = value; };
+window.consultoria360AlternarModoCliente = mode => { uiState.draft.clientMode = mode === 'sem_cadastro' ? 'sem_cadastro' : 'cadastro'; if (uiState.draft.clientMode === 'sem_cadastro') uiState.draft.clientId = ''; rerender(); };
+window.consultoria360AlternarEscopo = (pillar, checked) => { const current = new Set(uiState.draft.selectedScope); checked ? current.add(pillar) : current.delete(pillar); uiState.draft.selectedScope = [...current]; };
+window.consultoria360Continuar = async () => { if (uiState.saving) return; uiState.saving = true; uiState.error = ''; rerender(); try { await ensureAtendimento(); await saveResponses(); if (uiState.step === 4) await savePriorities(); if (uiState.step === 5) await saveDimensionings(); if (uiState.step === 6) await saveProposal(); if (uiState.step === 7) { await finishAtendimento(); uiState.view = 'cockpit'; uiState.notice = 'Atendimento concluído, proposta e revisão persistidas no Hub.'; await carregarDados(); return; } uiState.step = Math.min(STEPS.length, uiState.step + 1); } catch (error) { uiState.error = error.message || 'Não foi possível salvar esta etapa.'; } finally { uiState.saving = false; rerender(); } };
+window.consultoria360VoltarEtapa = () => { uiState.step = Math.max(1, uiState.step - 1); uiState.error = ''; rerender(); };
+window.consultoria360VoltarCockpit = () => { uiState.view = 'cockpit'; uiState.step = 1; uiState.detail = null; uiState.error = ''; rerender(); };
+window.consultoria360LimparErro = () => { uiState.error = ''; rerender(); };
+window.consultoria360AplicarFiltros = event => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); uiState.filters = { search: values.search || '', status: values.status || '', priority: values.priority || '', review: values.review || '' }; rerender(); };
+window.consultoria360AbrirAtendimento = async id => { uiState.loading = true; uiState.error = ''; rerender(); try { const response = await chamarApi('getConsultoria360Atendimento', { id, empresaId: activeContext.empresaId }); if (!response.ok) throw new Error(response.message); uiState.detail = response.data; uiState.view = 'detail'; uiState.detailTab = 'resumo'; } catch (error) { uiState.error = error.message || 'Não foi possível abrir o atendimento.'; } finally { uiState.loading = false; rerender(); } };
+window.consultoria360SelecionarAba = tab => { uiState.detailTab = tab; rerender(); };
+window.consultoria360ContinuarAtendimento = () => { uiState.draft = draftFromDetail(uiState.detail); uiState.view = 'editor'; uiState.step = uiState.draft.proposalVersion ? 7 : (uiState.draft.selectedPriority ? 5 : 1); uiState.error = ''; rerender(); };
+window.consultoria360ImprimirProposta = () => window.print();
 window.consultoria360Recarregar = () => carregarDados();
-window.consultoria360ConcluirMock = () => {
-  uiState.view = 'cockpit';
-  uiState.step = 1;
-  uiState.notice = 'Demonstração concluída. Nenhum dado oficial foi salvo.';
-  rerender();
-};
