@@ -18,6 +18,7 @@ const CRM2_PEDIDOS_INITIAL_ITEMS = [
 const PEDIDO_STAGE_OPTIONS = ['Novo', 'Em qualificação', 'Em Negociação', 'Aguardando pagamento', 'Aguardando validação', 'Pedido validado', 'Pedido emitido'];
 const PEDIDO_STATUS_OPTIONS = [...PEDIDO_STAGE_OPTIONS, 'Concluído', 'Cancelado', 'Vencido'];
 const PEDIDO_PRODUCT_OPTIONS = ['e-CPF A3', 'e-CNPJ A1', 'e-CNPJ A3', 'Renovação de certificado'];
+const PEDIDO_PRODUCT_PRICES = { 'e-CPF A3': '390,00', 'e-CNPJ A1': '540,00', 'e-CNPJ A3': '890,00', 'Renovação de certificado': '480,00' };
 const PEDIDO_RESPONSIBLE_OPTIONS = ['Ana Martins', 'Carlos Oliveira', 'Fernanda Lima'];
 const PEDIDO_ORIGIN_OPTIONS = ['Atendimento interno', 'Indicação', 'Parceiro', 'Site'];
 const PEDIDO_FINANCIAL_OPTIONS = ['Pago', 'Pendente', 'Estornado'];
@@ -220,6 +221,18 @@ function currentPedidoFilterValues() {
   };
 }
 
+function pedidoProductPrice(value = '') {
+  const normalized = normalizePedido(value);
+  const option = PEDIDO_PRODUCT_OPTIONS.find((item) => normalizePedido(item) === normalized);
+  return option ? PEDIDO_PRODUCT_PRICES[option] || '' : '';
+}
+
+function pedidoMoneyValue(value = '') {
+  const normalized = String(value ?? '').trim().replace(/R\$\s?/gi, '').replace(/\./g, '').replace(',', '.');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : NaN;
+}
+
 function hasPedidoFilters() {
   return Boolean(crm2PedidosState.search || Object.values(currentPedidoFilterValues()).some(Boolean));
 }
@@ -268,15 +281,15 @@ function renderPedidosListLegacy() {
   return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-title"><div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedidos-title">Pedidos</h3><p class="crm2-pedidos-subtitle">Consulta operacional de pedidos, prazos, pendências e financeiro mockado.</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>${crm2PedidosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PedidosOpenCreate()">+ Incluir pedido</button>' : ''}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${renderPedidoMetrics()}<form class="ar-crm-list-filters crm2-pedidos-filters" role="search" onsubmit="crm2PedidosApplyFilters(event)" aria-label="Buscar e filtrar pedidos"><label><span>Buscar</span><input class="config-input" name="search" type="search" value="${escapeAttrPedido(crm2PedidosState.search)}" placeholder="Número, PF, PJ, CPF, CNPJ ou produto"></label><label><span>Status</span><select class="config-input" name="status"><option value="">Todos os status</option>${PEDIDO_STATUS_OPTIONS.map((option) => `<option value="${escapeAttrPedido(option)}" ${crm2PedidosState.statusFilter === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select></label><label><span>Produto</span><select class="config-input" name="product"><option value="">Todos os produtos</option>${products.map((option) => `<option value="${escapeAttrPedido(option)}" ${crm2PedidosState.productFilter === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select></label><label><span>Responsável</span><select class="config-input" name="responsible"><option value="">Todos os responsáveis</option>${responsibles.map((option) => `<option value="${escapeAttrPedido(option)}" ${crm2PedidosState.responsibleFilter === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select></label><label><span>Origem</span><select class="config-input" name="origin"><option value="">Todas as origens</option>${origins.map((option) => `<option value="${escapeAttrPedido(option)}" ${crm2PedidosState.originFilter === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select></label><label><span>Financeiro</span><select class="config-input" name="financial"><option value="">Todas as situações</option>${PEDIDO_FINANCIAL_OPTIONS.map((option) => `<option value="${escapeAttrPedido(option)}" ${crm2PedidosState.financialFilter === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select></label><label><span>Solicitação desde</span><input class="config-input" name="dateFrom" type="date" value="${escapeAttrPedido(crm2PedidosState.dateFrom)}"></label><label><span>Solicitação até</span><input class="config-input" name="dateTo" type="date" value="${escapeAttrPedido(crm2PedidosState.dateTo)}"></label><div class="crm2-pedidos-filter-actions"><button class="save-btn" type="submit">Aplicar filtros</button><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div></form>${listContent}</section>`;
 }
 
-function renderPedidoField({ label, name, value = '', type = 'text', required = false, wide = false, options = [], placeholder = '' }) {
+function renderPedidoField({ label, name, value = '', type = 'text', required = false, wide = false, options = [], placeholder = '', formId = '' }) {
   const error = crm2PedidosState.errors[name] || '';
   const id = `crm2-pedido-${name}`;
   const automaticStatus = name === 'status' && value === 'Pedido emitido';
-  const common = `id="${id}" class="config-input" name="${name}" ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}" ${error ? `aria-describedby="${id}-error"` : ''}`;
+  const common = `id="${id}" class="config-input" name="${name}" ${formId ? `form="${formId}"` : ''} ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}" ${error ? `aria-describedby="${id}-error"` : ''}`;
   const input = type === 'textarea'
     ? `<textarea ${common} rows="4" placeholder="${escapeAttrPedido(placeholder)}">${escapeHtmlPedido(value)}</textarea>`
     : type === 'select'
-      ? `<select ${common}${automaticStatus ? ' disabled aria-disabled="true"' : ''}><option value="">Selecione</option>${options.map((option) => `<option value="${escapeAttrPedido(option)}" ${String(value) === String(option) ? 'selected' : ''}${name === 'status' && option === 'Pedido emitido' ? ' disabled' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select>`
+      ? `<select ${common}${automaticStatus ? ' disabled aria-disabled="true"' : ''}><option value="">${escapeHtmlPedido(placeholder || 'Selecione')}</option>${options.map((option) => `<option value="${escapeAttrPedido(option)}" ${String(value) === String(option) ? 'selected' : ''}${name === 'status' && option === 'Pedido emitido' ? ' disabled' : ''}>${escapeHtmlPedido(option)}</option>`).join('')}</select>`
       : name === 'pjCnpj'
         ? `<span class="crm2-pedido-cnpj-control"><input ${common} type="text" inputmode="numeric" maxlength="18" value="${escapeAttrPedido(maskCnpjPedido(value))}" placeholder="${escapeAttrPedido(placeholder)}" oninput="this.value = window.crm2PedidosMaskCnpj(this.value)"><button class="icon-btn" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="window.crm2PedidosLookupCnpj(this)"><i data-lucide="search" aria-hidden="true"></i></button></span>`
         : `<input ${common} type="${type}" value="${escapeAttrPedido(value)}" placeholder="${escapeAttrPedido(placeholder)}">`;
@@ -284,11 +297,28 @@ function renderPedidoField({ label, name, value = '', type = 'text', required = 
   return name === 'observacoes' ? `${field}${renderPedidoAttachments(crm2PedidosState.draft)}` : field;
 }
 
+function renderPedidoIdentityFields(draft, formId) {
+  return `<input type="hidden" name="numero" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}"><div class="crm2-opp-form-grid crm2-pedido-identity-grid"><label class="crm2-opp-derived-field"><span>CPF</span><div class="crm2-opp-cpf-search-control"><input class="config-input" name="pfCpf" form="${formId}" value="${escapeAttrPedido(maskCpfPedido(draft.pfCpf))}" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" required oninput="window.crm2PedidosFormatCpf(this)" onblur="window.crm2PedidosMatchPf(this.value, this)"><button class="icon-btn" type="button" title="Buscar CPF" aria-label="Buscar CPF" onclick="window.crm2PedidosMatchPf(this.closest('.crm2-opp-cpf-search-control').querySelector('[name=pfCpf]').value, this)"><i data-lucide="search" aria-hidden="true"></i></button></div><small class="crm2-pedido-cpf-match-message" aria-live="polite" hidden></small></label><label class="crm2-opp-derived-field"><span>Nome (PF vinculada)</span><input class="config-input" name="pfNome" form="${formId}" value="${escapeAttrPedido(draft.pfNome)}" placeholder="Nome completo" required></label></div>`;
+}
+
+function renderPedidoItemForm(draft, formId) {
+  const price = draft.valor || '';
+  const pjValue = draft.pjCnpj ? maskCnpjPedido(draft.pjCnpj) : draft.pjRazaoSocial || '';
+  return `<div class="crm2-opp-items-form crm2-pedido-items-form"><div class="crm2-opp-items-form-header"><div><strong>Itens e pedidos</strong><small data-pedido-total>${price ? `R$ ${escapeHtmlPedido(price)}` : 'R$ 0,00'} estimado</small></div></div><div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-editable"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">Valor</th><th scope="col">CNPJ / PJ vinculada</th></tr></thead><tbody><tr><td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-0" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}" placeholder="Pedido"><small class="crm2-opp-order-price-pill" data-pedido-item-price>${price ? `R$ ${escapeHtmlPedido(price)}` : 'R$ 0,00'}</small></div></td><td><div class="crm2-pedido-product-cell crm2-opp-product-cell"><input class="config-input" name="itemProduct-0" form="${formId}" value="${escapeAttrPedido(draft.produto || '')}" placeholder="Buscar produto" autocomplete="off" required oninput="window.crm2PedidosSyncItemPrice(this); window.crm2PedidosRenderProductSuggestions(this)" onfocus="window.crm2PedidosRenderProductSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHideProductSuggestions(this), 150)"><div class="crm2-pedido-product-suggestions crm2-opp-product-suggestions" data-pedido-product-suggestions hidden></div></div></td><td><input class="config-input" name="itemValue-0" form="${formId}" value="${escapeAttrPedido(price)}" placeholder="R$ 0,00" required oninput="window.crm2PedidosSyncItemValue(this)"></td><td><div class="crm2-pedido-item-pj-cell crm2-opp-pj-cell"><input class="config-input" name="itemPj-0" form="${formId}" value="${escapeAttrPedido(pjValue)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="window.crm2PedidosSyncItemPj(this)" onfocus="window.crm2PedidosRenderPjSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHidePjSuggestions(this), 150)"><button class="icon-btn crm2-pedido-item-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="window.crm2PedidosLookupItemCnpj(this)" ${digitsPedido(pjValue).length === 14 ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button><input type="hidden" name="itemPjName-0" form="${formId}" value="${escapeAttrPedido(draft.pjRazaoSocial || '')}"><div class="crm2-pedido-pj-suggestions crm2-opp-cnpj-suggestions" data-pedido-pj-suggestions hidden></div></div></td></tr></tbody></table></div></div>${renderPedidoAttachments(draft)}`;
+}
+
 function renderPedidoForm() {
   const creating = crm2PedidosState.formMode === 'create';
-  const title = creating ? 'Incluir pedido' : 'Editar pedido';
-  const draft = crm2PedidosState.draft;
-  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-form-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-form-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedido-form-title">${title}</h3><p class="crm2-pedidos-subtitle">Dados mockados para validação do fluxo de pedidos.</p></div><button class="secondary-btn" type="button" onclick="crm2PedidosCancelForm()">Voltar à lista</button></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}<form class="crm2-pedido-form" onsubmit="crm2PedidosSaveForm(event)"><div class="hub-form-section"><div class="hub-form-section-title"><strong>Identificação</strong><span>Campos principais do pedido</span></div><div class="crm2-pedido-form-grid">${renderPedidoField({ label: 'Número do pedido', name: 'numero', value: draft.numero, required: !creating, placeholder: creating ? 'Gerado ao salvar' : '' })}${renderPedidoField({ label: 'Pessoa física', name: 'pfNome', value: draft.pfNome, required: true, placeholder: 'Nome completo' })}${renderPedidoField({ label: 'CPF', name: 'pfCpf', value: maskCpfPedido(draft.pfCpf), required: true, placeholder: '000.000.000-00' })}${renderPedidoField({ label: 'Pessoa jurídica', name: 'pjRazaoSocial', value: draft.pjRazaoSocial, placeholder: 'Opcional' })}${renderPedidoField({ label: 'CNPJ', name: 'pjCnpj', value: maskCnpjPedido(draft.pjCnpj), placeholder: 'Opcional' })}${renderPedidoField({ label: 'Produto', name: 'produto', value: draft.produto, type: 'select', options: PEDIDO_PRODUCT_OPTIONS, required: true })}</div></div><div class="hub-form-section"><div class="hub-form-section-title"><strong>Operação e financeiro</strong><span>Status e prazos da solicitação</span></div><div class="crm2-pedido-form-grid">${renderPedidoField({ label: 'Responsável', name: 'responsavel', value: draft.responsavel, type: 'select', options: PEDIDO_RESPONSIBLE_OPTIONS, required: true })}${renderPedidoField({ label: 'Status', name: 'status', value: draft.status, type: 'select', options: PEDIDO_STATUS_OPTIONS, required: true })}${renderPedidoField({ label: 'Origem', name: 'origem', value: draft.origem, type: 'select', options: PEDIDO_ORIGIN_OPTIONS, required: true })}${renderPedidoField({ label: 'Data da solicitação', name: 'dataSolicitacao', value: draft.dataSolicitacao, type: 'date', required: true })}${renderPedidoField({ label: 'Vencimento', name: 'vencimento', value: draft.vencimento, type: 'date', required: true })}${renderPedidoField({ label: 'Situação financeira', name: 'financeiro', value: draft.financeiro, type: 'select', options: PEDIDO_FINANCIAL_OPTIONS, required: true })}${renderPedidoField({ label: 'Valor', name: 'valor', value: draft.valor, placeholder: '0,00', required: true })}${renderPedidoField({ label: 'Pendências', name: 'pendencias', value: draft.pendencias, type: 'number', required: true })}${renderPedidoField({ label: 'Observações', name: 'observacoes', value: draft.observacoes, type: 'textarea', wide: true, placeholder: 'Contexto operacional mockado' })}</div></div><div class="crm2-pedido-form-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosCancelForm()">Cancelar</button><button class="save-btn" type="submit">${creating ? 'Salvar pedido' : 'Salvar alterações'}</button></div></form></section>`;
+  const title = creating ? 'Novo pedido' : 'Editar pedido';
+  const draft = crm2PedidosState.draft || pedidoDefaults({});
+  const historyItem = creating ? null : getPedido(crm2PedidosState.detailId) || draft;
+  const history = creating
+    ? '<section class="crm2-pf-timeline-column crm2-opp-timeline-column crm2-pedido-history-section crm2-opp-form-history-placeholder" aria-labelledby="crm2-pedido-form-history-title"><div class="hub-form-section-title crm2-pedido-history-title"><div><strong id="crm2-pedido-form-history-title">Histórico</strong></div></div><div class="crm2-pessoas-state crm2-timeline-state" role="status"><strong>Histórico disponível após o cadastro.</strong><span>As interações do pedido aparecerão aqui.</span></div></section>'
+    : renderPedidoHistorySection(historyItem);
+  const formId = 'crm2-pedido-form';
+  const originOptions = PEDIDO_ORIGIN_OPTIONS.map((option) => `<option value="${escapeAttrPedido(option)}" ${draft.origem === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('');
+  const responsibleOptions = PEDIDO_RESPONSIBLE_OPTIONS.map((option) => `<option value="${escapeAttrPedido(option)}" ${draft.responsavel === option ? 'selected' : ''}>${escapeHtmlPedido(option)}</option>`).join('');
+  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-form-page crm2-pedido-opportunity-form" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-form-title"><div class="admin-panel-header"><div class="crm2-opp-form-heading"><span class="ar-crm-phase1-kicker">ROTA 204 · PEDIDO</span><span class="crm2-opp-number-pill">${escapeHtmlPedido(draft.numero || 'Novo pedido')}</span><div class="crm2-opp-form-title-row"><h3 id="crm2-pedido-form-title">${title}</h3></div><div class="crm2-opp-form-stage-row"><label class="crm2-opp-header-stage-field"><span>Origem do pedido</span><select class="config-input crm2-opp-pill crm2-opp-header-origin-select" name="origem" form="${formId}" required>${originOptions}</select></label><label class="crm2-opp-header-stage-field"><span>Etapa</span><span class="crm2-opp-header-stage-value crm2-opp-pill">${escapeHtmlPedido(draft.status || 'Novo')}</span></label><label class="crm2-opp-header-stage-field crm2-opp-header-responsible-field"><span>Responsável *</span><select class="config-input crm2-opp-pill crm2-opp-header-stage-value" name="responsavel" form="${formId}" required>${responsibleOptions}</select></label></div></div><button class="secondary-btn" type="button" onclick="crm2PedidosCancelForm()">Voltar à lista</button></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}<div class="crm2-opp-form-layout"><form id="${formId}" class="crm2-opp-form" onsubmit="crm2PedidosSaveForm(event)">${renderPedidoIdentityFields(draft, formId)}${renderPedidoItemForm(draft, formId)}</form><aside class="crm2-opp-form-sidebar"><label class="crm2-opp-form-observations crm2-pedido-form-observations"><span>Observações</span><textarea class="config-input" name="observacoes" form="${formId}" rows="5" placeholder="Registre uma observação">${escapeHtmlPedido(draft.observacoes)}</textarea></label>${history}</aside></div>${Object.keys(crm2PedidosState.errors).length ? `<p class="crm2-pedido-form-error" role="alert">Revise os campos destacados antes de salvar.</p>` : ''}<div class="crm2-opp-form-footer"><button class="secondary-btn" type="button" onclick="crm2PedidosCancelForm()">Cancelar</button><button class="save-btn" type="submit" form="${formId}">${creating ? 'Salvar pedido' : 'Salvar alterações'}</button></div></section>`;
 }
 
 function pedidoHistory(item) {
@@ -324,7 +354,23 @@ function findRelatedPjPedido(item) {
 function renderPedidoRelatedLinks(item) {
   const pf = findRelatedPfPedido(item);
   const pj = item.pjRazaoSocial ? findRelatedPjPedido(item) : null;
-  return `<section class="crm2-pedido-integrations" aria-labelledby="crm2-pedido-integrations-title"><div class="hub-form-section-title"><strong id="crm2-pedido-integrations-title">Integrações visuais do CRM 2.0</strong><span>Atalhos para os registros relacionados</span></div><div class="crm2-pedido-integrations-grid"><article><span>Pessoa Física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenPf('${escapeAttrPedido(pf?.id || '')}')">${pf ? 'Abrir cadastro PF' : 'Abrir lista PF'}</button></article><article><span>Pessoa Jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ vinculada')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Etapa opcional'}</small>${item.pjRazaoSocial ? `<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj('${escapeAttrPedido(pj?.id || '')}')">${pj ? 'Abrir cadastro PJ' : 'Abrir lista PJ'}</button>` : '<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj(\'\')">Incluir ou vincular PJ</button>'}</article><article><span>Fluxo sequencial</span><strong>PF → PJ → Pedido</strong><small>Retome o cadastro mockado por etapas.</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenFlow()">Abrir fluxo sequencial</button></article></div></section>`;
+  return `<section class="crm2-pedido-integrations" aria-labelledby="crm2-pedido-integrations-title"><div class="hub-form-section-title"><strong id="crm2-pedido-integrations-title">Integrações visuais do CRM 2.0</strong><span>Atalhos para os registros relacionados</span></div><div class="crm2-pedido-integrations-grid"><article><span>Pessoa Física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small><button class="secondary-btn" type="button" onclick="crm2PedidosOpenPf('${escapeAttrPedido(pf?.id || '')}')">${pf ? 'Abrir cadastro PF' : 'Abrir lista PF'}</button></article><article><span>Pessoa Jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ vinculada')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Etapa opcional'}</small>${item.pjRazaoSocial ? `<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj('${escapeAttrPedido(pj?.id || '')}')">${pj ? 'Abrir cadastro PJ' : 'Abrir lista PJ'}</button>` : '<button class="secondary-btn" type="button" onclick="crm2PedidosOpenPj(\'\')">Incluir ou vincular PJ</button>'}</article><article><span>Oportunidade de origem</span><strong>${escapeHtmlPedido(item.oportunidadeNumero || 'Cadastro manual')}</strong><small>${item.oportunidadeId ? 'Pedido integrado à oportunidade' : 'Pedido criado diretamente'}</small></article></div></section>`;
+}
+
+function renderPedidoInlineFields(item) {
+  const draft = crm2PedidosState.draft || pedidoDefaults(item);
+  return `<form id="crm2-pedido-inline-form" class="crm2-opp-form crm2-pedido-inline-form" onsubmit="crm2PedidosSaveForm(event)">${renderPedidoIdentityFields(draft, 'crm2-pedido-inline-form')}${renderPedidoItemForm(draft, 'crm2-pedido-inline-form')}<label class="crm2-opp-form-observations crm2-pedido-form-observations"><span>Observações</span><textarea class="config-input" name="observacoes" rows="5" placeholder="Registre uma observação">${escapeHtmlPedido(draft.observacoes)}</textarea></label></form>`;
+}
+
+function renderPedidoViewValue(value, placeholder = 'Não informado') {
+  const text = String(value ?? '').trim();
+  const empty = !text || text === '—';
+  return `<span class="config-input crm2-pedido-view-field${empty ? ' is-placeholder' : ''}">${escapeHtmlPedido(empty ? placeholder : text)}</span>`;
+}
+
+function renderPedidoHistorySection(item) {
+  const history = [...pedidoHistory(item)].sort((a, b) => new Date(b.data) - new Date(a.data));
+  return `<aside class="hub-form-section crm2-pedido-history-section" aria-labelledby="crm2-pedido-history-title"><div class="hub-form-section-title crm2-pedido-history-title"><div><strong id="crm2-pedido-history-title">Histórico</strong><span>${history.length} evento(s)</span></div></div><div class="crm2-pedido-history-scroll"><div class="crm2-pedido-timeline" aria-live="polite">${history.map(renderPedidoHistoryEvent).join('')}</div></div></aside>`;
 }
 
 function renderPedidoMetrics() { return ''; }
@@ -372,18 +418,16 @@ function renderPedidoAttachments(item = {}) {
   return `<section class="hub-attachment-container crm2-unified-attachments crm2-pedido-attachments-container" aria-labelledby="crm2-pedido-attachments-title"><div class="hub-form-section-title"><strong id="crm2-pedido-attachments-title">Anexos espelhados</strong><span>${attachments.length} anexo(s) relacionado(s)</span></div>${attachments.length ? `<div class="crm2-pedido-attachments-list">${attachments.map((attachment) => `<div><strong>${escapeHtmlPedido(attachment.nome || 'Anexo')}</strong><small>${escapeHtmlPedido(attachment.origem)}</small></div>`).join('')}</div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum anexo espelhado.</strong><span>Os anexos dos cadastros relacionados aparecerão aqui.</span></div>'}</section>`;
 }
 
-function renderPedidoDetail(item) {
-  const tabs = [['dados', 'Dados do pedido'], ['pendencias', 'Pendências'], ['historico', 'Histórico']];
-  const history = [...pedidoHistory(item)].sort((a, b) => new Date(b.data) - new Date(a.data));
-  const pendingCount = Number(item.pendencias) || 0;
-  const content = crm2PedidosState.detailTab === 'pendencias'
-    ? `<div class="crm2-pedido-related-list">${pendingCount ? Array.from({ length: pendingCount }, (_, index) => `<article><strong>Pendência ${index + 1}</strong><span>Validação operacional mockada aguardando tratamento.</span><small>Responsável: ${escapeHtmlPedido(item.responsavel)}</small></article>`).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pendência.</strong><span>Este pedido não possui pendências mockadas abertas.</span></div>'}</div>`
-    : crm2PedidosState.detailTab === 'historico'
-      ? `<div class="crm2-pedido-timeline">${history.map(renderPedidoHistoryEvent).join('')}</div>`
-      : `<div class="crm2-pedido-detail-grid"><div><span>Número</span><strong>${escapeHtmlPedido(item.numero)}</strong></div><div><span>Status</span><strong>${renderStatusPedido(item.status)}</strong></div><div><span>Pessoa física</span><strong>${escapeHtmlPedido(item.pfNome)}</strong><small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span><strong>${escapeHtmlPedido(item.pjRazaoSocial || 'Sem PJ')}</strong><small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span><strong>${escapeHtmlPedido(item.produto)}</strong></div><div><span>Responsável</span><strong>${escapeHtmlPedido(item.responsavel)}</strong></div><div><span>Solicitação</span><strong>${escapeHtmlPedido(formatDatePedido(item.dataSolicitacao))}</strong></div><div><span>Vencimento</span><strong>${escapeHtmlPedido(formatDatePedido(item.vencimento))}</strong></div><div><span>Financeiro</span><strong>${renderStatusPedido(item.financeiro, true)}</strong><small>R$ ${escapeHtmlPedido(item.valor)}</small></div><div><span>Pendências</span><strong>${pendingCount}</strong></div><div class="is-wide"><span>Observações</span><strong>${escapeHtmlPedido(item.observacoes || 'Nenhuma observação registrada.')}</strong></div></div>`;
+function renderPedidoDetail(item, editing = crm2PedidosState.formMode === 'edit' && crm2PedidosState.detailId === item.id) {
+  const dataContent = editing
+    ? renderPedidoInlineFields(item)
+    : `<div class="crm2-pedido-detail-grid"><div><span>Número do pedido</span>${renderPedidoViewValue(item.numero)}</div><div><span>Pessoa física</span>${renderPedidoViewValue(item.pfNome)}<small>${escapeHtmlPedido(maskCpfPedido(item.pfCpf))}</small></div><div><span>Pessoa jurídica</span>${renderPedidoViewValue(item.pjRazaoSocial, 'Sem PJ vinculada')}<small>${item.pjCnpj ? escapeHtmlPedido(maskCnpjPedido(item.pjCnpj)) : 'Não informada'}</small></div><div><span>Produto</span>${renderPedidoViewValue(item.produto)}</div><div><span>Valor</span>${renderPedidoViewValue(item.valor, '0,00')}</div><div><span>Responsável</span>${renderPedidoViewValue(item.responsavel)}</div><div><span>Origem</span>${renderPedidoViewValue(item.origem)}</div><div><span>Data de cadastro</span>${renderPedidoViewValue(formatDatePedido(item.dataSolicitacao))}</div><div class="is-wide"><span>Observações</span>${renderPedidoViewValue(item.observacoes, 'Nenhuma observação registrada.')}</div></div>${renderPedidoAttachments(item)}`;
+  const dataSection = `<section class="hub-form-section crm2-pedido-detail-section" aria-labelledby="crm2-pedido-data-title"><div class="hub-form-section-title"><strong id="crm2-pedido-data-title">Dados do pedido</strong></div>${dataContent}</section>`;
   const closed = isPedidoEncerrado(item);
-  const actions = crm2PedidosState.canEdit && !closed ? `<button class="save-btn" type="button" onclick="crm2PedidosOpenEdit('${escapeAttrPedido(item.id)}')">Editar</button><button class="secondary-btn crm2-pedido-cancel-action" type="button" onclick="crm2PedidosCancel('${escapeAttrPedido(item.id)}')">Cancelar pedido</button><button class="secondary-btn crm2-pedido-close-action" type="button" onclick="crm2PedidosClose('${escapeAttrPedido(item.id)}')">Encerrar pedido</button>` : '';
-  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-detail-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-detail-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><h3 id="crm2-pedido-detail-title">${escapeHtmlPedido(item.numero)}</h3><p class="crm2-pedidos-subtitle">${escapeHtmlPedido(item.pfNome)} · atualizado em ${escapeHtmlPedido(formatDateTimePedido(item.atualizadoEm))}</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosBackToList()">Voltar à lista</button>${actions}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${closed ? '<p class="crm2-pedido-closed-notice" role="status">Este pedido está encerrado e não pode mais ser editado. O histórico permanece disponível para consulta.</p>' : ''}<div class="module-tabs crm2-pedido-tabs" role="tablist" aria-label="Detalhes do pedido">${tabs.map(([id, label]) => `<button class="${crm2PedidosState.detailTab === id ? 'active' : ''}" type="button" role="tab" aria-selected="${crm2PedidosState.detailTab === id}" onclick="crm2PedidosSelectTab('${id}')">${label}</button>`).join('')}</div><div class="crm2-pedido-tab-content">${content}${crm2PedidosState.detailTab === 'dados' ? renderPedidoRelatedLinks(item) : ''}</div></section>`;
+  const actions = editing
+    ? `<button class="secondary-btn" type="button" onclick="crm2PedidosCancelForm()">Cancelar edição</button><button class="save-btn" type="submit" form="crm2-pedido-inline-form">Salvar alterações</button>`
+    : crm2PedidosState.canEdit && !closed ? `<button class="save-btn" type="button" onclick="crm2PedidosOpenEdit('${escapeAttrPedido(item.id)}')">Editar</button><button class="secondary-btn crm2-pedido-cancel-action" type="button" onclick="crm2PedidosCancel('${escapeAttrPedido(item.id)}')">Cancelar pedido</button><button class="secondary-btn crm2-pedido-close-action" type="button" onclick="crm2PedidosClose('${escapeAttrPedido(item.id)}')">Encerrar pedido</button>` : '';
+  return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page crm2-pedido-detail-page${editing ? ' crm2-pedido-inline-edit-page' : ''}" data-crm2-pedidos="true" aria-labelledby="crm2-pedido-detail-title"><div class="admin-panel-header"><div><span class="ar-crm-phase1-kicker">ROTA 204 · CRM 2.0</span><span class="crm2-pedido-number-pill">${escapeHtmlPedido(item.numero)}</span><h3 id="crm2-pedido-detail-title">Pedido</h3><p class="crm2-pedidos-subtitle">${escapeHtmlPedido(item.pfNome)} · atualizado em ${escapeHtmlPedido(formatDateTimePedido(item.atualizadoEm))}</p></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosBackToList()">Voltar à lista</button>${actions}</div></div>${crm2PedidosState.message ? `<p class="admin-message" role="status">${escapeHtmlPedido(crm2PedidosState.message)}</p>` : ''}${closed ? '<p class="crm2-pedido-closed-notice" role="status">Este pedido está encerrado e não pode mais ser editado. O histórico permanece disponível para consulta.</p>' : ''}<div class="crm2-pedido-data-layout"><main class="crm2-pedido-data-main">${dataSection}${renderPedidoRelatedLinks(item)}</main>${renderPedidoHistorySection(item)}</div></section>`;
 }
 
 function renderPedidoMissing() {
@@ -396,10 +440,13 @@ function renderPedidos() {
   if (!crm2PedidosState.canView) return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-denied-title"><div class="crm2-pessoas-state crm2-pedidos-state is-error" role="alert"><strong id="crm2-pedidos-denied-title">Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar Pedidos.</span><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></section>`;
   if (route.view === 'new') {
     if (!crm2PedidosState.canCreate) return renderPedidoMissing();
-    window.setTimeout(() => {
-      if (currentPedidosRoute().view === 'new') window.navegarParaCrm2Cadastro?.();
-    }, 0);
-    return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true"><div class="crm2-pessoas-state" role="status"><strong>Abrindo cadastro sequencial...</strong><span>O pedido será criado pelo fluxo PF → PJ → Pedido.</span></div></section>`;
+    if (crm2PedidosState.formMode !== 'create' || crm2PedidosState.detailId) {
+      crm2PedidosState.formMode = 'create';
+      crm2PedidosState.detailId = '';
+      crm2PedidosState.draft = pedidoDefaults({});
+      crm2PedidosState.errors = {};
+    }
+    return renderPedidoForm();
   }
   if (route.view === 'edit') {
     const item = getPedido(route.id);
@@ -410,7 +457,8 @@ function renderPedidos() {
       crm2PedidosState.draft = pedidoDefaults(item);
       crm2PedidosState.errors = {};
     }
-    return renderPedidoForm();
+    crm2PedidosState.detailTab = 'dados';
+    return renderPedidoDetail(item, true);
   }
   if (route.view === 'detail') {
     const item = getPedido(route.id);
@@ -429,12 +477,13 @@ function rerenderPedidos() {
 
 function validatePedidoDraft(draft) {
   const errors = {};
-  ['pfNome', 'pfCpf', 'produto', 'responsavel', 'status', 'origem', 'dataSolicitacao', 'vencimento', 'financeiro', 'valor'].forEach((field) => {
+  ['pfNome', 'pfCpf', 'produto', 'responsavel', 'origem', 'dataSolicitacao', 'valor'].forEach((field) => {
     if (!String(draft[field] || '').trim()) errors[field] = 'Preenchimento obrigatório.';
   });
+  if (draft.produto && !PEDIDO_PRODUCT_OPTIONS.some((option) => normalizePedido(option) === normalizePedido(draft.produto))) errors.produto = 'Selecione um produto válido do catálogo.';
   if (draft.pfCpf && digitsPedido(draft.pfCpf).length !== 11) errors.pfCpf = 'Informe um CPF com 11 dígitos.';
   if (draft.pjCnpj && digitsPedido(draft.pjCnpj).length !== 14) errors.pjCnpj = 'Informe um CNPJ com 14 dígitos.';
-  if (draft.dataSolicitacao && draft.vencimento && draft.vencimento < draft.dataSolicitacao) errors.vencimento = 'O vencimento não pode ser anterior à solicitação.';
+  if (draft.valor && (Number.isNaN(pedidoMoneyValue(draft.valor)) || pedidoMoneyValue(draft.valor) < 0)) errors.valor = 'Informe um valor válido.';
   if (draft.pendencias !== '' && (!/^\d+$/.test(String(draft.pendencias)) || Number(draft.pendencias) < 0)) errors.pendencias = 'Informe uma quantidade inteira igual ou maior que zero.';
   return errors;
 }
@@ -464,6 +513,120 @@ function changePedidoStatus(id, status, actionLabel) {
 }
 
 Object.assign(window, {
+  crm2PedidosFormatCpf(input) {
+    if (!input) return;
+    const digits = digitsPedido(input.value).slice(0, 11);
+    input.value = maskCpfPedido(digits);
+  },
+  crm2PedidosMatchPf(value, target) {
+    const cpf = digitsPedido(value);
+    const form = target?.closest('form') || document.getElementById('crm2-pedido-form') || document.getElementById('crm2-pedido-inline-form');
+    const field = form?.querySelector('[name="pfCpf"]');
+    const name = form?.querySelector('[name="pfNome"]');
+    const message = form?.querySelector('.crm2-pedido-cpf-match-message');
+    const searched = cpf.length === 11;
+    const pf = searched ? (window.crm2PfGetMockItems?.() || []).find((item) => digitsPedido(item.cpf) === cpf) : null;
+    if (field) field.value = maskCpfPedido(cpf);
+    if (pf && name) name.value = pf.nome || '';
+    if (message) {
+      message.hidden = !searched;
+      message.textContent = pf ? 'PF encontrada' : 'CPF sem cadastro';
+      message.classList.toggle('is-success', Boolean(pf));
+    }
+    crm2PedidosState.draft = { ...crm2PedidosState.draft, pfId: pf?.id || '', pfCpf: cpf, pfNome: pf?.nome || name?.value || '' };
+  },
+  crm2PedidosRenderProductSuggestions(input) {
+    const target = input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    if (!target) return;
+    const query = normalizePedido(input.value);
+    const matches = PEDIDO_PRODUCT_OPTIONS.filter((item) => !query || normalizePedido(item).includes(query)).slice(0, 8);
+    target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-product-suggestion" data-product-value="${escapeAttrPedido(item)}" onclick="window.crm2PedidosSelectProductSuggestion(this)"><strong>${escapeHtmlPedido(item)}</strong><small>R$ ${escapeHtmlPedido(pedidoProductPrice(item))}</small></button>`).join('');
+    target.hidden = !matches.length;
+  },
+  crm2PedidosHideProductSuggestions(input) {
+    const target = input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    if (target) target.hidden = true;
+  },
+  crm2PedidosSelectProductSuggestion(button) {
+    const cell = button?.closest('.crm2-pedido-product-cell');
+    const input = cell?.querySelector('[name^="itemProduct-"]');
+    if (!input) return;
+    input.value = button.dataset.productValue || '';
+    window.crm2PedidosSyncItemPrice(input);
+    window.crm2PedidosHideProductSuggestions(input);
+  },
+  crm2PedidosSyncItemPrice(input) {
+    const row = input?.closest('tr');
+    if (!row) return;
+    const price = pedidoProductPrice(input.value);
+    const value = row.querySelector('[name^="itemValue-"]');
+    const pill = row.querySelector('[data-pedido-item-price]');
+    if (price && value) value.value = price;
+    if (pill) pill.textContent = price ? `R$ ${price}` : 'R$ 0,00';
+    const total = row.closest('.crm2-pedido-items-form')?.querySelector('[data-pedido-total]');
+    if (total) total.textContent = price ? `R$ ${price} estimado` : 'R$ 0,00 estimado';
+  },
+  crm2PedidosSyncItemValue(input) {
+    const row = input?.closest('tr');
+    const price = String(input?.value || '').trim() || '0,00';
+    const pill = row?.querySelector('[data-pedido-item-price]');
+    const total = row?.closest('.crm2-pedido-items-form')?.querySelector('[data-pedido-total]');
+    if (pill) pill.textContent = `R$ ${price}`;
+    if (total) total.textContent = `R$ ${price} estimado`;
+  },
+  crm2PedidosSyncItemPj(input) {
+    if (!input) return;
+    const raw = String(input.value || '');
+    const hasText = /[A-Za-zÀ-ÿ]/.test(raw);
+    const normalized = digitsPedido(raw).slice(0, 14);
+    if (!hasText) input.value = maskCnpjPedido(normalized);
+    const cell = input.closest('.crm2-pedido-item-pj-cell');
+    const lookup = cell?.querySelector('.crm2-pedido-item-cnpj-search');
+    if (lookup) lookup.disabled = hasText || normalized.length !== 14;
+    window.crm2PedidosRenderPjSuggestions(input);
+  },
+  crm2PedidosRenderPjSuggestions(input) {
+    const target = input?.closest('.crm2-pedido-item-pj-cell')?.querySelector('[data-pedido-pj-suggestions]');
+    if (!target) return;
+    const query = normalizePedido(input.value);
+    const queryDigits = digitsPedido(input.value);
+    if (query.length < 2 && queryDigits.length < 2) {
+      target.hidden = true;
+      target.innerHTML = '';
+      return;
+    }
+    const matches = (window.crm2PjGetMockItems?.() || []).filter((item) => normalizePedido(`${item.razaoSocial || ''} ${item.id || ''}`).includes(query) || (queryDigits.length >= 2 && digitsPedido(item.cnpj).includes(queryDigits))).slice(0, 6);
+    target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-cnpj-suggestion" data-pj-id="${escapeAttrPedido(item.id)}" onclick="window.crm2PedidosSelectPjSuggestion(this)"><strong>${escapeHtmlPedido(item.razaoSocial || item.id)}</strong><small>${escapeHtmlPedido(maskCnpjPedido(item.cnpj))}</small></button>`).join('');
+    target.hidden = !matches.length;
+  },
+  crm2PedidosHidePjSuggestions(input) {
+    const target = input?.closest('.crm2-pedido-item-pj-cell')?.querySelector('[data-pedido-pj-suggestions]');
+    if (target) target.hidden = true;
+  },
+  crm2PedidosSelectPjSuggestion(button) {
+    const pj = (window.crm2PjGetMockItems?.() || []).find((item) => item.id === button?.dataset?.pjId);
+    const cell = button?.closest('.crm2-pedido-item-pj-cell');
+    const input = cell?.querySelector('[name^="itemPj-"]');
+    const name = cell?.querySelector('[name^="itemPjName-"]');
+    if (!pj || !input) return;
+    input.value = maskCnpjPedido(pj.cnpj);
+    if (name) name.value = pj.razaoSocial || '';
+    cell.querySelector('.crm2-pedido-item-cnpj-search')?.removeAttribute('disabled');
+    window.crm2PedidosHidePjSuggestions(input);
+  },
+  crm2PedidosLookupItemCnpj(button) {
+    const cell = button?.closest('.crm2-pedido-item-pj-cell');
+    const input = cell?.querySelector('[name^="itemPj-"]');
+    const name = cell?.querySelector('[name^="itemPjName-"]');
+    if (!input) return;
+    const cnpj = digitsPedido(input.value);
+    const existingPj = (window.crm2PjGetMockItems?.() || []).find((item) => digitsPedido(item.cnpj) === cnpj);
+    abrirConsultaCnpj({ value: input.value, existing: existingPj ? { cnpj: existingPj.cnpj, razaoSocial: existingPj.razaoSocial } : null, onConfirm: (data) => {
+      input.value = maskCnpjPedido(data.cnpj);
+      if (name) name.value = data.razaoSocial || '';
+      crm2PedidosState.draft = { ...crm2PedidosState.draft, pjCnpj: digitsPedido(data.cnpj), pjRazaoSocial: data.razaoSocial || '' };
+    } });
+  },
   crm2PedidosMaskCnpj(value) { return maskCnpjPedido(value); },
   crm2PedidosLookupCnpj(button) {
     const form = button?.closest('form');
@@ -491,13 +654,13 @@ Object.assign(window, {
     const id = `pedido-conv-${Date.now()}-${crm2PedidosState.items.length}`;
     const item = {
       id,
-      numero: `PED-CONV-${String(crm2PedidosState.items.length + 1).padStart(3, '0')}`,
+      numero: payload.numeroPedido || `PED-CONV-${String(crm2PedidosState.items.length + 1).padStart(3, '0')}`,
       pfNome: payload.pfNome, pfCpf: String(payload.pfCpf).replace(/\D/g, ''),
       pjRazaoSocial: payload.pjRazaoSocial || '', pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''),
       produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: payload.dataEmissao ? 'Pedido emitido' : 'Pedido validado',
       origem: 'Pedido gerado pela oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
       financeiro: 'Pendente', valor: payload.valor || '0,00', pendencias: 0, atualizadoEm: now,
-      oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '',
+      oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '', oportunidadeItemId: payload.oportunidadeItemId || '',
       historico: [{ data: now, usuario: payload.responsavel || 'Usuário mockado', tipo: 'Pedido gerado', descricao: 'Pedido gerado a partir da oportunidade.', alteracoes: `Origem: Oportunidade · Item: ${payload.produto}` }]
     };
     crm2PedidosState.items.unshift(item);
@@ -560,7 +723,12 @@ Object.assign(window, {
   crm2PedidosOpenCreate() {
     permissionsPedidos();
     if (!crm2PedidosState.canCreate) return;
-    window.navegarParaCrm2Cadastro?.();
+    crm2PedidosState.message = '';
+    crm2PedidosState.formMode = 'create';
+    crm2PedidosState.detailId = '';
+    crm2PedidosState.draft = pedidoDefaults({});
+    crm2PedidosState.errors = {};
+    navigatePedidos('novo');
   },
   crm2PedidosOpenDetail(id) {
     if (!getPedido(id)) return;
@@ -589,7 +757,12 @@ Object.assign(window, {
     permissionsPedidos();
     if (!crm2PedidosState.canEdit || !getPedido(id) || isPedidoEncerrado(getPedido(id))) return;
     crm2PedidosState.message = '';
-    navigatePedidos(`${id}/editar`);
+    crm2PedidosState.formMode = 'edit';
+    crm2PedidosState.detailId = id;
+    crm2PedidosState.detailTab = 'dados';
+    crm2PedidosState.draft = pedidoDefaults(getPedido(id));
+    crm2PedidosState.errors = {};
+    rerenderPedidos();
   },
   crm2PedidosCancel(id) {
     changePedidoStatus(id, 'Cancelado', 'cancelamento');
@@ -603,9 +776,11 @@ Object.assign(window, {
     navigatePedidos();
   },
   crm2PedidosCancelForm() {
+    const route = currentPedidosRoute();
     crm2PedidosState.message = '';
     resetPedidoForm();
-    navigatePedidos();
+    if (route.view === 'edit') navigatePedidos(route.id);
+    else navigatePedidos();
   },
   crm2PedidosSelectTab(tab) {
     if (!['dados', 'pendencias', 'historico'].includes(tab)) return;
@@ -615,7 +790,18 @@ Object.assign(window, {
   crm2PedidosSaveForm(event) {
     event?.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const draft = { ...crm2PedidosState.draft, ...values, pfCpf: digitsPedido(values.pfCpf), pjCnpj: digitsPedido(values.pjCnpj), pendencias: String(values.pendencias || '0') };
+    const itemPj = String(values['itemPj-0'] || values.pjCnpj || values.pjRazaoSocial || '').trim();
+    const itemPjDigits = digitsPedido(itemPj);
+    const itemPjIsNumeric = Boolean(itemPj) && !/[A-Za-zÀ-ÿ]/.test(itemPj);
+    const draft = { ...crm2PedidosState.draft, ...values,
+      numero: String(values['itemOrder-0'] || values.numero || '').trim(),
+      produto: String(values['itemProduct-0'] || values.produto || '').trim(),
+      valor: String(values['itemValue-0'] || values.valor || '').trim(),
+      pfCpf: digitsPedido(values.pfCpf),
+      pjCnpj: itemPjIsNumeric ? itemPjDigits : '',
+      pjRazaoSocial: itemPjDigits.length === 14 ? String(values['itemPjName-0'] || values.pjRazaoSocial || '').trim() : itemPj,
+      pendencias: String(values.pendencias || '0')
+    };
     const errors = validatePedidoDraft(draft);
     crm2PedidosState.draft = draft;
     crm2PedidosState.errors = errors;
@@ -625,7 +811,7 @@ Object.assign(window, {
     }
     if (crm2PedidosState.formMode === 'create') {
       const id = `pedido-${String(crm2PedidosState.items.length + 1).padStart(3, '0')}`;
-      const item = { ...draft, id, numero: `PED-${2401 + crm2PedidosState.items.length}`, atualizadoEm: new Date().toISOString(), historico: createPedidoHistory('Pedido criado no CRM 2.0 mockado.', draft.responsavel) };
+      const item = { ...draft, id, numero: draft.numero || `PED-${2401 + crm2PedidosState.items.length}`, atualizadoEm: new Date().toISOString(), historico: createPedidoHistory('Pedido criado no CRM 2.0 mockado.', draft.responsavel) };
       crm2PedidosState.items.unshift(item);
       crm2PedidosState.message = 'Pedido incluído com sucesso no conjunto mockado.';
       crm2PedidosState.detailTab = 'dados';
