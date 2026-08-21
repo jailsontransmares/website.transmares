@@ -1,0 +1,432 @@
+.consultoria360-page {
+  min-width: 0;
+}
+
+.consultoria360-cockpit,
+.consultoria360-workspace,
+.consultoria360-access-state {
+  min-width: 0;
+}
+
+.consultoria360-loading {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  gap: 10px;
+  min-height: 140px;
+  justify-content: center;
+}
+
+.consultoria360-error {
+  align-items: center;
+  background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-destaque) 28%, var(--borda));
+  border-radius: var(--radius-card);
+  color: var(--texto);
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+}
+
+.consultoria360-error > svg {
+  color: var(--cor-destaque);
+  flex: 0 0 20px;
+}
+
+.consultoria360-error div {
+  flex: 1;
+  min-width: 0;
+}
+
+.consultoria360-error p {
+  color: var(--texto-suave);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+.consultoria360-table-wrap {
+  overflow-x: auto;
+}
+
+.consultoria360-table {
+  min-width: 620px;
+}
+
+.consultoria360-table-caption {
+  color: var(--texto-suave);
+  font-size: 12px;
+  padding: 0 0 8px;
+  text-align: left;
+}
+
+.consultoria360-cockpit-header {
+  align-items: center;
+}
+
+.consultoria360-cockpit-header .save-btn,
+.consultoria360-workspace .consultoria360-status-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.consultoria360-cockpit-header .save-btn svg {
+  height: 16px;
+  width: 16px;
+}
+
+.consultoria360-intro-card {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--cor-principal) 9%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 22%, var(--borda));
+  border-radius: var(--radius-card);
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+}
+
+.consultoria360-intro-card > div:first-child {
+  align-items: center;
+  background: var(--cor-principal);
+  border-radius: 10px;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 34px;
+  height: 34px;
+  justify-content: center;
+}
+
+.consultoria360-intro-card svg,
+.consultoria360-empty-state > svg,
+.consultoria360-feedback svg {
+  height: 18px;
+  width: 18px;
+}
+
+.consultoria360-intro-card strong,
+.consultoria360-intro-card p {
+  display: block;
+  margin: 0;
+}
+
+.consultoria360-intro-card p {
+  color: var(--texto-suave);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.consultoria360-metrics {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.consultoria360-metrics article,
+.consultoria360-priority-grid article {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  min-width: 0;
+  padding: 15px;
+}
+
+.consultoria360-metrics span,
+.consultoria360-metrics small,
+.consultoria360-priority-grid small {
+  color: var(--texto-suave);
+  display: block;
+}
+
+.consultoria360-metrics strong {
+  display: block;
+  font-size: 26px;
+  margin: 5px 0 2px;
+}
+
+.consultoria360-metrics small,
+.consultoria360-priority-grid small {
+  font-size: 12px;
+}
+
+.consultoria360-empty-state {
+  align-items: center;
+  border: 1px dashed var(--borda);
+  border-radius: var(--radius-card);
+  color: var(--texto-suave);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  min-height: 210px;
+  padding: 24px;
+  text-align: center;
+}
+
+.consultoria360-empty-state strong {
+  color: var(--texto);
+}
+
+.consultoria360-empty-state p {
+  margin: 0 0 8px;
+  max-width: 56ch;
+}
+
+.consultoria360-feedback,
+.consultoria360-notice {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.consultoria360-feedback svg {
+  color: var(--cor-principal);
+}
+
+.consultoria360-status-chip {
+  background: color-mix(in srgb, var(--cor-principal) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--cor-principal) 25%, var(--borda));
+  border-radius: 999px;
+  color: var(--cor-principal);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.consultoria360-stepper {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.consultoria360-stepper li {
+  align-items: center;
+  border-bottom: 2px solid var(--borda);
+  color: var(--texto-suave);
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 10px;
+}
+
+.consultoria360-stepper li span {
+  align-items: center;
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 24px;
+  font-size: 12px;
+  height: 24px;
+  justify-content: center;
+}
+
+.consultoria360-stepper li strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.consultoria360-stepper li.is-current {
+  border-color: var(--cor-principal);
+  color: var(--texto);
+}
+
+.consultoria360-stepper li.is-current span,
+.consultoria360-stepper li.is-complete span {
+  background: var(--cor-principal);
+  border-color: var(--cor-principal);
+  color: #fff;
+}
+
+.consultoria360-copy-block {
+  margin-bottom: 18px;
+}
+
+.consultoria360-copy-block h3 {
+  margin: 4px 0;
+}
+
+.consultoria360-copy-block p {
+  color: var(--texto-suave);
+  margin: 0;
+}
+
+.consultoria360-form-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.consultoria360-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.consultoria360-field.is-wide {
+  grid-column: 1 / -1;
+}
+
+.consultoria360-field > span {
+  color: var(--texto);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.consultoria360-field small {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.consultoria360-investigation-grid,
+.consultoria360-priority-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.consultoria360-investigation-grid article {
+  background: color-mix(in srgb, var(--fundo) 78%, var(--card));
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 6px;
+  padding: 15px;
+}
+
+.consultoria360-investigation-grid svg {
+  color: var(--cor-principal);
+  height: 20px;
+  width: 20px;
+}
+
+.consultoria360-investigation-grid span,
+.consultoria360-priority-grid small {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.consultoria360-priority-grid article {
+  display: grid;
+  gap: 6px;
+}
+
+.consultoria360-priority-placeholder {
+  color: var(--cor-principal);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.consultoria360-actions {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, var(--cor-principal) 10%, transparent);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding-top: 16px;
+}
+
+.consultoria360-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.consultoria360-module-entry {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: var(--radius-card);
+  color: var(--texto);
+  cursor: pointer;
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: 38px minmax(0, 1fr) 20px;
+  padding: 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.consultoria360-module-entry:hover,
+.consultoria360-module-entry:focus-visible {
+  border-color: var(--cor-principal);
+  box-shadow: var(--shadow-card);
+  outline: none;
+}
+
+.consultoria360-module-entry > span {
+  align-items: center;
+  background: color-mix(in srgb, var(--cor-principal) 12%, var(--card));
+  border-radius: 10px;
+  color: var(--cor-principal);
+  display: inline-flex;
+  grid-row: span 2;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.consultoria360-module-entry > i {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.consultoria360-module-entry small {
+  color: var(--texto-suave);
+}
+
+@media (max-width: 760px) {
+  .consultoria360-metrics,
+  .consultoria360-investigation-grid,
+  .consultoria360-priority-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .consultoria360-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .consultoria360-field.is-wide {
+    grid-column: auto;
+  }
+
+  .consultoria360-stepper {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .consultoria360-stepper li strong {
+    white-space: normal;
+  }
+
+  .consultoria360-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .consultoria360-actions > div {
+    justify-content: flex-end;
+  }
+
+  .consultoria360-error {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .consultoria360-error .secondary-btn {
+    margin-left: 32px;
+  }
+}

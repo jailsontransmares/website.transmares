@@ -18,6 +18,7 @@ import './crm2Comunicacao.css';
 import './crm2Automacoes.js';
 import './crm2Automacoes.css';
 import './crm2CadastroSequencial.js';
+import { CONSULTORIA360_ROUTE, mountConsultoria360Page, renderCorretoraOperationalPage } from './consultoria360.js';
 import './crm2CadastroSequencial.css';
 import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
 import { initializeHubResizableTables } from './hubResizableTable.js';
@@ -40,6 +41,7 @@ import {
 } from './notificationsUi.js';
 import {
   Archive,
+  ArrowRight,
   AtSign,
   Bold,
   Bell,
@@ -49,6 +51,8 @@ import {
   ChevronRight,
   ChevronUp,
   Check,
+  CheckCircle2,
+  ClipboardList,
   Circle,
   CircleHelp,
   CircleAlert,
@@ -56,6 +60,7 @@ import {
   createIcons,
   Download,
   DownloadCloud,
+  Compass,
   ExternalLink,
   Eraser,
   Eye,
@@ -63,6 +68,8 @@ import {
   FilePlus2,
   Filter,
   House,
+  HeartPulse,
+  Info,
   Italic,
   KeyRound,
   Landmark,
@@ -75,9 +82,11 @@ import {
   Menu,
   Moon,
   Pin,
+  Plus,
   Pencil,
   RemoveFormatting,
   Search,
+  ShieldCheck,
   Settings,
   Settings2,
   Sun,
@@ -95,6 +104,7 @@ import {
 
 const HUB_LUCIDE_ICONS = {
   Archive,
+  ArrowRight,
   AtSign,
   Bold,
   Bell,
@@ -104,17 +114,22 @@ const HUB_LUCIDE_ICONS = {
   ChevronRight,
   ChevronUp,
   Check,
+  CheckCircle2,
+  ClipboardList,
   Circle,
   CircleAlert,
   CircleHelp,
   Clock3,
   Download,
   DownloadCloud,
+  Compass,
   Eye,
   File,
   FilePlus2,
   Filter,
   House,
+  HeartPulse,
+  Info,
   Italic,
   KeyRound,
   Landmark,
@@ -127,9 +142,11 @@ const HUB_LUCIDE_ICONS = {
   Menu,
   Moon,
   Pin,
+  Plus,
   Pencil,
   RemoveFormatting,
   Search,
+  ShieldCheck,
   Settings,
   Settings2,
   Sun,
@@ -4005,6 +4022,7 @@ function obterAcoesDisponiveisRecurso(recurso) {
     'admin.perfis': ['view', 'create', 'update'],
     'admin.permissoes': ['view', 'update'],
     'admin.parceiros_indicacao': ['view', 'create', 'update', 'archive', 'view_sensitive'],
+    consultoria_360: ['view', 'create', 'update', 'delete'],
     financeiro: ['view'],
     'financeiro.dashboard': ['view'],
     'financeiro.lancamentos': ['view', 'create', 'update', 'settle', 'cancel', 'export'],
@@ -4027,6 +4045,7 @@ function obterGrupoRecursoPermissao(recurso) {
   if (chave.startsWith('admin')) return 'Administração';
   if (chave === 'central_senhas') return 'Central de Senhas';
   if (chave.startsWith('painel_ar')) return 'Painel AR';
+  if (chave === 'consultoria_360') return 'Operações';
   if (chave.startsWith('links_')) return 'Links';
   if (chave.startsWith('financeiro')) return 'Financeiro';
 
@@ -12740,6 +12759,9 @@ const HUB_BREADCRUMB_LABELS = {
   administracao: 'Administração',
   'central-senhas': 'Central de Senhas',
   'painel-ar': 'Painel AR',
+  operacoes: 'Operações',
+  corretora: 'Corretora',
+  'consultoria-360': 'Consultoria 360°',
   crm: 'CRM',
   'links-corretora': 'Links Corretora',
   'links-ar': 'Links AR',
@@ -13750,6 +13772,23 @@ const renderizarRotaAtualHubPhase2 = async function() {
   hubLimparDropdowns({ remover: true });
   window.hubRemoveFormFooterPortals?.();
   const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+
+  if (rotaRelativa === CONSULTORIA360_ROUTE) {
+    await mountConsultoria360Page({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === 'operacoes/corretora') {
+    document.getElementById('app').innerHTML = renderCorretoraOperationalPage({
+      renderShell: renderHubShell,
+      navegarParaRota
+    });
+    return;
+  }
 
   if (rotaRelativa === 'notificacoes') {
     await renderizarPaginaNotificacoesHub();
