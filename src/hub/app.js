@@ -1470,6 +1470,10 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
+  if (idNormalizado === 'central-senhas') {
+    return canAccessModule(state.permissions, idNormalizado) || podeAcessarGerenciamentoLinks();
+  }
+
   if (idNormalizado === 'financeiro' || idNormalizado === 'rh-dp') {
     return canAccessModule(state.permissions, idNormalizado);
   }
@@ -1647,7 +1651,11 @@ async function abrirModuloDireto(id) {
   const idModulo = normalizarIdModuloRota(id);
 
   if (['links-corretora', 'links-ar', 'links-gestao'].includes(idModulo)) {
-    return navegarParaRota(`${montarCaminhoHub('central-senhas')}#links`);
+    const meta = obterMetaLinks(idModulo);
+    state.passwords.aba = 'links';
+    state.links.escopo = meta.escopo;
+    state.links.titulo = meta.titulo;
+    return navegarParaRota(`${montarCaminhoHub('central-senhas')}/links/${meta.escopo}`);
   }
 
   if (!moduloEstaAtivo(idModulo)) {
@@ -6807,10 +6815,20 @@ async function abrirCentralSenhas() {
   state.passwords.message = '';
   state.passwords.modalAberto = false;
   state.passwords.modalId = '';
-  await carregarCentralSenhas();
+  if (state.passwords.aba === 'links' && !pode('central_senhas', 'view')) {
+    state.passwords.loading = false;
+    renderCentralSenhas();
+  } else {
+    await carregarCentralSenhas();
+  }
   if (state.passwords.aba === 'links') {
-    state.links.escopo = 'todos';
-    state.links.titulo = 'Gerenciamento de Links';
+    const escopoAtual = ['corretora', 'ar', 'gestao'].includes(state.links.escopo)
+      ? state.links.escopo
+      : 'todos';
+    state.links.escopo = escopoAtual;
+    state.links.titulo = escopoAtual === 'todos'
+      ? 'Gerenciamento de Links'
+      : obterMetaLinks(`links-${escopoAtual}`).titulo;
     await carregarLinksUteis();
   }
 }
@@ -12953,13 +12971,33 @@ function sincronizarContextoAdminPelaRota() {
 }
 
 function sincronizarContextoSenhasPelaRota() {
-  const { modulo, principal } = obterContextoRotaHub();
-  if (modulo !== 'central-senhas' || !principal) return;
+  const { modulo, principal, secundaria } = obterContextoRotaHub();
+  if (modulo !== 'central-senhas') return;
+
+  if (!principal) {
+    if (!pode('central_senhas', 'view') && podeAcessarGerenciamentoLinks()) {
+      state.passwords.aba = 'links';
+      state.links.escopo = 'todos';
+      state.links.titulo = 'Gerenciamento de Links';
+    }
+    return;
+  }
 
   if (principal === 'links') {
     state.passwords.aba = 'links';
+    const escopo = ['corretora', 'ar', 'gestao', 'todos'].includes(secundaria) ? secundaria : 'todos';
+    state.links.escopo = escopo;
+    state.links.titulo = escopo === 'todos'
+      ? 'Gerenciamento de Links'
+      : obterMetaLinks(`links-${escopo}`).titulo;
   } else if (principal === 'acessos' || principal === 'historico') {
-    state.passwords.aba = 'acessos';
+    if (pode('central_senhas', 'view') || pode('central_senhas', 'create')) {
+      state.passwords.aba = 'acessos';
+    } else if (podeAcessarGerenciamentoLinks()) {
+      state.passwords.aba = 'links';
+      state.links.escopo = 'todos';
+      state.links.titulo = 'Gerenciamento de Links';
+    }
   }
 }
 
@@ -13113,12 +13151,15 @@ function itemMenuEstaAtivoHub(item = {}) {
 }
 
 function itemMenuPodeAparecerHub(item = {}) {
+  const acessoCentralSenhas = item.id === 'central-senhas'
+    && (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks());
+
   if (item.permission && !pode(item.permission.resource, item.permission.action || 'view')) {
-    return false;
+    if (!acessoCentralSenhas) return false;
   }
 
   if (item.moduleId && !canAccessModule(state.permissions, item.moduleId)) {
-    return false;
+    if (!acessoCentralSenhas) return false;
   }
 
   return true;
@@ -13977,22 +14018,30 @@ const renderLinksUteisHubPhase1 = function() {
 const renderCentralSenhasHubPhase1 = function() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
   const podeVerSenha = pode('central_senhas', 'view_secret');
+  const podeAcessos = pode('central_senhas', 'view') || podeGerenciar;
   const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
+  const titulo = state.passwords.aba === 'links'
+    ? (state.links.titulo || 'Central de Links')
+    : 'Central de Senhas';
 
   document.getElementById('app').innerHTML = renderHubShell({
-    tituloPagina: 'Central de Senhas',
-    descricaoPagina: podeGerenciar ? 'Gestao de acessos e historico operacional.' : 'Consulta dos acessos liberados ao seu perfil.',
+    tituloPagina: titulo,
+    descricaoPagina: state.passwords.aba === 'links'
+      ? 'Links úteis por área, com acesso conforme as permissões do seu perfil.'
+      : (podeGerenciar ? 'Gestao de acessos e historico operacional.' : 'Consulta dos acessos liberados ao seu perfil.'),
     conteudo: `
       <section class="admin-panel">
         <div class="admin-panel-header">
           <div>
-            <h2>Central de Senhas</h2>
-            <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
+            <h2>${escapeHtml(titulo)}</h2>
+            <p>${state.passwords.aba === 'links'
+              ? 'Consulte links úteis da área selecionada.'
+              : (podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.')}</p>
           </div>
-          ${pode('central_senhas', 'view') || podeGerenciar || podeLinks ? `
+          ${podeAcessos || podeLinks ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
-              <button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>
-              <button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>
+              ${podeAcessos ? `<button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>` : ''}
+              ${podeLinks ? `<button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>` : ''}
             </div>
           ` : ''}
         </div>
@@ -14085,6 +14134,15 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
 
 const selecionarAbaSenhasHubPhase2 = function(aba) {
   if (aba === 'historico') aba = 'acessos';
+
+  const podeAcessos = pode('central_senhas', 'view')
+    || pode('central_senhas', 'create')
+    || pode('central_senhas', 'update')
+    || pode('central_senhas', 'delete');
+  const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
+  if ((aba === 'acessos' && !podeAcessos) || (aba === 'links' && !podeLinks)) {
+    return;
+  }
 
   atualizarHashHub(aba, { replace: true });
   state.passwords.aba = aba;
