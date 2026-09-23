@@ -10007,9 +10007,8 @@ function renderParceiroSelecionadoCardAr(parceiro) {
   const status = parceiro.status || 'não informado';
   const codigo = parceiro.codigo_revendedor || parceiro.codigo || 'sem código';
   const email = parceiro.email_cadastro_certificado || parceiro.email_comercial || parceiro.email || '';
-  const whatsappPessoal = parceiro.whatsapp_pessoal || parceiro.whatsapp || '';
-  const whatsappComercial = parceiro.whatsapp_comercial || '';
-  const contatos = [email, whatsappPessoal, whatsappComercial].filter(Boolean).join(' · ') || 'Sem contatos informados';
+  const whatsapps = [parceiro.whatsapp_pessoal || parceiro.whatsapp, parceiro.whatsapp_comercial].filter(Boolean);
+  const contatos = [email, ...whatsapps].filter(Boolean).join(' · ') || 'Sem contatos informados';
 
   return `
     <article class="ar-compact-selection-summary" aria-label="Resumo do parceiro selecionado">
@@ -10019,7 +10018,9 @@ function renderParceiroSelecionadoCardAr(parceiro) {
         <span>Status: ${escapeHtml(obterRotuloStatusHub(status, 'Não informado'))}</span>
       </div>
       <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(contatos)}">
-        ${escapeHtml(contatos)}
+        ${email ? `<button class="ar-partner-email-copy" type="button" onclick="copiarEmailParceiroAr('${escapeAttr(email)}', this)" title="Copiar e-mail">${escapeHtml(email)}</button>` : ''}
+        ${whatsapps.length ? `<span>${escapeHtml(whatsapps.join(' · '))}</span>` : ''}
+        ${email || whatsapps.length ? '' : 'Sem contatos informados'}
       </div>
     </div>
   `;

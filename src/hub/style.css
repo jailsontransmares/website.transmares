@@ -13020,6 +13020,24 @@ body.dark .dashboard .config-group {
   text-overflow: ellipsis;
 }
 
+.ar-compact-summary-secondary .ar-partner-email-copy {
+  background: transparent;
+  border: 0;
+  color: var(--cor-principal);
+  cursor: pointer;
+  font: inherit;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-overflow: ellipsis;
+}
+
+.ar-compact-summary-secondary .ar-partner-email-copy.copied {
+  color: var(--cor-destaque);
+}
+
 .ar-compact-empty {
   color: var(--texto-suave);
   font-size: 11px;
