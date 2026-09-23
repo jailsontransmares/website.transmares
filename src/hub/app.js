@@ -11239,10 +11239,30 @@ function renderDetalhesParceiroAr(parceiro) {
   return `
     <dl class="ar-partner-details">
       ${linhas.filter(([, valor]) => valor).map(([rotulo, valor]) => `
-        <div><dt>${escapeHtml(rotulo)}</dt><dd>${escapeHtml(valor)}</dd></div>
+        <div><dt>${escapeHtml(rotulo)}</dt><dd>${rotulo === 'E-mail para cadastro' || rotulo === 'E-mail comercial'
+          ? `<button class="ar-partner-email-copy" type="button" onclick="copiarEmailParceiroAr('${escapeAttr(valor)}', this)" title="Copiar e-mail">${escapeHtml(valor)}</button>`
+          : escapeHtml(valor)}</dd></div>
       `).join('')}
     </dl>
   `;
+}
+
+async function copiarEmailParceiroAr(email, botao) {
+  try {
+    await navigator.clipboard.writeText(email);
+    const textoOriginal = botao.textContent;
+    botao.textContent = 'E-mail copiado';
+    botao.classList.add('copied');
+    window.setTimeout(() => {
+      botao.textContent = textoOriginal;
+      botao.classList.remove('copied');
+    }, 1600);
+  } catch (erro) {
+    botao.textContent = 'Não foi possível copiar';
+    window.setTimeout(() => {
+      botao.textContent = email;
+    }, 1600);
+  }
 }
 
 function renderOrcamentoAr() {
@@ -14449,6 +14469,7 @@ Object.assign(window, {
   carregarValidacoesAr,
   alterarMesBaseRepasseAr,
   copiarLink,
+  copiarEmailParceiroAr,
   copiarLinkResultadoAr,
   copiarOrcamentoAr,
   copiarSenhaTemporariaUsuarioAdmin,
