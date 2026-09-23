@@ -50,6 +50,20 @@ import {
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
+import {
+  createConsultoria360Atendimento,
+  addConsultoria360Event,
+  deleteConsultoria360Atendimento,
+  getConsultoria360Atendimento,
+  getConsultoria360Dashboard,
+  listConsultoria360Clients,
+  listConsultoria360Companies,
+  saveConsultoria360Dimensioning,
+  saveConsultoria360Opportunity,
+  saveConsultoria360Proposal,
+  saveConsultoria360Responses,
+  updateConsultoria360Atendimento
+} from './services/consultoria360Service.js';
 
 const ACOES_QUE_INVALIDAM_ACESSO = new Set([
   'saveAdminUser',
@@ -101,6 +115,19 @@ export async function chamarApi(action, payload = {}) {
       const dados = await carregarDadosCrmAr(payload.pagina, payload.limite);
       return { ok: true, data: dados };
     }
+
+    if (action === 'getConsultoria360Dashboard') return { ok: true, data: await getConsultoria360Dashboard(payload.empresaId) };
+    if (action === 'getConsultoria360Atendimento') return { ok: true, data: await getConsultoria360Atendimento(payload.id, payload.empresaId) };
+    if (action === 'listConsultoria360Clients') return { ok: true, data: await listConsultoria360Clients(payload.empresaId, payload.search) };
+    if (action === 'listConsultoria360Companies') return { ok: true, data: await listConsultoria360Companies() };
+    if (action === 'createConsultoria360Atendimento') return { ok: true, data: await createConsultoria360Atendimento(payload) };
+    if (action === 'updateConsultoria360Atendimento') return { ok: true, data: await updateConsultoria360Atendimento(payload) };
+    if (action === 'saveConsultoria360Responses') return { ok: true, data: await saveConsultoria360Responses(payload) };
+    if (action === 'saveConsultoria360Dimensioning') return { ok: true, data: await saveConsultoria360Dimensioning(payload) };
+    if (action === 'saveConsultoria360Proposal') return { ok: true, data: await saveConsultoria360Proposal(payload) };
+    if (action === 'saveConsultoria360Opportunity') return { ok: true, data: await saveConsultoria360Opportunity(payload) };
+    if (action === 'addConsultoria360Event') return { ok: true, data: await addConsultoria360Event(payload) };
+    if (action === 'deleteConsultoria360Atendimento') return { ok: true, data: await deleteConsultoria360Atendimento(payload.id, payload.empresaId) };
 
     if (action === 'getArCrmFormOptions') {
       const dados = await carregarOpcoesCadastroCrmAr();
