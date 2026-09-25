@@ -3,6 +3,8 @@ import { hasPermission } from './services/permissionService.js';
 import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
 import { portalHubFormFooter } from './formFooterPortal.js';
 import { consultarCnpj } from './services/cnpjService.js';
+import { renderCrm2CadastroListHeader, renderCrm2CadastroListToolbar, renderCrm2CadastroPagination, renderCrm2CadastroState } from './crm2CadastroUi.js';
+import { resolveCrm2CadastroRelations } from './crm2CadastroRelations.js';
 
 const CRM2_PJ_INITIAL_ITEMS = [
   {
@@ -359,12 +361,12 @@ function renderStatePj() {
     empty: ['Nenhuma pessoa jurídica cadastrada.', 'A lista mockada ainda não possui empresas.']
   }[crm2PjState.listState];
   if (!copy) return '';
-  return `<div class="crm2-pessoas-state ${crm2PjState.listState === 'error' ? 'is-error' : ''}" role="${crm2PjState.listState === 'error' ? 'alert' : 'status'}"><strong>${copy[0]}</strong><span>${copy[1]}</span><button class="secondary-btn" type="button" onclick="crm2PjSetListState('normal')">Voltar à lista</button></div>`;
+  return renderCrm2CadastroState({ title: escapeHtmlPj(copy[0]), description: escapeHtmlPj(copy[1]), action: '<button class="secondary-btn" type="button" onclick="crm2PjSetListState(\'normal\')">Voltar à lista</button>', state: crm2PjState.listState, loading: crm2PjState.listState === 'loading' });
 }
 
 function renderPaginationPj(totalPages, totalItems) {
   crm2PjState.page = Math.min(Math.max(1, crm2PjState.page), totalPages);
-  return `<div class="crm2-pessoas-pagination" aria-label="Paginação de pessoas jurídicas"><span>Página <strong>${crm2PjState.page}</strong> de <strong>${totalPages}</strong> · ${totalItems} registro(s)</span><div><button class="secondary-btn" type="button" onclick="crm2PjSetPage(${crm2PjState.page - 1})" ${crm2PjState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2PjSetPage(${crm2PjState.page + 1})" ${crm2PjState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`;
+  return renderCrm2CadastroPagination({ label: 'pessoas jurídicas', page: crm2PjState.page, totalPages, totalItems, previousAction: `crm2PjSetPage(${crm2PjState.page - 1})`, nextAction: `crm2PjSetPage(${crm2PjState.page + 1})` });
 }
 
 function renderPjAttachments(item, editing = false) {
@@ -427,16 +429,14 @@ function renderListPj() {
   const pageItems = items.slice((crm2PjState.page - 1) * crm2PjState.perPage, crm2PjState.page * crm2PjState.perPage);
   const hasFilters = Boolean(crm2PjState.search || crm2PjState.statusFilter);
   return `<section class="admin-panel crm2-pessoas-page" data-crm2-pj="true" aria-labelledby="crm2-pj-title">
-    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 202 · CRM 2.0</span><h3 id="crm2-pj-title">Pessoas jurídicas</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></div>
-    <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2PjApplyFilters(event)">
-      <div class="crm2-pf-filter-actions">
+    ${renderCrm2CadastroListHeader({ title: 'Pessoas jurídicas', titleId: 'crm2-pj-title', routeCode: '202' })}
+    ${renderCrm2CadastroListToolbar('crm2PjApplyFilters(event)', `
         ${crm2PjState.canCreate ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="crm2PjOpenCreate()">+Incluir</button>' : ''}
         <div class="crm2-pf-select"><button id="crm2-pj-status-filter" class="icon-btn ${crm2PjState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pj-status-filter-menu" title="Filtrar por situação na RFB" aria-label="Filtrar por situação na RFB" onclick="crm2PjToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-pj-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por situação na RFB" data-dropdown-input-id="crm2-pj-status-filter" data-dropdown-width="180" hidden>${[['', 'Todas'], ...CRM2_PJ_RFB_STATUS_OPTIONS.map(({ value, label }) => [value, label])].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PjState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PjState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrPj(value)}" onclick="crm2PjSelectStatusFilter(this)">${escapeHtmlPj(label)}</button>`).join('')}</div></div>
         <div class="crm2-pf-search-control ${crm2PjState.searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar pessoa jurídica" placeholder="Busca por razão social ou CNPJ" value="${escapeAttrPj(crm2PjState.search)}" ${crm2PjState.searchExpanded ? '' : 'hidden'} oninput="crm2PjSetSearch(this.value, this)" onfocusout="crm2PjHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${crm2PjState.searchExpanded ? 'true' : 'false'}" onclick="crm2PjToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>
         ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PjClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
-      </div>
-    </form>
-    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(upperPj(item.razaoSocial))}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : `<div class="crm2-pessoas-state" role="status"><strong>${crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.'}</strong><span>${crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.'}</span><button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
+    `)}
+    ${crm2PjState.listState !== 'normal' ? renderStatePj() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table" aria-describedby="crm2-pj-caption"><caption id="crm2-pj-caption" class="crm2-pessoas-table-caption">Pessoas jurídicas cadastradas no CRM 2.0</caption><thead><tr><th scope="col">Razão social</th><th scope="col">CNPJ</th><th scope="col">Pedidos</th><th scope="col">Última atualização</th></tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-pf-name-link" type="button" onclick="crm2PjOpenDetail('${escapeAttrPj(item.id)}')">${escapeHtmlPj(upperPj(item.razaoSocial))}</button></td><td>${escapeHtmlPj(maskCnpjPj(item.cnpj))}</td><td>${ordersCountPj(item)}</td><td>${escapeHtmlPj(formatDateTimePj(item.atualizadoEm))}</td></tr>`).join('')}</tbody></table></div>${renderPaginationPj(totalPages, items.length)}` : renderCrm2CadastroState({ title: crm2PjState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhuma pessoa jurídica cadastrada.', description: crm2PjState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui empresas.', action: `<button class="secondary-btn" type="button" onclick="crm2PjClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>` })}
     ${renderPjFooter(`<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar</button>${crm2PjState.canCreate ? '<button class="save-btn" type="button" onclick="crm2PjOpenCreate()">Incluir</button>' : ''}`)}
   </section>`;
 }
@@ -554,9 +554,13 @@ function renderPjDataTab(item) {
 }
 
 function renderPjPeopleTab(item) {
-  const people = Array.isArray(item.pessoasVinculadas) ? item.pessoasVinculadas : [];
-  const actions = crm2PjState.canDelete;
-  const content = people.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table crm2-pj-people-table" aria-label="Pessoas vinculadas"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th>${actions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${people.map((person, index) => `<tr><td>${person.vinculoId ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrPj(person.vinculoId)}')" aria-label="Abrir vínculo de ${escapeAttrPj(person.nome)}">${escapeHtmlPj(person.nome)}</button>` : escapeHtmlPj(person.nome)}</td><td>${person.cpf ? escapeHtmlPj(maskCpfPj(person.cpf)) : '—'}</td>${actions ? `<td class="crm2-pj-people-actions"><button class="icon-btn crm2-pf-vinculo-delete" type="button" onclick="crm2PjRemoveVinculo('${escapeAttrPj(item.id)}', ${index})" aria-label="Excluir vínculo de ${escapeAttrPj(person.nome)}" title="Excluir vínculo"><i data-lucide="trash-2" aria-hidden="true"></i></button></td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pessoa vinculada.</strong><span>Os vínculos serão habilitados em fase posterior.</span></div>';
+  const people = resolveCrm2CadastroRelations({ records: window.crm2VinculosGetMockItems?.() || [], references: Array.isArray(item.pessoasVinculadas) ? item.pessoasVinculadas : [], identityField: 'cnpj', identityValue: item.cnpj, side: 'pj' });
+  const showActions = crm2PjState.canDelete || window.crm2VinculosCan?.('delete') === true;
+  const content = people.length ? `<div class="crm2-pf-companies-table-wrap"><table class="crm2-pf-companies-table crm2-pj-people-table" aria-label="Pessoas vinculadas"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th>${showActions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${people.map((person, index) => {
+    const canRemove = person.centralizado ? window.crm2VinculosCan?.('delete') === true && person.status === 'Ativo' : crm2PjState.canDelete;
+    const removeAction = person.centralizado ? `crm2VinculosInactivate('${escapeAttrPj(person.id)}')` : `crm2PjRemoveVinculo('${escapeAttrPj(item.id)}', ${person.sourceIndex ?? index})`;
+    return `<tr><td>${person.centralizado ? `<button class="crm2-pf-company-name-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrPj(person.vinculoId)}')" aria-label="Abrir vínculo de ${escapeAttrPj(person.nome)}">${escapeHtmlPj(person.nome)}</button>` : escapeHtmlPj(person.nome)}</td><td>${person.cpf ? escapeHtmlPj(maskCpfPj(person.cpf)) : '—'}</td>${showActions ? `<td class="crm2-pj-people-actions">${canRemove ? `<button class="icon-btn crm2-pf-vinculo-delete" type="button" onclick="${removeAction}" aria-label="${person.centralizado ? 'Inativar' : 'Excluir'} vínculo de ${escapeAttrPj(person.nome)}" title="${person.centralizado ? 'Inativar vínculo' : 'Excluir vínculo'}"><i data-lucide="${person.centralizado ? 'x' : 'trash-2'}" aria-hidden="true"></i></button>` : ''}</td>` : ''}</tr>`;
+  }).join('')}</tbody></table></div>` : '<div class="crm2-pessoas-state is-compact"><strong>Nenhuma pessoa vinculada.</strong><span>Inclua um vínculo para relacionar uma pessoa física a esta empresa.</span></div>';
   return `<div class="crm2-pj-people-content">${content}</div>`;
 }
 
@@ -571,7 +575,7 @@ function enhancePjPeopleSection(root = document) {
     button.type = 'button';
     button.dataset.crm2PjPeopleInclude = 'true';
     button.textContent = 'Incluir';
-    button.addEventListener('click', () => window.crm2VinculosOpenCreate?.());
+    button.addEventListener('click', () => window.crm2VinculosOpenCreate?.('', crm2PjState.detailId));
     title.appendChild(button);
   });
 }
@@ -659,6 +663,7 @@ function rerenderPj() {
 
 Object.assign(window, {
   crm2PjRender: renderPj,
+  crm2PjRequestLeave: requestLeavePj,
   crm2PjGetMockItems() {
     return crm2PjState.items.map((item) => ({
       id: item.id,

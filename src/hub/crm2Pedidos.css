@@ -110,6 +110,30 @@
   gap: 16px;
 }
 
+.crm2-opp-form-grid .crm2-pedido-name-field {
+  grid-column: 2 / -1;
+}
+
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable th:first-child,
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable td:first-child {
+  width: 18%;
+}
+
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable th:nth-child(2),
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable td:nth-child(2) {
+  width: 42%;
+}
+
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable th:last-child,
+.crm2-pedido-items-form .crm2-opp-items-sheet.is-editable td:last-child {
+  width: 40%;
+}
+
+.crm2-pedido-item-cnpj-search:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
 .crm2-pedido-form-grid {
   display: grid;
   gap: 14px;

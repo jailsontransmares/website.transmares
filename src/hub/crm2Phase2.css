@@ -1,3 +1,45 @@
+.crm2-cadastro-module {
+  min-width: 0;
+}
+
+.crm2-cadastro-tabs {
+  align-items: center;
+  border-bottom: 1px solid var(--border-color, #dfe4ec);
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.crm2-cadastro-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--muted-text, #64748b);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-weight: 600;
+  min-height: 42px;
+  padding: 9px 14px;
+}
+
+.crm2-cadastro-tab:hover,
+.crm2-cadastro-tab:focus-visible {
+  color: var(--text-color, #172033);
+}
+
+.crm2-cadastro-tab:focus-visible {
+  outline: 2px solid var(--color-primary, #466fc1);
+  outline-offset: -2px;
+}
+
+.crm2-cadastro-tab.is-active {
+  border-bottom-color: var(--color-primary, #466fc1);
+  color: var(--color-primary, #466fc1);
+}
+
 .crm2-phase1-roadmap-item.is-available .crm2-phase1-roadmap-status {
   color: var(--color-success, #067647);
 }
@@ -1368,6 +1410,48 @@
 }
 
 .crm2-pf-cpf-icon svg {
+  height: 17px;
+  width: 17px;
+}
+
+.crm2-birth-date-mask-wrap {
+  display: block;
+  min-width: 0;
+  position: relative;
+  width: 100%;
+}
+
+.crm2-birth-date-mask-wrap > .config-input {
+  padding-right: 42px;
+  width: 100%;
+}
+
+.crm2-birth-date-picker {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--texto-suave);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+}
+
+.crm2-birth-date-picker:hover,
+.crm2-birth-date-picker:focus-visible {
+  background: var(--surface-glass-strong);
+  color: var(--color-primary);
+  outline: none;
+}
+
+.crm2-birth-date-picker svg {
   height: 17px;
   width: 17px;
 }

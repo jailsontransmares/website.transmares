@@ -5,6 +5,10 @@ import { hasPermission } from './services/permissionService.js';
 import { CRM2_ORIGIN_OPTIONS, normalizarOrigemCrm2 } from './crm2OriginOptions.js';
 import { consultarCnpj } from './services/cnpjService.js';
 import { getHubAttachmentPreviewKind, hydrateHubPdfThumbnails, renderHubAttachmentManager } from './hubAttachmentManager.js';
+import { getCrm2ProductPrice, findCrm2Product, formatCrm2ProductPrice, searchCrm2Products } from './crm2ProductCatalog.js';
+import { loadCrm2ProductCatalog } from './crm2ProductCatalogService.js';
+import { formatCrm2DateForInput, isValidCrm2Date, maskCrm2Date, normalizeCrm2Date, renderCrm2MaskedDateField } from './crm2DateMask.js';
+import { isSupabaseConfigured } from './supabaseClient.js';
 
 const CRM2_CADASTRO_DRAFT_STORAGE_KEY = 'crm2-cadastro-sequencial-draft-v1';
 
@@ -74,6 +78,9 @@ const crm2CadastroState = {
   pedidoDraft: {},
   pedidoErrors: {},
   pedidoCreated: null,
+  produtos: [],
+  produtosLoaded: false,
+  produtosLoading: false,
   dirty: false,
   draftSavedAt: '',
   draftAvailable: false,
@@ -198,6 +205,23 @@ function normalizeCadastro(value = '') {
 
 function digitsCadastro(value = '') {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+function positionCadastroProductSuggestions(input, target) {
+  if (!input || !target || target.hidden) return;
+  const rect = input.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
+  const width = Math.min(Math.max(rect.width, 260), window.innerWidth - margin * 2);
+  target.style.position = 'fixed';
+  target.style.width = `${width}px`;
+  target.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`;
+  target.style.right = 'auto';
+  const height = target.offsetHeight;
+  const below = window.innerHeight - rect.bottom - gap;
+  const top = below >= height || rect.top < height + gap ? rect.bottom + gap : rect.top - height - gap;
+  target.style.top = `${Math.max(margin, top)}px`;
+  target.style.zIndex = '2200';
 }
 
 function maskCpfCadastro(value = '') {
@@ -462,14 +486,18 @@ function renderPfListCadastro() {
 function renderPfFieldCadastro({ label, name, value = '', type = 'text', required = false, wide = false, extra = '', options = [] }) {
   const error = crm2CadastroState.pfErrors[name] || '';
   const id = `crm2-cadastro-pf-${name}`;
-  const safeValue = name === 'cpf' ? maskCpfCadastro(value) : name === 'telefone' ? maskPhoneCadastro(value) : value;
+  const safeValue = name === 'cpf' ? maskCpfCadastro(value) : name === 'telefone' ? maskPhoneCadastro(value) : name === 'nascimento' && type === 'date' ? formatCrm2DateForInput(value) : value;
   const inputEvent = name === 'cpf'
     ? `oninput="crm2CadastroMaskCpf(this); crm2CadastroTrackField('pf', this)"`
     : name === 'telefone'
       ? `oninput="crm2CadastroMaskPhone(this); crm2CadastroTrackField('pf', this)"`
-      : `oninput="crm2CadastroTrackField('pf', this)"`;
+      : name === 'nascimento' && type === 'date'
+        ? `oninput="crm2CadastroMaskBirthDate(this)"`
+        : `oninput="crm2CadastroTrackField('pf', this)"`;
   const changeEvent = `onchange="crm2CadastroTrackField('pf', this)"`;
-  const control = type === 'textarea'
+  const control = name === 'nascimento' && type === 'date'
+    ? renderCrm2MaskedDateField({ id, value, required, invalid: Boolean(error), onInput: 'crm2CadastroMaskBirthDate(this)', onPicker: 'crm2CadastroSetBirthDateFromPicker', onOpen: 'crm2CadastroOpenBirthDatePicker' })
+    : type === 'textarea'
     ? `<textarea id="${id}" class="config-input" name="${name}" rows="4" ${required ? 'required' : ''} ${extra} aria-invalid="${error ? 'true' : 'false'}" ${inputEvent}>${escapeHtmlCadastro(safeValue)}</textarea>`
     : options.length
       ? `<select id="${id}" class="config-input" name="${name}" ${required ? 'required' : ''} ${extra} aria-invalid="${error ? 'true' : 'false'}" ${inputEvent} ${changeEvent}><option value="">Selecione</option>${options.map((option) => { const item = typeof option === 'string' ? { value: option, label: option } : option; return `<option value="${escapeAttrCadastro(item.value)}" ${String(item.value) === String(safeValue) ? 'selected' : ''}>${escapeHtmlCadastro(item.label)}</option>`; }).join('')}</select>`
@@ -584,9 +612,31 @@ function renderPjCreateCadastro() {
   return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pj-create-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 2 DE 3 · NOVO REGISTRO</span><h2 id="crm2-cadastro-pj-create-title">Novo cadastro PJ</h2><p>Consulte o CNPJ antes de iniciar o cadastro.</p></div></div>${crm2CadastroState.message ? `<p class="admin-message" role="status">${escapeHtmlCadastro(crm2CadastroState.message)}</p>` : ''}${cnpjVerification}${normalizedCreateForm}</section>`;
 }
 
+async function loadCadastroProductCatalog() {
+  if (!isSupabaseConfigured || crm2CadastroState.produtosLoaded || crm2CadastroState.produtosLoading) return;
+  crm2CadastroState.produtosLoading = true;
+  try {
+    crm2CadastroState.produtos = await loadCrm2ProductCatalog();
+    window.crm2PedidosSetProductCatalog?.(crm2CadastroState.produtos);
+  } catch (error) {
+    console.warn('Não foi possível carregar o catálogo de produtos para o cadastro sequencial.', error);
+  } finally {
+    crm2CadastroState.produtosLoaded = true;
+    crm2CadastroState.produtosLoading = false;
+    crm2CadastroState.pedidoDraft.valor = getCrm2ProductPrice(crm2CadastroState.produtos, crm2CadastroState.pedidoDraft.produto);
+    if (currentCadastroRoute().active && crm2CadastroState.currentStep === 'pedido') rerenderCadastro();
+  }
+}
+
 function renderPedidoFieldCadastro({ label, name, value = '', type = 'text', required = false, wide = false, options = [] }) {
   const error = crm2CadastroState.pedidoErrors[name] || '';
   const id = `crm2-cadastro-pedido-${name}`;
+  if (name === 'produto') {
+    const price = getCrm2ProductPrice(crm2CadastroState.produtos, value);
+    const control = `<div class="crm2-pedido-product-cell crm2-opp-product-cell"><input id="${id}" class="config-input" name="produto" data-product-key="cadastro-sequencial" value="${escapeAttrCadastro(value)}" placeholder="Buscar produto" autocomplete="off" ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}" oninput="window.crm2CadastroTrackField('pedido', this); window.crm2CadastroSyncProductPrice(this); window.crm2CadastroRenderProductSuggestions(this)" onfocus="window.crm2CadastroRenderProductSuggestions(this)" onblur="window.setTimeout(() => window.crm2CadastroHideProductSuggestions(this), 150)"><div class="crm2-pedido-product-suggestions crm2-opp-product-suggestions" data-pedido-product-suggestions data-product-suggestions data-product-key="cadastro-sequencial" hidden></div><output class="crm2-opp-derived-value" data-pedido-item-price aria-label="Preço definido pelo catálogo">${escapeHtmlCadastro(price ? formatCrm2ProductPrice(price) : 'Selecione um produto')}</output></div>`;
+    return `<label class="${wide ? 'is-wide ' : ''}${error ? 'has-error' : ''}" for="${id}"><span>${label}${required ? ' *' : ''}</span>${control}${error ? `<small class="crm2-field-error">${escapeHtmlCadastro(error)}</small>` : ''}</label>`;
+  }
+  if (name === 'valor') return '';
   const control = options.length
     ? `<select id="${id}" class="config-input" name="${name}" ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}"><option value="">Selecione</option>${options.map((option) => `<option value="${escapeAttrCadastro(option)}" ${option === value ? 'selected' : ''}>${escapeHtmlCadastro(option)}</option>`).join('')}</select>`
     : type === 'textarea'
@@ -604,7 +654,7 @@ function renderPedidoResumoCadastro() {
 
 function renderPedidoReviewCadastro() {
   const pedido = crm2CadastroState.pedidoDraft;
-  return `<section class="crm2-cadastro-review-section" aria-labelledby="crm2-cadastro-review-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">CONFERÊNCIA FINAL</span><h3 id="crm2-cadastro-review-title">Revise os dados antes de criar</h3><p>Confira as informações do pedido e retorne às etapas anteriores se precisar ajustar algo.</p></div></div><div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto ou serviço</small><strong>${escapeHtmlCadastro(pedido.produto || 'Não informado')}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel || 'Não informado')}</strong></div><div><small>Origem</small><strong>${escapeHtmlCadastro(pedido.origem || 'Não informado')}</strong></div><div><small>Data de cadastro</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div><div><small>Valor</small><strong>${escapeHtmlCadastro(pedido.valor ? `R$ ${pedido.valor}` : 'Não informado')}</strong></div><div class="is-wide"><small>Observações</small><strong>${escapeHtmlCadastro(pedido.observacoes || 'Nenhuma informada')}</strong></div></div></section>`;
+  return `<section class="crm2-cadastro-review-section" aria-labelledby="crm2-cadastro-review-title"><div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">CONFERÊNCIA FINAL</span><h3 id="crm2-cadastro-review-title">Revise os dados antes de criar</h3><p>Confira as informações do pedido e retorne às etapas anteriores se precisar ajustar algo.</p></div></div><div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto ou serviço</small><strong data-cadastro-pedido-review-product>${escapeHtmlCadastro(pedido.produto || 'Não informado')}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel || 'Não informado')}</strong></div><div><small>Origem</small><strong>${escapeHtmlCadastro(pedido.origem || 'Não informado')}</strong></div><div><small>Data de cadastro</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div><div><small>Valor</small><strong data-cadastro-pedido-review-value>${escapeHtmlCadastro(pedido.valor ? formatCrm2ProductPrice(pedido.valor) : 'Não informado')}</strong></div><div class="is-wide"><small>Observações</small><strong>${escapeHtmlCadastro(pedido.observacoes || 'Nenhuma informada')}</strong></div></div></section>`;
 }
 
 function renderPedidoCadastro() {
@@ -613,7 +663,7 @@ function renderPedidoCadastro() {
     const pedido = crm2CadastroState.pedidoCreated;
     return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-success-title"><div class="crm2-cadastro-success" role="status"><span class="crm2-cadastro-success-icon" aria-hidden="true">✓</span><div><span class="ar-crm-phase1-kicker">FLUXO CONCLUÍDO · MOCKADO</span><h2 id="crm2-cadastro-pedido-success-title">Pedido criado com sucesso</h2><p>${escapeHtmlCadastro(pedido.numero)} foi incluído na lista de pedidos.</p></div></div>${renderPedidoResumoCadastro()}<div class="crm2-cadastro-review crm2-cadastro-review-details"><div><small>Produto</small><strong>${escapeHtmlCadastro(pedido.produto)}</strong></div><div><small>Responsável</small><strong>${escapeHtmlCadastro(pedido.responsavel)}</strong></div><div><small>Data de cadastro</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.dataSolicitacao))}</strong></div><div><small>Vencimento</small><strong>${escapeHtmlCadastro(formatDateCadastro(pedido.vencimento))}</strong></div></div><div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroOpenCreatedPedido()">Abrir pedido</button></div></section>`;
   }
-  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-title">${renderPedidoResumoCadastro()}<div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 3 DE 3</span><h2 id="crm2-cadastro-pedido-title">Pedido</h2><p>Informe os dados iniciais do pedido para concluir o cadastro sequencial.</p></div></div><form class="crm2-cadastro-form" onsubmit="crm2CadastroSavePedido(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados do pedido</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPedidoFieldCadastro({ label: 'Produto ou serviço', name: 'produto', value: values.produto, required: true, options: ['e-CPF A3', 'e-CNPJ A3', 'e-CNPJ A1', 'Renovação de certificado'] })}${renderPedidoFieldCadastro({ label: 'Responsável', name: 'responsavel', value: values.responsavel, required: true })}${renderPedidoFieldCadastro({ label: 'Origem do pedido', name: 'origem', value: values.origem, required: true, options: ['Atendimento interno', 'Indicação', 'Site', 'Parceiro'] })}${renderPedidoFieldCadastro({ label: 'Vencimento', name: 'vencimento', value: values.vencimento, type: 'date', required: true })}${renderPedidoFieldCadastro({ label: 'Valor', name: 'valor', value: values.valor, type: 'number' })}${renderPedidoFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div>${renderPedidoReviewCadastro()}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pj')">Voltar</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Criar pedido</button></div></form></section>`;
+  return `<section class="crm2-cadastro-pf-step" aria-labelledby="crm2-cadastro-pedido-title">${renderPedidoResumoCadastro()}<div class="crm2-cadastro-section-header"><div><span class="ar-crm-phase1-kicker">ETAPA 3 DE 3</span><h2 id="crm2-cadastro-pedido-title">Pedido</h2><p>Informe os dados iniciais do pedido para concluir o cadastro sequencial.</p></div></div><form class="crm2-cadastro-form" onsubmit="crm2CadastroSavePedido(event)" novalidate><div class="hub-form-section"><div class="hub-form-section-title"><strong>Dados do pedido</strong><span>Campos obrigatórios marcados com *</span></div><div class="hub-form-grid">${renderPedidoFieldCadastro({ label: 'Produto ou serviço', name: 'produto', value: values.produto, required: true })}${renderPedidoFieldCadastro({ label: 'Responsável', name: 'responsavel', value: values.responsavel, required: true })}${renderPedidoFieldCadastro({ label: 'Origem do pedido', name: 'origem', value: values.origem, required: true, options: ['Atendimento interno', 'Indicação', 'Site', 'Parceiro'] })}${renderPedidoFieldCadastro({ label: 'Vencimento', name: 'vencimento', value: values.vencimento, type: 'date', required: true })}${renderPedidoFieldCadastro({ label: 'Valor', name: 'valor', value: values.valor, type: 'number' })}${renderPedidoFieldCadastro({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}</div></div>${renderPedidoReviewCadastro()}<div class="hub-form-screen-actions"><button class="secondary-btn" type="button" onclick="crm2CadastroGoToStep('pj')">Voltar</button><button class="save-btn" type="submit" ${crm2CadastroState.canCreate ? '' : 'disabled'}>Criar pedido</button></div></form></section>`;
 }
 
 function renderCadastroFooter() {
@@ -654,6 +704,7 @@ function crm2CadastroRequestLeave() {
 function renderCadastroShell() {
   permissionsCadastro();
   if (!crm2CadastroState.canView) return `<section class="admin-panel crm2-cadastro-page" data-crm2-cadastro="true" aria-labelledby="crm2-cadastro-denied-title"><div class="crm2-pessoas-state is-error" role="alert"><strong id="crm2-cadastro-denied-title">Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar o cadastro sequencial.</span><button class="secondary-btn" type="button" onclick="crm2CadastroBackToOverview()">Voltar ao CRM 2.0</button></div></section>`;
+  if (crm2CadastroState.currentStep === 'pedido') void loadCadastroProductCatalog();
   let content = crm2CadastroState.currentStep === 'pj'
     ? renderPjCreateCadastro()
     : crm2CadastroState.currentStep === 'pedido'
@@ -700,7 +751,7 @@ function collectPfFormValues(form) {
   values.cpf = digitsCadastro(values.cpf);
   values.email = String(values.email || '').trim();
   values.telefone = maskPhoneCadastro(values.telefone);
-  values.nascimento = String(values.nascimento || '').trim();
+  values.nascimento = normalizeCrm2Date(values.nascimento);
   values.observacoes = String(values.observacoes || '').trim();
   return values;
 }
@@ -1072,7 +1123,60 @@ Object.assign(window, {
         ? crm2CadastroState.pedidoDraft
         : crm2CadastroState.pfDraft;
     target[name] = input.value;
+    if (section === 'pedido' && name === 'produto') {
+      const product = findCrm2Product(crm2CadastroState.produtos, input.value);
+      target.produto = product?.value || input.value;
+      target.valor = product?.price || '';
+    }
     crm2CadastroMarkDirty();
+  },
+  crm2CadastroMaskBirthDate(input) { if (!input) return; input.value = maskCrm2Date(input.value); const picker = input.closest('.crm2-birth-date-mask-wrap')?.querySelector('.crm2-opp-next-action-native-date'); if (picker) picker.value = isValidCrm2Date(normalizeCrm2Date(input.value)) ? normalizeCrm2Date(input.value) : ''; window.crm2CadastroTrackField('pf', input); },
+  crm2CadastroOpenBirthDatePicker(button) { const picker = button?.closest('.crm2-birth-date-mask-wrap')?.querySelector('.crm2-opp-next-action-native-date'); if (!picker) return; if (typeof picker.showPicker === 'function') picker.showPicker(); else picker.click(); },
+  crm2CadastroSetBirthDateFromPicker(picker) { const input = picker?.closest('.crm2-birth-date-mask-wrap')?.querySelector('[name="nascimento"]'); if (!input) return; input.value = picker.value ? formatCrm2DateForInput(picker.value) : ''; window.crm2CadastroTrackField('pf', input); },
+  crm2CadastroRenderProductSuggestions(input) {
+    const target = input?.dataset?.productKey
+      ? document.querySelector(`[data-product-suggestions][data-product-key="${input.dataset.productKey}"]`)
+      : input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    if (!target) return;
+    const matches = searchCrm2Products(crm2CadastroState.produtos, input.value);
+    target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-product-suggestion" data-product-value="${escapeAttrCadastro(item.value)}" onclick="window.crm2CadastroSelectProductSuggestion(this)"><strong>${escapeHtmlCadastro(item.label)}</strong>${item.sku ? `<small>${escapeHtmlCadastro(item.sku)}</small>` : ''}</button>`).join('');
+    target.hidden = !matches.length;
+    if (!matches.length) { window.crm2CadastroHideProductSuggestions(input); return; }
+    if (target.parentElement !== document.body) document.body.appendChild(target);
+    target.dataset.productPortal = 'true';
+    positionCadastroProductSuggestions(input, target);
+  },
+  crm2CadastroHideProductSuggestions(input) {
+    const target = input?.dataset?.productKey
+      ? document.querySelector(`[data-product-suggestions][data-product-key="${input.dataset.productKey}"]`)
+      : input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    if (!target) return;
+    target.hidden = true;
+    const cell = input.closest('.crm2-pedido-product-cell');
+    if (cell && target.parentElement !== cell) cell.appendChild(target);
+    target.dataset.productPortal = 'false';
+    ['position', 'width', 'left', 'right', 'top', 'zIndex'].forEach((property) => target.style.removeProperty(property));
+  },
+  crm2CadastroSelectProductSuggestion(button) {
+    const target = button?.closest('[data-product-suggestions]');
+    const input = target?.dataset?.productKey
+      ? document.querySelector(`[data-product-key="${target.dataset.productKey}"]`)
+      : button?.closest('.crm2-pedido-product-cell')?.querySelector('[name="produto"]');
+    if (!input) return;
+    input.value = button.dataset.productValue || '';
+    window.crm2CadastroTrackField('pedido', input);
+    window.crm2CadastroSyncProductPrice(input);
+    window.crm2CadastroHideProductSuggestions(input);
+  },
+  crm2CadastroSyncProductPrice(input) {
+    const price = getCrm2ProductPrice(crm2CadastroState.produtos, input?.value || '');
+    const product = findCrm2Product(crm2CadastroState.produtos, input?.value || '');
+    const output = input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-item-price]');
+    if (output) output.textContent = price ? formatCrm2ProductPrice(price) : 'Selecione um produto';
+    const reviewProduct = document.querySelector('[data-cadastro-pedido-review-product]');
+    if (reviewProduct) reviewProduct.textContent = product?.value || input?.value || 'Não informado';
+    const review = document.querySelector('[data-cadastro-pedido-review-value]');
+    if (review) review.textContent = price ? formatCrm2ProductPrice(price) : 'Não informado';
   },
   crm2CadastroSaveDraft() {
     permissionsCadastro();
@@ -1396,7 +1500,8 @@ Object.assign(window, {
     if (!values.nome) errors.nome = 'Informe o nome completo ou nome social.';
     if (!validateCpfCadastro(values.cpf)) errors.cpf = 'Informe um CPF válido.';
     if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Informe um e-mail válido.';
-    if (values.nascimento && new Date(`${values.nascimento}T00:00:00`) > new Date()) errors.nascimento = 'A data de nascimento não pode estar no futuro.';
+    if (values.nascimento && !isValidCrm2Date(values.nascimento)) errors.nascimento = 'Informe uma data válida no formato dd/mm/aaaa.';
+    else if (values.nascimento && new Date(`${values.nascimento}T00:00:00`) > new Date()) errors.nascimento = 'A data de nascimento não pode estar no futuro.';
     if (getMockPfsCadastro().some((item) => digitsCadastro(item.cpf) === values.cpf)) errors.cpf = 'Já existe uma pessoa física mockada com este CPF.';
     if (Object.keys(errors).length) {
       crm2CadastroState.pfErrors = errors;
@@ -1585,11 +1690,17 @@ Object.assign(window, {
     Object.keys(values).forEach((key) => { values[key] = String(values[key] ?? '').trim(); });
     values.dataSolicitacao = new Date().toISOString().slice(0, 10);
     const errors = {};
+    const selectedProduct = findCrm2Product(crm2CadastroState.produtos, values.produto);
     ['produto', 'responsavel', 'origem', 'vencimento'].forEach((field) => {
       if (!values[field]) errors[field] = 'Preencha este campo.';
     });
+    if (values.produto && !selectedProduct) errors.produto = 'Selecione um produto válido do catálogo.';
+    if (values.produto && selectedProduct && !selectedProduct.price) errors.produto = 'O produto selecionado não possui preço cadastrado.';
+    if (selectedProduct?.price) {
+      values.produto = selectedProduct.value;
+      values.valor = selectedProduct.price;
+    }
     if (values.dataSolicitacao && values.vencimento && values.vencimento < values.dataSolicitacao) errors.vencimento = 'O vencimento não pode ser anterior à data de cadastro.';
-    if (values.valor && Number(values.valor) < 0) errors.valor = 'Informe um valor igual ou maior que zero.';
     if (Object.keys(errors).length) {
       crm2CadastroState.pedidoErrors = errors;
       crm2CadastroState.pedidoDraft = values;

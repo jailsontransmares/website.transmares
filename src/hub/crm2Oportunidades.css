@@ -13,6 +13,18 @@
   --border-color: var(--borda);
 }
 
+.crm2-opp-module-header > :first-child {
+  min-width: 0;
+}
+
+.crm2-opp-module-nav {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .crm2-opp-conversion-backdrop {
   align-items: center;
   box-sizing: border-box;
@@ -1462,30 +1474,6 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   align-self: start;
 }
 
-.crm2-opp-cpf-search-control {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-}
-
-.crm2-opp-cpf-search-control .config-input {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.crm2-opp-cpf-search {
-  flex: 0 0 30px;
-  min-height: 30px;
-  min-width: 30px;
-  padding: 5px;
-}
-
-.crm2-opp-cpf-search svg {
-  height: 14px;
-  width: 14px;
-}
-
 .crm2-opp-cpf-match-message {
   color: var(--color-warning, #f59e0b);
   display: block;
@@ -2088,21 +2076,16 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 
 .crm2-opp-items-sheet.is-readonly th:nth-child(3),
 .crm2-opp-items-sheet.is-readonly td:nth-child(3) {
-  width: 8%;
+  width: 18%;
 }
 
 .crm2-opp-items-sheet.is-readonly th:nth-child(4),
 .crm2-opp-items-sheet.is-readonly td:nth-child(4) {
-  width: 18%;
+  width: 32%;
 }
 
 .crm2-opp-items-sheet.is-readonly th:nth-child(5),
 .crm2-opp-items-sheet.is-readonly td:nth-child(5) {
-  width: 24%;
-}
-
-.crm2-opp-items-sheet.is-readonly th:nth-child(6),
-.crm2-opp-items-sheet.is-readonly td:nth-child(6) {
   width: 8%;
 }
 
@@ -2133,27 +2116,17 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 
 .crm2-opp-items-sheet.is-editable th:nth-child(2),
 .crm2-opp-items-sheet.is-editable td:nth-child(2) {
-  width: 30%;
+  width: 38%;
 }
 
 .crm2-opp-items-sheet.is-editable th:nth-child(3),
 .crm2-opp-items-sheet.is-editable td:nth-child(3) {
-  width: 8%;
+  min-width: 260px;
 }
 
-.crm2-opp-items-sheet.is-editable th:nth-child(4),
-.crm2-opp-items-sheet.is-editable td:nth-child(4) {
-  width: 14%;
-}
-
-.crm2-opp-items-sheet.is-editable th:nth-child(5),
-.crm2-opp-items-sheet.is-editable td:nth-child(5) {
-  width: 26%;
-}
-
-.crm2-opp-items-sheet.is-editable th:nth-child(6),
-.crm2-opp-items-sheet.is-editable td:nth-child(6) {
-  width: 8%;
+.crm2-opp-items-sheet.is-editable th:last-child,
+.crm2-opp-items-sheet.is-editable td:last-child {
+  width: 56px;
 }
 
 .crm2-opp-items-sheet.is-readonly th:last-child,
@@ -2190,10 +2163,6 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   display: block;
   font-size: 10px;
   margin-top: 3px;
-}
-
-.crm2-opp-item-quantity {
-  max-width: 74px;
 }
 
 .crm2-opp-derived-value {
@@ -2285,9 +2254,10 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   box-sizing: border-box;
   display: grid;
   gap: 4px;
+  grid-template-columns: max-content;
   left: 0;
   max-height: 320px;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   padding: 6px;
   position: absolute;
@@ -2309,9 +2279,10 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   display: grid;
   font: inherit;
   gap: 2px;
+  min-width: 100%;
   padding: 6px 8px;
   text-align: left;
-  width: 100%;
+  width: max-content;
 }
 
 .crm2-opp-product-suggestion:hover,
@@ -2325,9 +2296,9 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   display: block;
   font-size: 11px;
   line-height: 1.3;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -2337,9 +2308,9 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   font-size: 10px;
   line-height: 1.35;
   margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -2533,6 +2504,19 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
 }
 
 @media (max-width: 640px) {
+  .crm2-opp-module-header {
+    align-items: flex-start;
+  }
+
+  .crm2-opp-module-nav {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .crm2-opp-module-nav .secondary-btn {
+    flex: 1 1 auto;
+  }
+
   .crm2-opp-form-title-row {
     align-items: stretch;
     flex-direction: column;
@@ -2567,6 +2551,10 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   .crm2-opp-form-grid,
   .crm2-opp-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .crm2-opp-form-grid .crm2-pedido-name-field {
+    grid-column: auto;
   }
 
   .crm2-opp-header-stage-field,

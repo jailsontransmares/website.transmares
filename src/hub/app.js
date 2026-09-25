@@ -33,6 +33,7 @@ import {
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
 import { HUB_ADMIN_ROUTE_TABS, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
+import { resolveCrm2CadastroTab } from './crm2CadastroRoute.js';
 import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
@@ -1511,6 +1512,7 @@ function podeAcessarAbaAr(aba) {
     historico: ['painel_ar.validacoes', 'view'],
     crm: ['painel_ar', 'view'],
     crm2: ['painel_ar', 'view'],
+    'crm2-cadastro': ['painel_ar', 'view'],
     'crm2-pf': ['painel_ar', 'view'],
     'crm2-pj': ['painel_ar', 'view'],
     'crm2-vinculos': ['painel_ar', 'view'],
@@ -6462,72 +6464,17 @@ async function carregarLinksUteis() {
 }
 
 function renderLinksUteis() {
-  const gestor = state.usuario?.perfil === 'gestor';
-  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
-  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
-
-  document.getElementById('app').innerHTML = `
-    <main class="dashboard">
-      <header class="topbar">
-        ${renderHeaderLogo()}
-        <div class="brand">
-          <h1>${escapeHtml(nomeSistema)}</h1>
-          <p>${escapeHtml(subtitulo)}</p>
-        </div>
-
-        <div class="user-box">
-          <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
-          ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
-        </div>
-      </header>
-
-      <section class="admin-panel">
-        <div class="admin-panel-header">
-          <div>
-            <h2>${escapeHtml(state.links.titulo || 'Links Úteis')}</h2>
-            <p>${gestor ? 'Listagem e cadastro de links.' : 'Consulte os links disponíveis.'}</p>
-          </div>
-        </div>
-
-        <div class="links-toolbar">
-          <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
-            <option value="">Todas as categorias</option>
-            ${state.links.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-          </select>
-
-          <select class="config-input" onchange="alterarFiltroLinks('grupo', this.value)">
-            <option value="">Todos os grupos</option>
-            ${state.links.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-          </select>
-
-          ${gestor ? `
-            <select class="config-input" onchange="alterarFiltroLinks('status', this.value)">
-              <option value="">Todos os status</option>
-              <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
-              <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
-            </select>
-            <button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>
-          ` : ''}
-        </div>
-
-        <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
-        ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
-        ${state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(gestor)}
-        ${renderModalNovoLink()}
-      </section>
-    </main>
-  `;
+  renderCentralSenhas();
 }
 
-function renderListaLinksUteis(gestor) {
+function renderListaLinksUteis(gestor, podeEditar = gestor) {
   if (!state.links.items.length) {
     return '<p class="quick-link-empty">Nenhum link cadastrado.</p>';
   }
 
   return `
     <div class="links-list">
-      ${state.links.items.map(item => renderLinkItem(item, gestor)).join('')}
+      ${state.links.items.map(item => renderLinkItem(item, podeEditar)).join('')}
     </div>
   `;
 }
@@ -6616,6 +6563,11 @@ function obterRotuloEscopoLink(escopo) {
 }
 
 function editarLinkItem(id) {
+  if (!pode('central_senhas', 'update')) {
+    state.links.message = 'Seu perfil não tem permissão para editar links.';
+    renderCentralSenhas();
+    return;
+  }
   state.links.modalNovo = true;
   state.links.modalLinkId = id;
   state.links.erros = {};
@@ -6625,6 +6577,11 @@ function editarLinkItem(id) {
 }
 
 function abrirModalNovoLink() {
+  if (!pode('central_senhas', 'create')) {
+    state.links.message = 'Seu perfil não tem permissão para cadastrar links. Solicite a permissão “Central de Senhas: criar” ao administrador.';
+    renderCentralSenhas();
+    return;
+  }
   state.links.modalNovo = true;
   state.links.modalLinkId = '';
   state.links.erros = {};
@@ -6643,6 +6600,12 @@ function fecharModalNovoLink() {
 }
 
 async function salvarLinkItem(id) {
+  const acaoNecessaria = id ? 'update' : 'create';
+  if (!pode('central_senhas', acaoNecessaria)) {
+    state.links.message = `Seu perfil não tem permissão para ${id ? 'editar' : 'cadastrar'} links. Solicite a permissão “Central de Senhas: ${id ? 'editar' : 'criar'}” ao administrador.`;
+    renderCentralSenhas();
+    return;
+  }
   const payload = {
     id,
     escopo: document.getElementById('novo_link_escopo')?.value || state.links.escopo,
@@ -6688,7 +6651,10 @@ async function salvarLinkItem(id) {
     state.links.salvando = false;
     state.links.salvo = false;
     atualizarBotaoSalvarLink('Salvar', false, '');
-    state.links.message = erro.message || 'Erro ao salvar link.';
+    const mensagem = erro.message || 'Erro ao salvar link.';
+    state.links.message = /row-level security|permission denied|not authorized/i.test(mensagem)
+      ? 'O banco recusou o cadastro por falta da permissão “Central de Senhas: criar”. Solicite essa permissão ao administrador.'
+      : mensagem;
     renderLinksUteis();
   }
 }
@@ -6864,6 +6830,8 @@ async function carregarCentralSenhas() {
 
 function renderCentralSenhas() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeCriarLink = pode('central_senhas', 'create');
+  const podeEditarLink = pode('central_senhas', 'update');
   const podeVerSenha = pode('central_senhas', 'view_secret');
   const podeLinks = podeAcessarGerenciamentoLinks();
   const podeNavegarAbas = podeGerenciar || podeLinks;
@@ -6900,12 +6868,12 @@ function renderCentralSenhas() {
           ` : ''}
         </div>
 
-        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar) : renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : renderResumoSenhas(podeGerenciar)}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
         ${state.passwords.aba === 'links'
-          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar))
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
           : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
         ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
@@ -7444,11 +7412,11 @@ function renderMenuPrincipalAr({ podeHistorico, incluirCrm = false, incluirCrm2 
   const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
   const principais = itens.slice(0, limite);
   const secundarias = itens.slice(limite);
-  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
+  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
 
   return `<div class="module-tabs hub-module-nav" role="group" aria-label="Visualização do Painel AR">${principais.map(renderItem).join('')}${secundarias.length ? `
     <div class="hub-responsive-more">
-      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
+      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
       <div id="ar-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('<button ', '<button role="menuitem" ')).join('')}</div>
     </div>` : ''}</div>`;
 }
@@ -7521,16 +7489,8 @@ function renderConteudoAr() {
     return renderCrm2Phase1();
   }
 
-  if (state.ar.aba === 'crm2-pf') {
-    return renderCrm2PessoasFisicasPhase2();
-  }
-
-  if (state.ar.aba === 'crm2-pj') {
-    return typeof window.crm2PjRender === 'function' ? window.crm2PjRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pessoas jurídicas...</div></section>';
-  }
-
-  if (state.ar.aba === 'crm2-vinculos') {
-    return typeof window.crm2VinculosRender === 'function' ? window.crm2VinculosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Vínculos...</div></section>';
+  if (['crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos'].includes(state.ar.aba)) {
+    return renderCrm2CadastroUnificado();
   }
 
   if (state.ar.aba === 'crm2-pedidos') {
@@ -7552,6 +7512,39 @@ function renderConteudoAr() {
   return renderGeradorLinksAr();
 }
 
+function renderCrm2CadastroUnificado() {
+  const { principal } = obterContextoRotaHub();
+  const tipo = resolveCrm2CadastroTab(principal);
+  const tabs = [
+    ['pf', 'Pessoas físicas'],
+    ['pj', 'Pessoas jurídicas'],
+    ['vinculos', 'Vínculos']
+  ];
+  const content = tipo === 'pj'
+    ? (typeof window.crm2PjRender === 'function' ? window.crm2PjRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pessoas jurídicas...</div></section>')
+    : tipo === 'vinculos'
+      ? (typeof window.crm2VinculosRender === 'function' ? window.crm2VinculosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Vínculos...</div></section>')
+      : renderCrm2PessoasFisicasPhase2();
+  return `<div class="crm2-cadastro-module"><nav class="crm2-cadastro-tabs" role="tablist" aria-label="Tipos de cadastro CRM 2.0">${tabs.map(([key, label]) => `<button id="crm2-cadastro-tab-${key}" class="crm2-cadastro-tab${tipo === key ? ' is-active' : ''}" type="button" role="tab" aria-selected="${tipo === key}" aria-controls="crm2-cadastro-tabpanel" onclick="navegarParaCrm2Cadastro('${key}')" onkeydown="if(['ArrowRight','ArrowLeft'].includes(event.key)){event.preventDefault();const tabs=[...this.parentElement.querySelectorAll('[role=tab]')];const direction=event.key==='ArrowRight'?1:-1;const next=tabs[(tabs.indexOf(this)+direction+tabs.length)%tabs.length];next.focus();next.click();}">${label}</button>`).join('')}</nav><div id="crm2-cadastro-tabpanel" role="tabpanel" aria-labelledby="crm2-cadastro-tab-${tipo}">${content}</div></div>`;
+}
+
+function navegarParaCrm2Cadastro(tipo) {
+  if (!['pf', 'pj', 'vinculos'].includes(tipo)) {
+    return window.navegarParaCrm2Rota?.('200', 'cadastro');
+  }
+  const route = obterContextoRotaHub().principal;
+  const currentType = ['200', '205'].includes(route) ? 'oportunidades' : route === '202' ? 'pj' : route === '203' ? 'vinculos' : 'pf';
+  if (tipo === currentType) return;
+  const navigate = () => {
+    if (tipo === 'pj') return window.navegarParaCrm2PjRota?.();
+    if (tipo === 'vinculos') return window.navegarParaCrm2VinculosRota?.();
+    return window.navegarParaCrm2Rota?.('201');
+  };
+  if (currentType === 'pf' && !protegerNavegacaoFormularioPfHub(navigate)) return;
+  if (currentType === 'pj' && window.crm2PjRequestLeave && !window.crm2PjRequestLeave(navigate)) return;
+  return navigate();
+}
+
 function renderCrm2Phase1() {
   const crm2RouteContext = obterContextoRotaHub();
   if (crm2RouteContext.principal === '200' && crm2RouteContext.secundaria === 'cadastro') {
@@ -7560,14 +7553,23 @@ function renderCrm2Phase1() {
       : '<section class="admin-panel crm2-cadastro-page"><div class="hub-loading" role="status">Carregando cadastro sequencial...</div></section>';
   }
 
+  if (crm2RouteContext.principal === '200') {
+    return typeof window !== 'undefined' && typeof window.crm2OportunidadesRender === 'function'
+      ? window.crm2OportunidadesRender()
+      : '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page"><div class="hub-loading" role="status">Carregando Oportunidades...</div></section>';
+  }
+
   const crm2 = state.ar.crm2;
   const podeExecutar = pode('painel_ar', 'update');
   const podeVisualizarCrm2 = pode('painel_ar', 'view');
-  const rotasCrm2Disponiveis = ['201', '202', '203', '204', '205', '206'];
+  const rotasCrm2Disponiveis = ['201', '204', '205', '206'];
+  const atalhosCrm2 = new Map([
+    ['201', ['Cadastro', 'Pessoas físicas, pessoas jurídicas e vínculos em uma área unificada.', "navegarParaCrm2Rota('201')"]],
+    ['204', ['Pedidos', 'Cadastro, detalhe, status, vencimento e histórico.', 'navegarParaCrm2PedidosRota()']],
+    ['205', ['Oportunidades', 'Negociações, itens e conversão.', 'navegarParaCrm2OportunidadesRota()']]
+  ]);
   const etapas = [
-    ['201', 'Pessoas físicas', 'Cadastro, busca, dados cadastrais e timeline.'],
-    ['202', 'Pessoas jurídicas', 'Empresas, documentos e pessoas vinculadas.'],
-    ['203', 'Vínculos', 'Relacionamentos entre PF e PJ, com histórico de inativação.'],
+    ['201', 'Cadastro', 'Pessoas físicas, pessoas jurídicas e vínculos em uma área unificada.'],
     ['204', 'Pedidos', 'Cadastro, detalhe, status, vencimento e histórico.'],
     ['205', 'Oportunidades', 'Negociações, itens e conversão.'],
     ['206', 'Configurações', 'Comunicação, automações e modelos mockados.']
@@ -7575,18 +7577,23 @@ function renderCrm2Phase1() {
 
   return `
     <section class="admin-panel" aria-labelledby="crm2-title">
-      <div class="admin-panel-header">
-        <div>
+      <div class="admin-panel-header crm2-phase1-header">
+        <div class="crm2-phase1-heading">
+          <div class="crm2-phase1-title">
           <span class="ar-crm-phase1-kicker">FASE 1 · FUNDAÇÃO MOCKADA</span>
           <h3 id="crm2-title">CRM 2.0</h3>
+          </div>
+          <nav class="crm2-phase1-shortcuts" aria-label="Módulos CRM 2.0">
+            ${[...atalhosCrm2].map(([codigo, [titulo, descricao, acao]]) => `<button class="crm2-phase1-shortcut" type="button" onclick="${acao}" title="${escapeHtml(descricao)}"><span class="crm2-phase1-roadmap-code">${codigo}</span><strong>${titulo}</strong></button>`).join('')}
+          </nav>
         </div>
         <span class="ar-crm-phase1-status">Rota ${escapeHtml(crm2.codigoRota)}</span>
       </div>
 
       ${crm2.mensagem ? `<p class="admin-message" role="status">${escapeHtml(crm2.mensagem)}</p>` : ''}
 
-      <div class="crm2-phase1-roadmap" role="list" aria-label="Próximas telas do CRM 2.0">
-        ${etapas.map(([codigo, titulo, descricao]) => `
+      <div class="crm2-phase1-roadmap crm2-phase1-roadmap-secondary" role="list" aria-label="Outras telas do CRM 2.0">
+        ${etapas.filter(([codigo]) => !atalhosCrm2.has(codigo)).map(([codigo, titulo, descricao]) => `
           <article class="crm2-phase1-roadmap-item ${rotasCrm2Disponiveis.includes(codigo) ? 'is-actionable' : ''}" role="${rotasCrm2Disponiveis.includes(codigo) ? 'button' : 'listitem'}" ${codigo === '201' ? `tabindex="0" onclick="navegarParaCrm2Rota('${codigo}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('${codigo}'); }"` : codigo === '202' ? `tabindex="0" onclick="navegarParaCrm2PjRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2PjRota(); }"` : codigo === '203' ? `tabindex="0" onclick="navegarParaCrm2VinculosRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2VinculosRota(); }"` : codigo === '204' ? `tabindex="0" onclick="navegarParaCrm2PedidosRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2PedidosRota(); }"` : codigo === '205' ? `tabindex="0" onclick="navegarParaCrm2OportunidadesRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2OportunidadesRota(); }"` : codigo === '206' ? `tabindex="0" onclick="navegarParaCrm2ComunicacaoRota()" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2ComunicacaoRota(); }"` : ''}>
             <span class="crm2-phase1-roadmap-code">${escapeHtml(codigo)}</span>
             <div>
@@ -7623,7 +7630,7 @@ function renderCrm2PessoasFisicasPhase2() {
   `;
 }
 
-function renderToolbarLinks(gestor) {
+function renderToolbarLinks(gestor, podeCriar = gestor) {
   return `
     <div class="links-toolbar">
       <select class="config-input" onchange="alterarFiltroLinks('escopo', this.value)" aria-label="Área dos links">
@@ -7646,8 +7653,8 @@ function renderToolbarLinks(gestor) {
           <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
           <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
         </select>
-        <button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>
       ` : ''}
+      ${podeCriar ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>' : ''}
     </div>
     <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
     ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
@@ -12849,8 +12856,7 @@ const HUB_BREADCRUMB_ADMIN_ROUTES = {
 
 function obterLabelBreadcrumbHub(chave = '') {
   if (String(chave) === '200') return 'CRM 2.0';
-  if (String(chave) === '201') return 'Pessoas físicas';
-  if (String(chave) === '202') return 'Pessoas jurídicas';
+  if (['201', '202', '203'].includes(String(chave))) return 'Cadastro';
   if (String(chave) === '204') return 'Pedidos';
   if (String(chave) === '205') return 'Oportunidades';
   if (String(chave) === '206') return 'Configurações';
@@ -12895,7 +12901,7 @@ function obterBreadcrumbHub() {
       path: `${pathModulo.replace(/\/+$/g, '')}/200`
     });
     itens.push({
-      label: contexto.principal === '201' ? 'Pessoas físicas' : contexto.principal === '202' ? 'Pessoas jurídicas' : contexto.principal === '203' ? 'Vínculos PF/PJ' : contexto.principal === '204' ? 'Pedidos' : contexto.principal === '205' ? 'Oportunidades' : contexto.principal === '206' ? 'Comunicação' : 'Automações',
+      label: ['201', '202', '203'].includes(contexto.principal) ? 'Cadastro' : contexto.principal === '204' ? 'Pedidos' : contexto.principal === '205' ? 'Oportunidades' : contexto.principal === '206' ? 'Comunicação' : 'Automações',
       path: `${pathModulo.replace(/\/+$/g, '')}/${contexto.principal}`
     });
   } else if (contexto.principal) {
@@ -13005,21 +13011,21 @@ function sincronizarContextoArPelaRota() {
   const { modulo, principal, secundaria } = obterContextoRotaHub();
   if (modulo !== 'painel-ar') return;
 
-  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
   if (principal === '200') {
     state.ar.aba = 'crm2';
     return;
   }
   if (principal === '201') {
-    state.ar.aba = 'crm2-pf';
+    state.ar.aba = 'crm2-cadastro';
     return;
   }
   if (principal === '202') {
-    state.ar.aba = 'crm2-pj';
+    state.ar.aba = 'crm2-cadastro';
     return;
   }
   if (principal === '203') {
-    state.ar.aba = 'crm2-vinculos';
+    state.ar.aba = 'crm2-cadastro';
     return;
   }
   if (principal === '204') {
@@ -14017,6 +14023,8 @@ const renderLinksUteisHubPhase1 = function() {
 
 const renderCentralSenhasHubPhase1 = function() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeCriarLink = pode('central_senhas', 'create');
+  const podeEditarLink = pode('central_senhas', 'update');
   const podeVerSenha = pode('central_senhas', 'view_secret');
   const podeAcessos = pode('central_senhas', 'view') || podeGerenciar;
   const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
@@ -14046,12 +14054,12 @@ const renderCentralSenhasHubPhase1 = function() {
           ` : ''}
         </div>
 
-        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar) : renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : renderResumoSenhas(podeGerenciar)}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
         ${state.passwords.aba === 'links'
-          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar))
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
           : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
         ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
         ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
@@ -14061,7 +14069,8 @@ const renderCentralSenhasHubPhase1 = function() {
 };
 
 const renderPainelArHubPhase1 = function() {
-  window.crm2PfArActive = state.ar.aba === 'crm2-pf';
+  const crm2CadastroRoute = obterContextoRotaHub().principal;
+  window.crm2PfArActive = state.ar.aba === 'crm2-pf' || (state.ar.aba === 'crm2-cadastro' && crm2CadastroRoute === '201');
   window.hubRemoveFormFooterPortals?.();
   fecharMenuMaisAr();
   const podeHistorico = podeAcessarAbaAr('historico');
@@ -14163,7 +14172,7 @@ const selecionarAbaArHubPhase2 = function(aba) {
     return;
   }
 
-  if (['crm2', 'crm2-pf'].includes(state.ar.aba) && aba !== state.ar.aba) {
+  if (['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos'].includes(state.ar.aba) && aba !== state.ar.aba) {
     if (!protegerNavegacaoFormularioPfHub(() => selecionarAbaArHubPhase2(aba))) return;
   }
 
@@ -14180,6 +14189,16 @@ const selecionarAbaArHubPhase2 = function(aba) {
     state.ar.aba = 'crm2';
     state.ar.crm2.mensagem = '';
     renderPainelAr();
+    return;
+  }
+
+  if (aba === 'crm2-cadastro') {
+    navegarParaCrm2Cadastro('pf');
+    return;
+  }
+
+  if (aba === 'crm2-pf' || aba === 'crm2-pj' || aba === 'crm2-vinculos') {
+    navegarParaCrm2Cadastro(aba === 'crm2-pj' ? 'pj' : aba === 'crm2-vinculos' ? 'vinculos' : 'pf');
     return;
   }
 
@@ -14640,6 +14659,7 @@ Object.assign(window, {
   selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
+  navegarParaCrm2Cadastro,
   selecionarPaginaCrmAr,
   sincronizarCrmAr,
   sincronizarCadastroCrmAr,

@@ -1,6 +1,7 @@
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
 import { portalHubFormFooter } from './formFooterPortal.js';
+import { renderCrm2CadastroListHeader, renderCrm2CadastroListToolbar, renderCrm2CadastroPagination, renderCrm2CadastroState } from './crm2CadastroUi.js';
 
 const CRM2_VINCULOS_INITIAL_ITEMS = [
   {
@@ -274,6 +275,20 @@ function permissionsVinculos() {
   crm2VinculosState.canDelete = resolve('delete');
 }
 
+function vinculosPfOptions() {
+  const people = window.crm2PfGetMockItems?.();
+  return Array.isArray(people) && people.length
+    ? people.filter((person) => person?.nome && person?.cpf).map((person) => ({ id: person.id, nome: person.nome, cpf: String(person.cpf).replace(/\D/g, '') }))
+    : CRM2_VINCULOS_PF_OPTIONS;
+}
+
+function vinculosPjOptions() {
+  const companies = window.crm2PjGetMockItems?.();
+  return Array.isArray(companies) && companies.length
+    ? companies.filter((company) => company?.razaoSocial && company?.cnpj).map((company) => ({ id: company.id, razaoSocial: company.razaoSocial, cnpj: String(company.cnpj).replace(/\D/g, '') }))
+    : CRM2_VINCULOS_PJ_OPTIONS;
+}
+
 function filteredVinculos() {
   const normalizedSearch = normalizeSearchVinculo(crm2VinculosState.search);
   const compactSearch = digitsOnlyVinculo(crm2VinculosState.search);
@@ -298,12 +313,12 @@ function renderStateVinculos() {
     empty: ['Nenhum vínculo cadastrado.', 'A lista mockada ainda não possui vínculos.']
   }[crm2VinculosState.listState];
   if (!copy) return '';
-  return `<div class="crm2-pessoas-state crm2-vinculos-state ${crm2VinculosState.listState === 'error' ? 'is-error' : ''}" role="${crm2VinculosState.listState === 'error' ? 'alert' : 'status'}" ${crm2VinculosState.listState === 'loading' ? 'aria-busy="true"' : ''}><strong>${copy[0]}</strong><span>${copy[1]}</span><button class="secondary-btn" type="button" onclick="crm2VinculosSetListState('normal')">Voltar à lista</button></div>`;
+  return renderCrm2CadastroState({ title: escapeHtmlVinculo(copy[0]), description: escapeHtmlVinculo(copy[1]), action: '<button class="secondary-btn" type="button" onclick="crm2VinculosSetListState(\'normal\')">Voltar à lista</button>', state: crm2VinculosState.listState, className: 'crm2-vinculos-state', loading: crm2VinculosState.listState === 'loading' });
 }
 
 function renderPaginationVinculos(totalPages, totalItems) {
   crm2VinculosState.page = Math.min(Math.max(1, crm2VinculosState.page), totalPages);
-  return `<div class="crm2-pessoas-pagination crm2-vinculos-pagination" aria-label="Paginação de vínculos"><span>Página <strong>${crm2VinculosState.page}</strong> de <strong>${totalPages}</strong> · ${totalItems} registro(s)</span><div><button class="secondary-btn" type="button" onclick="crm2VinculosSetPage(${crm2VinculosState.page - 1})" ${crm2VinculosState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2VinculosSetPage(${crm2VinculosState.page + 1})" ${crm2VinculosState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`;
+  return renderCrm2CadastroPagination({ label: 'vínculos', page: crm2VinculosState.page, totalPages, totalItems, previousAction: `crm2VinculosSetPage(${crm2VinculosState.page - 1})`, nextAction: `crm2VinculosSetPage(${crm2VinculosState.page + 1})` });
 }
 
 function renderVinculosFooter(actions) {
@@ -320,17 +335,15 @@ function renderVinculosList() {
   const hasActions = crm2VinculosState.canEdit || crm2VinculosState.canDelete;
 
   return `<section class="admin-panel crm2-pessoas-page crm2-vinculos-page" data-crm2-vinculos="true" aria-labelledby="crm2-vinculos-title">
-    <div class="admin-panel-header crm2-pessoas-list-header"><div><span class="ar-crm-phase1-kicker">ROTA 203 · CRM 2.0</span><h3 id="crm2-vinculos-title">Vínculos PF/PJ</h3></div><div class="crm2-pessoas-header-actions"><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></div>
+    ${renderCrm2CadastroListHeader({ title: 'Vínculos PF/PJ', titleId: 'crm2-vinculos-title', routeCode: '203' })}
     ${crm2VinculosState.message ? `<p class="admin-message" role="status">${escapeHtmlVinculo(crm2VinculosState.message)}</p>` : ''}
-    <form class="crm2-pf-filter-bar" role="search" onsubmit="crm2VinculosApplyFilters(event)">
-      <div class="crm2-pf-filter-actions">
+    ${renderCrm2CadastroListToolbar('crm2VinculosApplyFilters(event)', `
         ${crm2VinculosState.canCreate ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="crm2VinculosOpenCreate()">+Incluir</button>' : ''}
         <div class="crm2-pf-select"><button id="crm2-vinculos-filter" class="icon-btn ${crm2VinculosState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-vinculos-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2VinculosToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button><div id="crm2-vinculos-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-vinculos-filter" data-dropdown-width="180" hidden>${[['', 'Todos'], ['Ativo', 'Ativo'], ['Inativo', 'Inativo']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2VinculosState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2VinculosState.statusFilter === value ? 'true' : 'false'}" data-field="status" data-value="${escapeAttrVinculo(value)}" onclick="crm2VinculosSelectFilter(this)">${escapeHtmlVinculo(label)}</button>`).join('')}</div></div>
         <div class="crm2-pf-search-control ${crm2VinculosState.searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar vínculo" placeholder="Busca por PF, PJ, CPF ou CNPJ" value="${escapeAttrVinculo(crm2VinculosState.search)}" ${crm2VinculosState.searchExpanded ? '' : 'hidden'} oninput="crm2VinculosSetSearch(this.value, this)" onfocusout="crm2VinculosHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${crm2VinculosState.searchExpanded ? 'true' : 'false'}" onclick="crm2VinculosToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>
         ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2VinculosClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
-      </div>
-    </form>
-    ${crm2VinculosState.listState !== 'normal' ? renderStateVinculos() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap crm2-vinculos-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table crm2-vinculos-table" aria-describedby="crm2-vinculos-caption"><caption id="crm2-vinculos-caption" class="crm2-pessoas-table-caption">Vínculos entre pessoas físicas e jurídicas no CRM 2.0</caption><thead><tr><th scope="col">Pessoa física</th><th scope="col">Pessoa jurídica</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Início</th><th scope="col">Última atualização</th>${hasActions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pfNome)}</button><small>${escapeHtmlVinculo(maskCpfVinculo(item.pfCpf))}</small></td><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pjRazaoSocial)}</button><small>${escapeHtmlVinculo(maskCnpjVinculo(item.pjCnpj))}</small></td><td><span class="crm2-vinculo-type">${escapeHtmlVinculo(item.tipo)}</span></td><td><span class="crm2-pessoas-status is-${escapeAttrVinculo(normalizeSearchVinculo(item.status))}" role="status">${escapeHtmlVinculo(item.status)}</span></td><td>${escapeHtmlVinculo(formatDateVinculo(item.inicioEm))}</td><td>${escapeHtmlVinculo(formatDateTimeVinculo(item.atualizadoEm))}</td>${hasActions ? `<td class="crm2-vinculos-actions">${crm2VinculosState.canEdit ? `<button class="icon-btn" type="button" onclick="crm2VinculosOpenEdit('${escapeAttrVinculo(item.id)}')" aria-label="Editar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Editar vínculo">✎</button>` : ''}${crm2VinculosState.canDelete && item.status === 'Ativo' ? `<button class="icon-btn" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')" aria-label="Inativar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Inativar vínculo">×</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>${renderPaginationVinculos(totalPages, filtered.length)}` : `<div class="crm2-pessoas-state crm2-vinculos-state" role="status"><strong>${crm2VinculosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum vínculo cadastrado.'}</strong><span>${crm2VinculosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui vínculos.'}</span><button class="secondary-btn" type="button" onclick="crm2VinculosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>`}
+    `)}
+    ${crm2VinculosState.listState !== 'normal' ? renderStateVinculos() : pageItems.length ? `<div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap crm2-vinculos-table-wrap"><table class="ar-crm-phase1-table crm2-pessoas-table crm2-vinculos-table" aria-describedby="crm2-vinculos-caption"><caption id="crm2-vinculos-caption" class="crm2-pessoas-table-caption">Vínculos entre pessoas físicas e jurídicas no CRM 2.0</caption><thead><tr><th scope="col">Pessoa física</th><th scope="col">Pessoa jurídica</th><th scope="col">Tipo</th><th scope="col">Situação</th><th scope="col">Início</th><th scope="col">Última atualização</th>${hasActions ? '<th scope="col">Ações</th>' : ''}</tr></thead><tbody>${pageItems.map((item) => `<tr><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pfNome)}</button><small>${escapeHtmlVinculo(maskCpfVinculo(item.pfCpf))}</small></td><td><button class="crm2-vinculo-link" type="button" onclick="crm2VinculosOpenDetail('${escapeAttrVinculo(item.id)}')">${escapeHtmlVinculo(item.pjRazaoSocial)}</button><small>${escapeHtmlVinculo(maskCnpjVinculo(item.pjCnpj))}</small></td><td><span class="crm2-vinculo-type">${escapeHtmlVinculo(item.tipo)}</span></td><td><span class="crm2-pessoas-status is-${escapeAttrVinculo(normalizeSearchVinculo(item.status))}" role="status">${escapeHtmlVinculo(item.status)}</span></td><td>${escapeHtmlVinculo(formatDateVinculo(item.inicioEm))}</td><td>${escapeHtmlVinculo(formatDateTimeVinculo(item.atualizadoEm))}</td>${hasActions ? `<td class="crm2-vinculos-actions">${crm2VinculosState.canEdit ? `<button class="icon-btn" type="button" onclick="crm2VinculosOpenEdit('${escapeAttrVinculo(item.id)}')" aria-label="Editar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Editar vínculo">✎</button>` : ''}${crm2VinculosState.canDelete && item.status === 'Ativo' ? `<button class="icon-btn" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')" aria-label="Inativar vínculo de ${escapeAttrVinculo(item.pfNome)}" title="Inativar vínculo">×</button>` : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>${renderPaginationVinculos(totalPages, filtered.length)}` : renderCrm2CadastroState({ title: crm2VinculosState.items.length ? 'Nenhum resultado encontrado.' : 'Nenhum vínculo cadastrado.', description: crm2VinculosState.items.length ? 'Ajuste os filtros ou limpe a busca.' : 'A lista mockada ainda não possui vínculos.', action: `<button class="secondary-btn" type="button" onclick="crm2VinculosClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button>`, className: 'crm2-vinculos-state' })}
     ${renderVinculosFooter(`<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar</button>${crm2VinculosState.canCreate ? '<button class="save-btn" type="button" onclick="crm2VinculosOpenCreate()">Incluir</button>' : ''}`)}
   </section>`;
 }
@@ -357,8 +370,10 @@ function renderVinculoLookup({ label, name, value = '', options, readonly = fals
 function renderVinculoForm(item = null) {
   const editing = Boolean(item);
   const values = { ...(item || {}), ...crm2VinculosState.draft };
-  const pfOptions = CRM2_VINCULOS_PF_OPTIONS.map((person) => ({ value: person.nome, label: `${person.nome} · ${maskCpfVinculo(person.cpf)}` }));
-  const pjOptions = CRM2_VINCULOS_PJ_OPTIONS.map((company) => ({ value: company.razaoSocial, label: `${company.razaoSocial} · ${maskCnpjVinculo(company.cnpj)}` }));
+  const pfOptions = vinculosPfOptions();
+  const pjOptions = vinculosPjOptions();
+  const pfLookupOptions = pfOptions.map((person) => ({ value: person.nome, label: `${person.nome} · ${maskCpfVinculo(person.cpf)}` }));
+  const pjLookupOptions = pjOptions.map((company) => ({ value: company.razaoSocial, label: `${company.razaoSocial} · ${maskCnpjVinculo(company.cnpj)}` }));
   const typeOptions = CRM2_VINCULOS_TYPES.map((type) => ({ value: type, label: type }));
   const title = editing ? 'Editar vínculo PF/PJ' : 'Novo vínculo PF/PJ';
   const actionLabel = editing ? 'Salvar alterações' : 'Salvar vínculo';
@@ -369,8 +384,8 @@ function renderVinculoForm(item = null) {
     ${crm2VinculosState.message ? `<p class="admin-message" role="status">${escapeHtmlVinculo(crm2VinculosState.message)}</p>` : ''}
     <form id="crm2-vinculo-form" class="hub-form-screen-content crm2-pf-form" onsubmit="crm2VinculosSave(event)" novalidate>
       <section class="hub-form-section"><div class="hub-form-section-title"><strong>Relacionamento</strong></div><div class="hub-form-grid">
-        ${renderVinculoLookup({ label: 'Pessoa física', name: 'pfNome', value: values.pfNome, options: pfOptions, readonly: editing, required: true })}
-        ${renderVinculoLookup({ label: 'Pessoa jurídica', name: 'pjRazaoSocial', value: values.pjRazaoSocial, options: pjOptions, readonly: editing, required: true })}
+        ${renderVinculoLookup({ label: 'Pessoa física', name: 'pfNome', value: values.pfNome, options: pfLookupOptions, readonly: editing, required: true })}
+        ${renderVinculoLookup({ label: 'Pessoa jurídica', name: 'pjRazaoSocial', value: values.pjRazaoSocial, options: pjLookupOptions, readonly: editing, required: true })}
         ${renderVinculoSelect({ label: 'Tipo de vínculo', name: 'tipo', value: values.tipo, options: typeOptions, required: true })}
         ${renderVinculoFormField({ label: 'Data de início', name: 'inicioEm', value: values.inicioEm, type: 'date', required: true })}
         ${renderVinculoFormField({ label: 'Observações', name: 'observacoes', value: values.observacoes, type: 'textarea', wide: true })}
@@ -392,8 +407,8 @@ function renderVinculoHistory(item) {
 }
 
 function renderVinculoDetail(item) {
-  const pf = CRM2_VINCULOS_PF_OPTIONS.find((person) => person.nome === item.pfNome);
-  const pj = CRM2_VINCULOS_PJ_OPTIONS.find((company) => company.razaoSocial === item.pjRazaoSocial);
+  const pf = vinculosPfOptions().find((person) => person.nome === item.pfNome);
+  const pj = vinculosPjOptions().find((company) => company.razaoSocial === item.pjRazaoSocial);
   const editButton = crm2VinculosState.canEdit ? `<button class="save-btn" type="button" onclick="crm2VinculosOpenEdit('${escapeAttrVinculo(item.id)}')">Editar</button>` : '';
   const inactivateButton = crm2VinculosState.canDelete && item.status === 'Ativo' ? `<button class="secondary-btn crm2-vinculo-inactivate-button" type="button" onclick="crm2VinculosInactivate('${escapeAttrVinculo(item.id)}')">Inativar vínculo</button>` : '';
   return `<section class="admin-panel crm2-pessoas-page crm2-vinculos-page" data-crm2-vinculos="true" aria-labelledby="crm2-vinculo-detail-title">
@@ -454,15 +469,21 @@ Object.assign(window, {
   crm2VinculosGetMockItems() {
     return crm2VinculosState.items.map((item) => ({ ...item }));
   },
+  crm2VinculosCan(action) {
+    permissionsVinculos();
+    return ({ view: crm2VinculosState.canView, create: crm2VinculosState.canCreate, edit: crm2VinculosState.canEdit, update: crm2VinculosState.canEdit, delete: crm2VinculosState.canDelete })[action] === true;
+  },
   crm2VinculosCreateMockFromOpportunity(payload = {}) {
     permissionsVinculos();
     if (!crm2VinculosState.canCreate || !payload.pfNome || !payload.pjRazaoSocial || !CRM2_VINCULOS_TYPES.includes(payload.tipo)) return null;
     const duplicate = crm2VinculosState.items.find((item) => item.status === 'Ativo' && item.pfNome === payload.pfNome && item.pjRazaoSocial === payload.pjRazaoSocial && item.tipo === payload.tipo);
     if (duplicate) return { ...duplicate, reused: true };
+    const pf = vinculosPfOptions().find((person) => person.nome === payload.pfNome || (payload.pfCpf && person.cpf === digitsOnlyVinculo(payload.pfCpf)));
+    const pj = vinculosPjOptions().find((company) => company.razaoSocial === payload.pjRazaoSocial || (payload.pjCnpj && company.cnpj === digitsOnlyVinculo(payload.pjCnpj)));
     const now = new Date().toISOString();
     const item = {
-      id: `vinculo-conv-${Date.now()}`, pfNome: payload.pfNome, pfCpf: String(payload.pfCpf || '').replace(/\D/g, ''),
-      pjRazaoSocial: payload.pjRazaoSocial, pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''), tipo: payload.tipo,
+      id: `vinculo-conv-${Date.now()}`, pfId: pf?.id || '', pfNome: payload.pfNome, pfCpf: String(payload.pfCpf || '').replace(/\D/g, ''),
+      pjId: pj?.id || '', pjRazaoSocial: payload.pjRazaoSocial, pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''), tipo: payload.tipo,
       status: 'Ativo', inicioEm: now.slice(0, 10), encerramentoEm: '', motivoInativacao: '', observacoes: payload.observacoes || 'Vínculo criado ao gerar pedido pela oportunidade.',
       atualizadoPor: payload.usuario || 'Usuário mockado', atualizadoEm: now,
       historico: [{ data: now, usuario: payload.usuario || 'Usuário mockado', tipo: 'Pedido gerado', descricao: 'Vínculo criado ao gerar pedido pela oportunidade.' }]
@@ -476,16 +497,20 @@ Object.assign(window, {
     return window.crm2VinculosCreateMockFromOpportunity?.(payload) || null;
   },
   navegarParaCrm2VinculosRota() { navigateVinculos(); },
-  crm2VinculosOpenCreate() {
+  crm2VinculosOpenCreate(pfId = '', pjId = '') {
+    permissionsVinculos();
     if (!crm2VinculosState.canCreate) return;
     crm2VinculosState.formMode = 'create';
     crm2VinculosState.detailId = '';
-    crm2VinculosState.draft = { inicioEm: new Date().toISOString().slice(0, 10) };
+    const pf = vinculosPfOptions().find((person) => person.id === pfId);
+    const pj = vinculosPjOptions().find((company) => company.id === pjId);
+    crm2VinculosState.draft = { inicioEm: new Date().toISOString().slice(0, 10), ...(pf ? { pfNome: pf.nome } : {}), ...(pj ? { pjRazaoSocial: pj.razaoSocial } : {}) };
     crm2VinculosState.errors = {};
     crm2VinculosState.message = '';
     navigateVinculos('novo');
   },
   crm2VinculosOpenEdit(id) {
+    permissionsVinculos();
     if (!crm2VinculosState.canEdit) return;
     const item = crm2VinculosState.items.find((entry) => entry.id === id);
     if (!item) return;
@@ -497,6 +522,8 @@ Object.assign(window, {
     navigateVinculos(`${id}/editar`);
   },
   crm2VinculosOpenDetail(id) {
+    permissionsVinculos();
+    if (!crm2VinculosState.canView) return;
     const item = crm2VinculosState.items.find((entry) => entry.id === id);
     if (!item) return;
     crm2VinculosState.detailId = id;
@@ -523,6 +550,7 @@ Object.assign(window, {
   },
   crm2VinculosSave(event) {
     event?.preventDefault();
+    permissionsVinculos();
     const editing = crm2VinculosState.formMode === 'edit';
     if (editing ? !crm2VinculosState.canEdit : !crm2VinculosState.canCreate) return;
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -531,8 +559,8 @@ Object.assign(window, {
     values.tipo = String(values.tipo || '').trim();
     values.inicioEm = String(values.inicioEm || '').trim();
     values.observacoes = String(values.observacoes || '').trim();
-    const pf = CRM2_VINCULOS_PF_OPTIONS.find((person) => person.nome === values.pfNome);
-    const pj = CRM2_VINCULOS_PJ_OPTIONS.find((company) => company.razaoSocial === values.pjRazaoSocial);
+    const pf = vinculosPfOptions().find((person) => person.nome === values.pfNome);
+    const pj = vinculosPjOptions().find((company) => company.razaoSocial === values.pjRazaoSocial);
     const errors = {};
     if (!pf) errors.pfNome = 'Selecione uma Pessoa Física existente.';
     if (!pj) errors.pjRazaoSocial = 'Selecione uma Pessoa Jurídica existente.';
@@ -567,8 +595,10 @@ Object.assign(window, {
       crm2VinculosState.items.unshift({
         id: `vinculo-mock-${Date.now()}`,
         pfNome: values.pfNome,
+        pfId: pf.id || '',
         pfCpf: pf.cpf,
         pjRazaoSocial: values.pjRazaoSocial,
+        pjId: pj.id || '',
         pjCnpj: pj.cnpj,
         tipo: values.tipo,
         status: 'Ativo',
@@ -590,6 +620,7 @@ Object.assign(window, {
     navigateVinculos();
   },
   crm2VinculosInactivate(id) {
+    permissionsVinculos();
     if (!crm2VinculosState.canDelete) return;
     const item = crm2VinculosState.items.find((entry) => entry.id === id);
     if (!item || item.status !== 'Ativo') return;

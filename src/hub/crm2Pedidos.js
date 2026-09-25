@@ -2,7 +2,11 @@
 // Fases 7.1 a 7.7: shell, lista, filtros, estados, permissões, inclusão, detalhe e edição mockados.
 import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
 import { hasPermission } from './services/permissionService.js';
+import { isSupabaseConfigured } from './supabaseClient.js';
 import { abrirConsultaCnpj } from './cnpjLookupModal.js';
+import { renderCrm2CpfSearchField } from './crm2CpfSearchField.js';
+import { findCrm2Product, formatCrm2ProductPrice, getCrm2ProductPrice, normalizeCrm2ProductCatalog, parseCrm2Money, searchCrm2Products } from './crm2ProductCatalog.js';
+import { loadCrm2ProductCatalog } from './crm2ProductCatalogService.js';
 
 const CRM2_PEDIDOS_INITIAL_ITEMS = [
   { id: 'pedido-001', numero: 'PED-2401', pfNome: 'Mariana Alves de Souza', pfCpf: '12345678909', pjRazaoSocial: 'Transmares Tecnologia Ltda.', pjCnpj: '04252011000110', produto: 'e-CNPJ A3', responsavel: 'Ana Martins', status: 'Pedido emitido', origem: 'Indicação', dataSolicitacao: '2026-07-18', vencimento: '2027-07-18', financeiro: 'Pago', valor: '890,00', pendencias: 0, atualizadoEm: '2026-08-04T09:20:00' },
@@ -17,8 +21,6 @@ const CRM2_PEDIDOS_INITIAL_ITEMS = [
 
 const PEDIDO_STAGE_OPTIONS = ['Novo', 'Em qualificação', 'Em Negociação', 'Aguardando pagamento', 'Aguardando validação', 'Pedido validado', 'Pedido emitido'];
 const PEDIDO_STATUS_OPTIONS = [...PEDIDO_STAGE_OPTIONS, 'Concluído', 'Cancelado', 'Vencido'];
-const PEDIDO_PRODUCT_OPTIONS = ['e-CPF A3', 'e-CNPJ A1', 'e-CNPJ A3', 'Renovação de certificado'];
-const PEDIDO_PRODUCT_PRICES = { 'e-CPF A3': '390,00', 'e-CNPJ A1': '540,00', 'e-CNPJ A3': '890,00', 'Renovação de certificado': '480,00' };
 const PEDIDO_RESPONSIBLE_OPTIONS = ['Ana Martins', 'Carlos Oliveira', 'Fernanda Lima'];
 const PEDIDO_ORIGIN_OPTIONS = ['Atendimento interno', 'Indicação', 'Parceiro', 'Site'];
 const PEDIDO_FINANCIAL_OPTIONS = ['Pago', 'Pendente', 'Estornado'];
@@ -34,6 +36,9 @@ const crm2PedidosState = {
   canEdit: false,
   canDelete: false,
   items: structuredClone(CRM2_PEDIDOS_INITIAL_ITEMS),
+  produtos: [],
+  produtosLoaded: false,
+  produtosLoading: false,
   search: '',
   searchExpanded: false,
   filterModalOpen: false,
@@ -80,6 +85,23 @@ function normalizePedido(value = '') {
 
 function digitsPedido(value = '') {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+function positionPedidoProductSuggestions(input, target) {
+  if (!input || !target || target.hidden) return;
+  const rect = input.getBoundingClientRect();
+  const margin = 8;
+  const gap = 6;
+  const width = Math.min(Math.max(rect.width, 260), window.innerWidth - margin * 2);
+  target.style.position = 'fixed';
+  target.style.width = `${width}px`;
+  target.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`;
+  target.style.right = 'auto';
+  const height = target.offsetHeight;
+  const below = window.innerHeight - rect.bottom - gap;
+  const top = below >= height || rect.top < height + gap ? rect.bottom + gap : rect.top - height - gap;
+  target.style.top = `${Math.max(margin, top)}px`;
+  target.style.zIndex = '2200';
 }
 
 function maskCpfPedido(value = '') {
@@ -221,16 +243,28 @@ function currentPedidoFilterValues() {
   };
 }
 
-function pedidoProductPrice(value = '') {
-  const normalized = normalizePedido(value);
-  const option = PEDIDO_PRODUCT_OPTIONS.find((item) => normalizePedido(item) === normalized);
-  return option ? PEDIDO_PRODUCT_PRICES[option] || '' : '';
+function catalogoProdutosPedido() { return normalizeCrm2ProductCatalog(crm2PedidosState.produtos); }
+function opcoesProdutoPedido() { return [...new Set([...catalogoProdutosPedido().map((item) => item.value), ...crm2PedidosState.items.map((item) => item.produto).filter(Boolean)])]; }
+function pedidoProductPrice(value = '') { return getCrm2ProductPrice(crm2PedidosState.produtos, value); }
+function formatPedidoPrice(value = '') {
+  return formatCrm2ProductPrice(value);
+}
+async function loadPedidoProductCatalog() {
+  if (!isSupabaseConfigured || crm2PedidosState.produtosLoaded || crm2PedidosState.produtosLoading) return;
+  crm2PedidosState.produtosLoading = true;
+  try {
+    crm2PedidosState.produtos = await loadCrm2ProductCatalog();
+  } catch (error) {
+    console.warn('Não foi possível carregar o catálogo de produtos para pedidos.', error);
+  } finally {
+    crm2PedidosState.produtosLoaded = true;
+    crm2PedidosState.produtosLoading = false;
+    if (currentPedidosRoute().active) rerenderPedidos();
+  }
 }
 
 function pedidoMoneyValue(value = '') {
-  const normalized = String(value ?? '').trim().replace(/R\$\s?/gi, '').replace(/\./g, '').replace(',', '.');
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : NaN;
+  return parseCrm2Money(value);
 }
 
 function hasPedidoFilters() {
@@ -242,7 +276,7 @@ function renderPedidoFilterModal() {
   const values = crm2PedidosState.filterDraft || currentPedidoFilterValues();
   const options = (items, selected, emptyLabel) => `<option value="">${emptyLabel}</option>${items.map((item) => `<option value="${escapeAttrPedido(item)}" ${selected === item ? 'selected' : ''}>${escapeHtmlPedido(item)}</option>`).join('')}`;
   const field = (label, name, items, emptyLabel) => `<label><span>${label}</span><select class="config-input" name="${name}">${options(items, values[name], emptyLabel)}</select></label>`;
-  return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2PedidosCloseFilterModal(event)"><section id="crm2-pedidos-filter-modal" class="crm2-opp-filter-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-pedidos-filter-modal-title" onclick="event.stopPropagation()"><header class="crm2-opp-filter-modal-header"><div><h3 id="crm2-pedidos-filter-modal-title">Filtrar pedidos</h3></div><button id="crm2-pedidos-filter-modal-close" class="icon-btn" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2PedidosCloseFilterModal()">×</button></header><form class="crm2-opp-filter-modal-form crm2-opp-filter-modal-form-grouped" onsubmit="crm2PedidosApplyModalFilters(event)"><fieldset class="crm2-opp-filter-group"><legend>Pedido</legend><div class="crm2-opp-filter-group-grid">${field('Status', 'status', PEDIDO_STATUS_OPTIONS, 'Todos os status')}${field('Produto', 'product', PEDIDO_PRODUCT_OPTIONS, 'Todos os produtos')}${field('Responsável', 'responsible', PEDIDO_RESPONSIBLE_OPTIONS, 'Todos os responsáveis')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Origem e financeiro</legend><div class="crm2-opp-filter-group-grid">${field('Origem', 'origin', PEDIDO_ORIGIN_OPTIONS, 'Todas as origens')}${field('Financeiro', 'financial', PEDIDO_FINANCIAL_OPTIONS, 'Todas as situações')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Período da solicitação</legend><div class="crm2-opp-filter-group-grid"><label><span>Solicitação desde</span><input class="config-input" name="dateFrom" type="date" value="${escapeAttrPedido(values.dateFrom)}"></label><label><span>Solicitação até</span><input class="config-input" name="dateTo" type="date" value="${escapeAttrPedido(values.dateTo)}"></label></div></fieldset><div class="crm2-opp-filter-modal-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilterDraft()">Limpar</button><div><button class="secondary-btn" type="button" onclick="crm2PedidosCloseFilterModal()">Cancelar</button><button class="save-btn" type="submit">Aplicar filtros</button></div></div></form></section></div>`;
+  return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2PedidosCloseFilterModal(event)"><section id="crm2-pedidos-filter-modal" class="crm2-opp-filter-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-pedidos-filter-modal-title" onclick="event.stopPropagation()"><header class="crm2-opp-filter-modal-header"><div><h3 id="crm2-pedidos-filter-modal-title">Filtrar pedidos</h3></div><button id="crm2-pedidos-filter-modal-close" class="icon-btn" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2PedidosCloseFilterModal()">×</button></header><form class="crm2-opp-filter-modal-form crm2-opp-filter-modal-form-grouped" onsubmit="crm2PedidosApplyModalFilters(event)"><fieldset class="crm2-opp-filter-group"><legend>Pedido</legend><div class="crm2-opp-filter-group-grid">${field('Status', 'status', PEDIDO_STATUS_OPTIONS, 'Todos os status')}${field('Produto', 'product', opcoesProdutoPedido(), 'Todos os produtos')}${field('Responsável', 'responsible', PEDIDO_RESPONSIBLE_OPTIONS, 'Todos os responsáveis')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Origem e financeiro</legend><div class="crm2-opp-filter-group-grid">${field('Origem', 'origin', PEDIDO_ORIGIN_OPTIONS, 'Todas as origens')}${field('Financeiro', 'financial', PEDIDO_FINANCIAL_OPTIONS, 'Todas as situações')}</div></fieldset><fieldset class="crm2-opp-filter-group"><legend>Período da solicitação</legend><div class="crm2-opp-filter-group-grid"><label><span>Solicitação desde</span><input class="config-input" name="dateFrom" type="date" value="${escapeAttrPedido(values.dateFrom)}"></label><label><span>Solicitação até</span><input class="config-input" name="dateTo" type="date" value="${escapeAttrPedido(values.dateTo)}"></label></div></fieldset><div class="crm2-opp-filter-modal-actions"><button class="secondary-btn" type="button" onclick="crm2PedidosClearFilterDraft()">Limpar</button><div><button class="secondary-btn" type="button" onclick="crm2PedidosCloseFilterModal()">Cancelar</button><button class="save-btn" type="submit">Aplicar filtros</button></div></div></form></section></div>`;
 }
 
 function renderPedidosFiltersLegacy() {
@@ -269,7 +303,7 @@ function renderPedidosListLegacy() {
   crm2PedidosState.page = Math.min(Math.max(1, crm2PedidosState.page), totalPages);
   const pageItems = filtered.slice((crm2PedidosState.page - 1) * crm2PedidosState.perPage, crm2PedidosState.page * crm2PedidosState.perPage);
   const hasFilters = Boolean(crm2PedidosState.search || crm2PedidosState.statusFilter || crm2PedidosState.productFilter || crm2PedidosState.responsibleFilter || crm2PedidosState.originFilter || crm2PedidosState.financialFilter || crm2PedidosState.dateFrom || crm2PedidosState.dateTo);
-  const products = [...new Set([...PEDIDO_PRODUCT_OPTIONS, ...crm2PedidosState.items.map((item) => item.produto)])];
+  const products = opcoesProdutoPedido();
   const responsibles = [...new Set([...PEDIDO_RESPONSIBLE_OPTIONS, ...crm2PedidosState.items.map((item) => item.responsavel)])];
   const origins = [...new Set([...PEDIDO_ORIGIN_OPTIONS, ...crm2PedidosState.items.map((item) => item.origem)])];
   const listContent = crm2PedidosState.listState !== 'normal'
@@ -298,13 +332,14 @@ function renderPedidoField({ label, name, value = '', type = 'text', required = 
 }
 
 function renderPedidoIdentityFields(draft, formId) {
-  return `<input type="hidden" name="numero" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}"><div class="crm2-opp-form-grid crm2-pedido-identity-grid"><label class="crm2-opp-derived-field"><span>CPF</span><div class="crm2-opp-cpf-search-control"><input class="config-input" name="pfCpf" form="${formId}" value="${escapeAttrPedido(maskCpfPedido(draft.pfCpf))}" placeholder="000.000.000-00" inputmode="numeric" maxlength="14" required oninput="window.crm2PedidosFormatCpf(this)" onblur="window.crm2PedidosMatchPf(this.value, this)"><button class="icon-btn" type="button" title="Buscar CPF" aria-label="Buscar CPF" onclick="window.crm2PedidosMatchPf(this.closest('.crm2-opp-cpf-search-control').querySelector('[name=pfCpf]').value, this)"><i data-lucide="search" aria-hidden="true"></i></button></div><small class="crm2-pedido-cpf-match-message" aria-live="polite" hidden></small></label><label class="crm2-opp-derived-field"><span>Nome (PF vinculada)</span><input class="config-input" name="pfNome" form="${formId}" value="${escapeAttrPedido(draft.pfNome)}" placeholder="Nome completo" required></label></div>`;
+  return `<input type="hidden" name="numero" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}"><div class="crm2-opp-form-grid crm2-pedido-identity-grid"><label class="crm2-opp-derived-field"><span>CPF</span>${renderCrm2CpfSearchField({ value: maskCpfPedido(draft.pfCpf), form: formId, required: true, onInput: 'window.crm2PedidosFormatCpf(this)', onBlur: 'window.crm2PedidosMatchPf(this.value, this)', onSearch: 'window.crm2PedidosMatchPf' })}<small class="crm2-pedido-cpf-match-message" aria-live="polite" hidden></small></label><label class="crm2-opp-derived-field crm2-pedido-name-field"><span>Nome (PF vinculada)</span><input class="config-input" name="pfNome" form="${formId}" value="${escapeAttrPedido(draft.pfNome)}" placeholder="Nome completo" required></label></div>`;
 }
 
 function renderPedidoItemForm(draft, formId) {
-  const price = draft.valor || '';
+  const price = pedidoProductPrice(draft.produto) || draft.valor || '';
   const pjValue = draft.pjCnpj ? maskCnpjPedido(draft.pjCnpj) : draft.pjRazaoSocial || '';
-  return `<div class="crm2-opp-items-form crm2-pedido-items-form"><div class="crm2-opp-items-form-header"><div><strong>Itens e pedidos</strong><small data-pedido-total>${price ? `R$ ${escapeHtmlPedido(price)}` : 'R$ 0,00'} estimado</small></div></div><div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-editable"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">Valor</th><th scope="col">CNPJ / PJ vinculada</th></tr></thead><tbody><tr><td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-0" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}" placeholder="Pedido"><small class="crm2-opp-order-price-pill" data-pedido-item-price>${price ? `R$ ${escapeHtmlPedido(price)}` : 'R$ 0,00'}</small></div></td><td><div class="crm2-pedido-product-cell crm2-opp-product-cell"><input class="config-input" name="itemProduct-0" form="${formId}" value="${escapeAttrPedido(draft.produto || '')}" placeholder="Buscar produto" autocomplete="off" required oninput="window.crm2PedidosSyncItemPrice(this); window.crm2PedidosRenderProductSuggestions(this)" onfocus="window.crm2PedidosRenderProductSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHideProductSuggestions(this), 150)"><div class="crm2-pedido-product-suggestions crm2-opp-product-suggestions" data-pedido-product-suggestions hidden></div></div></td><td><input class="config-input" name="itemValue-0" form="${formId}" value="${escapeAttrPedido(price)}" placeholder="R$ 0,00" required oninput="window.crm2PedidosSyncItemValue(this)"></td><td><div class="crm2-pedido-item-pj-cell crm2-opp-pj-cell"><input class="config-input" name="itemPj-0" form="${formId}" value="${escapeAttrPedido(pjValue)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="window.crm2PedidosSyncItemPj(this)" onfocus="window.crm2PedidosRenderPjSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHidePjSuggestions(this), 150)"><button class="icon-btn crm2-pedido-item-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="window.crm2PedidosLookupItemCnpj(this)" ${digitsPedido(pjValue).length === 14 ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button><input type="hidden" name="itemPjName-0" form="${formId}" value="${escapeAttrPedido(draft.pjRazaoSocial || '')}"><div class="crm2-pedido-pj-suggestions crm2-opp-cnpj-suggestions" data-pedido-pj-suggestions hidden></div></div></td></tr></tbody></table></div></div>${renderPedidoAttachments(draft)}`;
+  const priceLabel = price ? formatPedidoPrice(price) : 'Selecione um produto';
+  return `<div class="crm2-opp-items-form crm2-pedido-items-form"><div class="crm2-opp-items-form-header"><div><strong>Itens e pedidos</strong><small data-pedido-total>${price ? `${escapeHtmlPedido(priceLabel)} · valor do catálogo` : 'O preço vem do catálogo'}</small></div></div><div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-editable"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">CNPJ / PJ vinculada</th></tr></thead><tbody><tr><td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-0" form="${formId}" value="${escapeAttrPedido(draft.numero || '')}" placeholder="Pedido"><small class="crm2-opp-order-price-pill" data-pedido-item-price>${escapeHtmlPedido(price ? formatPedidoPrice(price) : '—')}</small></div></td><td><div class="crm2-pedido-product-cell crm2-opp-product-cell"><input class="config-input" name="itemProduct-0" data-product-key="pedido" form="${formId}" value="${escapeAttrPedido(draft.produto || '')}" placeholder="Buscar produto" autocomplete="off" required oninput="window.crm2PedidosSyncItemPrice(this); window.crm2PedidosRenderProductSuggestions(this)" onfocus="window.crm2PedidosRenderProductSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHideProductSuggestions(this), 150)"><div class="crm2-pedido-product-suggestions crm2-opp-product-suggestions" data-pedido-product-suggestions data-product-suggestions data-product-key="pedido" hidden></div></div></td><td><div class="crm2-pedido-item-pj-cell crm2-opp-pj-cell"><span class="crm2-pf-cpf-input-wrap"><input class="config-input" name="itemPj-0" form="${formId}" value="${escapeAttrPedido(pjValue)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="window.crm2PedidosSyncItemPj(this)" onfocus="window.crm2PedidosRenderPjSuggestions(this)" onblur="window.setTimeout(() => window.crm2PedidosHidePjSuggestions(this), 150)"><button class="crm2-pf-cpf-icon crm2-pedido-item-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="window.crm2PedidosLookupItemCnpj(this)" ${digitsPedido(pjValue).length === 14 ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button></span><input type="hidden" name="itemPjName-0" form="${formId}" value="${escapeAttrPedido(draft.pjRazaoSocial || '')}"><div class="crm2-pedido-pj-suggestions crm2-opp-cnpj-suggestions" data-pedido-pj-suggestions hidden></div></div></td></tr></tbody></table></div></div>${renderPedidoAttachments(draft)}`;
 }
 
 function renderPedidoForm() {
@@ -438,6 +473,7 @@ function renderPedidos() {
   permissionsPedidos();
   const route = currentPedidosRoute();
   if (!crm2PedidosState.canView) return `<section class="admin-panel crm2-pessoas-page crm2-pedidos-page" data-crm2-pedidos="true" aria-labelledby="crm2-pedidos-denied-title"><div class="crm2-pessoas-state crm2-pedidos-state is-error" role="alert"><strong id="crm2-pedidos-denied-title">Acesso não autorizado.</strong><span>É necessária a permissão Visualizar para acessar Pedidos.</span><button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button></div></section>`;
+  void loadPedidoProductCatalog();
   if (route.view === 'new') {
     if (!crm2PedidosState.canCreate) return renderPedidoMissing();
     if (crm2PedidosState.formMode !== 'create' || crm2PedidosState.detailId) {
@@ -480,7 +516,9 @@ function validatePedidoDraft(draft) {
   ['pfNome', 'pfCpf', 'produto', 'responsavel', 'origem', 'dataSolicitacao', 'valor'].forEach((field) => {
     if (!String(draft[field] || '').trim()) errors[field] = 'Preenchimento obrigatório.';
   });
-  if (draft.produto && !PEDIDO_PRODUCT_OPTIONS.some((option) => normalizePedido(option) === normalizePedido(draft.produto))) errors.produto = 'Selecione um produto válido do catálogo.';
+  const selectedProduct = findCrm2Product(crm2PedidosState.produtos, draft.produto);
+  if (draft.produto && !selectedProduct) errors.produto = 'Selecione um produto válido do catálogo.';
+  if (draft.produto && selectedProduct && !selectedProduct.price) errors.produto = 'O produto selecionado não possui preço cadastrado.';
   if (draft.pfCpf && digitsPedido(draft.pfCpf).length !== 11) errors.pfCpf = 'Informe um CPF com 11 dígitos.';
   if (draft.pjCnpj && digitsPedido(draft.pjCnpj).length !== 14) errors.pjCnpj = 'Informe um CNPJ com 14 dígitos.';
   if (draft.valor && (Number.isNaN(pedidoMoneyValue(draft.valor)) || pedidoMoneyValue(draft.valor) < 0)) errors.valor = 'Informe um valor válido.';
@@ -536,20 +574,34 @@ Object.assign(window, {
     crm2PedidosState.draft = { ...crm2PedidosState.draft, pfId: pf?.id || '', pfCpf: cpf, pfNome: pf?.nome || name?.value || '' };
   },
   crm2PedidosRenderProductSuggestions(input) {
-    const target = input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    const target = input?.dataset?.productKey
+      ? document.querySelector(`[data-product-suggestions][data-product-key="${input.dataset.productKey}"]`)
+      : input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
     if (!target) return;
-    const query = normalizePedido(input.value);
-    const matches = PEDIDO_PRODUCT_OPTIONS.filter((item) => !query || normalizePedido(item).includes(query)).slice(0, 8);
-    target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-product-suggestion" data-product-value="${escapeAttrPedido(item)}" onclick="window.crm2PedidosSelectProductSuggestion(this)"><strong>${escapeHtmlPedido(item)}</strong><small>R$ ${escapeHtmlPedido(pedidoProductPrice(item))}</small></button>`).join('');
+    const matches = searchCrm2Products(crm2PedidosState.produtos, input.value);
+    target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-product-suggestion" data-product-value="${escapeAttrPedido(item.value)}" onclick="window.crm2PedidosSelectProductSuggestion(this)"><strong>${escapeHtmlPedido(item.label)}</strong>${item.sku ? `<small>${escapeHtmlPedido(item.sku)}</small>` : ''}</button>`).join('');
     target.hidden = !matches.length;
+    if (!matches.length) { window.crm2PedidosHideProductSuggestions(input); return; }
+    if (target.parentElement !== document.body) document.body.appendChild(target);
+    target.dataset.productPortal = 'true';
+    positionPedidoProductSuggestions(input, target);
   },
   crm2PedidosHideProductSuggestions(input) {
-    const target = input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
-    if (target) target.hidden = true;
+    const target = input?.dataset?.productKey
+      ? document.querySelector(`[data-product-suggestions][data-product-key="${input.dataset.productKey}"]`)
+      : input?.closest('.crm2-pedido-product-cell')?.querySelector('[data-pedido-product-suggestions]');
+    if (!target) return;
+    target.hidden = true;
+    const cell = input.closest('.crm2-pedido-product-cell');
+    if (cell && target.parentElement !== cell) cell.appendChild(target);
+    target.dataset.productPortal = 'false';
+    ['position', 'width', 'left', 'right', 'top', 'zIndex'].forEach((property) => target.style.removeProperty(property));
   },
   crm2PedidosSelectProductSuggestion(button) {
-    const cell = button?.closest('.crm2-pedido-product-cell');
-    const input = cell?.querySelector('[name^="itemProduct-"]');
+    const target = button?.closest('[data-product-suggestions]');
+    const input = target?.dataset?.productKey
+      ? document.querySelector(`[data-product-key="${target.dataset.productKey}"]`)
+      : button?.closest('.crm2-pedido-product-cell')?.querySelector('[name^="itemProduct-"]');
     if (!input) return;
     input.value = button.dataset.productValue || '';
     window.crm2PedidosSyncItemPrice(input);
@@ -559,20 +611,10 @@ Object.assign(window, {
     const row = input?.closest('tr');
     if (!row) return;
     const price = pedidoProductPrice(input.value);
-    const value = row.querySelector('[name^="itemValue-"]');
-    const pill = row.querySelector('[data-pedido-item-price]');
-    if (price && value) value.value = price;
-    if (pill) pill.textContent = price ? `R$ ${price}` : 'R$ 0,00';
+    const orderPill = row.querySelector('.crm2-opp-order-price-pill');
+    if (orderPill) orderPill.textContent = price ? formatPedidoPrice(price) : '—';
     const total = row.closest('.crm2-pedido-items-form')?.querySelector('[data-pedido-total]');
-    if (total) total.textContent = price ? `R$ ${price} estimado` : 'R$ 0,00 estimado';
-  },
-  crm2PedidosSyncItemValue(input) {
-    const row = input?.closest('tr');
-    const price = String(input?.value || '').trim() || '0,00';
-    const pill = row?.querySelector('[data-pedido-item-price]');
-    const total = row?.closest('.crm2-pedido-items-form')?.querySelector('[data-pedido-total]');
-    if (pill) pill.textContent = `R$ ${price}`;
-    if (total) total.textContent = `R$ ${price} estimado`;
+    if (total) total.textContent = price ? `${formatPedidoPrice(price)} · valor do catálogo` : 'O preço vem do catálogo';
   },
   crm2PedidosSyncItemPj(input) {
     if (!input) return;
@@ -641,6 +683,11 @@ Object.assign(window, {
     } });
   },
   crm2PedidosRender: renderPedidos,
+  crm2PedidosSetProductCatalog(products = []) {
+    crm2PedidosState.produtos = Array.isArray(products) ? products : [];
+    crm2PedidosState.produtosLoaded = true;
+  },
+  crm2PedidosGetProductPrice(product = '') { return pedidoProductPrice(product); },
   crm2PedidosGetMockItems() {
     return crm2PedidosState.items.map((item) => ({
       ...item,
@@ -650,6 +697,8 @@ Object.assign(window, {
   crm2PedidosCreateMockFromOpportunity(payload = {}) {
     permissionsPedidos();
     if (!crm2PedidosState.canCreate || !payload.pfNome || !payload.pfCpf || !payload.produto) return null;
+    const catalogPrice = pedidoProductPrice(payload.produto);
+    if (!catalogPrice) return null;
     const now = new Date().toISOString();
     const id = `pedido-conv-${Date.now()}-${crm2PedidosState.items.length}`;
     const item = {
@@ -659,7 +708,7 @@ Object.assign(window, {
       pjRazaoSocial: payload.pjRazaoSocial || '', pjCnpj: String(payload.pjCnpj || '').replace(/\D/g, ''),
       produto: payload.produto, responsavel: payload.responsavel || 'Usuário mockado', status: payload.dataEmissao ? 'Pedido emitido' : 'Pedido validado',
       origem: 'Pedido gerado pela oportunidade', dataSolicitacao: now.slice(0, 10), dataEmissao: payload.dataEmissao || '', vencimento: payload.vencimento || now.slice(0, 10),
-      financeiro: 'Pendente', valor: payload.valor || '0,00', pendencias: 0, atualizadoEm: now,
+      financeiro: 'Pendente', valor: catalogPrice, pendencias: 0, atualizadoEm: now,
       oportunidadeId: payload.oportunidadeId || '', oportunidadeNumero: payload.oportunidadeNumero || '', oportunidadeItemId: payload.oportunidadeItemId || '',
       historico: [{ data: now, usuario: payload.responsavel || 'Usuário mockado', tipo: 'Pedido gerado', descricao: 'Pedido gerado a partir da oportunidade.', alteracoes: `Origem: Oportunidade · Item: ${payload.produto}` }]
     };
@@ -674,6 +723,8 @@ Object.assign(window, {
   crm2PedidosCreateMockFromSequential(payload = {}) {
     permissionsPedidos();
     if (!crm2PedidosState.canCreate || !payload.pfNome || !payload.pfCpf || !payload.produto) return null;
+    const catalogPrice = pedidoProductPrice(payload.produto);
+    if (!catalogPrice) return null;
     const now = new Date().toISOString();
     const sequence = crm2PedidosState.items.length + 1;
     const item = {
@@ -694,7 +745,7 @@ Object.assign(window, {
       dataSolicitacao: payload.dataSolicitacao || now.slice(0, 10),
       vencimento: payload.vencimento || now.slice(0, 10),
       financeiro: payload.financeiro || 'Pendente',
-      valor: payload.valor || '0,00',
+      valor: catalogPrice,
       pendencias: String(payload.pendencias || '0'),
       observacoes: payload.observacoes || '',
       atualizadoEm: now,
@@ -793,10 +844,11 @@ Object.assign(window, {
     const itemPj = String(values['itemPj-0'] || values.pjCnpj || values.pjRazaoSocial || '').trim();
     const itemPjDigits = digitsPedido(itemPj);
     const itemPjIsNumeric = Boolean(itemPj) && !/[A-Za-zÀ-ÿ]/.test(itemPj);
+    const productValue = String(values['itemProduct-0'] || values.produto || '').trim();
     const draft = { ...crm2PedidosState.draft, ...values,
       numero: String(values['itemOrder-0'] || values.numero || '').trim(),
-      produto: String(values['itemProduct-0'] || values.produto || '').trim(),
-      valor: String(values['itemValue-0'] || values.valor || '').trim(),
+      produto: findCrm2Product(crm2PedidosState.produtos, productValue)?.value || productValue,
+      valor: pedidoProductPrice(productValue),
       pfCpf: digitsPedido(values.pfCpf),
       pjCnpj: itemPjIsNumeric ? itemPjDigits : '',
       pjRazaoSocial: itemPjDigits.length === 14 ? String(values['itemPjName-0'] || values.pjRazaoSocial || '').trim() : itemPj,

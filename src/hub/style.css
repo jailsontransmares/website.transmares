@@ -3672,6 +3672,71 @@ body.dark .admin-partners-actions-menu {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.crm2-phase1-header {
+  align-items: center;
+}
+
+.crm2-phase1-heading {
+  align-items: center;
+  display: flex;
+  gap: clamp(16px, 2vw, 30px);
+  justify-content: space-between;
+}
+
+.crm2-phase1-title {
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.crm2-phase1-shortcuts {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(112px, 1fr));
+  max-width: 680px;
+  min-width: 0;
+}
+
+.crm2-phase1-shortcut {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  color: var(--color-navy);
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  justify-content: flex-start;
+  min-height: 46px;
+  min-width: 0;
+  padding: 7px 10px;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.crm2-phase1-shortcut:hover,
+.crm2-phase1-shortcut:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.crm2-phase1-shortcut .crm2-phase1-roadmap-code {
+  flex: 0 0 34px;
+  min-height: 30px;
+}
+
+.crm2-phase1-shortcut strong {
+  font-size: 13px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.crm2-phase1-roadmap.crm2-phase1-roadmap-secondary {
+  grid-template-columns: minmax(240px, 1fr);
+}
+
 .crm2-phase1-roadmap-item {
   align-items: center;
   background: var(--surface-glass-strong);
@@ -5228,6 +5293,17 @@ body.dark .admin-partners-actions-menu {
 @media (max-width: 960px) {
   .crm2-phase1-roadmap {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .crm2-phase1-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .crm2-phase1-shortcuts {
+    max-width: none;
+    width: 100%;
   }
 }
 
@@ -12462,6 +12538,20 @@ body.dark .hub-layout .fin-modal-backdrop {
 
   .crm2-phase1-roadmap {
     grid-template-columns: 1fr;
+  }
+
+  .crm2-phase1-roadmap.crm2-phase1-roadmap-secondary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .crm2-phase1-shortcuts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .crm2-phase1-shortcut {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
   }
 
   .hub-layout .modal-backdrop.hub-modal-backdrop--contained > .small-modal,
