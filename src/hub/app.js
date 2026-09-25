@@ -816,15 +816,28 @@ async function concluirTrocaSenhaObrigatoria(event) {
   state.auth.loading = true;
   state.auth.message = '';
   renderTrocaSenhaObrigatoria();
+  let trocaConcluida = false;
   try {
     await trocarSenhaProvisoria(senha);
+    trocaConcluida = true;
+    const email = state.usuario?.email || state.auth.email;
+    const sessao = await entrarComSenha(email, senha);
+    if (!sessao?.user?.email) {
+      throw new Error('Entre novamente usando a nova senha.');
+    }
     state.auth.loading = false;
     state.auth.message = '';
     await iniciarApp(false);
   } catch (erro) {
     state.auth.loading = false;
-    state.auth.message = erro.message || 'Não foi possível alterar a senha.';
-    renderTrocaSenhaObrigatoria();
+    if (trocaConcluida) {
+      state.auth.email = state.usuario?.email || state.auth.email;
+      state.auth.message = `A senha foi alterada. Entre com sua nova senha para continuar. ${erro.message || ''}`.trim();
+      renderLogin();
+    } else {
+      state.auth.message = erro.message || 'Não foi possível alterar a senha.';
+      renderTrocaSenhaObrigatoria();
+    }
   }
 }
 async function entrarNoHub(event) {
