@@ -45,10 +45,16 @@ const CRM2_OPPORTUNITY_ITEMS = [
   { id: 'opp-004', numero: 'OPP-004', pfId: '', pjId: '', pfNome: 'Grupo Nova Rota', pfEmail: 'compras@novarota.example.com', status: 'Perdido', etapa: 'Em Negociação', responsavel: 'Fernanda Lima', origem: 'Atendimento interno', probabilidade: 0, valorEstimado: '390,00', previsaoFechamento: '2026-08-01', itens: [{ id: 'item-005', produto: 'e-CPF A3', quantidade: 1, valorUnitario: '390,00' }], motivoPerda: 'Sem retorno', observacoes: '', criadoEm: '2026-07-05T11:00:00', atualizadoEm: '2026-07-25T15:20:00', historico: [{ data: '2026-07-25T15:20:00', tipo: 'Perda', usuario: 'Fernanda Lima', descricao: 'Oportunidade marcada como perdida.', alteracoes: 'Motivo: — → Sem retorno' }] }
 ];
 
+// Cache em memória da página: mantém alterações durante a sessão e volta aos mocks após recarregar.
+const CRM2_OPPORTUNITY_MEMORY_CACHE_KEY = '__crm2OportunidadesMemoryCache';
+const crm2OportunidadesMemoryCache = window[CRM2_OPPORTUNITY_MEMORY_CACHE_KEY] ||= {
+  opportunities: structuredClone(CRM2_OPPORTUNITY_ITEMS)
+};
+
 const crm2OportunidadesState = {
   canView: false, canCreate: false, canEdit: false, canDelete: false, canComment: false,
   responsibleUsers: [], responsibleUsersLoaded: false, responsibleUsersLoading: false, responsibleUsersError: '',
-  opportunities: structuredClone(CRM2_OPPORTUNITY_ITEMS), pjTemporarios: [], tempLoadedForId: '', tempLoading: false, produtos: [], produtosLoaded: false, produtosLoading: false,
+  opportunities: crm2OportunidadesMemoryCache.opportunities, pjTemporarios: [], tempLoadedForId: '', tempLoading: false, produtos: [], produtosLoaded: false, produtosLoading: false,
   viewMode: 'table', tableColumnFields: TABLE_COLUMN_OPTIONS.map((option) => option.key), tableColumnSettingsOpen: false, tableColumnSettingsDraft: [], kanbanCollapsedStages: {}, kanbanCardFields: ['pfName', 'nextContact', 'responsible'], kanbanCardSettingsOpen: false, kanbanCardSettingsDraft: [], kanbanSettingsMessage: '', search: '', searchExpanded: false, filterModalOpen: false, filterDraft: {}, nextActionDrafts: {}, timelineDetailsExpanded: false, timelineCommentDraft: '', stageFilter: '', statusFilter: '', responsibleFilter: '', sourceFilter: [], lossReasonFilter: '', productFilter: [], nextContactFilter: '', nextContactFrom: '', nextContactTo: '', dateFrom: '', dateTo: '', updatedFrom: '', updatedTo: '', page: 1, perPage: 20, sortLevels: [], listState: 'normal', detailId: '', detailTab: 'timeline', formMode: '', inlineEditingId: '', draft: {}, errors: {}, message: '', saving: false, saveError: '', attachmentDraft: [], attachmentSelectionDraft: [], attachmentSelectionMode: false, selectedAttachmentKeys: [], attachmentView: 'list', collapsedAttachmentTargets: {}, attachmentInlineEditKey: '', attachmentInlineDraft: null
 };
 
@@ -278,6 +284,7 @@ function productCatalogOpp() {
   return normalizeCrm2ProductCatalog(crm2OportunidadesState.produtos);
 }
 function productPriceOpp(product = '') { return getCrm2ProductPrice(crm2OportunidadesState.produtos, product); }
+function renderOrderPricePillOpp(price) { return `<small class="crm2-opp-order-price-pill" data-item-price>${moneyOpp(price)}</small>`; }
 function catalogUnitPriceOpp(item = {}) { return moneyValueOpp(productPriceOpp(item.produto)); }
 function productGroupOpp(item = {}) { const product = findCrm2Product(crm2OportunidadesState.produtos, item.produto); return String(item.tipo_certificado || product?.group || '').trim(); }
 function productPersonTypeOpp(item = {}) { const group = productGroupOpp(item); const groupKey = normOpp(group).replace(/[^a-z0-9]/g, ''); if (groupKey.includes('ecpf') || groupKey.includes('oab')) return 'pf'; if (group) return 'pj'; const legacyProduct = String(item.produto || ''); if (/e-CPF|OAB/i.test(legacyProduct)) return 'pf'; return 'pj'; }
@@ -285,6 +292,49 @@ async function loadProductCatalogOpp() { if (!isSupabaseConfigured || crm2Oportu
 function productSuggestionsTargetOpp(input) { const key = input?.dataset?.productKey; return (key && document.querySelector(`[data-product-suggestions][data-product-key="${key}"]`)) || input?.closest('.crm2-opp-product-cell')?.querySelector('[data-product-suggestions]'); }
 function positionSuggestionsOpp(input, target) { if (!input || !target || target.hidden) return; const rect = input.getBoundingClientRect(); const margin = 8; const gap = 6; const width = Math.min(Math.max(rect.width, 260), window.innerWidth - margin * 2); target.style.position = 'fixed'; target.style.width = `${width}px`; target.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`; target.style.right = 'auto'; const height = target.offsetHeight; const below = window.innerHeight - rect.bottom - gap; const top = below >= height || rect.top < height + gap ? rect.bottom + gap : rect.top - height - gap; target.style.top = `${Math.max(margin, top)}px`; target.style.zIndex = '2200'; }
 function fitProductSuggestionTextOpp(target) { target?.querySelectorAll('.crm2-opp-product-suggestion strong, .crm2-opp-product-suggestion small').forEach((element) => { const computedSize = Number.parseFloat(window.getComputedStyle(element).fontSize) || 11; const minimumSize = element.matches('small') ? 8 : 9; let size = computedSize; element.style.fontSize = `${size}px`; while (element.scrollWidth > element.clientWidth && size > minimumSize) { size = Math.max(minimumSize, size - 0.5); element.style.fontSize = `${size}px`; } }); }
+const productTitleWidthsOpp = new WeakMap();
+let productTitleResizeObserverOpp = null;
+function fitProductTitleOpp(element, force = false) {
+  const container = element?.parentElement;
+  const width = container?.clientWidth || 0;
+  if (!element || width <= 0) return;
+  const previousWidth = productTitleWidthsOpp.get(element);
+  if (!force && previousWidth && Math.abs(previousWidth - width) < 1) return;
+  productTitleWidthsOpp.set(element, width);
+
+  const baseSize = Number.parseFloat(element.dataset.baseFontSize) || Number.parseFloat(window.getComputedStyle(element).fontSize) || 13;
+  element.dataset.baseFontSize = String(baseSize);
+  let size = baseSize;
+  element.style.display = 'block';
+  element.style.webkitLineClamp = 'unset';
+  element.style.webkitBoxOrient = 'initial';
+  element.style.overflow = 'visible';
+  element.style.whiteSpace = 'normal';
+  element.style.fontSize = `${size}px`;
+  let lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || size * 1.25;
+  while (element.scrollHeight > lineHeight * 2 + 1 && size > 8) {
+    size = Math.max(8, size - 0.5);
+    element.style.fontSize = `${size}px`;
+    lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || size * 1.25;
+  }
+
+  element.style.removeProperty('display');
+  element.style.removeProperty('-webkit-line-clamp');
+  element.style.removeProperty('-webkit-box-orient');
+  element.style.removeProperty('overflow');
+  element.style.removeProperty('white-space');
+  if (size < baseSize) element.style.fontSize = `${size}px`;
+  else element.style.removeProperty('font-size');
+}
+function fitProductTitlesOpp(root = document) {
+  const titles = [...(root?.querySelectorAll?.('.crm2-opp-product-title') || [])];
+  productTitleResizeObserverOpp?.disconnect();
+  titles.forEach((element) => fitProductTitleOpp(element, true));
+  if (typeof ResizeObserver !== 'undefined' && titles.length) {
+    productTitleResizeObserverOpp = new ResizeObserver((entries) => entries.forEach(({ target }) => fitProductTitleOpp(target)));
+    titles.forEach((element) => productTitleResizeObserverOpp.observe(element));
+  }
+}
 function restoreSuggestionsOpp(input, target) { if (!target) return; const owner = input?.closest('.crm2-opp-product-cell, .crm2-opp-pj-cell'); if (owner && target.parentElement !== owner) owner.appendChild(target); target.dataset.suggestionPortal = 'false'; ['position', 'width', 'left', 'right', 'top', 'zIndex'].forEach((property) => target.style.removeProperty(property)); }
 function repositionOpenSuggestionsOpp() { document.querySelectorAll('[data-suggestion-portal="true"]:not([hidden])').forEach((target) => { const key = target.dataset.suggestionKey; const kind = target.dataset.suggestionKind; const input = document.querySelector(`[data-${kind}-key="${key}"]`); positionSuggestionsOpp(input, target); }); }
 function pjOptionsOpp() { return (window.crm2PjGetMockItems?.() || []).map((item) => ({ value: item.id, label: `${item.id} · ${item.razaoSocial}`, cnpj: item.cnpj || '' })); }
@@ -307,7 +357,12 @@ function renderOppItemForm(draft) {
     const cnpj = maskCnpjOpp(item.cnpj || cnpjData.cnpj);
     const validCnpj = normalizarCnpjLocal(cnpj).length === 14;
     const pjName = pj?.razaoSocial || temporary?.razaoSocial || '';
-    return `<tr data-item-quantity="${Math.max(1, Number(item.quantidade || 1))}"><td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-${index}" value="${attrOpp(pedido)}" placeholder="Pedido"><small class="crm2-opp-order-price-pill" data-item-price>${moneyOpp(price)}</small></div></td><td><div class="crm2-opp-product-cell"><input class="config-input" name="itemProduct-${index}" data-product-key="${index}" value="${attrOpp(product)}" placeholder="Buscar produto" autocomplete="off" oninput="crm2OportunidadesSyncItemPrice(this); crm2OportunidadesRenderProductSuggestions(this)" onfocus="crm2OportunidadesRenderProductSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideProductSuggestions(this), 150)"><div class="crm2-opp-product-suggestions" data-product-suggestions data-product-key="${index}" data-suggestion-kind="product" data-suggestion-key="${index}" hidden></div></div></td><td><div class="crm2-opp-pj-cell"><div class="crm2-opp-cnpj-search-control"><input class="config-input" name="itemCnpj-${index}" data-cnpj-key="${index}" value="${attrOpp(cnpj === '—' ? '' : cnpj)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="crm2OportunidadesSyncItemCnpj(this)" onfocus="crm2OportunidadesRenderCnpjSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideCnpjSuggestions(this), 150)"><button class="icon-btn crm2-opp-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="crm2OportunidadesLookupCnpj(this)" ${validCnpj ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button></div><div class="crm2-opp-cnpj-suggestions" data-cnpj-suggestions data-suggestion-kind="cnpj" data-suggestion-key="${index}" hidden></div><div class="crm2-opp-pj-meta-row"><small class="crm2-opp-pj-cnpj-pill" data-pj-cnpj ${pjName ? '' : 'hidden'}>${escapeOpp(pjName)}</small></div></div></td><td><button class="icon-btn crm2-opp-remove-item" type="button" title="Remover produto" aria-label="Remover produto ${index + 1}" onclick="crm2OportunidadesRemoveItem(${index})"><i data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
+    return `<tr data-item-quantity="${Math.max(1, Number(item.quantidade || 1))}">
+      <td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-${index}" value="${attrOpp(pedido)}" placeholder="Pedido">${renderOrderPricePillOpp(price)}</div></td>
+      <td><div class="crm2-opp-product-cell"><input class="config-input" name="itemProduct-${index}" data-product-key="${index}" value="${attrOpp(product)}" placeholder="Buscar produto" autocomplete="off" oninput="crm2OportunidadesSyncItemPrice(this); crm2OportunidadesRenderProductSuggestions(this)" onfocus="crm2OportunidadesRenderProductSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideProductSuggestions(this), 150)"><div class="crm2-opp-product-suggestions" data-product-suggestions data-product-key="${index}" data-suggestion-kind="product" data-suggestion-key="${index}" hidden></div></div></td>
+      <td><div class="crm2-opp-pj-cell"><div class="crm2-opp-cnpj-search-control"><input class="config-input" name="itemCnpj-${index}" data-cnpj-key="${index}" value="${attrOpp(cnpj === '—' ? '' : cnpj)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="crm2OportunidadesSyncItemCnpj(this)" onfocus="crm2OportunidadesRenderCnpjSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideCnpjSuggestions(this), 150)"><button class="icon-btn crm2-opp-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="crm2OportunidadesLookupCnpj(this)" ${validCnpj ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button></div><div class="crm2-opp-cnpj-suggestions" data-cnpj-suggestions data-suggestion-kind="cnpj" data-suggestion-key="${index}" hidden></div><div class="crm2-opp-pj-meta-row"><small class="crm2-opp-pj-cnpj-pill" data-pj-cnpj ${pjName ? '' : 'hidden'}>${escapeOpp(pjName)}</small></div></div></td>
+      <td><button class="icon-btn crm2-opp-remove-item" type="button" title="Remover produto" aria-label="Remover produto ${index + 1}" onclick="crm2OportunidadesRemoveItem(${index})"><i data-lucide="trash-2" aria-hidden="true"></i></button></td>
+    </tr>`;
   }).join('');
   return `<div class="crm2-opp-items-form"><div class="crm2-opp-items-form-header"><div><strong>Itens e pedidos</strong><small data-opportunity-estimate>${moneyOpp(total)} estimado</small></div><button class="secondary-btn" type="button" onclick="crm2OportunidadesAddItem()">Incluir item</button></div><div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-editable"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">CNPJ / PJ vinculada</th><th scope="col">Ações</th></tr></thead><tbody>${rows}</tbody></table></div></div>${renderOpportunityAttachmentsOpp(attachmentContext)}`;
 }
@@ -430,7 +485,7 @@ function normalizeOpportunityActionsOpp() {
   generation.parentElement.insertBefore(stack, generation);
   stack.append(scheduling, generation);
 }
-function rerenderOpp() { if (currentOppRoute().active && document.querySelector('[data-crm2-oportunidades="true"]')) document.querySelector('[data-crm2-oportunidades="true"]').outerHTML = decorateOppMarkup(renderOpp()); portalOppFilterModal(); normalizeOpportunityActionsOpp(); window.hubInicializarTabelasRedimensionaveis?.(document.querySelector('[data-crm2-oportunidades="true"]') || document); }
+function rerenderOpp() { if (currentOppRoute().active && document.querySelector('[data-crm2-oportunidades="true"]')) document.querySelector('[data-crm2-oportunidades="true"]').outerHTML = decorateOppMarkup(renderOpp()); const target = document.querySelector('[data-crm2-oportunidades="true"]') || document; fitProductTitlesOpp(target); portalOppFilterModal(); normalizeOpportunityActionsOpp(); window.hubInicializarTabelasRedimensionaveis?.(target); }
 function validateOpportunityOpp(values) { values.proximaAcaoEm = composeNextContactOpp(values.proximoContatoData, values.proximoContatoHora); const errors = {}; if (!crm2OportunidadesState.detailId && !String(values.origemOportunidade || '').trim()) errors.origemOportunidade = 'Informe a origem da oportunidade.'; if (!String(values.responsavel || '').trim()) errors.responsavel = 'Informe o responsável.'; if (values.pfNascimento && !isValidCrm2Date(values.pfNascimento)) errors.pfNascimento = 'Informe uma data válida no formato dd/mm/aaaa.'; else if (values.pfNascimento && new Date(`${values.pfNascimento}T00:00:00`) > new Date()) errors.pfNascimento = 'A data de nascimento não pode estar no futuro.'; if (!values.itens?.length || values.itens.some((item) => !item.produto || catalogUnitPriceOpp(item) <= 0)) errors.itens = 'Selecione um produto válido do catálogo para todos os itens.'; return errors; }
 function renderOppValidationErrors() { const messages = Object.values(crm2OportunidadesState.errors || {}).filter(Boolean); return messages.length ? `<div class="crm2-opp-save-error" role="alert"><strong>Revise os dados antes de salvar:</strong><ul>${messages.map((message) => `<li>${escapeOpp(message)}</li>`).join('')}</ul></div>` : ''; }
 function renderOppSaveError() { return crm2OportunidadesState.saveError ? `<div class="crm2-opp-save-error" role="alert">${escapeOpp(crm2OportunidadesState.saveError)}</div>` : ''; }
@@ -468,7 +523,7 @@ function focusKanbanSettingsOpp(selector = '#crm2-opp-kanban-settings-close') { 
 function clearKanbanDragStateOpp() { crm2OportunidadesState.kanbanDraggedOpportunityId = ''; document.querySelectorAll('.crm2-opp-kanban-column.is-drag-over, .crm2-opp-card.is-dragging').forEach((element) => element.classList.remove('is-drag-over', 'is-dragging')); }
 Object.assign(window, {
   crm2OportunidadesRender() { void loadProductCatalogOpp(); void loadResponsibleUsersOpp(); return decorateOppMarkup(renderOpp()); },
-  crm2OportunidadesMount() { void loadProductCatalogOpp(); void loadResponsibleUsersOpp(); const target = document.querySelector('[data-crm2-oportunidades="true"]'); if (target) target.outerHTML = decorateOppMarkup(renderOpp()); portalOppFilterModal(); normalizeOpportunityActionsOpp(); window.hubInicializarTabelasRedimensionaveis?.(document.querySelector('[data-crm2-oportunidades="true"]') || document); },
+  crm2OportunidadesMount() { void loadProductCatalogOpp(); void loadResponsibleUsersOpp(); const target = document.querySelector('[data-crm2-oportunidades="true"]'); if (target) target.outerHTML = decorateOppMarkup(renderOpp()); const mountedTarget = document.querySelector('[data-crm2-oportunidades="true"]') || document; fitProductTitlesOpp(mountedTarget); portalOppFilterModal(); normalizeOpportunityActionsOpp(); window.hubInicializarTabelasRedimensionaveis?.(mountedTarget); },
   openRelatedCrm2RecordOpp,
   crm2OportunidadesCloseRelatedView: closeRelatedCrm2RecordOpp,
   crm2OportunidadesToggleAttachmentTarget(source) { crm2OportunidadesState.collapsedAttachmentTargets[source] = !crm2OportunidadesState.collapsedAttachmentTargets[source]; rerenderOpportunityAttachmentsOpp(); },
@@ -630,6 +685,7 @@ Object.assign(window, {
 
 observarContextoAcessoHub(() => { permissionsOpp(); if (currentOppRoute().active) window.crm2OportunidadesMount?.(); });
 window.addEventListener('resize', repositionOpenSuggestionsOpp);
+window.addEventListener('resize', () => fitProductTitlesOpp());
 window.addEventListener('scroll', repositionOpenSuggestionsOpp, true);
 permissionsOpp();
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && crm2OportunidadesState.filterModalOpen) window.crm2OportunidadesCloseFilterModal?.(); });
@@ -966,7 +1022,7 @@ function renderOppTimelineColumn(opp) {
 function renderOppItemsColumn(opp) {
   const items = opp.itens || [];
   const total = items.reduce((sum, item) => sum + Number(item.quantidade || 1) * catalogUnitPriceOpp(item), 0);
-  return '<section class="crm2-opp-items-block" aria-labelledby="crm2-opp-items-title"><div class="crm2-opp-items-block-header"><div><strong id="crm2-opp-items-title">Itens e pedidos</strong><span>' + items.length + ' item(ns)</span></div><strong class="crm2-opp-items-total">Total: ' + moneyOpp(total) + '</strong></div>' + (items.length ? '<div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-readonly"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">Valor unitário</th><th scope="col">PJ vinculada</th><th scope="col">Status</th></tr></thead><tbody>' + items.map((item) => {
+  return '<section class="crm2-opp-items-block" aria-labelledby="crm2-opp-items-title"><div class="crm2-opp-items-block-header"><div><strong id="crm2-opp-items-title">Itens e pedidos</strong><span>' + items.length + ' item(ns)</span></div><strong class="crm2-opp-items-total">Total: ' + moneyOpp(total) + '</strong></div>' + (items.length ? '<div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-readonly"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">PJ vinculada</th></tr></thead><tbody>' + items.map((item) => {
     const pj = relatedPjOpp(item.pjId || opp.pjId);
     const temporary = temporaryForItemOpp(item) || item.pjTemporario || null;
     const cnpjData = pjCnpjDataOpp(pj, temporary);
@@ -974,13 +1030,10 @@ function renderOppItemsColumn(opp) {
     const pjName = pj?.razaoSocial || temporary?.razaoSocial || '';
     const pjPill = pj
       ? '<button class="crm2-opp-related-link crm2-opp-pj-cnpj-pill" type="button" onclick="openRelatedCrm2RecordOpp(\'202\', \'' + attrOpp(pj.id) + '\')">' + escapeOpp(pjName) + '</button>'
-      : (pjName ? '<small class="crm2-opp-pj-cnpj-pill">' + escapeOpp(pjName) + '</small>' : '—');
-    const quantity = Number(item.quantidade || 1);
+      : (pjName ? '<small class="crm2-opp-pj-cnpj-pill">' + escapeOpp(pjName) + '</small>' : (cnpj === '—' ? '' : '—'));
     const unitPrice = productPriceOpp(item.produto);
-    const itemTotal = quantity * catalogUnitPriceOpp(item);
     const orderNumber = item.numeroPedido || item.pedido || '—';
-    const orderStatus = item.pedidoIds?.length || item.conversaoEm ? 'Pedido gerado' : orderNumber !== '—' ? 'Pedido informado' : 'Aguardando geração';
-    return '<tr><td><strong class="crm2-opp-table-value">' + escapeOpp(orderNumber) + '</strong></td><td><strong class="crm2-opp-table-value">' + escapeOpp(item.produto || '—') + '</strong></td><td><span class="crm2-opp-table-value">' + moneyOpp(unitPrice) + '</span><small class="crm2-opp-item-total">Total: ' + moneyOpp(itemTotal) + '</small></td><td><div class="crm2-opp-pj-cell"><span class="crm2-opp-table-value">' + escapeOpp(cnpj === '—' ? '—' : cnpj) + '</span><div class="crm2-opp-pj-meta-row">' + pjPill + '</div></div></td><td>' + stagePillOpp(orderStatus) + '</td></tr>';
+    return '<tr><td><div class="crm2-opp-order-cell"><strong class="crm2-opp-table-value">' + escapeOpp(orderNumber) + '</strong>' + renderOrderPricePillOpp(unitPrice) + '</div></td><td><strong class="crm2-opp-table-value crm2-opp-product-title">' + escapeOpp(item.produto || '—') + '</strong></td><td><div class="crm2-opp-pj-cell"><span class="crm2-opp-table-value">' + escapeOpp(cnpj === '—' ? '—' : cnpj) + '</span><div class="crm2-opp-pj-meta-row">' + pjPill + '</div></div></td></tr>';
   }).join('') + '</tbody></table></div>' : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum item cadastrado.</strong><span>Os itens da oportunidade aparecerão aqui.</span></div>') + '</section>';
 }
 

@@ -122,6 +122,7 @@ export async function carregarLinksData(payload = {}) {
 export async function salvarLinkItem(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
   const apoio = await carregarApoio();
+  const escopo = String(payload.escopo || 'corretora').trim().toLowerCase();
   const item = {
     titulo: String(payload.titulo || '').trim(),
     descricao: String(payload.descricao || '').trim() || null,
@@ -131,7 +132,7 @@ export async function salvarLinkItem(payload = {}) {
     status: payload.status === 'inativo' ? 'inativo' : 'ativo',
     dados: {
       tipo: 'link',
-      escopo: payload.escopo || 'corretora',
+      escopo,
       categoria: payload.categoria || '',
       grupo: payload.grupo || ''
     }
@@ -139,6 +140,19 @@ export async function salvarLinkItem(payload = {}) {
 
   if (!item.titulo || !item.url) {
     throw new Error('Informe título e URL do link.');
+  }
+
+  if (!['corretora', 'ar', 'gestao'].includes(escopo)) {
+    throw new Error('Selecione uma área válida para o link.');
+  }
+
+  try {
+    const url = new URL(item.url);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error('Informe uma URL válida começando com http:// ou https://.');
   }
 
   if (payload.id) {
