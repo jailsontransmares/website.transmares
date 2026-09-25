@@ -147,6 +147,7 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
     perfil_nome: perfis.find(item => item.id === usuarioEncontrado.perfil_id)?.nome || '',
     grupo: grupo.nome || '',
     status: usuarioEncontrado.status || 'ativo',
+    trocar_senha_proximo_acesso: usuarioEncontrado.trocar_senha_proximo_acesso === true,
     preferencia_modo_visual: usuarioEncontrado.preferencia_modo_visual || usuarioEncontrado.modo_visual || ''
   };
 }
@@ -301,9 +302,23 @@ async function carregarPermissoesEfetivas(supabase, usuario) {
 export async function carregarDadosIniciaisSupabase() {
   const supabase = exigirSupabaseConfigurado();
   const { data: authData } = await supabase.auth.getUser();
+  const usuarios = await selecionarTabelaObrigatoria('usuarios');
+  const usuarioAutenticado = normalizarUsuario(usuarios, authData?.user);
 
-  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
-    selecionarTabelaObrigatoria('usuarios'),
+  if (usuarioAutenticado.trocar_senha_proximo_acesso) {
+    return {
+      usuario: usuarioAutenticado,
+      config: { ...DEFAULT_CONFIG },
+      permissions: [],
+      cards: [],
+      avisos: [],
+      aniversariantes: [],
+      favoritos: [],
+      meta: { modo_visual_efetivo: DEFAULT_CONFIG.modo_visual_padrao, fonte_dados: 'supabase' }
+    };
+  }
+
+  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),

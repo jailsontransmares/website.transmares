@@ -300,9 +300,9 @@ function invalidarCacheUsuario(id = '') {
 }
 
 function renderOptionsPerfis(perfis, perfilAtual = '') {
-  const options = ['<option value="">Selecione</option>'];
+  const options = ['<option value="">Selecione um perfil ativo</option>'];
   perfis
-    .filter(perfil => perfil.status !== 'inativo' || perfil.id === perfilAtual)
+    .filter(perfil => String(perfil.status || '').trim().toLowerCase() === 'ativo')
     .forEach(perfil => {
       options.push(`<option value="${escapeAttr(perfil.id)}" ${perfil.id === perfilAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || 'Perfil')}</option>`);
     });
@@ -341,7 +341,7 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
           <h4>Acesso e permissões</h4>
           <p>Controle de perfil, status, senha e permissões adicionais.</p>
         </div>
-        <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfis(perfis, usuario.perfil_id || '')}</select></label>
+        <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfis(perfis, usuario.perfil_id || '')}</select></label>
         <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatus(usuario.status || 'ativo')}</select></label>
         <p class="admin-user-direct-note">Status padronizado com o Supabase: ativo, inativo ou arquivado. Para bloquear acesso, use inativo.</p>
         <label><span>${editando ? 'Nova senha administrativa' : 'Senha inicial'}</span><input id="${prefixo}_senha_admin" class="config-input" type="text" autocomplete="new-password" placeholder="${editando ? 'Opcional' : 'Gerar ou informar senha'}"></label>

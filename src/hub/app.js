@@ -24,7 +24,7 @@ import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
 import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
-import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
+import { entrarComSenha, obterSessaoAtual, sairDoHub, trocarSenhaProvisoria } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes, LINK_RESOURCES } from './services/permissionService.js';
 import {
   atualizarContextoInicialHub,
@@ -693,6 +693,13 @@ async function iniciarApp(exibirLoadingInicial = true) {
       return false;
     }
 
+    if (response.data.usuario?.trocar_senha_proximo_acesso) {
+      state.usuario = response.data.usuario;
+      state.auth.loading = false;
+      renderTrocaSenhaObrigatoria();
+      return true;
+    }
+
     state.usuario = response.data.usuario;
     state.config = response.data.config;
     state.cards = response.data.cards || [];
@@ -769,6 +776,56 @@ function renderLoginLoading() {
       </div>
     </section>
   `;
+}
+
+function renderTrocaSenhaObrigatoria() {
+  document.getElementById('app').innerHTML = `
+    <section class="login-card">
+      <div class="login-logo" aria-label="Transmares Corretora de Seguros">
+        <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
+      </div>
+      <h1>Crie sua senha</h1>
+      <p>Este é seu primeiro acesso. Defina uma senha pessoal para continuar.</p>
+      <form class="login-form" onsubmit="concluirTrocaSenhaObrigatoria(event)">
+        <label><span>Nova senha</span><input id="primeiro_acesso_senha" class="config-input" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label><span>Confirmar nova senha</span><input id="primeiro_acesso_confirmar" class="config-input" type="password" autocomplete="new-password" minlength="8" required></label>
+        ${state.auth.message ? `<p class="admin-message">${escapeHtml(state.auth.message)}</p>` : ''}
+        <button class="save-btn" type="submit" ${state.auth.loading ? 'disabled' : ''}>${state.auth.loading ? 'Salvando...' : 'Salvar senha e continuar'}</button>
+        <button class="secondary-btn" type="button" onclick="sair()">Sair</button>
+      </form>
+    </section>
+  `;
+}
+
+async function concluirTrocaSenhaObrigatoria(event) {
+  event.preventDefault();
+  const senha = document.getElementById('primeiro_acesso_senha')?.value || '';
+  const confirmar = document.getElementById('primeiro_acesso_confirmar')?.value || '';
+
+  if (senha.length < 8) {
+    state.auth.message = 'A senha deve ter pelo menos 8 caracteres.';
+    renderTrocaSenhaObrigatoria();
+    return;
+  }
+  if (senha !== confirmar) {
+    state.auth.message = 'A confirmação da senha não confere.';
+    renderTrocaSenhaObrigatoria();
+    return;
+  }
+
+  state.auth.loading = true;
+  state.auth.message = '';
+  renderTrocaSenhaObrigatoria();
+  try {
+    await trocarSenhaProvisoria(senha);
+    state.auth.loading = false;
+    state.auth.message = '';
+    await iniciarApp(false);
+  } catch (erro) {
+    state.auth.loading = false;
+    state.auth.message = erro.message || 'Não foi possível alterar a senha.';
+    renderTrocaSenhaObrigatoria();
+  }
 }
 async function entrarNoHub(event) {
   event.preventDefault();
@@ -3804,9 +3861,10 @@ function renderUsuarioAdmin(usuario) {
 }
 
 function renderOptionsPerfisAdmin(valorAtual) {
-  return (state.admin.perfis || []).map(perfil => `
+  const perfisAtivos = (state.admin.perfis || []).filter(perfil => String(perfil.status || '').trim().toLowerCase() === 'ativo');
+  return `<option value="">Selecione um perfil ativo</option>${perfisAtivos.map(perfil => `
     <option value="${escapeAttr(perfil.id || '')}" ${perfil.id === valorAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || '')}</option>
-  `).join('');
+  `).join('')}`;
 }
 
 function obterRotuloStatusUsuario(status) {
@@ -4346,7 +4404,7 @@ function renderModalUsuarioAdmin() {
             <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
             <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
             <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
+            <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
             <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
             ${editando ? `
               <section class="admin-user-access-panel">
@@ -4358,12 +4416,12 @@ function renderModalUsuarioAdmin() {
                   <div class="admin-user-password-box">
                     <div class="admin-user-password-header">
                       <strong>Senha provisória</strong>
-                      <p>Esta senha ainda não está sincronizada com o Supabase.</p>
+                      <p>${state.admin.credencialModal?.sincronizando ? 'Sincronizando com o Supabase Auth…' : 'Senha sincronizada com o Supabase Auth. O usuário deverá trocá-la no próximo acesso.'}</p>
                     </div>
                     <div class="admin-user-password-value" aria-live="polite">${escapeHtml(senhaTemporaria)}</div>
                     <div class="admin-user-password-actions">
-                      <button class="secondary-btn" type="button" onclick="copiarSenhaTemporariaUsuarioAdmin()">${senhaCopiada ? 'Copiada' : 'Copiar'}</button>
-                      <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()">Gerar outra</button>
+                      <button class="secondary-btn" type="button" onclick="copiarSenhaTemporariaUsuarioAdmin()" ${state.admin.credencialModal?.sincronizando ? 'disabled' : ''}>${senhaCopiada ? 'Copiada' : 'Copiar'}</button>
+                      <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()" ${state.admin.credencialModal?.sincronizando ? 'disabled' : ''}>Gerar outra</button>
                     </div>
                   </div>
                 ` : ''}
@@ -5483,12 +5541,29 @@ function gerarSenhaAleatoriaAdmin(tamanho = 14) {
   return Array.from(array, numero => caracteres[numero % caracteres.length]).join('');
 }
 
-function gerarSenhaTemporariaUsuarioAdmin() {
+async function gerarSenhaTemporariaUsuarioAdmin() {
+  const usuarioId = state.admin.editando.usuarios || '';
+  if (!usuarioId) return;
+
+  const senhaTemporaria = gerarSenhaAleatoriaAdmin();
   state.admin.credencialModal = {
-    senhaTemporaria: gerarSenhaAleatoriaAdmin(),
-    senhaCopiada: false
+    senhaTemporaria,
+    senhaCopiada: false,
+    sincronizando: true
   };
   renderAdministracao();
+
+  try {
+    const response = await chamarApi('setAdminUserPassword', { id: usuarioId, password: senhaTemporaria });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível sincronizar a senha com o Supabase.'));
+    state.admin.credencialModal.sincronizando = false;
+    state.admin.message = 'Senha provisória sincronizada. O usuário deverá alterá-la no próximo acesso.';
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.credencialModal = { senhaTemporaria: '', senhaCopiada: false, sincronizando: false };
+    state.admin.message = erro.message || 'Não foi possível sincronizar a senha com o Supabase.';
+    renderAdministracao();
+  }
 }
 
 async function copiarSenhaTemporariaUsuarioAdmin() {
@@ -5722,7 +5797,9 @@ async function salvarUsuarioAdmin(id) {
     telefone: document.getElementById(`${prefixo}_telefone`)?.value || '',
     perfil_id: document.getElementById(`${prefixo}_perfil`)?.value || '',
     status: document.getElementById(`${prefixo}_status`)?.value || 'pendente',
-    password: document.querySelector('.admin-user-password-value')?.textContent?.trim() || ''
+    password: document.getElementById(`${prefixo}_senha_admin`)?.value?.trim()
+      || document.querySelector('.admin-user-password-value')?.textContent?.trim()
+      || ''
   };
 
   try {
@@ -5746,10 +5823,11 @@ async function salvarUsuarioAdmin(id) {
       senhaCopiada: false
     };
     const senhaProvisoria = response.data?.temporary_password || '';
+    await carregarUsuariosAdmin();
     state.admin.message = senhaProvisoria
       ? `Usuário salvo. Senha provisória: ${senhaProvisoria}`
       : 'Usuário salvo e sincronizado com o Supabase Auth.';
-    await carregarUsuariosAdmin();
+    renderAdministracao();
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao salvar usuário.';
@@ -14610,6 +14688,7 @@ Object.assign(window, {
   fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
+  concluirTrocaSenhaObrigatoria,
   iniciarEdicaoGrupoProdutosAr,
   gerarSenhaTemporariaUsuarioAdmin,
   gerarLinksAr,

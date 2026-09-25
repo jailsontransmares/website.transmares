@@ -588,6 +588,17 @@ export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfi
   return data || {};
 }
 
+export async function salvarSenhaTemporariaUsuarioAdmin({ id, password }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'setPassword', id, password }
+  });
+
+  if (error) throw new Error(error.message || 'Não foi possível sincronizar a senha com o Supabase.');
+  if (data?.ok === false) throw new Error(data.message || 'Não foi possível sincronizar a senha com o Supabase.');
+  return data || {};
+}
+
 export async function listarPerfisAdmin() {
   const supabase = exigirSupabaseConfigurado();
   const [perfis, permissoes] = await Promise.all([
