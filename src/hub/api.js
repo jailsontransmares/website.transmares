@@ -25,6 +25,7 @@ import {
   arquivarParceirosIndicacaoAdminLote,
   excluirPerfilAdmin,
   listarUsuariosAdmin,
+  excluirUsuarioAdmin,
   salvarSenhaTemporariaUsuarioAdmin,
   restaurarCoresPadrao,
   salvarConfig,
@@ -68,6 +69,7 @@ import {
 
 const ACOES_QUE_INVALIDAM_ACESSO = new Set([
   'saveAdminUser',
+  'deleteAdminUser',
   'saveAdminProfile',
   'deleteAdminProfile',
   'saveAdminProfilePermission',
@@ -229,6 +231,7 @@ export async function chamarApi(action, payload = {}) {
       listAdminRecords: () => listarRegistrosAdmin(payload),
       listAdminIntegrationLogs: () => listarLogsIntegracoesAdmin(payload),
       saveAdminUser: () => salvarUsuarioAdmin(payload),
+      deleteAdminUser: () => excluirUsuarioAdmin(payload),
       setAdminUserPassword: () => salvarSenhaTemporariaUsuarioAdmin(payload),
       saveAdminProfile: () => salvarPerfilAdmin(payload),
       deleteAdminProfile: () => excluirPerfilAdmin(payload),

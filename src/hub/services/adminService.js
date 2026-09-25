@@ -588,6 +588,22 @@ export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfi
   return data || {};
 }
 
+export async function excluirUsuarioAdmin({ id }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'deleteUser', id }
+  });
+
+  if (error) {
+    const resposta = error.context && typeof error.context.clone === 'function'
+      ? await error.context.clone().json().catch(() => null)
+      : null;
+    throw new Error(resposta?.message || error.message || 'Não foi possível excluir o usuário.');
+  }
+  if (data?.ok === false) throw new Error(data.message || 'Não foi possível excluir o usuário.');
+  return data || {};
+}
+
 export async function salvarSenhaTemporariaUsuarioAdmin({ id, password }) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase.functions.invoke('admin-users', {

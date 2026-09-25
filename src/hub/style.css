@@ -3336,6 +3336,16 @@ body.dark .admin-partners-actions-menu {
   color: var(--color-primary);
 }
 
+.icon-btn.danger {
+  color: #b42318;
+}
+
+.icon-btn.danger:hover {
+  background: color-mix(in srgb, #b42318 9%, var(--color-surface-muted));
+  border-color: color-mix(in srgb, #b42318 34%, var(--borda));
+  color: #b42318;
+}
+
 .admin-user-modal {
   box-sizing: border-box;
   min-height: 0;

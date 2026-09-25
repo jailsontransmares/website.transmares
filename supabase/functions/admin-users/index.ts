@@ -82,7 +82,7 @@ async function requireAdmin(serviceClient: ReturnType<typeof createClient>, auth
     throw new Error("Acesso permitido apenas para administrador.");
   }
 
-  return usuario;
+  return { ...usuario, requester_auth_user_id: authData.user.id };
 }
 
 async function registrarAuditoria(serviceClient: ReturnType<typeof createClient>, params: Record<string, unknown>) {
@@ -329,6 +329,78 @@ async function setPassword(serviceClient: ReturnType<typeof createClient>, paylo
   return { ok: true };
 }
 
+async function deleteUser(
+  serviceClient: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>,
+  requesterAuthUserId: string
+) {
+  const id = normalizeText(payload.id);
+  if (!id) throw new Error("Informe o usuário que será excluído.");
+
+  const { data: usuario, error: consultaError } = await serviceClient
+    .from("usuarios")
+    .select("id, auth_user_id, email, nome, perfil, perfil_id, is_master, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (consultaError || !usuario) throw new Error("Usuário não encontrado.");
+  if (usuario.auth_user_id && usuario.auth_user_id === requesterAuthUserId) {
+    throw new Error("Não é possível excluir o próprio usuário.");
+  }
+
+  const { data: perfis, error: perfisError } = await serviceClient
+    .from("perfis")
+    .select("id, slug, nome")
+    .eq("status", "ativo");
+  if (perfisError) throw new Error(perfisError.message || "Não foi possível validar os perfis administrativos.");
+
+  const perfisAtivos = new Map((perfis || []).map((perfil) => [
+    perfil.id,
+    normalizeText(perfil.slug || perfil.nome).toLowerCase()
+  ]));
+  const ehAdministrador = (registro: Record<string, unknown>) => {
+    const slug = perfisAtivos.get(String(registro.perfil_id || "")) || normalizeText(registro.perfil).toLowerCase();
+    return registro.is_master === true || slug === "admin" || slug === "administrador";
+  };
+
+  const { data: usuariosAtivos, error: ativosError } = await serviceClient
+    .from("usuarios")
+    .select("id, perfil, perfil_id, is_master")
+    .eq("status", "ativo");
+  if (ativosError) throw new Error(ativosError.message || "Não foi possível validar os administradores ativos.");
+
+  if (usuario.status === "ativo" && ehAdministrador(usuario) && !(usuariosAtivos || []).some((item) => item.id !== id && ehAdministrador(item))) {
+    throw new Error("Não é possível excluir o último administrador ativo. Promova outro usuário antes.");
+  }
+
+  const { error: deleteRecordError } = await serviceClient.rpc("app_excluir_usuario_admin", {
+    p_usuario_id: id
+  });
+  if (deleteRecordError) {
+    throw new Error(deleteRecordError.message || "Não foi possível excluir o cadastro do Hub.");
+  }
+
+  let authDeleted: boolean | null = usuario.auth_user_id ? true : null;
+  if (usuario.auth_user_id) {
+    const { error: authDeleteError } = await serviceClient.auth.admin.deleteUser(usuario.auth_user_id);
+    if (authDeleteError) {
+      authDeleted = false;
+    }
+  }
+
+  await registrarAuditoria(serviceClient, {
+    p_acao: "usuario.excluir",
+    p_recurso: "admin.usuarios",
+    p_detalhes: { usuario_id: usuario.id, email: usuario.email, auth_deleted: authDeleted }
+  });
+
+  return {
+    record_deleted: true,
+    auth_deleted: authDeleted,
+    warning: authDeleted ? null : "O cadastro foi removido do Hub, mas a conta do Supabase Auth ainda precisa ser removida."
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -359,7 +431,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: true, ...result });
     }
 
-    await requireAdmin(serviceClient, authorization);
+    const admin = await requireAdmin(serviceClient, authorization);
 
     if (action === "saveUser") {
       const result = await saveUser(serviceClient, payload);
@@ -368,6 +440,11 @@ Deno.serve(async (req: Request) => {
 
     if (action === "setPassword") {
       const result = await setPassword(serviceClient, payload);
+      return jsonResponse({ ok: true, ...result });
+    }
+
+    if (action === "deleteUser") {
+      const result = await deleteUser(serviceClient, payload, String(admin.requester_auth_user_id || ""));
       return jsonResponse({ ok: true, ...result });
     }
 

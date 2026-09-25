@@ -3849,6 +3849,7 @@ function renderListaUsuariosAdmin(records) {
 function renderUsuarioAdmin(usuario) {
   const id = escapeAttr(usuario.id || '');
   const podeEditar = pode('admin.usuarios', 'update');
+  const podeExcluir = pode('admin.usuarios', 'delete') && usuario.id !== state.usuario?.id;
   const status = usuario.status || 'pendente';
   const rotuloStatus = obterRotuloStatusUsuario(status);
   const perfil = (state.admin.perfis || []).find(item => item.id === usuario.perfil_id);
@@ -3860,6 +3861,7 @@ function renderUsuarioAdmin(usuario) {
       <div class="crud-actions admin-user-actions">
         <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
         <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
+        ${podeExcluir ? `<button class="icon-btn danger" type="button" onclick="excluirUsuarioAdmin('${id}')" title="Excluir usuário" aria-label="Excluir usuário"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
       </div>
       <div class="admin-user-main">
         <div class="admin-user-identity">
@@ -4099,7 +4101,7 @@ function obterAcoesDisponiveisRecurso(recurso) {
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
-    'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
+    'admin.usuarios': ['view', 'create', 'update', 'delete', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],
     'admin.permissoes': ['view', 'update'],
     'admin.parceiros_indicacao': ['view', 'create', 'update', 'archive', 'view_sensitive'],
@@ -5844,6 +5846,55 @@ async function salvarUsuarioAdmin(id) {
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao salvar usuário.';
+    renderAdministracao();
+  }
+}
+
+async function excluirUsuarioAdmin(id) {
+  if (!pode('admin.usuarios', 'delete')) {
+    state.admin.message = 'Seu usuário não possui permissão para excluir usuários.';
+    renderAdministracao();
+    return;
+  }
+
+  const usuario = (state.admin.usuarios || []).find(item => item.id === id);
+  if (!usuario) {
+    state.admin.message = 'Usuário não encontrado na lista atual.';
+    renderAdministracao();
+    return;
+  }
+
+  if (usuario.id === state.usuario?.id) {
+    state.admin.message = 'Não é possível excluir o próprio usuário.';
+    renderAdministracao();
+    return;
+  }
+
+  const identificacao = [usuario.nome, usuario.email].filter(Boolean).join(' · ');
+  if (!window.confirm(`Excluir definitivamente ${identificacao}? A conta do Supabase Auth e o cadastro do Hub serão removidos. Registros históricos vinculados podem impedir a exclusão.`)) {
+    return;
+  }
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    renderAdministracao();
+
+    const response = await chamarApi('deleteAdminUser', { id });
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível excluir o usuário.'));
+    }
+
+    await carregarUsuariosAdmin();
+    state.admin.message = response.data?.auth_deleted === false
+      ? 'Cadastro removido do Hub, mas não foi possível excluir a conta do Supabase Auth. Verifique a conta no Supabase.'
+      : response.data?.auth_deleted === true
+        ? `Usuário ${usuario.nome || usuario.email || ''} excluído do Hub e do Supabase Auth.`
+        : `Usuário ${usuario.nome || usuario.email || ''} excluído do Hub.`;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    state.admin.message = erro.message || 'Erro ao excluir usuário.';
     renderAdministracao();
   }
 }
@@ -14687,6 +14738,7 @@ Object.assign(window, {
   editarParceiroIndicacaoAdmin,
   editarPerfilAdmin,
   excluirPerfilAdmin,
+  excluirUsuarioAdmin,
   editarRegistroAdmin,
   editarUsuarioAdmin,
   emitirReciboValidacoesAr,
