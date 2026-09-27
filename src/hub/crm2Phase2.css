@@ -2,6 +2,138 @@
   min-width: 0;
 }
 
+/* Padrão compartilhado das listas de cadastros do CRM 2.0. */
+.admin-panel.crm2-cadastro-directory-page {
+  background: linear-gradient(135deg, rgba(255, 255, 255, .96), rgba(247, 250, 255, .94));
+  border: 1px solid color-mix(in srgb, var(--borda, #dfe7f1) 86%, #fff);
+  border-radius: 22px;
+  box-shadow: 0 16px 40px rgba(27, 53, 87, .07);
+  padding: 26px 30px 22px;
+}
+.crm2-cadastro-directory-page .admin-panel-header.crm2-pessoas-list-header { align-items: flex-start; border: 0; display: flex; gap: 20px; justify-content: space-between; margin: 0 0 30px; padding: 0; }
+.crm2-cadastro-directory-page .crm2-pessoas-list-header h3 { color: var(--color-navy, #0f1b34); font-size: clamp(28px, 3vw, 36px); letter-spacing: -.035em; line-height: 1.08; margin: 0; }
+.crm2-cadastro-directory-page .crm2-pessoas-header-actions { flex: 0 0 auto; justify-content: flex-end; }
+.crm2-cadastro-directory-page .crm2-pessoas-header-actions .secondary-btn { min-height: 44px; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar { display: block; margin: 0 0 22px; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions { align-items: center; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) auto auto auto; justify-content: initial; width: 100%; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-search-control { align-items: center; background: linear-gradient(180deg, #fbfdff, #f6f9fd); border: 1px solid #dce5f0; border-radius: 13px; box-shadow: 0 2px 8px rgba(35, 67, 123, .035); display: flex; gap: 11px; grid-column: 1; min-height: 48px; min-width: 0; padding: 0 14px; width: 100%; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-search-control > svg { color: #526b8c; flex: 0 0 19px; height: 19px; width: 19px; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-search-control input,
+.crm2-cadastro-directory-page .crm2-cadastro-directory-search-control input:focus { background: transparent; border: 0; box-shadow: none; flex: 1 1 auto; font-size: 15px; min-height: 44px; min-width: 0; outline: 0; padding: 0; width: 100%; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-search-control input::placeholder { color: #7689a4; font-size: 14px; }
+.crm2-cadastro-directory-page .crm2-pf-include-btn { align-items: center; display: inline-flex; gap: 8px; grid-column: 2; justify-content: center; min-height: 48px; padding: 0 20px; white-space: nowrap; }
+.crm2-cadastro-directory-page .crm2-pf-include-btn svg { height: 19px; width: 19px; }
+.crm2-cadastro-directory-page .crm2-pf-select { grid-column: 3; position: relative; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions > .crm2-pf-select > .icon-btn,
+.crm2-cadastro-directory-page .crm2-pf-list-more > summary { align-items: center; background: #fff; border: 1px solid #dce5f0; border-radius: 13px; color: #20304a; display: inline-flex; height: 48px; justify-content: center; min-height: 48px; min-width: 48px; padding: 0; width: 48px; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions > .crm2-pf-select > .icon-btn:hover,
+.crm2-cadastro-directory-page .crm2-pf-list-more > summary:hover { background: #f7faff; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions .icon-btn svg { height: 20px; width: 20px; }
+.crm2-cadastro-directory-page .crm2-pf-list-more { grid-column: 4; position: relative; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions:not(:has(.crm2-pf-include-btn)) .crm2-pf-select { grid-column: 2; }
+.crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions:not(:has(.crm2-pf-include-btn)) .crm2-pf-list-more { grid-column: 3; }
+.crm2-cadastro-directory-page .crm2-pf-list-more > summary { cursor: pointer; list-style: none; }
+.crm2-cadastro-directory-page .crm2-pf-list-more > summary::-webkit-details-marker { display: none; }
+.crm2-cadastro-directory-page .crm2-pf-list-more > summary::marker { content: ''; }
+.crm2-cadastro-directory-page .crm2-pessoas-table-wrap { background: #fff; border: 1px solid #e1e8f1; border-radius: 16px; box-shadow: 0 6px 20px rgba(35, 67, 123, .035); }
+.crm2-cadastro-directory-page .crm2-pessoas-table th,
+.crm2-cadastro-directory-page .crm2-pessoas-table td { padding: 12px 16px; }
+.crm2-cadastro-directory-page .crm2-pessoas-table th { background: #fbfcfe; color: #687a93; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.crm2-cadastro-directory-page .crm2-pessoas-table td { color: #1d2b43; font-size: 14px; height: 58px; }
+.crm2-cadastro-directory-page .crm2-pessoas-table-caption { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; white-space: nowrap; width: 1px; }
+.crm2-cadastro-directory-page .crm2-pessoas-pagination { align-items: center; flex-direction: row; justify-content: space-between; margin-top: 18px; }
+.crm2-parceiros-directory-page .admin-panel-header.crm2-pessoas-list-header { margin-bottom: 22px; }
+.crm2-parceiros-directory-page .crm2-parceiros-list-content { align-items: stretch; display: flex; flex-direction: column; margin-inline: auto; max-width: 100%; min-width: 0; width: fit-content; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-toolbar { margin-bottom: 18px; max-width: 100%; width: 100%; }
+.crm2-parceiros-directory-page .admin-partners-controls-row { align-items: stretch; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.crm2-parceiros-directory-page .admin-partners-main-actions { align-items: center; display: flex; flex: initial; flex-wrap: nowrap; gap: 10px; min-width: 0; width: 100%; }
+.crm2-parceiros-directory-page .admin-users-search { flex: 1 1 0; min-width: 0; width: auto; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control { box-sizing: border-box; height: 48px; min-height: 48px; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control > i { color: #526b8c; display: inline-flex; flex: 0 0 19px; height: 19px; width: 19px; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control > i svg { height: 19px; width: 19px; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control input,
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control input:focus { background: transparent; border: 0; box-shadow: none; flex: 1 1 auto; font-size: 15px; height: auto; min-height: 44px; min-width: 0; outline: 0; padding: 0; width: 100%; }
+.crm2-parceiros-directory-page .crm2-cadastro-directory-search-control input::placeholder { color: #7689a4; font-size: 14px; }
+.crm2-parceiros-directory-page .admin-users-add-btn { align-self: center; flex: 0 0 auto; height: 48px; min-height: 48px; padding: 0 20px; white-space: nowrap; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu,
+.crm2-parceiros-directory-page .crm2-parceiros-action-menu { flex: 0 0 48px; position: relative; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu > summary { align-items: center; background: #fff; border: 1px solid #dce5f0; border-radius: 13px; color: #20304a; display: inline-flex; height: 48px; justify-content: center; min-height: 48px; min-width: 48px; padding: 0; width: 48px; }
+.crm2-parceiros-directory-page .crm2-parceiros-action-menu > summary { align-items: center; background: #fff; border: 1px solid #dce5f0; border-radius: 13px; color: #20304a; display: inline-flex; height: 48px; justify-content: center; min-height: 48px; min-width: 48px; padding: 0; width: 48px; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu > summary:hover,
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu[open] > summary,
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu > summary.is-active { background: #f2f7ff; border-color: #b9d1f5; color: #1455b8; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu > summary svg { height: 20px; width: 20px; }
+.crm2-parceiros-directory-page .crm2-parceiros-action-menu > summary:hover,
+.crm2-parceiros-directory-page .crm2-parceiros-action-menu[open] > summary { background: #f2f7ff; border-color: #b9d1f5; color: #1455b8; }
+.crm2-parceiros-directory-page .crm2-parceiros-action-menu > summary svg { height: 20px; width: 20px; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu .hub-row-actions-popover { right: 0; top: calc(100% + 8px); }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu .hub-row-actions-popover button { align-items: center; display: flex; justify-content: space-between; min-height: 38px; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu .hub-row-actions-popover button[aria-pressed="true"] { background: color-mix(in srgb, var(--cor-principal) 10%, transparent); color: var(--color-primary); font-weight: 700; }
+.crm2-parceiros-directory-page .crm2-parceiros-filter-menu .hub-row-actions-popover button svg { height: 16px; width: 16px; }
+.crm2-parceiros-directory-page .admin-partners-actions-btn { height: 48px; min-height: 48px; min-width: 48px; padding: 0; width: 48px; }
+.crm2-parceiros-directory-page .admin-partners-list { align-self: center; box-sizing: border-box; display: block; margin-inline: auto; max-width: 100%; min-width: 0; padding: 0; width: fit-content; }
+.crm2-parceiros-directory-page .admin-partners-list .crud-header { align-items: center; background: #f8faff; border-bottom: 1px solid #e1e8f1; color: #687a93; display: grid; min-height: 46px; padding: 0 16px; }
+.crm2-parceiros-directory-page .admin-partners-list .crud-row { background: #fff; border-bottom: 1px solid #e8edf4; min-height: 58px; padding: 8px 16px; transition: background-color .15s ease; }
+.crm2-parceiros-directory-page .admin-partners-list .crud-row:hover { background: #f8fbff; }
+.crm2-parceiros-directory-page .admin-partners-list .crud-row:last-child { border-bottom: 0; padding-bottom: 8px; }
+.crm2-parceiros-directory-page .admin-partners-list .admin-partner-cell { color: #1d2b43; font-size: 14px; }
+.crm2-parceiros-directory-page .admin-partners-list .crud-header > span { font-size: 12px; }
+.crm2-parceiros-directory-page .admin-partners-list .crm2-parceiro-name-link { background: transparent; border: 0; color: #104b85; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; padding: 0; text-align: left; }
+.crm2-parceiros-directory-page .admin-partners-list .crm2-parceiro-name-link:hover { color: #0b3b70; text-decoration: underline; text-underline-offset: 3px; }
+.crm2-parceiros-directory-page .admin-partners-list .crm2-parceiro-name-link:focus-visible { border-radius: 3px; outline: 2px solid color-mix(in srgb, var(--color-primary) 65%, white); outline-offset: 3px; }
+.crm2-parceiros-directory-page .admin-partners-list .admin-user-identity small { color: #71839d; font-size: 12px; margin-top: 3px; }
+.crm2-parceiros-directory-page .admin-partners-list .admin-partner-actions { justify-content: flex-start; }
+.crm2-parceiros-directory-page .admin-partners-list .admin-partner-actions .icon-btn { align-items: center; background: #fff; border: 1px solid #dce5f0; border-radius: 10px; display: inline-flex; height: 36px; justify-content: center; min-height: 36px; min-width: 36px; }
+.crm2-parceiros-directory-page .admin-users-pagination { justify-content: flex-end; margin-top: 18px; }
+.partner-form-screen .partner-modal-header-actions { align-items: center; display: flex; flex: 0 0 auto; gap: 8px; }
+.partner-form-screen .partner-modal-edit-btn { align-items: center; display: inline-flex; gap: 7px; }
+.partner-form-screen .partner-modal-edit-btn svg { height: 16px; width: 16px; }
+.crm2-pj-directory-page .crm2-pessoas-table { min-width: 900px; }
+.crm2-pj-directory-page .crm2-pessoas-table th:nth-child(1) { width: 38%; }
+.crm2-pj-directory-page .crm2-pessoas-table th:nth-child(2) { width: 22%; }
+.crm2-pj-directory-page .crm2-pessoas-table th:nth-child(3) { width: 16%; }
+.crm2-pj-directory-page .crm2-pessoas-table th:nth-child(4) { width: 24%; }
+.crm2-pj-directory-page .crm2-pf-name-link { color: #104b85; font-size: 14px; }
+.crm2-vinculos-page .crm2-pessoas-table { min-width: 1120px; }
+.crm2-vinculos-page .crm2-vinculo-link { color: #104b85; font-size: 14px; font-weight: 700; }
+.crm2-vinculos-page .crm2-pessoas-table td small { color: #71839d; display: block; font-size: 12px; margin-top: 4px; }
+.crm2-vinculos-page .crm2-vinculos-actions { white-space: nowrap; }
+.crm2-vinculos-page .crm2-vinculos-actions .icon-btn { margin-right: 4px; }
+@media (max-width: 900px) {
+  .admin-panel.crm2-cadastro-directory-page { padding: 22px 20px; }
+  .crm2-parceiros-directory-page .admin-partners-controls-row { align-items: stretch; display: grid; }
+  .crm2-parceiros-directory-page .admin-partners-main-actions { flex-wrap: nowrap; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions { gap: 8px; grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-search-control { min-height: 44px; }
+  .crm2-cadastro-directory-page .crm2-pf-include-btn,
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions > .crm2-pf-select > .icon-btn,
+  .crm2-cadastro-directory-page .crm2-pf-list-more > summary { height: 44px; min-height: 44px; min-width: 44px; }
+  .crm2-cadastro-directory-page .crm2-pessoas-pagination { align-items: center; flex-direction: row; }
+}
+@media (max-width: 640px) {
+  .admin-panel.crm2-cadastro-directory-page { border-radius: 16px; padding: 18px 14px; }
+  .crm2-cadastro-directory-page .admin-panel-header.crm2-pessoas-list-header { align-items: stretch; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+  .crm2-cadastro-directory-page .crm2-pessoas-list-header h3 { font-size: 28px; }
+  .crm2-cadastro-directory-page .crm2-pessoas-header-actions { justify-content: flex-start; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-search-control { grid-column: 1 / -1; grid-row: 1; }
+  .crm2-cadastro-directory-page .crm2-pf-include-btn { grid-column: 1; grid-row: 2; justify-self: start; }
+  .crm2-cadastro-directory-page .crm2-pf-select { grid-column: 2; grid-row: 2; }
+  .crm2-cadastro-directory-page .crm2-pf-list-more { grid-column: 3; grid-row: 2; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions:not(:has(.crm2-pf-include-btn)) .crm2-pf-select { grid-column: 1; }
+  .crm2-cadastro-directory-page .crm2-cadastro-directory-toolbar-actions:not(:has(.crm2-pf-include-btn)) .crm2-pf-list-more { grid-column: 2; }
+  .crm2-cadastro-directory-page .crm2-pessoas-pagination { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .crm2-cadastro-directory-page .crm2-pessoas-pagination > div { margin-left: 0; }
+  .crm2-parceiros-directory-page .admin-partners-main-actions { flex-wrap: nowrap; gap: 6px; }
+  .crm2-parceiros-directory-page .admin-users-search { flex: 1 1 0; min-width: 0; }
+  .crm2-parceiros-directory-page .admin-users-add-btn { flex: 0 0 auto; padding-inline: 10px; }
+  .crm2-parceiros-directory-page .crm2-parceiros-filter-menu,
+  .crm2-parceiros-directory-page .crm2-parceiros-action-menu { flex-basis: 44px; }
+  .crm2-parceiros-directory-page .crm2-parceiros-filter-menu > summary,
+  .crm2-parceiros-directory-page .crm2-parceiros-action-menu > summary { height: 44px; min-height: 44px; min-width: 44px; width: 44px; }
+  .crm2-parceiros-directory-page .admin-partners-list .crud-header { display: grid; }
+}
+
 .crm2-cadastro-tabs {
   align-items: center;
   border-bottom: 1px solid var(--border-color, #dfe4ec);
@@ -660,6 +792,439 @@
 
   .crm2-pf-vinculo-form .small-modal-actions {
     grid-column: auto;
+  }
+}
+
+/* A mesma linguagem visual é aplicada ao detalhe já cadastrado. */
+.crm2-pessoas-page:not(.hub-form-screen) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+  border-bottom: 1px solid #e8eef6;
+  margin-bottom: 18px;
+  padding: 26px 4px 20px;
+  padding-right: 250px;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-layout {
+  gap: 18px;
+  grid-template-columns: minmax(0, 2.2fr) minmax(340px, 1fr);
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-main > .hub-form-section,
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-sidebar > .hub-form-section,
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-sidebar > .crm2-pf-attachments-container {
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 18px;
+  box-shadow: 0 12px 34px rgba(31, 55, 87, .055);
+  padding: 20px 22px;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-sidebar > .crm2-pf-attachments-container {
+  height: auto;
+  min-height: 0;
+}
+
+@media (max-width: 800px) {
+  .crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+    padding-right: 4px;
+  }
+
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Cabeçalho do detalhe: seta à esquerda, título/status no centro e ações à direita. */
+.crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.crm2-pf-detail-heading {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-pf-detail-back {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 14px;
+  color: #172941;
+  display: inline-flex;
+  flex: 0 0 64px;
+  height: 64px;
+  justify-content: center;
+  width: 64px;
+}
+
+.crm2-pf-detail-back svg {
+  height: 22px;
+  width: 22px;
+}
+
+.crm2-pf-detail-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.crm2-pf-detail-title-row h3 {
+  color: #0f1b34;
+  font-size: clamp(24px, 2.2vw, 30px);
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.crm2-pf-detail-meta {
+  color: #6a7c96;
+  font-size: 14px;
+  font-weight: 650;
+  margin: 6px 0 0;
+}
+
+.crm2-pf-detail-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.crm2-pf-detail-actions > .secondary-btn,
+.crm2-pf-detail-actions > .save-btn,
+.crm2-pf-detail-more {
+  height: 50px;
+  min-height: 50px;
+}
+
+.crm2-pf-detail-actions > .secondary-btn,
+.crm2-pf-detail-actions > .save-btn {
+  font-size: 14px;
+  font-weight: 800;
+  padding: 0 22px;
+}
+
+.crm2-pf-detail-actions > .save-btn {
+  min-width: 118px;
+}
+
+.crm2-pf-detail-more {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 13px;
+  color: #17315a;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+  width: 50px;
+}
+
+.crm2-pf-detail-more svg {
+  height: 20px;
+  width: 20px;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #e8eef6;
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 18px 0 0;
+  position: static;
+  transform: none;
+  width: 100%;
+}
+
+/* Durante a edição inline, as ações seguem o padrão global de footer suspenso do Hub. */
+.crm2-pf-detail-footer.is-inline-editing {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: 999px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-card);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  left: 50%;
+  margin: 0;
+  padding: 8px 12px;
+  position: fixed;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 2147483000;
+}
+
+@media (max-width: 600px) {
+  .crm2-pf-detail-footer.is-inline-editing {
+    align-items: stretch;
+    border-radius: var(--radius-card);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    flex-direction: column-reverse;
+    width: min(calc(100vw - 24px), 360px);
+  }
+
+  .crm2-pf-detail-footer.is-inline-editing > button {
+    width: 100%;
+  }
+}
+
+/* Os botões PF seguem exatamente as classes globais do Hub. */
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn {
+  border-radius: var(--radius-button-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  height: auto;
+  min-height: 34px;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn {
+  background: var(--cor-principal);
+  border: 1px solid var(--cor-principal);
+  border-radius: var(--radius-button-primary);
+  color: #fff;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn {
+  min-width: 0;
+}
+
+.crm2-pessoas-page .crm2-pf-detail-actions > .crm2-pf-detail-more {
+  background: var(--color-surface-muted);
+  border: var(--border-subtle);
+  border-radius: var(--radius-button-secondary);
+  color: var(--texto);
+  font-size: 18px;
+  height: 34px;
+  min-height: 34px;
+  width: 38px;
+}
+
+/* Mantém a barra de edição acima das regras estáticas do detalhe. */
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: 999px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-card);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  left: 50%;
+  margin: 0;
+  padding: 8px 12px;
+  position: fixed;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 2147483000;
+}
+
+@media (max-width: 600px) {
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing {
+    align-items: stretch;
+    border-radius: var(--radius-card);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    flex-direction: column-reverse;
+    width: min(calc(100vw - 24px), 360px);
+  }
+
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing > button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 800px) {
+  .crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crm2-pf-detail-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .crm2-pf-detail-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .crm2-pf-detail-back {
+    flex-basis: 50px;
+    height: 50px;
+    width: 50px;
+  }
+
+  .crm2-pf-detail-actions {
+    flex-wrap: wrap;
+  }
+
+  .crm2-pf-detail-actions > .secondary-btn,
+  .crm2-pf-detail-actions > .save-btn {
+    flex: 1 1 0;
+  }
+}
+
+/* Ações da tela PF: equivalentes aos botões .btn-outline/.btn-primary da referência. */
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 13px;
+  color: #17233a;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 800;
+  height: 50px;
+  justify-content: center;
+  min-height: 50px;
+  padding: 0 22px;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn {
+  align-items: center;
+  background: linear-gradient(180deg, #0a5fae, #084c8e);
+  border: 0;
+  border-radius: 13px;
+  box-shadow: 0 7px 18px rgba(8, 76, 142, .16);
+  color: #fff;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 800;
+  height: 50px;
+  justify-content: center;
+  min-height: 50px;
+  min-width: 118px;
+  padding: 0 22px;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn:hover {
+  background: #f7faff;
+  border-color: #cbd9ea;
+  box-shadow: 0 4px 12px rgba(31, 55, 87, .08);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #0b67bb, #07508f);
+  box-shadow: 0 9px 20px rgba(8, 76, 142, .2);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > button:focus-visible,
+.crm2-pessoas-page .crm2-pf-detail-footer > button:focus-visible {
+  outline: 3px solid rgba(10, 95, 174, .22);
+  outline-offset: 2px;
+}
+
+/* Os footers PF permanecem no fluxo da tela para que sua posição seja
+ * relativa ao cadastro, e não à viewport inteira. */
+.crm2-pessoas-page.hub-form-screen .crm2-pf-form-footer {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #e8eef6;
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 18px 0 0;
+  position: static;
+  transform: none;
+  width: 100%;
+  z-index: auto;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) {
+  position: relative;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 30px;
+  top: 26px;
+  transform: none;
+  width: auto;
+  z-index: 3;
+}
+
+@media (max-width: 800px) {
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer {
+    justify-content: flex-start;
+    margin-top: 18px;
+    position: static;
+    width: 100%;
   }
 }
 
@@ -2911,6 +3476,125 @@ body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop
   margin: 0 0 6px;
 }
 
+/* Acabamento visual da tela de cadastro PF baseado no layout de referência.
+ * O bloco de anexos mantém seus componentes e handlers originais; somente o
+ * card externo participa do novo grid da tela. */
+.crm2-pessoas-page.hub-form-screen {
+  background: linear-gradient(135deg, rgba(255, 255, 255, .97), rgba(247, 250, 255, .95));
+  border: 1px solid #dfe7f1;
+  border-radius: 22px;
+  box-shadow: 0 14px 36px rgba(24, 52, 89, .055);
+  padding: 26px 30px 22px;
+}
+
+.crm2-pessoas-page.hub-form-screen .hub-form-screen-header {
+  align-items: center;
+  border-bottom: 1px solid #e8eef6;
+  padding-bottom: 20px;
+}
+
+.crm2-pessoas-page.hub-form-screen .hub-form-screen-header h2 {
+  color: #0f1b34;
+  font-size: clamp(24px, 2.2vw, 32px);
+  font-weight: 800;
+  letter-spacing: -.025em;
+}
+
+.crm2-pf-form > section,
+.crm2-pf-notes-attachments-grid > .crm2-pf-notes-block,
+.crm2-pf-notes-attachments-grid > .crm2-pf-attachments-container {
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 18px;
+  box-shadow: 0 12px 34px rgba(31, 55, 87, .055);
+  padding: 20px 22px;
+}
+
+.crm2-pf-form > section .hub-form-section-title,
+.crm2-pf-notes-block .hub-form-section-title,
+.crm2-pf-attachments-container .hub-form-section-title {
+  margin-bottom: 4px;
+}
+
+.crm2-pf-form .hub-form-grid > label > span,
+.crm2-pf-inline-form .hub-form-grid > label > span,
+.crm2-pf-view-form .crm2-pf-readonly-field > span {
+  color: #61738e;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.crm2-pf-form .hub-form-grid .config-input,
+.crm2-pf-form .hub-form-grid .crm2-pf-select-trigger,
+.crm2-pf-inline-form .hub-form-grid .config-input,
+.crm2-pf-inline-form .hub-form-grid .crm2-pf-select-trigger,
+.crm2-pf-view-form .crm2-pf-readonly-field .config-input {
+  background: linear-gradient(180deg, #fbfdff, #f7faff);
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  min-height: 46px;
+  padding-left: 13px;
+  padding-right: 13px;
+}
+
+.crm2-pf-form .hub-form-grid textarea,
+.crm2-pf-inline-form .hub-form-grid textarea,
+.crm2-pf-view-form .crm2-pf-readonly-field textarea {
+  background: #fbfdff;
+  border: 1px solid #dfe7f1;
+  border-radius: 12px;
+  min-height: 90px;
+  padding: 13px;
+}
+
+.crm2-pf-notes-attachments-grid {
+  align-items: stretch;
+  gap: 18px;
+}
+
+.crm2-pf-notes-attachments-grid > .crm2-pf-notes-block,
+.crm2-pf-notes-attachments-grid > .crm2-pf-attachments-container {
+  min-height: 0;
+  width: auto;
+}
+
+.crm2-pf-notes-attachments-grid > .crm2-pf-attachments-container {
+  height: auto;
+}
+
+.crm2-pf-observations-container {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.crm2-pf-form-footer {
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  padding: 10px 14px;
+}
+
+@media (max-width: 800px) {
+  .crm2-pessoas-page.hub-form-screen {
+    border-radius: 18px;
+    padding: 22px 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .crm2-pessoas-page.hub-form-screen {
+    border-radius: 16px;
+    padding: 18px 14px;
+  }
+
+  .crm2-pf-form > section,
+  .crm2-pf-notes-attachments-grid > .crm2-pf-notes-block,
+  .crm2-pf-notes-attachments-grid > .crm2-pf-attachments-container {
+    border-radius: 16px;
+    padding: 16px;
+  }
+}
+
 .crm2-pj-title-row {
   align-items: center;
   display: flex;
@@ -3029,5 +3713,302 @@ body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop
 
   .crm2-pf-search-control.is-expanded input {
     width: min(220px, calc(100vw - 150px));
+  }
+}
+
+.crm2-pf-directory-page .crm2-pessoas-table { min-width: 1080px; }
+.crm2-pf-directory-page .crm2-pessoas-table th:nth-child(1) { width: 25%; }
+.crm2-pf-directory-page .crm2-pessoas-table th:nth-child(2) { width: 15%; }
+.crm2-pf-directory-page .crm2-pessoas-table th:nth-child(3) { width: 16%; }
+.crm2-pf-directory-page .crm2-pessoas-table th:nth-child(4) { width: 27%; }
+.crm2-pf-directory-page .crm2-pessoas-table th:nth-child(5) { width: 17%; }
+.crm2-pf-directory-page .crm2-pf-name-link { color: #104b85; font-size: 14px; }
+
+.crm2-pf-action-with-icon {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.crm2-pf-action-with-icon > svg {
+  flex: 0 0 16px;
+  height: 16px;
+  width: 16px;
+}
+
+.crm2-pf-view-form .crm2-pf-readonly-field .crm2-birth-date-mask-wrap > .config-input {
+  padding-right: 42px;
+}
+
+.crm2-pessoas-list-header {
+  align-items: center !important;
+  display: flex !important;
+  justify-content: flex-start !important;
+}
+
+.crm2-cadastro-list-heading {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-cadastro-list-back {
+  background: #fff;
+  flex: 0 0 64px;
+  height: 64px;
+  width: 64px;
+}
+
+.crm2-cadastro-list-heading h3 {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .crm2-cadastro-list-heading {
+    gap: 12px;
+  }
+
+  .crm2-cadastro-list-back {
+    flex-basis: 50px;
+    height: 50px;
+    width: 50px;
+  }
+}
+
+/* Override final: controles de ação PF = padrão global do Hub. */
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn {
+  border-radius: var(--radius-button-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  height: auto;
+  min-height: 34px;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn {
+  background: var(--card);
+  border: 1px solid var(--borda);
+  color: var(--texto);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn,
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn {
+  background: var(--cor-principal);
+  border: 1px solid var(--cor-principal);
+  border-radius: var(--radius-button-primary);
+  color: #fff;
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-detail-footer > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-detail-actions > .secondary-btn:hover,
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn:hover:not(:disabled) {
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.crm2-pessoas-page .crm2-pf-form-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-footer > .save-btn:hover:not(:disabled),
+.crm2-pessoas-page .crm2-pf-detail-actions > .save-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
+.crm2-pessoas-page .crm2-pf-detail-actions > .crm2-pf-detail-more {
+  background: var(--color-surface-muted);
+  border: var(--border-subtle);
+  border-radius: var(--radius-button-secondary);
+  color: var(--texto);
+  font-size: 18px;
+  height: 34px;
+  min-height: 34px;
+  width: 38px;
+}
+
+/* Edição inline: ações suspensas, centralizadas e no padrão global do Hub. */
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: 999px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-card);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  left: 50%;
+  margin: 0;
+  padding: 8px 12px;
+  position: fixed;
+  right: auto;
+  top: auto;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 2147483000;
+}
+
+@media (max-width: 600px) {
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing {
+    align-items: stretch;
+    border-radius: var(--radius-card);
+    bottom: max(12px, env(safe-area-inset-bottom));
+    flex-direction: column-reverse;
+    width: min(calc(100vw - 24px), 360px);
+  }
+
+  .crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer.is-inline-editing > button {
+    width: 100%;
+  }
+}
+
+/* Ajuste final de posicionamento do cabeçalho do detalhe PF. */
+.crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+.crm2-pf-detail-heading {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  min-width: 0;
+}
+
+.crm2-pf-detail-back {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 14px;
+  color: #172941;
+  display: inline-flex;
+  flex: 0 0 64px;
+  height: 64px;
+  justify-content: center;
+  padding: 0;
+  width: 64px;
+}
+
+.crm2-pf-detail-heading .crm2-pf-detail-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.crm2-pf-detail-heading .crm2-pf-detail-title-row h3 {
+  color: #0f1b34;
+  font-size: clamp(24px, 2.2vw, 30px);
+  letter-spacing: -.025em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.crm2-pf-detail-meta {
+  color: #6a7c96;
+  font-size: 14px;
+  font-weight: 650;
+  margin: 6px 0 0;
+}
+
+.crm2-pf-detail-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.crm2-pf-detail-actions > .secondary-btn,
+.crm2-pf-detail-actions > .save-btn,
+.crm2-pf-detail-more {
+  height: 50px;
+  min-height: 50px;
+}
+
+.crm2-pf-detail-actions > .secondary-btn,
+.crm2-pf-detail-actions > .save-btn {
+  font-size: 14px;
+  font-weight: 800;
+  padding: 0 22px;
+}
+
+.crm2-pf-detail-actions > .save-btn {
+  min-width: 118px;
+}
+
+.crm2-pf-detail-more {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #dfe7f1;
+  border-radius: 13px;
+  color: #17315a;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+  width: 50px;
+}
+
+.crm2-pessoas-page:not(.hub-form-screen) .crm2-pf-detail-footer {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #e8eef6;
+  border-radius: 0;
+  box-shadow: none;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 18px 0 0;
+  position: static;
+  transform: none;
+  width: 100%;
+}
+
+@media (max-width: 800px) {
+  .crm2-pessoas-page:not(.hub-form-screen) > .admin-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .crm2-pf-detail-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .crm2-pf-detail-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .crm2-pf-detail-back {
+    flex-basis: 50px;
+    height: 50px;
+    width: 50px;
+  }
+
+  .crm2-pf-detail-actions {
+    flex-wrap: wrap;
+  }
+
+  .crm2-pf-detail-actions > .secondary-btn,
+  .crm2-pf-detail-actions > .save-btn {
+    flex: 1 1 0;
   }
 }

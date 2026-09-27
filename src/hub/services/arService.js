@@ -27,19 +27,65 @@ function montarLinkProduto({ produto, parceiro, grupo }) {
 }
 
 export async function carregarProdutosAR() {
+  return carregarProdutosARPorStatus('ativo');
+}
+
+export async function carregarProdutosARPorStatus(status) {
+  if (!['ativo', 'inativo'].includes(status)) {
+    throw new Error('Status de produto inválido.');
+  }
+
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('produtos_ar')
     .select('*')
-    .eq('status', 'ativo')
+    .eq('status', status)
     .order('descricao_comercial', { ascending: true });
 
   if (error) {
     console.error('Erro ao carregar produtos AR:', error);
+    if (status === 'inativo') throw new Error(error.message || 'Não foi possível carregar os produtos inativos.');
     return [];
   }
 
   return data || [];
+}
+
+export async function atualizarStatusProdutosAR(produtoIds, status) {
+  if (!Array.isArray(produtoIds) || !produtoIds.length || !['ativo', 'inativo'].includes(status)) {
+    throw new Error('Selecione produtos e informe um status válido.');
+  }
+
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.rpc('ar_atualizar_status_produtos', {
+    p_produto_ids: produtoIds,
+    p_status_atual: status === 'inativo' ? 'ativo' : 'inativo',
+    p_status: status
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível alterar o status dos produtos.');
+  }
+
+  return data || { status, total: 0, produtos: [] };
+}
+
+export async function criarProdutoAR({ grupo, descricao_comercial, product_id, preco_com_desconto, preco_sem_desconto, ac }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.rpc('ar_criar_produto', {
+    p_grupo: grupo,
+    p_descricao_comercial: descricao_comercial,
+    p_product_id: product_id,
+    p_preco_com_desconto: preco_com_desconto,
+    p_preco_sem_desconto: preco_sem_desconto,
+    p_ac: ac || null
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível adicionar o produto.');
+  }
+
+  return data || { produto: null };
 }
 
 export async function carregarParceirosAtivos() {
@@ -111,6 +157,10 @@ export async function gerarLinksAR({ produto_id, parceiro_id }) {
 
   if (erroProduto || !produto) {
     throw new Error('Produto AR não encontrado no Supabase.');
+  }
+
+  if (normalizarStatus(produto.status) !== 'ativo') {
+    throw new Error('Este produto está inativo e não pode ser usado para gerar links.');
   }
 
   if (erroParceiro || !parceiro) {

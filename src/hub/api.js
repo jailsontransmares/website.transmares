@@ -1,4 +1,4 @@
-import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { atualizarProdutosGrupoAR, atualizarStatusProdutosAR, carregarDadosAR, carregarProdutosARPorStatus, criarProdutoAR, gerarLinksAR } from './services/arService.js';
 import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarOpcoesCadastroCrmAr, carregarPedidosRelacionadosCrmAr, criarClienteCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr, sincronizarPendenciaCrmAr } from './services/arCrmService.js';
 import {
   cancelarReciboAR,
@@ -114,6 +114,11 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'getArProductsByStatus') {
+      const produtos = await carregarProdutosARPorStatus(payload.status);
+      return { ok: true, data: { produtos } };
+    }
+
     if (action === 'getArCrmData') {
       const dados = await carregarDadosCrmAr(payload.pagina, payload.limite);
       return { ok: true, data: dados };
@@ -177,6 +182,16 @@ export async function chamarApi(action, payload = {}) {
 
     if (action === 'updateArProductsGroup') {
       const resultado = await atualizarProdutosGrupoAR(payload);
+      return { ok: true, data: resultado };
+    }
+
+    if (action === 'updateArProductsStatus') {
+      const resultado = await atualizarStatusProdutosAR(payload.produtoIds, payload.status);
+      return { ok: true, data: resultado };
+    }
+
+    if (action === 'createArProduct') {
+      const resultado = await criarProdutoAR(payload);
       return { ok: true, data: resultado };
     }
 

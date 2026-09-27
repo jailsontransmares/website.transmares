@@ -220,7 +220,7 @@ function crm2PfRequestConfirmationCrm2({ title, description, confirmLabel = 'Con
         <div class="small-modal-header"><h3 id="crm2-pf-confirm-title">${escapeHtmlCrm2(title)}</h3></div>
         <div class="small-modal-body"><p id="crm2-pf-confirm-description">${escapeHtmlCrm2(description)}</p></div>
         <div class="small-modal-actions">
-          <button class="secondary-btn" type="button" onclick="crm2PfCancelConfirmation()">Cancelar</button>
+          <button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfCancelConfirmation()"><i data-lucide="x" aria-hidden="true"></i>Cancelar</button>
           <button class="save-btn" type="button" onclick="crm2PfConfirmConfirmation()">${escapeHtmlCrm2(confirmLabel)}</button>
         </div>
       </section>
@@ -452,35 +452,34 @@ function renderListStateCrm2() {
 }
 
 function renderPaginationCrm2(totalPages, totalItems) {
-  return renderCrm2CadastroPagination({ label: 'pessoas físicas', page: crm2PfState.page, totalPages, totalItems, previousAction: `crm2PfSetPage(${crm2PfState.page - 1})`, nextAction: `crm2PfSetPage(${crm2PfState.page + 1})` });
+  return renderCrm2CadastroPagination({ label: 'pessoas físicas', page: crm2PfState.page, totalPages, totalItems, previousAction: `crm2PfSetPage(${crm2PfState.page - 1})`, nextAction: `crm2PfSetPage(${crm2PfState.page + 1})`, hidePreviousOnFirstPage: true });
 }
 
 function renderPeopleListCrm2() {
   const items = filteredPeopleCrm2();
   const { totalPages, pageItems } = paginatedPeopleCrm2(items);
   const hasFilters = Boolean(crm2PfState.search || crm2PfState.statusFilter);
-  const searchExpanded = Boolean(crm2PfState.searchExpanded);
   const specialState = crm2PfState.listState !== 'normal';
 
   const filterControls = `
-    ${crm2CanCreate() ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')">+Incluir</button>' : ''}
+    <label class="crm2-cadastro-directory-search-control"><i data-lucide="search" aria-hidden="true"></i><input class="config-input" type="search" aria-label="Buscar pessoa física" placeholder="Buscar por nome, CPF, telefone ou e-mail..." value="${escapeAttrCrm2(crm2PfState.search)}" oninput="crm2PfSetSearch(this.value, this)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }"></label>
+    ${crm2CanCreate() ? '<button class="save-btn crm2-pf-include-btn" type="button" onclick="window.crm2PfOpenForm(\'create\')"><i data-lucide="plus" aria-hidden="true"></i>Incluir</button>' : ''}
     <div class="crm2-pf-select">
       <button id="crm2-pf-status-filter" class="icon-btn ${crm2PfState.statusFilter ? 'is-active' : ''}" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="crm2-pf-status-filter-menu" title="Filtrar por status" aria-label="Filtrar por status" onclick="crm2PfToggleDropdown(this, event)"><i data-lucide="filter" aria-hidden="true"></i></button>
       <div id="crm2-pf-status-filter-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="Filtrar por status" data-dropdown-input-id="crm2-pf-status-filter" data-dropdown-width="180" hidden>
         ${[['', 'Todos'], ['cliente ativo', 'Cliente ativo'], ['cliente inativo', 'Cliente inativo']].map(([value, label]) => `<button class="hub-filter-dropdown-option ${crm2PfState.statusFilter === value ? 'is-selected' : ''}" type="button" role="option" aria-selected="${crm2PfState.statusFilter === value ? 'true' : 'false'}" data-value="${escapeAttrCrm2(value)}" onclick="crm2PfSelectStatusFilter(this)">${escapeHtmlCrm2(label)}</button>`).join('')}
       </div>
     </div>
-    <div class="crm2-pf-search-control ${searchExpanded ? 'is-expanded' : ''}">
-      <input class="config-input" type="search" aria-label="Buscar pessoa física" placeholder="Busca por nome, CPF, telefone ou e-mail" value="${escapeAttrCrm2(crm2PfState.search)}" ${searchExpanded ? '' : 'hidden'} oninput="crm2PfSetSearch(this.value, this)" onfocusout="crm2PfHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.form?.requestSubmit(); }">
-      <button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${searchExpanded ? 'true' : 'false'}" onclick="crm2PfToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button>
-    </div>
-    ${hasFilters ? '<button class="icon-btn crm2-pf-clear-filter" type="button" onclick="crm2PfClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}
+    <details class="hub-row-actions-menu crm2-pf-list-more" data-hub-action-menu data-hub-action-min-width="160" data-hub-action-max-width="200" data-hub-action-gap="6">
+      <summary class="icon-btn hub-quick-actions-trigger" aria-haspopup="menu" aria-label="Mais opções" title="Mais opções"><i data-lucide="more-vertical" aria-hidden="true"></i></summary>
+      <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Mais opções da lista"><button type="button" role="menuitem" onclick="crm2PfClearFilters()" ${hasFilters ? '' : 'disabled'}>Limpar filtros</button></div>
+    </details>
   `;
 
   return `
-    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
-      ${renderCrm2CadastroListHeader({ title: 'Pessoas físicas', titleId: 'crm2-pessoas-title', routeCode: '201' })}
-      ${renderCrm2CadastroListToolbar('crm2PfApplyFilters(event)', filterControls)}
+    <section class="admin-panel crm2-pessoas-page crm2-cadastro-directory-page crm2-pf-directory-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+      ${renderCrm2CadastroListHeader({ title: 'Pessoas físicas', titleId: 'crm2-pessoas-title', routeCode: '201', showRouteCode: false, backLabel: 'Voltar' })}
+      ${renderCrm2CadastroListToolbar('crm2PfApplyFilters(event)', filterControls, { className: 'crm2-cadastro-directory-toolbar', actionsClassName: 'crm2-cadastro-directory-toolbar-actions' })}
 
       ${specialState ? renderListStateCrm2() : pageItems.length ? `
         <div class="ar-crm-phase1-table-wrap crm2-pessoas-table-wrap">
@@ -518,9 +517,18 @@ function renderPeopleListCrm2() {
 
 function renderReadOnlyCrm2({ label, value = '', type = 'text', className = '' }) {
   const safeValue = label === 'Nome' ? upperCrm2(value) : value ?? '';
+  const readOnlyInput = type === 'date'
+    ? renderCrm2MaskedDateField({
+      id: 'crm2-pf-readonly-birth-date',
+      value: safeValue,
+      onPicker: 'crm2PfSetBirthDateFromPicker',
+      onOpen: 'crm2PfOpenBirthDatePicker',
+      readOnly: true
+    })
+    : `<input class="config-input" type="${escapeAttrCrm2(type)}" value="${escapeAttrCrm2(safeValue)}" readonly aria-readonly="true">`;
   return `<label class="crm2-pf-readonly-field ${escapeAttrCrm2(className)}"><span>${escapeHtmlCrm2(label)}</span>${type === 'textarea'
     ? `<textarea class="config-input" readonly aria-readonly="true">${escapeHtmlCrm2(safeValue)}</textarea>`
-    : `<input class="config-input" type="${escapeAttrCrm2(type)}" value="${escapeAttrCrm2(safeValue)}" readonly aria-readonly="true">`}</label>`;
+    : readOnlyInput}</label>`;
 }
 
 function renderPersonDataCrm2(person) {
@@ -664,7 +672,7 @@ function renderVinculosCrm2(person) {
     identityValue: person.cpf,
     side: 'pf'
   });
-  const canInactivateCentral = window.crm2VinculosCan?.('delete') === true;
+  const canInactivateCentral = window.crm2VinculosCan?.('inactivate') === true;
   const search = normalizeSearchCrm2(crm2PfState.companySearch);
   const filteredVinculos = vinculos
     .map((vinculo, index) => ({ vinculo, index }))
@@ -674,7 +682,7 @@ function renderVinculosCrm2(person) {
     <section class="hub-form-section crm2-pf-vinculos-block" aria-labelledby="crm2-pf-vinculos-title">
       <div class="hub-form-section-title">
         <strong id="crm2-pf-vinculos-title">Empresas vinculadas</strong>
-        ${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfOpenVinculoForm()">Incluir</button>' : ''}
+        ${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include crm2-pf-action-with-icon" type="button" onclick="crm2PfOpenVinculoForm()"><i data-lucide="plus" aria-hidden="true"></i>Incluir</button>' : ''}
       </div>
       ${filteredVinculos.length ? `<div class="crm2-pf-companies-table-wrap">
         <table class="crm2-pf-companies-table" data-resizable-table data-resizable-editable="false" data-resize-key="crm2-pf-vinculos" aria-label="Empresas vinculadas">
@@ -730,12 +738,19 @@ function renderPersonDetailCrm2(person) {
   return `
     <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoa-detail-title">
       <div class="admin-panel-header">
-        <div>
+        <div class="crm2-pf-detail-heading">
+          <button class="icon-btn crm2-pf-detail-back" type="button" onclick="navegarParaCrm2Rota('201')" aria-label="Voltar" title="Voltar">
+            <i data-lucide="chevron-left" aria-hidden="true"></i>
+          </button>
           <div class="crm2-pf-detail-title-row">
-            <h3 id="crm2-pessoa-detail-title">${escapeHtmlCrm2(person.nome)}</h3>
+            <div>
+              <h3 id="crm2-pessoa-detail-title">${escapeHtmlCrm2(person.nome)}</h3>
+              <p class="crm2-pf-detail-meta">PF • Cadastrada em ${escapeHtmlCrm2(formatDateTimeCrm2(person.cadastroEm))}</p>
+            </div>
             <span class="crm2-pf-status-pill is-${escapeAttrCrm2(personStatusCrm2(person).replace(/\s+/g, '-'))}" role="status">${escapeHtmlCrm2(personStatusLabelCrm2(person))}</span>
           </div>
         </div>
+        <div class="crm2-pf-detail-actions" data-crm2-pf-detail-actions></div>
       </div>
 
       <div class="crm2-pf-detail-layout">
@@ -747,7 +762,7 @@ function renderPersonDetailCrm2(person) {
           <div class="crm2-pf-related-sections">
             ${renderCompaniesCrm2(person)}
             <section class="hub-form-section crm2-pf-detail-section" aria-labelledby="crm2-pf-orders-section-title">
-              <div class="hub-form-section-title"><strong id="crm2-pf-orders-section-title">Pedidos</strong>${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include" type="button" onclick="crm2PfIncludeOrder()">Incluir</button>' : ''}</div>
+              <div class="hub-form-section-title"><strong id="crm2-pf-orders-section-title">Pedidos</strong>${crm2CanCreate() ? '<button class="save-btn crm2-pf-company-include crm2-pf-action-with-icon" type="button" onclick="crm2PfIncludeOrder()"><i data-lucide="plus" aria-hidden="true"></i>Incluir</button>' : ''}</div>
               ${renderOrdersCrm2(person)}
             </section>
           </div>
@@ -755,13 +770,12 @@ function renderPersonDetailCrm2(person) {
         ${renderPersonSidebarCrm2(person)}
       </div>
 
-      <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer" data-hub-form-footer>
-        ${crm2PfState.inlineEditing
-            ? `<button class="secondary-btn" type="button" onclick="crm2PfCancelInlineEdit()">Cancelar</button>
-               <button class="save-btn" type="submit" form="crm2-pf-inline-form">Salvar alterações</button>`
-          : `<button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('201')">Voltar</button>
-             ${crm2CanEdit() ? `<button class="save-btn" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')">Editar</button>` : ''}`}
-      </div>
+      ${crm2PfState.inlineEditing ? `
+        <div class="hub-form-screen-actions crm2-pf-form-footer crm2-pf-detail-footer is-inline-editing">
+          <button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfCancelInlineEdit()"><i data-lucide="x" aria-hidden="true"></i>Cancelar</button>
+          <button class="save-btn crm2-pf-action-with-icon" type="submit" form="crm2-pf-inline-form"><i data-lucide="check" aria-hidden="true"></i>Salvar alterações</button>
+        </div>
+      ` : ''}
     </section>
   `;
 }
@@ -914,10 +928,10 @@ function renderPersonFormCrm2() {
           ${renderFormAttachmentsCrm2(person, editing || crm2PfState.formMode === 'create')}
         </div>
 
-        <div class="hub-form-screen-actions crm2-pf-form-footer" data-hub-form-footer>
-          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Voltar</button>
-          <button class="secondary-btn" type="button" onclick="crm2PfCancelForm()">Cancelar</button>
-          <button class="save-btn" type="submit" ${verified ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Salvar'}</button>
+        <div class="hub-form-screen-actions crm2-pf-form-footer">
+          <button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfCancelForm()"><i data-lucide="chevron-left" aria-hidden="true"></i>Voltar</button>
+          <button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfCancelForm()"><i data-lucide="x" aria-hidden="true"></i>Cancelar</button>
+          <button class="save-btn crm2-pf-action-with-icon" type="submit" ${verified ? '' : 'disabled'}><i data-lucide="check" aria-hidden="true"></i>${editing ? 'Salvar alterações' : 'Salvar'}</button>
         </div>
       </form>
     </section>
@@ -1483,6 +1497,29 @@ Object.assign(window, {
     const gap = 6;
     const requestedWidth = Number(menu.dataset.dropdownWidth) || rect.width;
     const menuWidth = Math.min(requestedWidth, window.innerWidth - (viewportPadding * 2));
+    const requestedMaxHeight = Number(menu.dataset.dropdownMaxHeight);
+    if (requestedMaxHeight > 0) {
+      const width = Math.min(menuWidth, window.innerWidth - (viewportPadding * 2));
+      const naturalHeight = Math.min(menu.scrollHeight, requestedMaxHeight);
+      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - gap - viewportPadding);
+      const spaceAbove = Math.max(0, rect.top - gap - viewportPadding);
+      const openAbove = naturalHeight > spaceBelow && spaceAbove > spaceBelow;
+      const availableSpace = openAbove ? spaceAbove : spaceBelow;
+      const maxHeight = Math.min(requestedMaxHeight, availableSpace);
+      const menuHeight = Math.min(menu.scrollHeight, maxHeight);
+      const preferredLeft = menu.dataset.dropdownAnchor === 'start' || trigger.dataset.dropdownAnchor === 'start'
+        ? rect.left
+        : rect.left + ((rect.width - width) / 2);
+      const left = Math.min(Math.max(viewportPadding, preferredLeft), window.innerWidth - width - viewportPadding);
+      const preferredTop = openAbove ? rect.top - menuHeight - gap : rect.bottom + gap;
+      const top = Math.min(Math.max(viewportPadding, preferredTop), Math.max(viewportPadding, window.innerHeight - menuHeight - viewportPadding));
+      menu.style.width = `${width}px`;
+      menu.style.maxHeight = `${maxHeight}px`;
+      menu.style.overflowY = 'auto';
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+      return;
+    }
     const menuMaxHeight = Math.max(160, window.innerHeight - (viewportPadding * 2));
     menu.style.width = `${menuWidth}px`;
     menu.style.maxHeight = `${menuMaxHeight}px`;
@@ -1880,9 +1917,8 @@ Object.assign(window, {
   crm2PfSetSearch(value, input) {
     window.hubAtualizarBuscaAoDigitar(input, (search) => {
       crm2PfState.search = search;
-      crm2PfState.searchExpanded = true;
       crm2PfState.page = 1;
-    }, rerenderCrm2Phase2, () => document.querySelector('.crm2-pf-search-control input[type="search"]'));
+    }, rerenderCrm2Phase2, () => document.querySelector('.crm2-cadastro-directory-search-control input[type="search"]'));
   },
   crm2PfSetCompanySearch(input) {
     const cursor = typeof input?.selectionStart === 'number' ? input.selectionStart : String(input?.value || '').length;
@@ -1993,31 +2029,8 @@ Object.assign(window, {
     crm2PfState.page = 1;
     rerenderCrm2Phase2();
   },
-  crm2PfToggleSearch(button) {
-    const control = button?.closest('.crm2-pf-search-control');
-    const input = control?.querySelector('input[type="search"]');
-    if (!control || !input) return;
-    const expanded = !control.classList.contains('is-expanded');
-    crm2PfState.searchExpanded = expanded;
-    control.classList.toggle('is-expanded', expanded);
-    input.hidden = !expanded;
-    button.setAttribute('aria-expanded', String(expanded));
-    if (expanded) input.focus({ preventScroll: true });
-  },
-  crm2PfHandleSearchBlur(event) {
-    const input = event?.currentTarget;
-    const control = input?.closest('.crm2-pf-search-control');
-    if (!control || control.contains(event.relatedTarget)) return;
-    window.setTimeout(() => {
-      if (control.contains(document.activeElement)) return;
-      crm2PfState.searchExpanded = false;
-      control.classList.remove('is-expanded');
-      input.hidden = true;
-      control.querySelector('button')?.setAttribute('aria-expanded', 'false');
-    }, 0);
-  },
   crm2PfClearFilters() {
-    Object.assign(crm2PfState, { search: '', searchExpanded: false, statusFilter: '', originFilter: '', registrationDateFilter: '', page: 1 });
+    Object.assign(crm2PfState, { search: '', statusFilter: '', originFilter: '', registrationDateFilter: '', page: 1 });
     rerenderCrm2Phase2();
   },
   crm2PfSetListState(value) {
@@ -2123,36 +2136,23 @@ import { hasPermission } from './services/permissionService.js';
   crm2PfState.canEdit = false;
   crm2PfState.canDelete = false;
 
-  const originalRenderPeopleListCrm2 = renderPeopleListCrm2;
   const originalRenderPersonDetailCrm2 = renderPersonDetailCrm2;
 
-  function injectRowPermissionsCrm2(html = '') {
-    return String(html).replace(
-      /<button type="button" role="menuitem" onclick="crm2PfEdit\('([^']+)'\)"[^>]*>Editar<\/button>/g,
-      (button, personId) => {
-        const editButton = crm2PfState.canEdit ? button : '';
-        const deleteButton = crm2PfState.canDelete
-          ? `<button class="danger-text" type="button" role="menuitem" onclick="crm2PfDelete('${escapeAttrCrm2(personId)}')">Excluir</button>`
-          : '';
-        return `${editButton}${deleteButton}`;
-      }
-    );
-  }
-
   function injectDetailPermissionsCrm2(html = '', person = {}) {
-    const editPattern = /<button class="save-btn" type="button" onclick="crm2PfEdit\('[^']+'\)"[^>]*>Editar<\/button>/;
-    return String(html).replace(editPattern, (button) => {
-      const editButton = crm2PfState.canEdit ? button : '';
-      const deleteButton = crm2PfState.canDelete
-        ? `<button class="secondary-btn" type="button" onclick="crm2PfDelete('${escapeAttrCrm2(person.id)}')">Excluir</button>`
+    const actionPattern = /<div class="crm2-pf-detail-actions" data-crm2-pf-detail-actions><\/div>/;
+    return String(html).replace(actionPattern, () => {
+      const editButton = !crm2PfState.inlineEditing && crm2PfState.canEdit
+        ? `<button class="save-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfEdit('${escapeAttrCrm2(person.id)}')"><i data-lucide="pencil" aria-hidden="true"></i>Editar</button>`
         : '';
-      return `${deleteButton}${editButton}`;
+      const deleteButton = crm2PfState.canDelete
+        ? `<button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="crm2PfDelete('${escapeAttrCrm2(person.id)}')"><i data-lucide="trash-2" aria-hidden="true"></i>Excluir</button>`
+        : '';
+      const moreButton = !crm2PfState.inlineEditing
+        ? '<button class="icon-btn crm2-pf-detail-more" type="button" aria-label="Mais ações" title="Mais ações"><i data-lucide="more-vertical" aria-hidden="true"></i></button>'
+        : '';
+      return `<div class="crm2-pf-detail-actions" data-crm2-pf-detail-actions>${deleteButton}${editButton}${moreButton}</div>`;
     });
   }
-
-  renderPeopleListCrm2 = function renderPeopleListWithPermissionsCrm2() {
-    return injectRowPermissionsCrm2(originalRenderPeopleListCrm2());
-  };
 
   renderPersonDetailCrm2 = function renderPersonDetailWithPermissionsCrm2(person) {
     return injectDetailPermissionsCrm2(originalRenderPersonDetailCrm2(person), person || {});
@@ -2187,7 +2187,7 @@ import { hasPermission } from './services/permissionService.js';
         <div class="crm2-pessoas-state is-error" role="alert">
           <strong id="crm2-access-denied-title">Acesso não autorizado.</strong>
           <span>É necessária a permissão Visualizar para acessar Pessoas físicas.</span>
-          <button class="secondary-btn" type="button" onclick="navegarParaCrm2Rota('200')">Voltar ao CRM 2.0</button>
+          <button class="secondary-btn crm2-pf-action-with-icon" type="button" onclick="navegarParaCrm2Rota('200')"><i data-lucide="chevron-left" aria-hidden="true"></i>Voltar ao CRM 2.0</button>
         </div>
       </section>
     `;

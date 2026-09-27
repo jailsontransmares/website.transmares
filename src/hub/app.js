@@ -34,6 +34,7 @@ import {
 import { HUB_MENU_TREE } from './menuTree.js';
 import { HUB_ADMIN_ROUTE_TABS, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
 import { resolveCrm2CadastroTab } from './crm2CadastroRoute.js';
+import { renderCrm2CadastroPagination } from './crm2CadastroUi.js';
 import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
@@ -67,6 +68,7 @@ import {
   Eye,
   File,
   FilePlus2,
+  FileText,
   Filter,
   House,
   HeartPulse,
@@ -82,6 +84,8 @@ import {
   MessageCircle,
   Menu,
   Moon,
+  MoreVertical,
+  Paperclip,
   Pin,
   Plus,
   Pencil,
@@ -127,6 +131,7 @@ const HUB_LUCIDE_ICONS = {
   Eye,
   File,
   FilePlus2,
+  FileText,
   Filter,
   House,
   HeartPulse,
@@ -142,6 +147,8 @@ const HUB_LUCIDE_ICONS = {
   MessageCircle,
   Menu,
   Moon,
+  MoreVertical,
+  Paperclip,
   Pin,
   Plus,
   Pencil,
@@ -326,7 +333,6 @@ const state = {
     colunasParceirosIndicacao: [],
     colunasParceirosIndicacaoRascunho: [],
     seletorColunasParceirosAberto: false,
-    acoesParceirosAberto: false,
     loteParceirosModo: null,
     loteParceirosSelecionados: [],
     loteParceirosProcessando: false,
@@ -394,11 +400,20 @@ const state = {
   buscaTimer: null,
   listaGrupos: [],
   listaAc: '',
+  listaStatusProdutos: 'ativo',
+  produtosInativos: [],
+  produtosInativosCarregados: false,
+  produtosInativosCarregando: false,
+  alterandoStatusProdutos: false,
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
+  ordenacaoGruposProdutos: 'asc',
+  ordenacaoGruposProdutosInicializada: false,
+  gruposProdutosExpandidos: {},
   largurasColunasProdutos: null,
   redimensionamentoColunaProdutos: null,
   modalVisualizacaoProdutos: false,
+  novoProdutoGrupo: null,
   mensagemProdutosLista: '',
   tipoMensagemProdutosLista: '',
   edicaoProdutosGrupo: {
@@ -524,17 +539,14 @@ let renderPainelAr;
 let selecionarAbaAr;
 const ADMIN_PARTNER_SEARCH_DEBOUNCE_MS = 650;
 const ADMIN_PARTNER_COLUMNS = [
-  { id: 'acoes', label: 'Ações', locked: true, min: '112px', size: '0.55fr' },
-  { id: 'parceiro', label: 'Parceiro', locked: true, min: '220px', size: '1.5fr' },
-  { id: 'codigo_revendedor', label: 'Cód. revendedor', min: '120px', size: '0.7fr' },
-  { id: 'ac', label: 'AC', min: '80px', size: '0.45fr' },
-  { id: 'contato', label: 'Contato', min: '180px', size: '1fr' },
-  { id: 'empresa', label: 'Empresa', min: '160px', size: '0.9fr' },
-  { id: 'remunerado', label: 'Remunerado', min: '110px', size: '0.55fr' },
-  { id: 'status', label: 'Status', min: '130px', size: '0.7fr' },
-  { id: 'atualizado', label: 'Atualizado em', min: '120px', size: '0.6fr' }
+  { id: 'parceiro', label: 'Parceiro', locked: true, min: '180px', size: '1.2fr' },
+  { id: 'contato', label: 'Contato', min: '100px', size: '0.5fr' },
+  { id: 'email_cadastro_certificado', label: 'E-mail para cadastro', min: '145px', size: '0.7fr' },
+  { id: 'empresa', label: 'Empresa', min: '140px', size: '0.8fr' },
+  { id: 'remunerado', label: 'Remunerado', min: '100px', size: '0.55fr' },
+  { id: 'status', label: 'Status', min: '90px', size: '0.4fr' }
 ];
-const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['acoes', 'parceiro', 'codigo_revendedor', 'ac', 'contato', 'status', 'atualizado'];
+const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['parceiro', 'contato', 'email_cadastro_certificado', 'status'];
 
 function sincronizarContextoInicialHub() {
   atualizarContextoInicialHub({
@@ -2544,25 +2556,22 @@ function renderParceirosIndicacaoAdmin() {
   state.admin.paginaParceirosIndicacao = paginaAtual;
 
   return `
-    <section class="admin-panel">
-      <div class="admin-panel-header admin-partners-panel-header">
+    <section class="admin-panel crm2-pessoas-page crm2-cadastro-directory-page crm2-parceiros-directory-page">
+      <div class="admin-panel-header admin-partners-panel-header crm2-pessoas-list-header">
         <div class="admin-users-header-row">
           <div>
-            <h2>Parceiros de Indicação</h2>
+            <h3>Parceiros de Indicação</h3>
             <p>Base central dos parceiros usados no Painel AR. ${resumo.total} registros · ${resumo.ativo || 0} ativos · ${(resumo.inativo || 0) + (resumo.arquivado || 0)} inativos/arquivados.</p>
           </div>
         </div>
+      </div>
 
+      <div class="crm2-parceiros-list-content">
+      <div class="crm2-cadastro-directory-toolbar crm2-parceiros-directory-toolbar">
         <div class="admin-partners-controls-row">
-          <div class="crud-filters admin-user-filters admin-partners-status-filters" role="group" aria-label="Filtro de status dos parceiros">
-            ${renderFiltroParceirosIndicacaoAdmin('todos', 'Todos', resumo.total)}
-            ${renderFiltroParceirosIndicacaoAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-            ${renderFiltroParceirosIndicacaoAdmin('inativos_arquivados', 'Inativos/Arquivados', (resumo.inativo || 0) + (resumo.arquivado || 0))}
-          </div>
-
-          <div class="action-toolbar admin-users-toolbar admin-partners-main-actions">
-            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Incluir</button>' : ''}
-            <label class="action-toolbar-field admin-users-search" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
+          <div class="action-toolbar admin-users-toolbar admin-partners-main-actions crm2-cadastro-directory-toolbar-actions">
+            <label class="action-toolbar-field admin-users-search crm2-cadastro-directory-search-control" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
+              <i data-lucide="search" aria-hidden="true"></i>
               <input
                 id="admin_parceiro_indicacao_busca"
                 class="config-input action-toolbar-input admin-users-search-input"
@@ -2574,14 +2583,13 @@ function renderParceirosIndicacaoAdmin() {
                 onblur="aplicarBuscaParceirosIndicacaoAdmin()"
               >
             </label>
-            <button
-              class="secondary-btn action-toolbar-btn admin-partners-actions-btn hub-quick-actions-trigger"
-              type="button"
-              onclick="alternarMenuAcoesParceirosIndicacaoAdmin()"
-              onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)"
-              aria-haspopup="menu"
-              aria-expanded="${state.admin.acoesParceirosAberto ? 'true' : 'false'}"
-            >⋮</button>
+            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Incluir</button>' : ''}
+            <details class="hub-row-actions-menu crm2-pf-list-more crm2-parceiros-filter-menu" data-hub-action-menu data-hub-action-min-width="190" data-hub-action-max-width="240" data-hub-action-gap="6" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="selected">
+              <summary class="icon-btn ${state.admin.filtros.parceirosIndicacao !== 'todos' ? 'is-active' : ''}" aria-haspopup="menu" aria-label="Filtros${state.admin.filtros.parceirosIndicacao !== 'todos' ? ': ' + (state.admin.filtros.parceirosIndicacao === 'ativo' ? 'Ativos' : 'Inativos/Arquivados') : ''}" title="Filtros"><i data-lucide="filter" aria-hidden="true"></i></summary>
+              <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Filtrar parceiros por status">
+                ${[['todos', 'Todos'], ['ativo', 'Ativos'], ['inativos_arquivados', 'Inativos/Arquivados']].map(([filtro, label]) => `<button type="button" role="menuitem" aria-pressed="${state.admin.filtros.parceirosIndicacao === filtro ? 'true' : 'false'}" onclick="selecionarFiltroParceirosIndicacaoAdmin('${filtro}')">${escapeHtml(label)}${state.admin.filtros.parceirosIndicacao === filtro ? '<i data-lucide="check" aria-hidden="true"></i>' : ''}</button>`).join('')}
+              </div>
+            </details>
             ${renderMenuAcoesParceirosIndicacaoAdmin()}
           </div>
         </div>
@@ -2591,7 +2599,8 @@ function renderParceirosIndicacaoAdmin() {
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${renderBarraLoteParceirosIndicacaoAdmin()}
       ${state.admin.loading ? renderHubLoading('Carregando parceiros...') : renderListaParceirosIndicacaoAdmin(recordsPagina)}
-      ${state.admin.loading ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual)}
+      ${state.admin.loading || !filtrados.length ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, filtrados.length)}
+      </div>
       ${renderModalParceiroIndicacaoAdmin()}
     </section>
   `;
@@ -2611,7 +2620,11 @@ function garantirColunasParceirosIndicacaoAdmin() {
   try {
     const salvo = window.localStorage?.getItem(ADMIN_PARTNER_COLUMNS_STORAGE_KEY);
     const parseado = salvo ? JSON.parse(salvo) : null;
-    const colunasSalvas = Array.isArray(parseado) ? parseado.filter(id => validas.has(id)) : [];
+    const colunasSalvas = Array.isArray(parseado)
+      ? parseado
+        .map(id => id === 'atualizado' ? 'email_cadastro_certificado' : id)
+        .filter(id => validas.has(id))
+      : [];
     state.admin.colunasParceirosIndicacao = garantirColunasObrigatoriasParceirosIndicacao(
       colunasSalvas.length ? colunasSalvas : ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS
     );
@@ -2699,22 +2712,6 @@ function renderSeletorColunasParceirosIndicacaoAdmin() {
   `;
 }
 
-function renderFiltroParceirosIndicacaoAdmin(filtro, label, total) {
-  const ativo = state.admin.filtros.parceirosIndicacao === filtro;
-  const classes = [
-    'filter-btn',
-    filtro === 'ativo' ? 'filter-status-ativo' : '',
-    filtro === 'inativos_arquivados' ? 'filter-status-bloqueados-inativos' : '',
-    ativo ? 'active' : ''
-  ].filter(Boolean).join(' ');
-
-  return `
-    <button class="${classes}" type="button" onclick="selecionarFiltroParceirosIndicacaoAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
-      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
-    </button>
-  `;
-}
-
 function renderListaParceirosIndicacaoAdmin(records) {
   if (!records.length) {
     return '<p class="quick-link-empty">Nenhum parceiro encontrado.</p>';
@@ -2728,7 +2725,7 @@ function renderListaParceirosIndicacaoAdmin(records) {
   const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
 
   return `
-    <div class="crud-list admin-partners-list" role="table" aria-label="Parceiros de indicação">
+    <div class="crud-list admin-partners-list crm2-pessoas-table-wrap crm2-parceiros-table-wrap" role="table" aria-label="Parceiros de indicação">
       <div class="crud-header" role="row" style="${escapeAttr(style)}">
         ${modoLote ? `
           <label class="admin-partner-select-cell" role="columnheader" aria-label="Selecionar todos os parceiros visíveis">
@@ -2760,7 +2757,7 @@ function obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao = fa
 function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas), { selecao = false } = {}) {
   const nome = parceiro.nome_completo || parceiro.nome || 'Sem nome';
   const empresa = parceiro.nome_empresa || parceiro.vinculo_empresa || '';
-  const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.email_cadastro_certificado || parceiro.email || '-';
+  const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.whatsapp_pessoal || parceiro.email_comercial || parceiro.email || '-';
   const status = parceiro.status || 'ativo';
   const remunerado = parceiro.remunerado === true ? ' · Remunerado' : '';
   const selecionado = (state.admin.loteParceirosSelecionados || []).includes(parceiro.id);
@@ -2783,23 +2780,12 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
 
 function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   const { nome, empresa, contato, status, remunerado } = contexto;
-  const podeEditar = pode('admin.parceiros_indicacao', 'update')
-    && (status !== 'arquivado' || pode('admin.parceiros_indicacao', 'archive'));
-
-  if (colunaId === 'acoes') {
-    return `
-      <div class="admin-partner-cell crud-actions admin-partner-actions" role="cell">
-        <button class="icon-btn" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Visualizar parceiro" aria-label="Visualizar ${escapeAttr(nome)}">🔍</button>
-        ${podeEditar ? `<button class="icon-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Editar parceiro" aria-label="Editar ${escapeAttr(nome)}">✎</button>` : ''}
-      </div>
-    `;
-  }
 
   if (colunaId === 'parceiro') {
     return `
       <div class="admin-partner-cell admin-user-main" role="cell">
         <div class="admin-user-identity">
-          <strong>${escapeHtml(nome)}</strong>
+          <button class="crm2-parceiro-name-link" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" aria-label="Abrir cadastro de ${escapeAttr(nome)}">${escapeHtml(nome)}</button>
           ${empresa ? `<small>${escapeHtml(empresa)}</small>` : ''}
         </div>
       </div>
@@ -2810,9 +2796,9 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
     codigo_revendedor: parceiro.codigo_revendedor || '-',
     ac: parceiro.ac || '-',
     contato,
+    email_cadastro_certificado: parceiro.email_cadastro_certificado || '-',
     empresa: empresa || '-',
     remunerado: parceiro.remunerado === true ? 'Sim' : 'Não',
-    atualizado: formatarDataCurtaAr(parceiro.updated_at || parceiro.created_at)
   };
 
   if (colunaId === 'status') {
@@ -2910,7 +2896,6 @@ function iniciarLoteParceirosIndicacaoAdmin(modo) {
   state.admin.loteParceirosModo = modo;
   state.admin.loteParceirosSelecionados = [];
   state.admin.loteParceirosProcessando = false;
-  state.admin.acoesParceirosAberto = false;
   state.admin.seletorColunasParceirosAberto = false;
   state.admin.message = '';
   renderAdministracao();
@@ -3131,54 +3116,23 @@ async function exportarParceirosIndicacaoAdmin() {
 }
 
 function renderMenuAcoesParceirosIndicacaoAdmin() {
-  if (!state.admin.acoesParceirosAberto) {
-    return '';
-  }
-
   const podeAtualizar = pode('admin.parceiros_indicacao', 'update');
   const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
 
   return `
-    <div class="admin-partners-actions-menu" role="menu" aria-label="Ações de parceiros" onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)">
-      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('colunas')">Editar colunas</button>
-      ${podeAtualizar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'status\')">Ativar/Inativar em lote</button>' : ''}
-      ${podeArquivar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'arquivar\')">Arquivar em lote</button>' : ''}
-      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('exportar')">Exportar para Excel</button>
-    </div>
+    <details class="hub-row-actions-menu crm2-pf-list-more crm2-parceiros-action-menu" data-hub-action-menu data-hub-action-min-width="220" data-hub-action-max-width="320" data-hub-action-gap="10" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="first">
+      <summary class="icon-btn admin-partners-actions-btn" aria-haspopup="menu" aria-label="Mais ações" title="Mais ações"><i data-lucide="more-vertical" aria-hidden="true"></i></summary>
+      <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Ações de parceiros">
+        <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('colunas')">Editar colunas</button>
+        ${podeAtualizar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'status\')">Ativar/Inativar em lote</button>' : ''}
+        ${podeArquivar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'arquivar\')">Arquivar em lote</button>' : ''}
+        <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('exportar')">Exportar para Excel</button>
+      </div>
+    </details>
   `;
 }
 
-function alternarMenuAcoesParceirosIndicacaoAdmin() {
-  state.admin.acoesParceirosAberto = !state.admin.acoesParceirosAberto;
-  renderAdministracao();
-
-  if (state.admin.acoesParceirosAberto) {
-    const trigger = document.querySelector('.admin-partners-actions-btn');
-    const menu = document.querySelector('.admin-partners-actions-menu');
-    abrirMenuAcaoGlobal(trigger, menu, {
-      minWidth: 220,
-      maxWidth: 320,
-      gap: 10
-    });
-    window.setTimeout(() => {
-      document.querySelector('.admin-partners-actions-menu [role="menuitem"]')?.focus();
-    }, 0);
-  }
-}
-
-function fecharMenuAcoesParceirosIndicacaoAdmin({ renderizar = true } = {}) {
-  if (!state.admin.acoesParceirosAberto) return;
-
-  state.admin.acoesParceirosAberto = false;
-
-  if (renderizar) {
-    renderAdministracao();
-  }
-}
-
 function executarAcaoParceirosIndicacaoAdmin(acao) {
-  state.admin.acoesParceirosAberto = false;
-
   if (acao === 'colunas') {
     abrirSeletorColunasParceirosIndicacaoAdmin();
     renderAdministracao();
@@ -3202,31 +3156,6 @@ function executarAcaoParceirosIndicacaoAdmin(acao) {
 
   state.admin.message = '';
   renderAdministracao();
-}
-
-function navegarMenuAcoesParceirosIndicacaoAdmin(event) {
-  const teclas = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'];
-  if (!teclas.includes(event.key)) return;
-
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    fecharMenuAcoesParceirosIndicacaoAdmin();
-    return;
-  }
-
-  const itens = Array.from(document.querySelectorAll('.admin-partners-actions-menu [role="menuitem"]'));
-  if (!itens.length) return;
-
-  event.preventDefault();
-  const atual = itens.indexOf(document.activeElement);
-  let proximo = atual;
-
-  if (event.key === 'ArrowDown') proximo = atual < 0 ? 0 : (atual + 1) % itens.length;
-  if (event.key === 'ArrowUp') proximo = atual < 0 ? itens.length - 1 : (atual - 1 + itens.length) % itens.length;
-  if (event.key === 'Home') proximo = 0;
-  if (event.key === 'End') proximo = itens.length - 1;
-
-  itens[proximo]?.focus();
 }
 
 function abrirSeletorColunasParceirosIndicacaoAdmin() {
@@ -3335,29 +3264,16 @@ function selecionarPaginaParceirosIndicacaoAdmin(pagina) {
   renderAdministracao();
 }
 
-function renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual) {
-  if (totalPaginas <= 1) {
-    return '';
-  }
-
-  return `
-    <nav class="admin-users-pagination" aria-label="Paginação de parceiros">
-      ${Array.from({ length: totalPaginas }, (_, index) => {
-        const pagina = index + 1;
-        const classes = ['admin-users-page-btn', pagina === paginaAtual ? 'active' : ''].filter(Boolean).join(' ');
-        return `
-          <button
-            class="${classes}"
-            type="button"
-            onclick="selecionarPaginaParceirosIndicacaoAdmin(${pagina})"
-            aria-current="${pagina === paginaAtual ? 'page' : 'false'}"
-          >
-            ${pagina}
-          </button>
-        `;
-      }).join('')}
-    </nav>
-  `;
+function renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, totalResultados) {
+  return renderCrm2CadastroPagination({
+    label: 'parceiros de indicação',
+    page: paginaAtual,
+    totalPages: totalPaginas,
+    totalItems: totalResultados,
+    previousAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual - 1})`,
+    nextAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual + 1})`,
+    hidePreviousOnFirstPage: true
+  });
 }
 
 function renderModalParceiroIndicacaoAdmin() {
@@ -3372,6 +3288,8 @@ function renderModalParceiroIndicacaoAdmin() {
   const somenteLeitura = modo === 'view';
   const podeVerSensiveis = pode('admin.parceiros_indicacao', 'view_sensitive');
   const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
+  const podeEditar = pode('admin.parceiros_indicacao', 'update')
+    && ((item.status || 'ativo') !== 'arquivado' || podeArquivar);
   const titulo = modo === 'view' ? 'Visualizar parceiro' : (modo === 'edit' ? 'Editar parceiro' : 'Adicionar parceiro');
   const botaoTexto = state.admin.parceiroModal.salvo
     ? 'Salvo'
@@ -3381,7 +3299,10 @@ function renderModalParceiroIndicacaoAdmin() {
     <section id="parceiro_modal_dialog" class="hub-form-screen partner-form-screen" role="region" aria-labelledby="parceiro_modal_title" tabindex="-1" data-partner-modal>
         <div class="hub-form-screen-header">
           <h3 id="parceiro_modal_title">${escapeHtml(titulo)}</h3>
-          <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
+          <div class="partner-modal-header-actions">
+            ${somenteLeitura && podeEditar ? `<button class="secondary-btn partner-modal-edit-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(state.admin.parceiroModal.id || item.id || '')}')"><i data-lucide="pencil" aria-hidden="true"></i>Editar</button>` : ''}
+            <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
+          </div>
         </div>
 
         <div class="hub-form-screen-steps partner-modal-tabs" role="tablist" aria-label="Seções do parceiro">
@@ -4060,6 +3981,70 @@ function formatarResumoPermissoesEspecificasUsuario(permitidas, bloqueadas) {
   return `${bloqueadas} bloqueada${bloqueadas > 1 ? 's' : ''}`;
 }
 
+const OPCOES_PERMISSAO_PERFIL = Object.freeze([
+  { id: 'view', label: 'Visualizar' },
+  { id: 'edit', label: 'Editar' },
+  { id: 'delete', label: 'Excluir' }
+]);
+
+const ACOES_TECNICAS_PERMISSAO_PERFIL = Object.freeze({
+  links_corretora: { view: ['view'] },
+  links_ar: { view: ['view'] },
+  links_gestao: { view: ['view'] },
+  painel_ar: { view: ['view'], edit: ['update'], delete: ['delete'] },
+  'painel_ar.produtos': { view: ['view'], edit: ['update'] },
+  'painel_ar.gerar_links': { view: ['view'], edit: ['execute'] },
+  'painel_ar.validacoes': { view: ['view'], edit: ['importar', 'emitir_recibo'], delete: ['excluir_importacao', 'cancelar_recibo'] },
+  'painel_ar.validacoes.importacao': { view: ['view'], edit: ['importar'], delete: ['excluir_importacao'] },
+  'painel_ar.validacoes.recibos': { view: ['view'], edit: ['emitir_recibo'], delete: ['cancelar_recibo'] },
+  central_senhas: { view: ['view', 'view_secret'], edit: ['create', 'update'], delete: ['delete'] },
+  admin: { view: ['view'] },
+  'admin.usuarios': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
+  'admin.perfis': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'admin.modulos': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
+  'admin.logs_integracoes': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'admin.permissoes': { view: ['view'], edit: ['update'] },
+  'admin.parceiros_indicacao': { view: ['view', 'view_sensitive'], edit: ['create', 'update'], delete: ['archive'] },
+  consultoria_360: { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  financeiro: { view: ['view'] },
+  'financeiro.dashboard': { view: ['view'] },
+  'financeiro.lancamentos': { view: ['view', 'export'], edit: ['create', 'update', 'edit', 'settle'], delete: ['cancel'] },
+  'financeiro.conciliacao': { view: ['view'], edit: ['edit', 'importar', 'reconcile', 'unreconcile'] },
+  'financeiro.cartoes': { view: ['view'], edit: ['create', 'update'], delete: ['cancel'] },
+  'financeiro.relatorios': { view: ['view', 'export'] },
+  'financeiro.cadastros': { view: ['view'], edit: ['create', 'update', 'edit'], delete: ['archive'] },
+  'financeiro.fechamento': { view: ['view'], edit: ['close', 'reopen'] },
+  'financeiro.auditoria': { view: ['view'] },
+  'financeiro.configuracoes': { view: ['view'], edit: ['update', 'edit'] },
+  'financeiro.complementares': { view: ['view'], edit: ['edit'] },
+  'financeiro.homologacao': { view: ['view'], edit: ['edit'] },
+  'financeiro.dados_sensiveis': { view: ['view_sensitive'] },
+  rh_dp: { view: ['view'] },
+  'rh_dp.dashboard': { view: ['view'] },
+  'rh_dp.colaboradores': { view: ['view', 'view_sensitive'], edit: ['create', 'update'], delete: ['archive'] },
+  'rh_dp.documentos': { view: ['view', 'download'], edit: ['create', 'update'], delete: ['delete'] },
+  'rh_dp.historicos': { view: ['view'] },
+  'rh_dp.ferias': { view: ['view'], edit: ['create', 'update'], delete: ['cancel'] },
+  'rh_dp.ocorrencias': { view: ['view'], edit: ['create', 'update'] },
+  'rh_dp.fechamentos': { view: ['view'], edit: ['create', 'update', 'close', 'reopen'] },
+  'rh_dp.desligamentos': { view: ['view'], edit: ['create', 'update'] },
+  'rh_dp.auditoria': { view: ['view'] },
+  'rh_dp.configuracoes': { view: ['view'], edit: ['update'] }
+});
+
+function obterAcoesTecnicasPermissaoPerfil(recursoChave, grupo) {
+  const acoesPorGrupo = ACOES_TECNICAS_PERMISSAO_PERFIL[recursoChave]
+    || { view: ['view'], edit: [], delete: [] };
+
+  return acoesPorGrupo[grupo] || [];
+}
+
+function obterTodasAcoesTecnicasPermissaoPerfil(recursoChave) {
+  return Array.from(new Set(OPCOES_PERMISSAO_PERFIL.flatMap(opcao =>
+    obterAcoesTecnicasPermissaoPerfil(recursoChave, opcao.id)
+  )));
+}
+
 function obterRotuloAcaoPermissao(acao) {
   const rotulos = {
     view: 'Visualizar',
@@ -4232,9 +4217,7 @@ function construirEstruturaPermissoesUsuario(recursos) {
       .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
 
     const recursosFuncionais = itensRelacionados.filter(recurso => recurso.chave !== modulo.chave);
-    const linhasBase = modulo.chave === 'painel_ar'
-      ? [modulo]
-      : (recursosFuncionais.length ? recursosFuncionais : [modulo]);
+    const linhasBase = [modulo, ...recursosFuncionais];
     const linhas = linhasBase.map(recurso => ({
       ...recurso,
       modulo_chave: modulo.chave,
@@ -4903,7 +4886,7 @@ function renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPor
         <thead>
           <tr>
             <th>Recurso</th>
-            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+            ${OPCOES_PERMISSAO_PERFIL.map(opcao => `<th>${escapeHtml(opcao.label)}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
@@ -4912,17 +4895,20 @@ function renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPor
               <td>
                 <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
               </td>
-              ${modulo.acoes.map(acao => {
-                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+              ${OPCOES_PERMISSAO_PERFIL.map(opcao => {
+                const acoesTecnicas = obterAcoesTecnicasPermissaoPerfil(recurso.chave, opcao.id);
+                if (!acoesTecnicas.length) {
                   return '<td class="permission-cell permission-cell-empty">-</td>';
                 }
 
-                const marcado = Boolean(permissoesPorChave[`${recurso.chave}:${acao}`]);
+                const acoesMarcadas = acoesTecnicas.filter(acao => permissoesPorChave[`${recurso.chave}:${acao}`]);
+                const marcado = acoesMarcadas.length === acoesTecnicas.length;
+                const parcial = acoesMarcadas.length > 0 && !marcado;
 
                 return `
                   <td class="permission-cell">
                     <label class="permission-checkbox">
-                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoPerfil('${escapeAttr(perfilId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
+                      <input type="checkbox" ${marcado ? 'checked' : ''} ${parcial ? 'class="is-mixed" aria-checked="mixed"' : ''} ${modal.applying ? 'disabled' : ''} aria-label="${escapeAttr(opcao.label)}: ${escapeAttr(recurso.rotulo_recurso || recurso.nome || recurso.chave)}" onchange="alternarCheckboxPermissaoPerfil('${escapeAttr(perfilId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(opcao.id)}', this.checked)">
                       <span aria-hidden="true"></span>
                     </label>
                   </td>
@@ -5143,13 +5129,13 @@ function voltarEtapaModalPerfilAdmin() {
 
 function alternarCheckboxPermissaoPerfil(perfilId, recursoChave, acao, permitido) {
   const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
-  const chave = `${recursoChave}:${acao}`;
+  const acoesTecnicas = obterAcoesTecnicasPermissaoPerfil(recursoChave, acao);
 
-  if (permitido) {
-    draftPermissions[chave] = true;
-  } else {
-    delete draftPermissions[chave];
-  }
+  acoesTecnicas.forEach(acaoTecnica => {
+    const chave = `${recursoChave}:${acaoTecnica}`;
+    if (permitido) draftPermissions[chave] = true;
+    else delete draftPermissions[chave];
+  });
 
   state.admin.permissionModal.draftProfilePermissions = draftPermissions;
   state.admin.permissionModal.dirty = verificarAlteracoesPermissoesPerfil(
@@ -5170,7 +5156,7 @@ function aplicarLoteModuloPermissoesPerfil(perfilId, moduloChave, permitido) {
   const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
 
   modulo.linhas.forEach(recurso => {
-    obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+    obterTodasAcoesTecnicasPermissaoPerfil(recurso.chave).forEach(acao => {
       const chave = `${recurso.chave}:${acao}`;
 
       if (permitido) {
@@ -5206,7 +5192,7 @@ function aplicarLoteGlobalPermissoesPerfil(perfilId, permitido) {
 
   modulos.forEach(modulo => {
     modulo.linhas.forEach(recurso => {
-      obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+      obterTodasAcoesTecnicasPermissaoPerfil(recurso.chave).forEach(acao => {
         const chave = `${recurso.chave}:${acao}`;
 
         if (permitido) {
@@ -10433,6 +10419,8 @@ function renderResumoProdutoMvpAr(produto) {
 }
 
 function renderListaProdutosAr() {
+  carregarOrdenacaoGruposProdutosAr();
+  const larguraContainerLista = obterLargurasColunasProdutosAr().reduce((total, largura) => total + largura, 2);
   const totalFiltrosAtivos = contarFiltrosListaProdutosAr();
   const rotuloBotaoFiltros = totalFiltrosAtivos
     ? `Filtros: ${totalFiltrosAtivos} ativo${totalFiltrosAtivos === 1 ? '' : 's'}`
@@ -10440,27 +10428,44 @@ function renderListaProdutosAr() {
 
   return `
     <section>
-      <div class="ar-toolbar">
-        <input class="config-input" type="search" value="${escapeAttr(state.ar.busca)}" placeholder="Buscar por descrição, AC, modelo, validade" oninput="alterarBuscaAr(this.value)">
-        <div class="ar-products-toolbar-actions">
-          <div class="ar-products-filter-menu">
-            <button
-              class="secondary-btn ar-products-filter-btn ${totalFiltrosAtivos ? 'has-active-filters' : ''}"
-              type="button"
-              onclick="alternarFiltrosListaProdutosAr()"
-              aria-label="${escapeAttr(rotuloBotaoFiltros)}"
-              aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
-              title="${escapeAttr(rotuloBotaoFiltros)}"
-            >
-              <i class="ar-products-filter-icon" data-lucide="filter" aria-hidden="true"></i>
+      <div class="ar-products-content-shell" style="--ar-products-content-width: ${larguraContainerLista}px">
+        <div class="ar-toolbar">
+          <label class="ar-products-search-control">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input type="search" value="${escapeAttr(state.ar.busca)}" placeholder="Buscar por descrição, AC, modelo, validade ou SKU..." oninput="alterarBuscaAr(this.value)">
+          </label>
+          <div class="ar-products-toolbar-actions">
+            <div class="ar-products-filter-menu">
+              <button
+                class="secondary-btn ar-products-filter-btn ${totalFiltrosAtivos ? 'has-active-filters' : ''}"
+                type="button"
+                onclick="alternarFiltrosListaProdutosAr()"
+                aria-label="${escapeAttr(rotuloBotaoFiltros)}"
+                aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
+                title="${escapeAttr(rotuloBotaoFiltros)}"
+              >
+                <i class="ar-products-filter-icon" data-lucide="filter" aria-hidden="true"></i>
+              </button>
+              ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
+            </div>
+            <details class="ar-products-sort-menu">
+              <summary class="secondary-btn ar-products-settings-btn" aria-label="Configurações de exibição" title="Configurações de exibição">
+                <i data-lucide="settings-2" aria-hidden="true"></i>
+              </summary>
+              <div class="ar-products-sort-dropdown" role="group" aria-label="Ordenar grupos de produtos">
+                <span>Ordem dos grupos</span>
+                <button type="button" class="${state.ar.ordenacaoGruposProdutos === 'asc' ? 'is-selected' : ''}" aria-pressed="${state.ar.ordenacaoGruposProdutos === 'asc'}" onclick="definirOrdenacaoGruposProdutosAr('asc')">A–Z</button>
+                <button type="button" class="${state.ar.ordenacaoGruposProdutos === 'desc' ? 'is-selected' : ''}" aria-pressed="${state.ar.ordenacaoGruposProdutos === 'desc'}" onclick="definirOrdenacaoGruposProdutosAr('desc')">Z–A</button>
+              </div>
+            </details>
+            <button class="secondary-btn ar-products-toggle-btn" type="button" onclick="alternarTodosGruposProdutosAr()">
+              <i data-lucide="chevron-down" aria-hidden="true"></i><span>Expandir todos</span>
             </button>
-            ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
           </div>
-          <button class="secondary-btn ar-products-toggle-btn" type="button" onclick="alternarTodosGruposProdutosAr()">Recolher todos</button>
         </div>
-      </div>
       <div id="ar_produtos_lista_resultado">
-        ${renderTabelaProdutosAr()}
+          ${renderTabelaProdutosAr()}
+        </div>
       </div>
       ${renderBarraProdutosSelecionadosAr()}
       ${renderModalVisualizacaoProdutosAr()}
@@ -10470,13 +10475,14 @@ function renderListaProdutosAr() {
 
 function produtosFiltradosAr() {
   if (state.ar.aba === 'produtos') {
+    const produtosLista = obterProdutosBaseListaProdutosAr();
     const termos = normalizarBuscaAr(state.ar.busca).split(' ').filter(Boolean);
     const gruposFiltro = new Set(
       (state.ar.listaGrupos || []).map(grupo => normalizarBuscaAr(grupo))
     );
     const acFiltro = normalizarBuscaAr(state.ar.listaAc);
 
-    return state.ar.produtos.filter(produto => {
+    return produtosLista.filter(produto => {
       const texto = normalizarBuscaAr([
         produto.descricao_comercial,
         produto.product_id,
@@ -10512,6 +10518,10 @@ function produtosFiltradosAr() {
 }
 
 function renderTabelaProdutosAr() {
+  if (state.ar.listaStatusProdutos === 'inativo' && state.ar.produtosInativosCarregando) {
+    return renderHubLoading('Carregando produtos inativos...');
+  }
+
   const produtos = produtosFiltradosAr();
 
   if (!produtos.length) {
@@ -10522,7 +10532,7 @@ function renderTabelaProdutosAr() {
   }
 
   const grupos = agruparProdutosListaAr(produtos);
-  const podeEditarProdutos = pode('painel_ar.produtos', 'update');
+  const podeEditarProdutos = state.ar.listaStatusProdutos === 'ativo' && pode('painel_ar.produtos', 'update');
 
   return `
     ${renderMensagemListaProdutosAr()}
@@ -10535,7 +10545,8 @@ function renderTabelaProdutosAr() {
           <details
             class="ar-products-group ${obterClasseGrupoProdutosAr(grupo.nome)}"
             data-group="${escapeAttr(grupo.nome)}"
-            open
+            ${state.ar.gruposProdutosExpandidos?.[grupo.nome] ? 'open' : ''}
+            ontoggle="registrarEstadoGrupoProdutosAr(this); atualizarBotaoToggleTodosProdutosAr()"
           >
             <summary><span>${escapeHtml(grupo.nome)}</span></summary>
             <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}" style="${obterEstiloLargurasColunasProdutosAr()}">
@@ -10546,7 +10557,7 @@ function renderTabelaProdutosAr() {
                 ${renderCabecalhoColunaProdutosAr('$ Padrão', 3)}
                 ${renderCabecalhoColunaProdutosAr('SKU', 4)}
               </div>
-              ${grupo.produtos.map(produto => {
+      ${grupo.produtos.map(produto => {
                 const temPrecoComDesconto = parseMoedaAr(produto.preco_com_desconto) != null;
                 const selecionado = state.ar.produtosListaSelecionados.includes(produto.id);
                 const rascunho = state.ar.edicaoProdutosGrupo?.rascunho?.[produto.id];
@@ -10577,10 +10588,24 @@ function renderTabelaProdutosAr() {
                   </article>
                 `;
               }).join('')}
+              ${state.ar.novoProdutoGrupo?.grupo === grupo.nome ? renderLinhaNovoProdutoGrupoAr(grupo) : ''}
             </div>
           </details>
           <div class="ar-products-group-actions" data-group="${escapeAttr(grupo.nome)}">
-            ${emEdicao ? `
+            ${state.ar.novoProdutoGrupo?.grupo === grupo.nome ? `
+              <button
+                class="ar-products-group-action-btn ar-products-group-cancel-btn"
+                type="button"
+                onclick="cancelarNovoProdutoGrupoAr()"
+                ${state.ar.novoProdutoGrupo.salvando ? 'disabled' : ''}
+              >Cancelar</button>
+              <button
+                class="ar-products-group-action-btn ar-products-group-save-btn"
+                type="button"
+                onclick="salvarNovoProdutoGrupoAr()"
+                ${state.ar.novoProdutoGrupo.salvando ? 'disabled' : ''}
+              >${state.ar.novoProdutoGrupo.salvando ? 'Salvando...' : 'Salvar'}</button>
+            ` : emEdicao ? `
               <button
                 class="ar-products-group-action-btn ar-products-group-cancel-btn"
                 type="button"
@@ -10595,11 +10620,20 @@ function renderTabelaProdutosAr() {
               >${state.ar.edicaoProdutosGrupo.salvando ? 'Salvando...' : 'Salvar'}</button>
             ` : podeEditarProdutos ? `
               <button
+                class="ar-products-group-action-btn ar-products-group-add-btn"
+                type="button"
+                data-group="${escapeAttr(grupo.nome)}"
+                aria-label="Adicionar produto ao grupo ${escapeAttr(grupo.nome)}"
+                onclick="iniciarNovoProdutoGrupoAr(this.dataset.group)"
+                ${state.ar.novoProdutoGrupo || state.ar.edicaoProdutosGrupo?.nome ? 'disabled' : ''}
+              ><i data-lucide="plus" aria-hidden="true"></i><span>Adicionar</span></button>
+              <button
                 class="ar-products-group-action-btn ar-products-group-edit-btn"
                 type="button"
                 data-group="${escapeAttr(grupo.nome)}"
                 aria-label="Editar produtos do grupo ${escapeAttr(grupo.nome)}"
                 onclick="iniciarEdicaoGrupoProdutosAr(this.dataset.group)"
+                ${state.ar.novoProdutoGrupo ? 'disabled' : ''}
               >Editar</button>
             ` : ''}
           </div>
@@ -10610,10 +10644,10 @@ function renderTabelaProdutosAr() {
   `;
 }
 
-const LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR = [42, 360, 114, 114, 150];
-const LARGURA_MINIMA_COLUNAS_PRODUTOS_AR = [42, 180, 90, 90, 90];
-const LARGURA_MAXIMA_COLUNA_PRODUTOS_AR = 560;
-const CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR = 'hub-ar-produtos-larguras-colunas';
+const LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR = [74, 760, 150, 150, 220];
+const LARGURA_MINIMA_COLUNAS_PRODUTOS_AR = [56, 300, 120, 120, 180];
+const LARGURA_MAXIMA_COLUNA_PRODUTOS_AR = 900;
+const CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR = 'hub-ar-produtos-larguras-colunas-v2';
 
 function obterLargurasColunasProdutosAr() {
   if (Array.isArray(state.ar.largurasColunasProdutos)) return state.ar.largurasColunasProdutos;
@@ -10659,6 +10693,10 @@ function ajustarLarguraColunaProdutosAr(indice, largura) {
     Math.max(LARGURA_MINIMA_COLUNAS_PRODUTOS_AR[indice], largura)
   );
   aplicarLargurasColunasProdutosAr();
+  const containerLista = document.querySelector('.ar-products-content-shell');
+  if (containerLista) {
+    containerLista.style.setProperty('--ar-products-content-width', `${larguras.reduce((total, valor) => total + valor, 2)}px`);
+  }
 }
 
 function iniciarRedimensionamentoColunaProdutosAr(event) {
@@ -11059,9 +11097,10 @@ function renderDropdownFiltrosListaProdutosAr() {
 
   return `
     <div class="ar-products-filter-dropdown">
-      <fieldset class="ar-products-filter-group">
+      <div class="ar-products-filter-content">
+       <fieldset class="ar-products-filter-group">
         <legend>Grupo do produto</legend>
-        <small>Sem seleção, todos os grupos são exibidos.</small>
+        <small>Selecione um ou mais grupos para filtrar.</small>
         <div class="ar-products-filter-group-options">
           ${grupos.map(grupo => {
             const selecionado = (state.ar.listaGrupos || []).includes(grupo);
@@ -11079,18 +11118,31 @@ function renderDropdownFiltrosListaProdutosAr() {
             `;
           }).join('')}
         </div>
-      </fieldset>
+       </fieldset>
 
-      <label>
+      <label class="ar-products-filter-ac">
+        <span>Status do produto</span>
+        <select onchange="alterarStatusListaProdutosAr(this.value)">
+          <option value="ativo" ${state.ar.listaStatusProdutos === 'ativo' ? 'selected' : ''}>Ativos</option>
+          <option value="inativo" ${state.ar.listaStatusProdutos === 'inativo' ? 'selected' : ''}>Inativos</option>
+        </select>
+      </label>
+
+      <label class="ar-products-filter-ac">
         <span>AC</span>
         <select onchange="alterarFiltroListaProdutosAr('ac', this.value)">
           <option value="">Todas</option>
           ${acs.map(ac => `<option value="${escapeAttr(ac)}" ${state.ar.listaAc === ac ? 'selected' : ''}>${escapeHtml(ac)}</option>`).join('')}
         </select>
       </label>
+      </div>
 
-      <button class="secondary-btn ar-products-clear-filters" type="button" onclick="limparFiltrosListaProdutosAr()">Limpar filtros</button>
-    </div>
+      <div class="ar-products-filter-footer">
+        <button class="secondary-btn ar-products-clear-filters" type="button" onclick="limparFiltrosListaProdutosAr()">Limpar filtros</button>
+        <button class="save-btn ar-products-apply-filters" type="button" onclick="aplicarFiltrosListaProdutosAr()">Aplicar</button>
+      </div>
+      </div>
+    </details>
   `;
 }
 
@@ -11103,9 +11155,163 @@ function renderBarraProdutosSelecionadosAr() {
     <div class="ar-products-selection-bar" role="status">
       <strong>${total} produto${total === 1 ? '' : 's'} selecionado${total === 1 ? '' : 's'}</strong>
       <button class="secondary-btn" type="button" onclick="limparProdutosListaSelecionadosAr()">Limpar</button>
-      <button class="save-btn" type="button" onclick="abrirVisualizacaoProdutosClienteAr()">Visualizar para cliente</button>
+      ${state.ar.listaStatusProdutos === 'ativo' ? `
+        ${pode('painel_ar.produtos', 'update') ? `<button class="secondary-btn ar-products-status-action" type="button" onclick="alterarStatusProdutosSelecionadosAr('inativo')" ${state.ar.alterandoStatusProdutos ? 'disabled' : ''}>Inativar produto${total === 1 ? '' : 's'}</button>` : ''}
+        <button class="save-btn" type="button" onclick="abrirVisualizacaoProdutosClienteAr()">Visualizar para cliente</button>
+      ` : `
+        ${pode('painel_ar.produtos', 'update') ? `<button class="save-btn ar-products-status-action" type="button" onclick="alterarStatusProdutosSelecionadosAr('ativo')" ${state.ar.alterandoStatusProdutos ? 'disabled' : ''}>Reativar produto${total === 1 ? '' : 's'}</button>` : ''}
+      `}
     </div>
   `;
+}
+
+function obterOpcoesAcProdutoGrupoAr(nomeGrupo) {
+  return [...new Set(
+    state.ar.produtos
+      .filter(produto => obterGrupoProdutoListaAr(produto) === nomeGrupo)
+      .map(produto => String(produto.ac || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function renderLinhaNovoProdutoGrupoAr(grupo) {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.grupo !== grupo.nome) return '';
+
+  const acs = obterOpcoesAcProdutoGrupoAr(grupo.nome);
+  const opcoesAc = acs.length
+    ? acs.map(ac => `<option value="${escapeAttr(ac)}" ${draft.ac === ac ? 'selected' : ''}>${escapeHtml(ac)}</option>`).join('')
+    : '<option value="">Sem AC definida neste grupo</option>';
+
+  return `
+    <article class="ar-products-row ar-products-new-row" role="row" aria-label="Novo produto">
+      <span class="ar-products-select-cell" aria-hidden="true"></span>
+      <span class="ar-products-edit-cell ar-products-new-description-cell">
+        <input class="ar-products-edit-input ar-products-new-input" type="text" maxlength="300" placeholder="Descrição do produto *" aria-label="Descrição do produto" value="${escapeAttr(draft.descricao)}" oninput="alterarRascunhoNovoProdutoGrupoAr('descricao', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off">
+        <select class="ar-products-edit-input ar-products-new-ac-select" aria-label="Autoridade certificadora" onchange="alterarRascunhoNovoProdutoGrupoAr('ac', this.value)" ${draft.salvando || acs.length < 2 ? 'disabled' : ''}>
+          ${acs.length > 1 ? '<option value="">Selecione a AC</option>' : ''}
+          ${opcoesAc}
+        </select>
+      </span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" inputmode="decimal" placeholder="Com desconto" aria-label="Valor com desconto" value="${escapeAttr(draft.precoComDesconto)}" oninput="alterarRascunhoNovoProdutoGrupoAr('precoComDesconto', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" inputmode="decimal" placeholder="Valor padrão" aria-label="Valor padrão" value="${escapeAttr(draft.precoSemDesconto)}" oninput="alterarRascunhoNovoProdutoGrupoAr('precoSemDesconto', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" maxlength="100" placeholder="SKU *" aria-label="SKU" value="${escapeAttr(draft.sku)}" oninput="alterarRascunhoNovoProdutoGrupoAr('sku', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+    </article>
+  `;
+}
+
+function iniciarNovoProdutoGrupoAr(grupo) {
+  if (!pode('painel_ar.produtos', 'update') || state.ar.listaStatusProdutos !== 'ativo') return;
+  if (state.ar.edicaoProdutosGrupo?.nome || state.ar.novoProdutoGrupo) return;
+
+  const acs = obterOpcoesAcProdutoGrupoAr(grupo);
+  state.ar.novoProdutoGrupo = {
+    grupo,
+    descricao: '',
+    sku: '',
+    precoComDesconto: '',
+    precoSemDesconto: '',
+    ac: acs.length === 1 ? acs[0] : '',
+    acs,
+    salvando: false,
+    erro: ''
+  };
+  state.ar.gruposProdutosExpandidos[grupo] = true;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+
+  const details = Array.from(document.querySelectorAll('.ar-products-group[data-group]'))
+    .find(elemento => elemento.dataset.group === grupo);
+  if (details) details.open = true;
+  window.requestAnimationFrame(() => {
+    const campo = details?.closest('.ar-products-group-shell')?.querySelector('.ar-products-new-input');
+    campo?.focus();
+  });
+}
+
+function alterarRascunhoNovoProdutoGrupoAr(campo, valor) {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.salvando || !['descricao', 'sku', 'precoComDesconto', 'precoSemDesconto', 'ac'].includes(campo)) return;
+  draft[campo] = valor;
+  draft.erro = '';
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+}
+
+function cancelarNovoProdutoGrupoAr() {
+  if (state.ar.novoProdutoGrupo?.salvando) return;
+  state.ar.novoProdutoGrupo = null;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+}
+
+async function salvarNovoProdutoGrupoAr() {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.salvando) return;
+
+  const descricao = String(draft.descricao || '').trim();
+  const sku = String(draft.sku || '').trim();
+  const precoComDesconto = parseValorEdicaoProdutoGrupoAr(draft.precoComDesconto);
+  const precoSemDesconto = parseValorEdicaoProdutoGrupoAr(draft.precoSemDesconto);
+
+  if (!descricao || descricao.length > 300) state.ar.mensagemProdutosLista = 'Informe uma descrição com até 300 caracteres.';
+  else if (!sku || sku.length > 100) state.ar.mensagemProdutosLista = 'Informe um SKU com até 100 caracteres.';
+  else if (Number.isNaN(precoComDesconto) || Number.isNaN(precoSemDesconto)) state.ar.mensagemProdutosLista = 'Informe valores válidos para os preços.';
+  else if ((precoComDesconto != null && precoComDesconto < 0) || (precoSemDesconto != null && precoSemDesconto < 0)) state.ar.mensagemProdutosLista = 'Os preços não podem ser negativos.';
+  else if (precoComDesconto != null && precoSemDesconto != null && precoComDesconto > precoSemDesconto) state.ar.mensagemProdutosLista = 'O valor com desconto não pode superar o valor padrão.';
+  else if (draft.acs.length > 0 && !draft.acs.includes(draft.ac)) state.ar.mensagemProdutosLista = 'Selecione uma AC já definida para este grupo.';
+
+  if (state.ar.mensagemProdutosLista) {
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    const details = Array.from(document.querySelectorAll('.ar-products-group[data-group]'))
+      .find(elemento => elemento.dataset.group === draft.grupo);
+    if (details) details.open = true;
+    return;
+  }
+
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para adicionar produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    return;
+  }
+
+  draft.salvando = true;
+  draft.erro = '';
+  atualizarListaProdutosDomAr();
+
+  try {
+    const response = await chamarApi('createArProduct', {
+      grupo: draft.grupo,
+      descricao_comercial: descricao,
+      product_id: sku,
+      preco_com_desconto: precoComDesconto,
+      preco_sem_desconto: precoSemDesconto,
+      ac: String(draft.ac || '').trim() || null
+    });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível adicionar o produto.'));
+
+    const produto = response.data?.produto;
+    if (!produto?.id) throw new Error('O produto foi salvo, mas não foi possível atualizar a lista. Recarregue a tela.');
+    state.ar.produtos = [...state.ar.produtos, produto]
+      .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+    state.ar.gruposProdutosExpandidos[draft.grupo] = true;
+    state.ar.novoProdutoGrupo = null;
+    state.ar.mensagemProdutosLista = 'Produto adicionado com sucesso.';
+    state.ar.tipoMensagemProdutosLista = 'sucesso';
+  } catch (erro) {
+    if (state.ar.novoProdutoGrupo) {
+      state.ar.novoProdutoGrupo.salvando = false;
+      state.ar.novoProdutoGrupo.erro = erro.message || 'Não foi possível adicionar o produto.';
+      state.ar.mensagemProdutosLista = state.ar.novoProdutoGrupo.erro;
+      state.ar.tipoMensagemProdutosLista = 'erro';
+    }
+  }
+
+  atualizarListaProdutosDomAr();
 }
 
 function renderModalVisualizacaoProdutosAr() {
@@ -11152,7 +11358,7 @@ function renderModalVisualizacaoProdutosAr() {
 }
 
 function obterOpcoesFiltroListaProdutosAr(tipo) {
-  const valores = state.ar.produtos.map(produto => {
+  const valores = obterProdutosBaseListaProdutosAr().map(produto => {
     if (tipo === 'grupo') return obterGrupoProdutoListaAr(produto);
     return produto.ac || '';
   }).filter(Boolean);
@@ -11161,7 +11367,14 @@ function obterOpcoesFiltroListaProdutosAr(tipo) {
 }
 
 function contarFiltrosListaProdutosAr() {
-  return (state.ar.listaGrupos || []).length + (state.ar.listaAc ? 1 : 0);
+  return (state.ar.listaGrupos || []).length + (state.ar.listaAc ? 1 : 0)
+    + (state.ar.listaStatusProdutos === 'inativo' ? 1 : 0);
+}
+
+function obterProdutosBaseListaProdutosAr() {
+  return state.ar.listaStatusProdutos === 'inativo'
+    ? state.ar.produtosInativos
+    : state.ar.produtos;
 }
 
 function atualizarIndicadorFiltrosListaProdutosAr() {
@@ -11188,6 +11401,8 @@ function obterClasseGrupoProdutosAr(nome) {
 }
 
 function agruparProdutosListaAr(produtos) {
+  carregarOrdenacaoGruposProdutosAr();
+
   const grupos = new Map();
 
   produtos.forEach(produto => {
@@ -11200,10 +11415,22 @@ function agruparProdutosListaAr(produtos) {
     grupos.get(nomeGrupo).push(produto);
   });
 
-  return Array.from(grupos.entries()).map(([nome, itens]) => ({
+  const gruposOrdenados = Array.from(grupos.entries()).map(([nome, itens]) => ({
     nome,
     produtos: itens
   }));
+
+  const ordem = state.ar.ordenacaoGruposProdutos === 'desc' ? -1 : 1;
+  return gruposOrdenados.sort((a, b) => ordem * a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+}
+
+function carregarOrdenacaoGruposProdutosAr() {
+  if (state.ar.ordenacaoGruposProdutosInicializada) return;
+  try {
+    const preferencia = window.localStorage.getItem('hub-ar-produtos-ordenacao-grupos-v1');
+    if (preferencia === 'asc' || preferencia === 'desc') state.ar.ordenacaoGruposProdutos = preferencia;
+  } catch { /* usa a ordem padrão */ }
+  state.ar.ordenacaoGruposProdutosInicializada = true;
 }
 
 function renderOpcoesProdutosAr() {
@@ -11691,6 +11918,8 @@ function atualizarListaProdutosDomAr() {
       grupo.open = expansaoGrupos.get(grupo.dataset.group);
     }
   });
+  atualizarBotaoToggleTodosProdutosAr();
+  aplicarIconesLucideHub(resultado);
 }
 
 function fecharFiltrosListaAoClicarForaAr(event) {
@@ -11706,12 +11935,47 @@ function alternarFiltrosListaProdutosAr() {
   renderPainelAr();
 }
 
+function aplicarFiltrosListaProdutosAr() {
+  state.ar.filtrosListaAberto = false;
+  renderPainelAr();
+}
+
 function alterarFiltroListaProdutosAr(tipo, valor) {
   if (tipo === 'ac') {
     state.ar.listaAc = valor;
   }
 
   renderPainelAr();
+}
+
+async function alterarStatusListaProdutosAr(status) {
+  if (!['ativo', 'inativo'].includes(status) || state.ar.listaStatusProdutos === status) return;
+
+  state.ar.listaStatusProdutos = status;
+  state.ar.produtosListaSelecionados = [];
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+
+  if (status !== 'inativo' || state.ar.produtosInativosCarregados) {
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.produtosInativosCarregando = true;
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('getArProductsByStatus', { status: 'inativo' });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os produtos inativos.'));
+    state.ar.produtosInativos = Array.isArray(response.data?.produtos) ? response.data.produtos : [];
+    state.ar.produtosInativosCarregados = true;
+  } catch (erro) {
+    state.ar.mensagemProdutosLista = erro.message || 'Não foi possível carregar os produtos inativos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+  } finally {
+    state.ar.produtosInativosCarregando = false;
+    renderPainelAr();
+  }
 }
 
 function alternarFiltroGrupoListaProdutosAr(grupo, selecionado) {
@@ -11731,7 +11995,64 @@ function alternarFiltroGrupoListaProdutosAr(grupo, selecionado) {
 function limparFiltrosListaProdutosAr() {
   state.ar.listaGrupos = [];
   state.ar.listaAc = '';
+  state.ar.listaStatusProdutos = 'ativo';
   renderPainelAr();
+}
+
+async function alterarStatusProdutosSelecionadosAr(status) {
+  const produtoIds = [...new Set(state.ar.produtosListaSelecionados)];
+  if (!produtoIds.length || !['ativo', 'inativo'].includes(status) || state.ar.alterandoStatusProdutos) return;
+
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para alterar o status dos produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    renderPainelAr();
+    return;
+  }
+
+  const acao = status === 'inativo' ? 'inativar' : 'reativar';
+  const descricaoImpacto = status === 'inativo'
+    ? 'Eles deixarão de aparecer na lista ativa e não poderão ser usados para gerar novos links.'
+    : 'Eles voltarão a aparecer na lista ativa e poderão ser usados para gerar links.';
+  if (!window.confirm(`Deseja ${acao} ${produtoIds.length} produto${produtoIds.length === 1 ? '' : 's'}? ${descricaoImpacto}`)) return;
+
+  state.ar.alterandoStatusProdutos = true;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('updateArProductsStatus', { produtoIds, status });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível alterar o status dos produtos.'));
+
+    const atualizados = Array.isArray(response.data?.produtos) ? response.data.produtos : [];
+    const idsAtualizados = new Set(atualizados.map(produto => produto.id));
+
+    if (status === 'inativo') {
+      state.ar.produtos = state.ar.produtos.filter(produto => !idsAtualizados.has(produto.id));
+      const inativosPorId = new Map(state.ar.produtosInativos.map(produto => [produto.id, produto]));
+      atualizados.forEach(produto => inativosPorId.set(produto.id, produto));
+      state.ar.produtosInativos = Array.from(inativosPorId.values())
+        .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+      state.ar.produtosInativosCarregados = true;
+    } else {
+      state.ar.produtosInativos = state.ar.produtosInativos.filter(produto => !idsAtualizados.has(produto.id));
+      const ativosPorId = new Map(state.ar.produtos.map(produto => [produto.id, produto]));
+      atualizados.forEach(produto => ativosPorId.set(produto.id, produto));
+      state.ar.produtos = Array.from(ativosPorId.values())
+        .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+    }
+
+    state.ar.produtosListaSelecionados = [];
+    state.ar.mensagemProdutosLista = `${atualizados.length} produto${atualizados.length === 1 ? '' : 's'} ${status === 'inativo' ? 'inativado' : 'reativado'}${atualizados.length === 1 ? '' : 's'} com sucesso.`;
+    state.ar.tipoMensagemProdutosLista = 'sucesso';
+  } catch (erro) {
+    state.ar.mensagemProdutosLista = erro.message || 'Não foi possível alterar o status dos produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+  } finally {
+    state.ar.alterandoStatusProdutos = false;
+    renderPainelAr();
+  }
 }
 
 function alternarProdutoListaSelecionadoAr(id) {
@@ -11810,19 +12131,49 @@ async function copiarVisualizacaoProdutosClienteAr() {
   }
 }
 
-function alternarTodosGruposProdutosAr() {
-  const grupos = Array.from(document.querySelectorAll('.ar-products-group'));
-  const deveFechar = grupos.some(grupo => grupo.open);
-
-  grupos.forEach(grupo => {
-    grupo.open = !deveFechar;
-  });
-
+function atualizarBotaoToggleTodosProdutosAr() {
+  const grupos = Array.from(document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group'));
+  const todosRecolhidos = grupos.length > 0 && grupos.every(grupo => !grupo.open);
   const botao = document.querySelector('.ar-products-toggle-btn');
+  if (!botao) return;
 
-  if (botao) {
-    botao.textContent = deveFechar ? 'Expandir todos' : 'Recolher todos';
+  const rotulo = todosRecolhidos ? 'Expandir todos' : 'Recolher todos';
+  botao.querySelector('span').textContent = rotulo;
+  const icone = botao.querySelector('[data-lucide]');
+  if (icone) {
+    icone.setAttribute('data-lucide', todosRecolhidos ? 'chevron-down' : 'chevron-up');
+    aplicarIconesLucideHub(icone.parentElement);
   }
+}
+
+function registrarEstadoGrupoProdutosAr(grupo) {
+  const nome = grupo?.dataset?.group;
+  if (!nome) return;
+  state.ar.gruposProdutosExpandidos ||= {};
+  state.ar.gruposProdutosExpandidos[nome] = grupo.open;
+}
+
+function alternarTodosGruposProdutosAr() {
+  const grupos = Array.from(document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group'));
+  const deveExpandir = grupos.length > 0 && grupos.every(grupo => !grupo.open);
+
+  grupos.forEach(grupo => { grupo.open = deveExpandir; });
+  atualizarBotaoToggleTodosProdutosAr();
+}
+
+function definirOrdenacaoGruposProdutosAr(ordem) {
+  if (!['asc', 'desc'].includes(ordem)) return;
+  state.ar.ordenacaoGruposProdutos = ordem;
+  try {
+    window.localStorage.setItem('hub-ar-produtos-ordenacao-grupos-v1', ordem);
+  } catch { /* preferência local é opcional */ }
+  document.querySelector('.ar-products-sort-menu')?.removeAttribute('open');
+  document.querySelectorAll('.ar-products-sort-dropdown button').forEach(botao => {
+    const selecionado = botao.textContent.trim() === (ordem === 'asc' ? 'A–Z' : 'Z–A');
+    botao.classList.toggle('is-selected', selecionado);
+    botao.setAttribute('aria-pressed', String(selecionado));
+  });
+  atualizarListaProdutosDomAr();
 }
 
 function campoProdutoCombinaAr(valor, filtro) {
@@ -14211,6 +14562,9 @@ const renderCentralSenhasHubPhase1 = function() {
 };
 
 const renderPainelArHubPhase1 = function() {
+  if (state.ar.aba === 'produtos') {
+    document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group[data-group]').forEach(registrarEstadoGrupoProdutosAr);
+  }
   const crm2CadastroRoute = obterContextoRotaHub().principal;
   window.crm2PfArActive = state.ar.aba === 'crm2-pf' || (state.ar.aba === 'crm2-cadastro' && crm2CadastroRoute === '201');
   window.hubRemoveFormFooterPortals?.();
@@ -14677,7 +15031,6 @@ Object.assign(window, {
   alterarBuscaPerfisAdmin,
   alterarBuscaParceirosIndicacaoAdmin,
   aplicarMascaraParceiroIndicacao,
-  alternarMenuAcoesParceirosIndicacaoAdmin,
   alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
   alterarVisibilidadeModuloHome,
@@ -14696,7 +15049,13 @@ Object.assign(window, {
   salvarPermissoesPerfilAdmin,
   alterarFiltroListaProdutosAr,
   alternarFiltroGrupoListaProdutosAr,
+  alterarStatusListaProdutosAr,
+  alterarStatusProdutosSelecionadosAr,
   alterarRascunhoProdutoGrupoAr,
+  iniciarNovoProdutoGrupoAr,
+  alterarRascunhoNovoProdutoGrupoAr,
+  cancelarNovoProdutoGrupoAr,
+  salvarNovoProdutoGrupoAr,
   executarAcaoParceirosIndicacaoAdmin,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
@@ -14705,8 +15064,8 @@ Object.assign(window, {
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
   alternarFiltrosListaProdutosAr,
+  aplicarFiltrosListaProdutosAr,
   aplicarBuscaParceirosIndicacaoAdmin,
-  navegarMenuAcoesParceirosIndicacaoAdmin,
   navegarMenuSidebarHub,
   alternarFavoritoLink,
   alternarGrupoSidebarHub,
@@ -14720,6 +15079,9 @@ Object.assign(window, {
   alternarProdutoListaSelecionadoAr,
   alternarTema,
   alternarTodosGruposProdutosAr,
+  atualizarBotaoToggleTodosProdutosAr,
+  registrarEstadoGrupoProdutosAr,
+  definirOrdenacaoGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
   alternarCheckboxPermissaoUsuario,
   alternarTodosModulosPermissoesUsuario,
@@ -14850,13 +15212,6 @@ Object.assign(window, {
   visualizarReciboValidacoesAr
 });
 
-document.addEventListener('pointerdown', event => {
-  if (!state.admin.acoesParceirosAberto) return;
-  if (event.target?.closest?.('.admin-partners-actions-btn, .admin-partners-actions-menu')) return;
-
-  fecharMenuAcoesParceirosIndicacaoAdmin();
-}, true);
-
 document.addEventListener('click', event => {
   if (!state.sidebar.floatingGroupId) return;
   if (event.target?.closest?.('.hub-sidebar')) return;
@@ -14897,13 +15252,6 @@ document.addEventListener('click', event => {
   if (state.admin.parceiroModal?.aberto) {
     state.admin.parceiroModal.aba = aba;
   }
-});
-
-document.addEventListener('keydown', event => {
-  if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;
-
-  event.preventDefault();
-  fecharMenuAcoesParceirosIndicacaoAdmin();
 });
 
 document.addEventListener('keydown', event => {

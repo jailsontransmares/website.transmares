@@ -134,27 +134,107 @@ export function inicializarMenusAcoesGlobais(root = document) {
       gap: Number(menu.dataset.hubActionGap) || 6,
       flipVertical: menu.dataset.hubActionFlipVertical === 'true'
     };
+    const keyboardEnabled = menu.dataset.hubActionKeyboard === 'true';
+    const focusMode = menu.dataset.hubActionFocus || '';
+    const getItems = () => Array.from(popover.querySelectorAll('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]'))
+      .filter(item => !item.disabled && !item.hidden);
+    const focusItem = (direction = 'first') => {
+      const items = getItems();
+      if (!items.length) return;
+      const index = direction === 'last'
+        ? items.length - 1
+        : focusMode === 'selected'
+          ? Math.max(0, items.findIndex(item => item.getAttribute('aria-pressed') === 'true' || item.getAttribute('aria-current') === 'true' || item.classList.contains('is-selected')))
+          : 0;
+      items[index]?.focus({ preventScroll: true });
+    };
+    const fechar = (restaurarFoco = false) => {
+      menu.open = false;
+      trigger.setAttribute('aria-expanded', 'false');
+      fecharMenuAcaoGlobal(popover);
+      if (restaurarFoco) trigger.focus({ preventScroll: true });
+    };
 
     const abrir = () => {
-      if (menu.open) abrirMenuAcaoGlobal(trigger, popover, options);
+      if (!menu.open) return;
+      trigger.setAttribute('aria-expanded', 'true');
+      abrirMenuAcaoGlobal(trigger, popover, options);
     };
 
     menu.addEventListener('toggle', () => {
       if (menu.open) abrir();
-      else fecharMenuAcaoGlobal(popover);
+      else {
+        trigger.setAttribute('aria-expanded', 'false');
+        fecharMenuAcaoGlobal(popover);
+      }
+      if (menu.open && focusMode) {
+        window.requestAnimationFrame(() => {
+          if (menu.open) focusItem();
+        });
+      }
     });
     popover.addEventListener('click', (event) => {
       if (!event.target.closest?.('[role="menuitem"]')) return;
-      menu.open = false;
-      fecharMenuAcaoGlobal(popover);
+      fechar();
     }, true);
     document.addEventListener('pointerdown', (event) => {
       if (!menu.open) return;
       if (menu.contains(event.target) || popover.contains(event.target)) return;
-      menu.open = false;
-      fecharMenuAcaoGlobal(popover);
+      fechar();
     }, true);
     trigger.addEventListener('click', () => window.requestAnimationFrame(abrir));
+    if (keyboardEnabled) {
+      const onKeydown = (event) => {
+        const key = event.key;
+        if (key === 'Escape' && menu.open) {
+          event.preventDefault();
+          fechar(true);
+          return;
+        }
+        if (key === 'Tab' && menu.open) {
+          const tabStops = Array.from(document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'))
+            .filter(item => item.offsetParent !== null && !popover.contains(item));
+          const triggerIndex = tabStops.indexOf(trigger);
+          const nextIndex = triggerIndex + (event.shiftKey ? -1 : 1);
+          const next = tabStops[nextIndex];
+          fechar();
+          if (next) {
+            event.preventDefault();
+            window.requestAnimationFrame(() => next.focus({ preventScroll: true }));
+          }
+          return;
+        }
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) return;
+
+        const items = getItems();
+        if (!items.length) return;
+        event.preventDefault();
+        const isTrigger = trigger.contains(event.target);
+        const activeItem = event.target.closest?.('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]');
+        if (isTrigger && !menu.open) menu.open = true;
+        window.requestAnimationFrame(() => {
+          if (!menu.open) return;
+          abrir();
+          if (key === 'Home') {
+            items[0]?.focus({ preventScroll: true });
+            return;
+          }
+          if (key === 'End') {
+            items[items.length - 1]?.focus({ preventScroll: true });
+            return;
+          }
+          if (isTrigger || !activeItem) {
+            focusItem(key === 'ArrowUp' ? 'last' : 'first');
+            return;
+          }
+          const index = items.indexOf(activeItem);
+          const next = (index + (key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus({ preventScroll: true });
+        });
+      };
+      trigger.addEventListener('keydown', onKeydown);
+      popover.addEventListener('keydown', onKeydown);
+    }
     menu.setAttribute(MENU_BOUND_ATTRIBUTE, 'true');
   });
 }

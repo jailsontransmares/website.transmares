@@ -172,7 +172,7 @@
   align-items: center;
   display: flex;
   gap: 6px;
-  justify-content: space-between;
+  justify-content: flex-start;
   min-width: 0;
 }
 
@@ -196,6 +196,7 @@
 .crm2-unified-timeline-composer-actions > button {
   flex: 0 0 auto;
   justify-self: end;
+  margin-left: auto;
 }
 
 @media (max-width: 640px) {
