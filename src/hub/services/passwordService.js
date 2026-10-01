@@ -89,6 +89,8 @@ function mapearAcesso(item, revelarSenha = false) {
     url: dados.url || '',
     login: dados.login || '',
     senha: revelarSenha ? (item.chave || '') : '',
+    seguradoraId: item.seguradora_id || '',
+    seguradoraNome: item.seguradora_nome || dados.categoria || '',
     categoria: dados.categoria || '',
     grupo: dados.grupo || '',
     status: item.status || 'ativo',
@@ -127,7 +129,7 @@ async function listarAcessosSanitizados(supabase) {
     throw new Error(error.message || 'Não foi possível carregar acessos.');
   }
 
-  return (data || []).map(item => mapearAcesso(item, true));
+  return (data || []).map(item => mapearAcesso(item, Boolean(item.chave)));
 }
 
 async function salvarAcessoCompatibilidade(supabase, payload, item) {
@@ -176,10 +178,9 @@ async function excluirAcessoCompatibilidade(supabase, id) {
 
 function filtrarAcessos(acessos, filtros = {}) {
   return acessos.filter(item => {
-    if (filtros.categoria && item.categoria !== filtros.categoria) return false;
+    if (filtros.seguradoraId && item.seguradoraId !== filtros.seguradoraId) return false;
     if (filtros.grupo && item.grupo !== filtros.grupo) return false;
     if (filtros.status && item.status !== filtros.status) return false;
-    if (!filtros.status && normalizarStatus(item.status) === 'inativo') return false;
     return true;
   });
 }
@@ -194,13 +195,17 @@ function montarResumo(acessos) {
 
 export async function carregarPasswordsData(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
-  const [taxonomias, acessos] = await Promise.all([
+  const [taxonomias, acessos, seguradorasResult] = await Promise.all([
     carregarTaxonomias(),
-    listarAcessosSanitizados(supabase)
+    listarAcessosSanitizados(supabase),
+    supabase.rpc('app_listar_seguradoras')
   ]);
+
+  if (seguradorasResult.error) throw new Error(seguradorasResult.error.message || 'Não foi possível carregar seguradoras.');
 
   return {
     ...taxonomias,
+    seguradoras: seguradorasResult.data || [],
     acessos: filtrarAcessos(acessos, payload),
     resumo: montarResumo(acessos),
     historico: []
@@ -209,21 +214,51 @@ export async function carregarPasswordsData(payload = {}) {
 
 export async function salvarPasswordItem(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
-  const usuario = await carregarUsuarioAtual();
   const item = {
-    usuario_id: usuario.id,
     chave: String(payload.senha || '').trim(),
     descricao: serializarDescricao(payload),
     status: payload.status === 'inativo' ? 'inativo' : 'ativo'
   };
 
-  if (!payload.titulo || !payload.login || !item.chave) {
-    throw new Error('Informe título, login e senha.');
+  if (!payload.id || !payload.seguradoraId) {
+    throw new Error('Selecione uma seguradora válida para o acesso.');
   }
+  if (!payload.titulo || !payload.login || !item.chave) throw new Error('Informe título, login e senha.');
 
-  const data = await salvarAcessoControlado(supabase, payload, item);
+  const { error } = await supabase.rpc('app_salvar_acesso_seguradora', {
+    p_id: payload.id,
+    p_seguradora_id: payload.seguradoraId,
+    p_descricao: item.descricao,
+    p_chave: item.chave,
+    p_status: item.status
+  });
+  if (error) throw new Error(error.message || 'Não foi possível salvar o acesso.');
+  return { id: payload.id };
+}
 
-  return { acesso: mapearAcesso(data, true) };
+export async function criarAcessosSeguradora(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.rpc('app_criar_acessos_seguradora', {
+    p_seguradora_id: payload.seguradoraId || null,
+    p_nome: payload.nome || null,
+    p_acessos: payload.acessos || []
+  });
+  if (error) throw new Error(error.message || 'Não foi possível criar acessos.');
+  return Array.isArray(data) ? data[0] : data;
+}
+
+export async function renomearSeguradora(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { error } = await supabase.rpc('app_renomear_seguradora', { p_id: payload.id, p_nome: payload.nome });
+  if (error) throw new Error(error.message || 'Não foi possível renomear seguradora.');
+  return { id: payload.id };
+}
+
+export async function excluirSeguradora(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { error } = await supabase.rpc('app_excluir_seguradora', { p_id: payload.id });
+  if (error) throw new Error(error.message || 'Não foi possível excluir seguradora.');
+  return { id: payload.id };
 }
 
 export async function excluirPasswordItem(payload = {}) {

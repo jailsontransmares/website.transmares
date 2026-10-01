@@ -48,7 +48,10 @@ import {
 } from './services/linksService.js';
 import {
   carregarPasswordsData,
+  criarAcessosSeguradora,
+  excluirSeguradora,
   excluirPasswordItem,
+  renomearSeguradora,
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
@@ -265,7 +268,10 @@ export async function chamarApi(action, payload = {}) {
       toggleFavoriteLink: () => alternarFavoritoLink(payload),
       getPasswordsData: () => carregarPasswordsData(payload),
       deletePasswordItem: () => excluirPasswordItem(payload),
-      savePasswordItem: () => salvarPasswordItem(payload)
+      savePasswordItem: () => salvarPasswordItem(payload),
+      createInsurerAccesses: () => criarAcessosSeguradora(payload),
+      renameInsurer: () => renomearSeguradora(payload),
+      deleteInsurer: () => excluirSeguradora(payload)
     };
 
     if (!acoes[action]) {

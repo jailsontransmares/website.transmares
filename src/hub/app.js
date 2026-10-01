@@ -61,9 +61,11 @@ import {
   Clock3,
   createIcons,
   Download,
+  Copy,
   DownloadCloud,
   Compass,
   ExternalLink,
+  EyeOff,
   Eraser,
   Eye,
   File,
@@ -126,7 +128,9 @@ const HUB_LUCIDE_ICONS = {
   CircleHelp,
   Clock3,
   Download,
+  Copy,
   DownloadCloud,
+  EyeOff,
   Compass,
   Eye,
   File,
@@ -369,6 +373,7 @@ const state = {
     message: ''
   },
   passwords: {
+    seguradoras: [],
     categorias: [],
     grupos: [],
     items: [],
@@ -380,9 +385,15 @@ const state = {
     historico: [],
     aba: 'acessos',
     filtros: {
-      categoria: '',
+      seguradoraId: '',
       grupo: '',
+    filtrosAbertos: false,
+    busca: '',
+    categoriasRecolhidas: {},
+    senhasVisiveis: {},
       status: ''
+    cadastroSeguradoraAberto: false,
+    seguradoraCadastroId: '',
     },
     modalAberto: false,
     modalId: '',
@@ -654,6 +665,7 @@ function agendarAtualizacaoContextoAcessoHub(motivo = '') {
   timerAtualizacaoContextoAcesso = window.setTimeout(() => {
     timerAtualizacaoContextoAcesso = null;
     atualizarContextoAcessoHub();
+document.addEventListener('click', fecharFiltrosSenhasAoClicarFora);
   }, 0);
 }
 
@@ -6902,6 +6914,9 @@ function validarLinkPayload(payload) {
 }
 
 function esperar(ms) {
+  state.passwords.cadastroSeguradoraAberto = false;
+  state.passwords.seguradoraCadastroId = '';
+  state.passwords.senhasVisiveis = {};
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -6933,11 +6948,12 @@ async function carregarCentralSenhas() {
 
   try {
     const response = await chamarApi('getPasswordsData', {
-      categoria: state.passwords.filtros.categoria,
+      seguradoraId: state.passwords.filtros.seguradoraId,
       grupo: state.passwords.filtros.grupo,
       status: state.passwords.filtros.status
     });
 
+    state.passwords.seguradoras = response.data.seguradoras || [];
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível carregar a Central de Senhas.'));
     }
@@ -6982,7 +6998,7 @@ function renderCentralSenhas() {
         </div>
       </header>
 
-      <section class="admin-panel">
+      <section class="admin-panel password-manager">
         <div class="admin-panel-header">
           <div>
             <h2>Central de Senhas</h2>
@@ -6996,7 +7012,7 @@ function renderCentralSenhas() {
           ` : ''}
         </div>
 
-        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : ''}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
@@ -7004,49 +7020,48 @@ function renderCentralSenhas() {
           ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
           : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
         ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
-        ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
+  const filtros = state.passwords.filtros;
+  const totalFiltrosAtivos = [filtros.seguradoraId, filtros.grupo, gestor ? filtros.status : ''].filter(Boolean).length;
+        ${state.passwords.aba === 'acessos' ? `${renderModalSenha()}${renderModalCadastroSeguradora()}` : ''}
       </section>
     </main>
   `;
 }
 
-function renderResumoSenhas(gestor) {
-  if (!gestor) {
-    return '';
-  }
-
-  const resumo = state.passwords.resumo || {};
-
-  return `
-    <div class="module-stats" aria-label="Resumo da Central de Senhas">
-      <span><strong>${Number(resumo.total || 0)}</strong> cadastrados</span>
-      <span><strong>${Number(resumo.ativos || 0)}</strong> ativos</span>
-      <span><strong>${Number(resumo.inativos || 0)}</strong> inativos</span>
-    </div>
-  `;
-}
-
 function renderToolbarSenhas(gestor) {
   return `
-    <div class="links-toolbar">
-      <select class="config-input" onchange="alterarFiltroSenha('categoria', this.value)">
-        <option value="">Todas as categorias</option>
-        ${state.passwords.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.passwords.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-      </select>
-
-      <select class="config-input" onchange="alterarFiltroSenha('grupo', this.value)">
-        <option value="">Todos os grupos</option>
-        ${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.passwords.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-      </select>
-
-      ${gestor ? `
-        <select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
-          <option value="">Todos os status</option>
-          <option value="ativo" ${state.passwords.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
-          <option value="inativo" ${state.passwords.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
-        </select>
-        <button class="add-small-btn" type="button" onclick="abrirModalSenha('')">+ Adicionar</button>
-      ` : ''}
+    <div class="links-toolbar password-manager-toolbar ${gestor ? 'is-manager' : ''}">
+      <label class="password-manager-search">
+        <i data-lucide="search" aria-hidden="true"></i>
+        <input type="search" value="${escapeAttr(state.passwords.busca || '')}" placeholder="Buscar por seguradora, título, login ou descrição..." aria-label="Buscar acessos" oninput="alterarBuscaSenha(this.value)">
+      </label>
+      <div class="password-manager-filter-menu">
+        <button class="icon-btn password-manager-filter-button ${totalFiltrosAtivos ? 'is-active' : ''}" type="button" onclick="alternarFiltrosSenhas()" aria-haspopup="dialog" aria-expanded="${state.passwords.filtrosAbertos ? 'true' : 'false'}" aria-label="Filtros${totalFiltrosAtivos ? `: ${totalFiltrosAtivos} ativos` : ''}" title="Filtros${totalFiltrosAtivos ? ` (${totalFiltrosAtivos})` : ''}">
+          <i data-lucide="filter" aria-hidden="true"></i>${totalFiltrosAtivos ? `<span>${totalFiltrosAtivos}</span>` : ''}
+        </button>
+        ${state.passwords.filtrosAbertos ? `
+          <div class="password-manager-filter-popover" role="dialog" aria-label="Filtros dos acessos">
+            <label><span>Seguradora</span><select class="config-input" onchange="alterarFiltroSenha('seguradoraId', this.value)">
+              <option value="">Todas as seguradoras</option>
+              ${state.passwords.seguradoras.map(item => `<option value="${escapeAttr(item.id)}" ${filtros.seguradoraId === item.id ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+            </select></label>
+            <label><span>Grupo</span><select class="config-input" onchange="alterarFiltroSenha('grupo', this.value)">
+              <option value="">Todos os grupos</option>
+              ${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+            </select></label>
+            ${gestor ? `<label><span>Status</span><select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
+              <option value="">Todos os status</option>
+              <option value="ativo" ${filtros.status === 'ativo' ? 'selected' : ''}>Ativos</option>
+              <option value="inativo" ${filtros.status === 'inativo' ? 'selected' : ''}>Inativos</option>
+            </select></label>` : ''}
+            <div class="password-manager-filter-actions">
+              <button class="secondary-btn" type="button" onclick="limparFiltrosSenhas()" ${totalFiltrosAtivos ? '' : 'disabled'}>Limpar filtros</button>
+              <button class="save-btn" type="button" onclick="alternarFiltrosSenhas(false)">Fechar</button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+      ${pode('central_senhas', 'create') ? '<button class="add-small-btn password-manager-add" type="button" onclick="abrirCadastroSeguradora(\'\')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar acesso</button>' : ''}
     </div>
   `;
 }
@@ -7060,46 +7075,171 @@ function renderConteudoSenhas(gestor, podeVerSenha) {
 }
 
 function renderListaSenhas(gestor, podeVerSenha) {
-  if (!state.passwords.items.length) {
+  if (!state.passwords.items.length && !state.passwords.seguradoras.length) {
     return '<p class="quick-link-empty">Nenhum acesso cadastrado.</p>';
   }
 
-  return `<div class="password-list">${state.passwords.items.map(item => renderSenhaItem(item, gestor, podeVerSenha)).join('')}</div>`;
-}
+  const busca = normalizarTextoBuscaSenha(state.passwords.busca || '');
+  const grupos = new Map((state.passwords.seguradoras || []).map(seguradora => [seguradora.id, { seguradora, acessos: [] }]));
+  state.passwords.items.forEach(item => {
+    const id = item.seguradoraId || `legacy:${item.categoria || ''}`;
+    if (!grupos.has(id)) grupos.set(id, { seguradora: { id, nome: item.seguradoraNome || item.categoria || 'Sem seguradora' }, acessos: [] });
+    grupos.get(id).acessos.push(item);
+  });
 
-function renderSenhaItem(item, gestor, podeVerSenha) {
-  const podeEditar = pode('central_senhas', 'update');
-  const podeExcluir = pode('central_senhas', 'delete');
-  const senhaTexto = podeVerSenha ? escapeHtml(item.senha || '-') : 'Senha oculta por permissão';
-  const senhaAjuda = podeVerSenha ? '' : '<small>Seu acesso permite consultar este item, mas não visualizar a senha.</small>';
+  const linhas = [...grupos.entries()].map(([id, grupo]) => {
+    const { seguradora, acessos } = grupo;
+    const termoSeguradora = normalizarTextoBuscaSenha(seguradora.nome);
+    const seguradoraCorresponde = busca && termoSeguradora.includes(busca);
+    const acessosVisiveis = seguradoraCorresponde ? acessos : acessos.filter(item => correspondeBuscaSenha(item, busca));
+    if (busca && !acessosVisiveis.length && !seguradoraCorresponde) return '';
+    if (state.passwords.filtros.seguradoraId && seguradora.id !== state.passwords.filtros.seguradoraId) return '';
+    const chaveGrupo = id;
+    const recolhido = !seguradoraCorresponde && !busca && Boolean(state.passwords.categoriasRecolhidas?.[chaveGrupo]);
+    const nomeCategoria = seguradora.nome;
+    const acoesSeguradora = `
+      ${pode('central_senhas', 'create') ? `<button class="password-manager-icon-button" type="button" onclick="abrirCadastroSeguradora('${escapeAttr(seguradora.id)}')" title="Adicionar acesso" aria-label="Adicionar acesso"><i data-lucide="plus" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'update') ? `<button class="password-manager-icon-button" type="button" onclick="renomearSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Renomear seguradora" aria-label="Renomear seguradora"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'delete') && !acessos.length ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Excluir seguradora" aria-label="Excluir seguradora"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+    `;
+
+    return `
+      <tr class="password-manager-category-row" data-password-category-row data-category-key="${escapeAttr(chaveGrupo)}" data-search-category="${escapeAttr(termoSeguradora)}">
+        <th colspan="6">
+          <button class="password-manager-category-toggle" type="button" onclick="alternarCategoriaSenhas(this.closest('tr').dataset.categoryKey)" aria-expanded="${!recolhido}">
+            <i data-lucide="${recolhido ? 'chevron-right' : 'chevron-down'}" aria-hidden="true"></i>
+            <strong>${escapeHtml(nomeCategoria)}</strong>
+            <span>${acessos.length} ${acessos.length === 1 ? 'acesso' : 'acessos'}</span>
+          </button>
+          <div class="password-manager-insurer-actions">${acoesSeguradora}</div>
+        </th>
+      </tr>
+      ${acessos.map(item => renderSenhaItem(item, gestor, podeVerSenha, recolhido, chaveGrupo, Boolean(busca && !seguradoraCorresponde && !correspondeBuscaSenha(item, busca)))).join('')}
+    `;
+  }).join('');
+
+  if (!linhas.trim()) return '<p class="quick-link-empty">Nenhum acesso corresponde à busca.</p>';
 
   return `
-    <article class="password-row status-line-${escapeAttr(item.status || 'inativo')}">
-      <div>
-        <span class="card-taxonomy">${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
-        <h3>${escapeHtml(item.titulo || 'Acesso')}</h3>
-        <p>${escapeHtml(item.descricao || '')}</p>
+    <div class="password-manager-table-card">
+      <div class="password-manager-table-scroll" role="region" aria-label="Tabela de acessos salvos" tabindex="0">
+        <table class="password-manager-table">
+          <thead><tr>
+            <th scope="col">Seguradora / Acesso</th>
+            <th scope="col">Login</th>
+            <th scope="col">Senha</th>
+            <th scope="col">Descrição</th>
+            <th scope="col">Status</th>
+            <th scope="col">Ações</th>
+          </tr></thead>
+          <tbody>
+            ${linhas}
+            <tr class="password-manager-empty-row" data-password-empty-row hidden><td colspan="6">Nenhum acesso corresponde à busca.</td></tr>
+          </tbody>
+        </table>
       </div>
 
-      <div class="password-fields">
-        <span>Login: ${escapeHtml(item.login || '-')}</span>
-        <span>Senha: ${senhaTexto}</span>
-        ${senhaAjuda}
-        ${item.url ? `
-          <div class="link-buttons">
-            <a class="link-sub-btn" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">Abrir</a>
-            <button id="copy_access_${escapeAttr(item.id)}" class="link-sub-btn" type="button" onclick="copiarLink('access_${escapeAttr(item.id)}', '${escapeAttr(item.url)}')">Copiar</button>
-          </div>
-        ` : ''}
-      </div>
+function renderSenhaItem(item, gestor, podeVerSenha, recolhido = false, chaveGrupo = '', ocultoPorBusca = false) {
+  const podeEditar = pode('central_senhas', 'update');
+  const podeExcluir = pode('central_senhas', 'delete');
+  const senhaVisivel = Boolean(state.passwords.senhasVisiveis?.[item.id]);
+  const senhaTexto = item.senha || '';
+  const termoBusca = normalizarTextoBuscaSenha([item.seguradoraNome || item.categoria || 'Sem seguradora', item.titulo, item.login, item.descricao].join(' '));
+  const statusAtivo = String(item.status || '').toLowerCase() === 'ativo';
 
-      ${gestor ? `
-        <div class="crud-actions">
-          ${podeEditar ? `<button class="icon-btn" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" title="Editar" aria-label="Editar acesso">✎</button>` : ''}
-          ${podeExcluir ? `<button class="secondary-btn danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" title="Excluir acesso" aria-label="Excluir acesso">Excluir</button>` : ''}
+  return `
+    <tr class="password-manager-access-row status-line-${escapeAttr(item.status || 'inativo')}" data-password-access-row data-category-key="${escapeAttr(chaveGrupo)}" data-collapsed="${recolhido}" data-search="${escapeAttr(termoBusca)}" ${recolhido || ocultoPorBusca ? 'hidden' : ''}>
+      <td>
+        <div class="password-manager-access-title">
+          <span class="password-manager-tree-indent" aria-hidden="true"></span>
+          <i data-lucide="link-2" aria-hidden="true"></i>
+          ${item.url ? `<a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.titulo || 'Acesso')}<i data-lucide="external-link" aria-hidden="true"></i></a>` : `<strong>${escapeHtml(item.titulo || 'Acesso')}</strong>`}
+          ${item.grupo ? `<small>${escapeHtml(item.grupo)}</small>` : ''}
         </div>
-      ` : ''}
-    </article>
+      </td>
+      <td><span class="password-manager-cell-text" title="${escapeAttr(item.login || '-')}" >${escapeHtml(item.login || '-')}</span></td>
+      <td>
+        <div class="password-manager-secret">
+          <span class="password-manager-secret-value">${podeVerSenha ? (senhaVisivel ? escapeHtml(senhaTexto || '-') : (senhaTexto ? '••••••••••' : '-')) : 'Oculta por permissão'}</span>
+          ${podeVerSenha ? `
+            <button class="password-manager-icon-button" type="button" onclick="alternarVisibilidadeSenhaAcesso('${escapeAttr(item.id)}')" aria-label="${senhaVisivel ? 'Ocultar senha' : 'Visualizar senha'}" title="${senhaVisivel ? 'Ocultar senha' : 'Visualizar senha'}"><i data-lucide="${senhaVisivel ? 'eye-off' : 'eye'}" aria-hidden="true"></i></button>
+            <button class="password-manager-icon-button" type="button" onclick="copiarSenhaAcesso('${escapeAttr(item.id)}')" aria-label="Copiar senha" title="Copiar senha"><i data-lucide="copy" aria-hidden="true"></i></button>
+          ` : ''}
+        </div>
+      </td>
+      <td><span class="password-manager-cell-text password-manager-description" title="${escapeAttr(item.descricao || '-')}" >${escapeHtml(item.descricao || '-')}</span></td>
+      <td><span class="password-manager-status ${statusAtivo ? 'is-active' : 'is-inactive'}">${statusAtivo ? 'Ativo' : 'Inativo'}</span></td>
+      <td><div class="password-manager-actions">
+        ${gestor && podeEditar ? `<button class="password-manager-icon-button" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" aria-label="Editar acesso" title="Editar"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+        ${gestor && podeExcluir ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+      </div></td>
+function normalizarTextoBuscaSenha(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+}
+
+function correspondeBuscaSenha(item, busca) {
+  if (!busca) return true;
+  return normalizarTextoBuscaSenha([item.seguradoraNome || item.categoria || 'Sem seguradora', item.titulo, item.login, item.descricao].join(' ')).includes(busca);
+}
+
+function alterarBuscaSenha(valor) {
+  state.passwords.busca = valor || '';
+  const busca = normalizarTextoBuscaSenha(valor);
+  const linhas = [...document.querySelectorAll('.password-manager-access-row')];
+  const categoriasComResultado = new Set();
+
+  linhas.forEach(linha => {
+    const corresponde = !busca || normalizarTextoBuscaSenha(linha.dataset.search).includes(busca);
+    if (corresponde) categoriasComResultado.add(linha.dataset.categoryKey);
+    linha.hidden = !corresponde || (linha.dataset.collapsed === 'true' && !busca);
+  });
+
+  document.querySelectorAll('.password-manager-category-row').forEach(linha => {
+    const seguradoraCorresponde = busca && normalizarTextoBuscaSenha(linha.dataset.searchCategory).includes(busca);
+    linha.hidden = !categoriasComResultado.has(linha.dataset.categoryKey) && !seguradoraCorresponde;
+    if (seguradoraCorresponde) {
+      categoriasComResultado.add(linha.dataset.categoryKey);
+      document.querySelectorAll(`.password-manager-access-row[data-category-key="${CSS.escape(linha.dataset.categoryKey)}"]`).forEach(acesso => {
+        acesso.hidden = acesso.dataset.collapsed === 'true';
+      });
+    }
+  });
+  const linhaVazia = document.querySelector('.password-manager-empty-row');
+  if (linhaVazia) linhaVazia.hidden = categoriasComResultado.size > 0;
+}
+
+function alternarCategoriaSenhas(chaveGrupo) {
+  state.passwords.categoriasRecolhidas ||= {};
+  state.passwords.categoriasRecolhidas[chaveGrupo] = !state.passwords.categoriasRecolhidas[chaveGrupo];
+  renderCentralSenhas();
+}
+
+function alternarVisibilidadeSenhaAcesso(id) {
+  if (!pode('central_senhas', 'view_secret')) return;
+  state.passwords.senhasVisiveis ||= {};
+  state.passwords.senhasVisiveis[id] = !state.passwords.senhasVisiveis[id];
+  renderCentralSenhas();
+}
+
+async function copiarSenhaAcesso(id) {
+  if (!pode('central_senhas', 'view_secret')) return;
+  const item = state.passwords.items.find(acesso => acesso.id === id);
+  if (!item?.senha) {
+    state.passwords.message = 'Não há senha disponível para copiar.';
+    renderCentralSenhas();
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(item.senha);
+    state.passwords.message = 'Senha copiada.';
+  } catch {
+    state.passwords.message = 'Não foi possível copiar a senha.';
+  }
+  renderCentralSenhas();
+}
+
+    </tr>
   `;
 }
 
@@ -7147,7 +7287,7 @@ function renderModalSenha() {
         <label><span>Login</span><input id="senha_login" class="config-input" type="text" value="${escapeAttr(item.login || '')}">${renderErroCampo(erros.login)}</label>
         <label><span>Senha</span><input id="senha_senha" class="config-input" type="text" value="${escapeAttr(item.senha || '')}">${renderErroCampo(erros.senha)}</label>
         <div class="modal-inline-grid">
-          <label><span>Categoria</span><select id="senha_categoria" class="config-input"><option value="">Sem categoria</option>${state.passwords.categorias.map(categoria => `<option value="${escapeAttr(categoria.nome)}" ${item.categoria === categoria.nome ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`).join('')}</select></label>
+          <label><span>Seguradora</span><select id="senha_seguradora" class="config-input"><option value="">Selecione</option>${state.passwords.seguradoras.map(seguradora => `<option value="${escapeAttr(seguradora.id)}" ${item.seguradoraId === seguradora.id ? 'selected' : ''}>${escapeHtml(seguradora.nome)}</option>`).join('')}</select></label>
           <label><span>Grupo</span><select id="senha_grupo" class="config-input"><option value="">Sem grupo</option>${state.passwords.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></label>
           <label><span>Status</span><select id="senha_status" class="config-input"><option value="ativo" ${item.status !== 'inativo' ? 'selected' : ''}>ativo</option><option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option></select></label>
         </div>
@@ -7157,6 +7297,209 @@ function renderModalSenha() {
           <button id="senha_salvar" class="save-btn saving-btn ${state.passwords.salvando ? 'is-saving' : ''} ${state.passwords.salvo ? 'is-saved' : ''}" type="button" onclick="salvarSenhaItem('${escapeAttr(item.id || '')}')" ${state.passwords.salvando ? 'disabled' : ''}>${botaoTexto}</button>
         </div>
       </section>
+function renderModalCadastroSeguradora() {
+  if (!state.passwords.cadastroSeguradoraAberto) return '';
+  const seguradoraSelecionada = state.passwords.seguradoraCadastroId || '';
+  return `
+    <div class="modal-backdrop password-manager-modal-backdrop" role="dialog" aria-modal="true" aria-label="Cadastro de acesso">
+      <section class="small-modal link-modal password-manager-batch-modal">
+        <header class="password-manager-modal-header">
+          <div class="password-manager-modal-heading">
+            <span class="password-manager-modal-icon"><i data-lucide="plus" aria-hidden="true"></i></span>
+            <div><h3>${seguradoraSelecionada ? 'Adicionar acesso' : 'Cadastrar acesso'}</h3></div>
+          </div>
+          <button class="password-manager-modal-close" type="button" onclick="fecharCadastroSeguradora()" title="Fechar" aria-label="Fechar"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+
+        <div class="password-manager-modal-body">
+          <section class="password-manager-form-section" aria-labelledby="cadastro_secao_seguradora">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">1</span><div><h4 id="cadastro_secao_seguradora">Seguradora</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-insurer">
+              <label class="password-manager-form-field"><span>Seguradora</span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="cadastro_seguradora_existente" class="config-input" onchange="alternarNovaSeguradora(this.value)"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.map(item => `<option value="${escapeAttr(item.id)}" ${item.id === seguradoraSelecionada ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
+              <label class="password-manager-form-field"><span>Nome da seguradora (opcional)</span><input id="cadastro_seguradora_nome" class="config-input" type="text" maxlength="120" placeholder="Ex.: Alfa Seguros" ${seguradoraSelecionada ? 'disabled' : ''} oninput="digitarNomeNovaSeguradora(this.value)"></label>
+            </div>
+          </section>
+
+          <div class="password-manager-batch-heading"><strong>Acessos</strong><button class="secondary-btn" type="button" onclick="adicionarLinhaAcessoSeguradora()"><i data-lucide="plus" aria-hidden="true"></i> Adicionar acesso</button></div>
+          <div id="cadastro_acessos_lista" class="password-manager-batch-list">${renderLinhaAcessoSeguradora()}</div>
+          <template id="cadastro_acesso_template">${renderLinhaAcessoSeguradora()}</template>
+          <p id="cadastro_seguradora_erro" class="password-manager-form-error" role="alert" aria-live="polite"></p>
+        </div>
+
+        <footer class="password-manager-modal-footer">
+          <button class="secondary-btn" type="button" onclick="fecharCadastroSeguradora()">Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarCadastroSeguradora()" ${state.passwords.salvando ? 'disabled' : ''}><i data-lucide="lock-keyhole" aria-hidden="true"></i>${state.passwords.salvando ? 'Salvando...' : 'Salvar acesso'}</button>
+        </footer>
+      </section>
+    </div>
+  `;
+}
+
+function renderLinhaAcessoSeguradora() {
+  return `
+    <div class="password-manager-batch-item">
+      <section class="password-manager-form-section password-manager-access-fields">
+        <div class="password-manager-form-section-heading"><span class="password-manager-step-number">2</span><div><h4>Dados do acesso</h4></div><button class="password-manager-icon-button is-danger" type="button" onclick="removerLinhaAcessoSeguradora(this)" title="Remover acesso" aria-label="Remover acesso"><i data-lucide="trash-2" aria-hidden="true"></i></button></div>
+        <div class="password-manager-form-grid password-manager-form-grid-credentials">
+          <label class="password-manager-form-field"><span>Título <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="file-text" aria-hidden="true"></i><input class="config-input" name="titulo" type="text" required placeholder="Ex.: Portal Principal"></span></label>
+          <label class="password-manager-form-field"><span>Grupo</span><span class="password-manager-input-shell"><i data-lucide="layout-grid" aria-hidden="true"></i><select class="config-input" name="grupo"><option value="">Sem grupo</option>${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
+          <label class="password-manager-form-field"><span>Status</span><span class="password-manager-status-select"><i class="password-manager-status-dot" data-status-indicator aria-hidden="true"></i><select class="config-input" name="status" onchange="atualizarIndicadorStatusAcesso(this)"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></span></label>
+          <label class="password-manager-form-field password-manager-form-full"><span>Link de acesso</span><span class="password-manager-input-shell"><i data-lucide="external-link" aria-hidden="true"></i><input class="config-input" name="url" type="url" placeholder="https://"></span></label>
+        </div>
+        <div class="password-manager-form-grid password-manager-form-grid-login">
+          <label class="password-manager-form-field"><span>Login <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="at-sign" aria-hidden="true"></i><input class="config-input" name="login" type="text" required placeholder="Usuário ou e-mail" autocomplete="username"></span></label>
+          <label class="password-manager-form-field"><span>Senha <b>*</b></span><span class="password-manager-input-shell password-manager-input-shell-action"><i data-lucide="key-round" aria-hidden="true"></i><input class="config-input" name="senha" type="password" required placeholder="Senha" autocomplete="new-password"><button class="password-manager-input-action" type="button" onclick="alternarVisibilidadeSenhaCadastro(this)" aria-label="Visualizar senha" title="Visualizar senha"><i data-lucide="eye" aria-hidden="true"></i></button></span></label>
+        </div>
+      </section>
+      <section class="password-manager-form-section password-manager-access-notes" aria-label="Observações do acesso">
+        <div class="password-manager-form-section-heading"><span class="password-manager-step-number">3</span><div><h4>Observações</h4></div></div>
+        <label class="password-manager-form-field"><span class="password-manager-visually-hidden">Observações adicionais</span><span class="password-manager-input-shell password-manager-textarea-shell"><i data-lucide="file-text" aria-hidden="true"></i><textarea class="config-input" name="descricao" placeholder="Descreva informações adicionais, observações, etc."></textarea></span></label>
+      </section>
+    </div>
+  `;
+}
+
+function abrirCadastroSeguradora(seguradoraId = '') {
+  if (!pode('central_senhas', 'create')) {
+    state.passwords.message = 'Seu usuário não possui permissão para criar acessos.';
+    renderCentralSenhas();
+    return;
+  }
+  state.passwords.cadastroSeguradoraAberto = true;
+  state.passwords.seguradoraCadastroId = seguradoraId || '';
+  state.passwords.salvando = false;
+  renderCentralSenhas();
+}
+
+function fecharCadastroSeguradora() {
+  state.passwords.cadastroSeguradoraAberto = false;
+  state.passwords.seguradoraCadastroId = '';
+  state.passwords.salvando = false;
+  renderCentralSenhas();
+}
+
+function alternarNovaSeguradora(id) {
+  state.passwords.seguradoraCadastroId = id || '';
+  const campoNome = document.getElementById('cadastro_seguradora_nome');
+  if (!campoNome) return;
+  campoNome.disabled = Boolean(id);
+  if (id) campoNome.value = '';
+}
+
+function digitarNomeNovaSeguradora(nome) {
+  if (!nome) return;
+  state.passwords.seguradoraCadastroId = '';
+  const seletor = document.getElementById('cadastro_seguradora_existente');
+  if (seletor) seletor.value = '';
+}
+
+function alternarVisibilidadeSenhaCadastro(botao) {
+  const campo = botao.closest('.password-manager-input-shell')?.querySelector('input[name="senha"]');
+  if (!campo) return;
+  const revelar = campo.type === 'password';
+  campo.type = revelar ? 'text' : 'password';
+  botao.setAttribute('aria-label', revelar ? 'Ocultar senha' : 'Visualizar senha');
+  botao.title = revelar ? 'Ocultar senha' : 'Visualizar senha';
+  botao.innerHTML = `<i data-lucide="${revelar ? 'eye-off' : 'eye'}" aria-hidden="true"></i>`;
+  aplicarIconesLucideHub(botao);
+}
+
+function atualizarIndicadorStatusAcesso(seletor) {
+  const indicador = seletor.closest('.password-manager-status-select')?.querySelector('[data-status-indicator]');
+  if (indicador) indicador.classList.toggle('is-inactive', seletor.value === 'inativo');
+}
+
+function adicionarLinhaAcessoSeguradora() {
+  const template = document.getElementById('cadastro_acesso_template');
+  const lista = document.getElementById('cadastro_acessos_lista');
+  if (!template || !lista) return;
+  lista.append(template.content.cloneNode(true));
+  aplicarIconesLucideHub(document.getElementById('cadastro_acessos_lista'));
+  atualizarContagemAcessosCadastro();
+}
+
+function removerLinhaAcessoSeguradora(botao) {
+  const lista = document.getElementById('cadastro_acessos_lista');
+  if (!lista || lista.querySelectorAll('.password-manager-batch-item').length <= 1) {
+    const erro = document.getElementById('cadastro_seguradora_erro');
+    if (erro) erro.textContent = 'Mantenha pelo menos um acesso no cadastro.';
+    return;
+  }
+  botao.closest('.password-manager-batch-item')?.remove();
+  atualizarContagemAcessosCadastro();
+}
+
+function atualizarContagemAcessosCadastro() {
+  const total = document.querySelectorAll('#cadastro_acessos_lista .password-manager-batch-item').length;
+  const botao = document.querySelector('.password-manager-modal-footer .save-btn');
+  if (botao && !state.passwords.salvando) {
+    botao.innerHTML = `<i data-lucide="lock-keyhole" aria-hidden="true"></i>Salvar ${total === 1 ? 'acesso' : `${total} acessos`}`;
+    aplicarIconesLucideHub(botao);
+  }
+}
+
+async function salvarCadastroSeguradora() {
+  if (!pode('central_senhas', 'create')) return;
+  const form = document.querySelector('.password-manager-batch-modal');
+  const acessos = [...form.querySelectorAll('.password-manager-batch-item')].map(row => Object.fromEntries(
+    [...row.querySelectorAll('[name]')].map(input => [input.name, input.value.trim()])
+  ));
+  const nome = document.getElementById('cadastro_seguradora_nome')?.value.trim() || '';
+  const seguradoraId = document.getElementById('cadastro_seguradora_existente')?.value || '';
+  const erroElemento = document.getElementById('cadastro_seguradora_erro');
+  const botaoSalvar = form?.querySelector('.password-manager-modal-footer .save-btn');
+  if (erroElemento) erroElemento.textContent = '';
+  if (!seguradoraId && !nome) {
+    if (erroElemento) erroElemento.textContent = 'Informe o nome da seguradora.';
+    return;
+  }
+  if (acessos.some(item => !item.titulo || !item.login || !item.senha || (item.url && !/^https?:\/\//i.test(item.url)))) {
+    if (erroElemento) erroElemento.textContent = 'Preencha título, login e senha de cada acesso. Links devem começar com http:// ou https://.';
+    return;
+  }
+  try {
+    state.passwords.salvando = true;
+    if (botaoSalvar) {
+      botaoSalvar.disabled = true;
+      botaoSalvar.innerHTML = '<i data-lucide="lock-keyhole" aria-hidden="true"></i>Salvando...';
+      aplicarIconesLucideHub(botaoSalvar);
+    }
+    const response = await chamarApi('createInsurerAccesses', { seguradoraId, nome, acessos });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível cadastrar acessos.'));
+    state.passwords.cadastroSeguradoraAberto = false;
+    state.passwords.seguradoraCadastroId = '';
+    state.passwords.salvando = false;
+    state.passwords.message = `${acessos.length} ${acessos.length === 1 ? 'acesso cadastrado' : 'acessos cadastrados'} com sucesso.`;
+    await carregarCentralSenhas();
+  } catch (erro) {
+    state.passwords.salvando = false;
+    if (botaoSalvar) botaoSalvar.disabled = false;
+    atualizarContagemAcessosCadastro();
+    if (erroElemento) erroElemento.textContent = erro.message || 'Não foi possível cadastrar acessos.';
+  }
+}
+
+async function renomearSeguradoraUI(id) {
+  if (!pode('central_senhas', 'update')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  const nome = window.prompt('Novo nome da seguradora:', seguradora?.nome || '');
+  if (nome === null || !nome.trim()) return;
+  const response = await chamarApi('renameInsurer', { id, nome: nome.trim() });
+  if (!response.ok) state.passwords.message = obterMensagemApi(response, 'Não foi possível renomear seguradora.');
+  else state.passwords.message = 'Seguradora renomeada.';
+  await carregarCentralSenhas();
+}
+
+async function excluirSeguradoraUI(id) {
+  if (!pode('central_senhas', 'delete')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  if (!window.confirm(`Excluir a seguradora ${seguradora?.nome || ''}?`)) return;
+  const response = await chamarApi('deleteInsurer', { id });
+  if (!response.ok) state.passwords.message = obterMensagemApi(response, 'Não foi possível excluir seguradora.');
+  else state.passwords.message = 'Seguradora excluída.';
+  await carregarCentralSenhas();
+}
+
     </div>
   `;
 }
@@ -7170,11 +7513,30 @@ function obterSenhaModalAtual() {
 }
 
 function alterarFiltroSenha(chave, valor) {
-  state.passwords.filtros[chave] = valor;
+function alternarFiltrosSenhas(aberto) {
+  state.passwords.filtrosAbertos = typeof aberto === 'boolean' ? aberto : !state.passwords.filtrosAbertos;
+  renderCentralSenhas();
+}
+
+function fecharFiltrosSenhasAoClicarFora(event) {
+  if (!state.passwords.filtrosAbertos || state.passwords.aba !== 'acessos') return;
+  if (event.target.closest('.password-manager-filter-menu')) return;
+  state.passwords.filtrosAbertos = false;
+  renderCentralSenhas();
+}
+
+function limparFiltrosSenhas() {
+  state.passwords.filtros = { seguradoraId: '', grupo: '', status: '' };
   carregarCentralSenhas();
 }
 
+  state.passwords.filtros[chave] = valor;
+  carregarCentralSenhas();
+}
+  state.passwords.senhasVisiveis = {};
+
 function selecionarAbaSenhas(aba) {
+  state.passwords.cadastroSeguradoraAberto = false;
   if (aba === 'historico') aba = 'acessos';
 
   state.passwords.aba = aba;
@@ -7224,7 +7586,8 @@ async function salvarSenhaItem(id) {
     url: document.getElementById('senha_url')?.value || '',
     login: document.getElementById('senha_login')?.value || '',
     senha: document.getElementById('senha_senha')?.value || '',
-    categoria: document.getElementById('senha_categoria')?.value || '',
+    seguradoraId: document.getElementById('senha_seguradora')?.value || '',
+    categoria: '',
     grupo: document.getElementById('senha_grupo')?.value || '',
     status: document.getElementById('senha_status')?.value || 'ativo'
   };
@@ -14438,7 +14801,7 @@ const renderModuloIndisponivelHubPhase1 = function(idModulo) {
     tituloPagina: 'Modulo indisponivel',
     descricaoPagina: 'A rota existe, mas o modulo esta inativo ou seu perfil nao possui acesso liberado.',
     conteudo: `
-      <section class="admin-panel">
+      <section class="admin-panel password-manager">
         <div class="admin-panel-header">
           <div>
             <h2>Módulo indisponível</h2>
@@ -14547,7 +14910,7 @@ const renderCentralSenhasHubPhase1 = function() {
           ` : ''}
         </div>
 
-        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : ''}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
@@ -14555,7 +14918,7 @@ const renderCentralSenhasHubPhase1 = function() {
           ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
           : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
         ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
-        ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
+        ${state.passwords.aba === 'acessos' ? `${renderModalSenha()}${renderModalCadastroSeguradora()}` : ''}
       </section>
     `
   });
@@ -14931,6 +15294,13 @@ function fecharPainelAvisosInternosHub() {
 }
 
 function hubAtualizarBuscaAoDigitar(input, atualizarValor, rerenderizar, localizarInput) {
+  abrirCadastroSeguradora,
+  adicionarLinhaAcessoSeguradora,
+  alternarNovaSeguradora,
+  alternarVisibilidadeSenhaCadastro,
+  atualizarIndicadorStatusAcesso,
+  digitarNomeNovaSeguradora,
+  excluirSeguradoraUI,
   if (!input || typeof atualizarValor !== 'function' || typeof rerenderizar !== 'function') return;
   atualizarValor(String(input.value || ''));
   window.clearTimeout(input.__hubSearchTimer);
@@ -14978,9 +15348,15 @@ function obterMensagemApi(response, fallback) {
     INVALID_PASSWORD: 'Informe a senha.',
     AR_PRODUCT_REQUIRED: 'Selecione um produto válido.',
     AR_PARTNER_REQUIRED: 'Selecione um parceiro válido.',
+  alterarBuscaSenha,
+  alternarCategoriaSenhas,
+  alternarVisibilidadeSenhaAcesso,
+  copiarSenhaAcesso,
     AR_PRODUCT_WITHOUT_ID: 'Produto sem Product ID. O link não será gerado.',
     AR_PARTNER_WITHOUT_CODE: 'Parceiro sem código revendedor. O link não será gerado.',
     AR_PARTNER_INACTIVE: 'Parceiro inativo. O link não será gerado.',
+  alternarFiltrosSenhas,
+  limparFiltrosSenhas,
     AR_TEMPLATE_MISSING: 'Templates de link AR não configurados.'
   };
 
@@ -15029,6 +15405,7 @@ Object.assign(window, {
   alterarBuscaAr,
   alterarBuscaUsuariosAdmin,
   alterarBuscaPerfisAdmin,
+  fecharCadastroSeguradora,
   alterarBuscaParceirosIndicacaoAdmin,
   aplicarMascaraParceiroIndicacao,
   alternarParceiroIndicacaoSelecionadoAdmin,
@@ -15065,6 +15442,9 @@ Object.assign(window, {
   alterarFiltroSenha,
   alternarFiltrosListaProdutosAr,
   aplicarFiltrosListaProdutosAr,
+  salvarCadastroSeguradora,
+  removerLinhaAcessoSeguradora,
+  renomearSeguradoraUI,
   aplicarBuscaParceirosIndicacaoAdmin,
   navegarMenuSidebarHub,
   alternarFavoritoLink,

@@ -5630,6 +5630,1220 @@ body.dark .password-row h3 {
   padding: 7px 9px;
 }
 
+/* Central de Senhas: layout hierárquico isolado do restante do Hub. */
+.password-manager .password-manager-toolbar {
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+}
+
+.password-manager .password-manager-toolbar:not(.is-manager) {
+  grid-template-columns: minmax(240px, 1fr) auto;
+}
+
+.password-manager .password-manager-filter-menu {
+  position: relative;
+}
+
+.password-manager .password-manager-filter-button {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: 12px;
+  color: var(--texto);
+  display: inline-flex;
+  gap: 6px;
+  height: 44px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 48px;
+  padding: 0 12px;
+  width: auto;
+}
+
+.password-manager .password-manager-filter-button:hover,
+.password-manager .password-manager-filter-button[aria-expanded="true"],
+.password-manager .password-manager-filter-button.is-active {
+  background: color-mix(in srgb, var(--cor-principal) 9%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-principal) 28%, transparent);
+  color: var(--color-primary);
+}
+
+.password-manager .password-manager-filter-button svg {
+  height: 19px;
+  width: 19px;
+}
+
+.password-manager .password-manager-filter-button span {
+  align-items: center;
+  background: var(--color-primary);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 750;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 4px;
+}
+
+.password-manager .password-manager-filter-popover {
+  background: var(--card);
+  border: var(--glass-border-subtle);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(200px, calc(100vw - 32px));
+  z-index: 2200;
+}
+
+.password-manager .password-manager-filter-popover > label {
+  display: grid;
+  gap: 4px;
+}
+
+.password-manager .password-manager-filter-popover > label > span {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.password-manager .password-manager-filter-popover .config-input {
+  font-size: 12px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+.password-manager .password-manager-filter-actions {
+  border-top: var(--glass-border-subtle);
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  margin-top: 2px;
+  padding-top: 8px;
+}
+
+.password-manager .password-manager-filter-actions button {
+  font-size: 12px;
+  min-height: 32px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.password-manager .password-manager-search {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: 12px;
+  color: var(--texto-suave);
+  display: flex;
+  gap: 9px;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.password-manager .password-manager-search svg {
+  flex: 0 0 17px;
+  height: 17px;
+  width: 17px;
+}
+
+.password-manager .password-manager-search input {
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  font: inherit;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.password-manager .password-manager-search:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.password-manager .password-manager-add {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-add svg {
+  height: 16px;
+  width: 16px;
+}
+
+.password-manager .password-manager-table-card {
+  background: color-mix(in srgb, var(--surface-glass-strong) 94%, var(--glass-blue-bg));
+  border: var(--glass-border-subtle);
+  border-radius: 16px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.password-manager .password-manager-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.password-manager .password-manager-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1020px;
+  width: 100%;
+}
+
+.password-manager .password-manager-table th,
+.password-manager .password-manager-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--borda) 72%, transparent);
+  padding: 10px 13px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.password-manager .password-manager-table thead th {
+  background: color-mix(in srgb, var(--glass-blue-bg) 82%, var(--surface-glass-strong));
+  color: var(--texto-suave);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-table thead th:first-child {
+  width: 27%;
+}
+
+.password-manager .password-manager-table thead th:nth-child(2) {
+  width: 18%;
+}
+
+.password-manager .password-manager-table thead th:nth-child(3) {
+  width: 17%;
+}
+
+.password-manager .password-manager-table thead th:nth-child(4) {
+  width: 23%;
+}
+
+.password-manager .password-manager-table thead th:nth-child(5),
+.password-manager .password-manager-table thead th:nth-child(6) {
+  width: 90px;
+}
+
+.password-manager .password-manager-table tbody tr:last-child td,
+.password-manager .password-manager-table tbody tr:last-child th {
+  border-bottom: 0;
+}
+
+.password-manager .password-manager-table tbody tr.password-manager-access-row:hover td {
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--surface-glass-strong));
+}
+
+.password-manager .password-manager-table [hidden] {
+  display: none !important;
+}
+
+.password-manager .password-manager-category-row th {
+  position: relative;
+  background: color-mix(in srgb, var(--glass-blue-bg) 65%, var(--surface-glass-strong));
+  padding: 0;
+}
+
+.password-manager .password-manager-category-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  min-height: 39px;
+  padding: 7px 13px;
+  text-align: left;
+  padding-right: 126px;
+  width: 100%;
+}
+
+.password-manager .password-manager-insurer-actions {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.password-manager .password-manager-batch-modal {
+  max-height: min(88vh, 900px);
+  max-width: 760px;
+  overflow-y: auto;
+}
+
+.password-manager .password-manager-batch-modal [hidden] {
+  display: none !important;
+}
+
+.password-manager .password-manager-batch-heading,
+.password-manager .password-manager-batch-item-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.password-manager .password-manager-batch-heading {
+  margin: 18px 0 10px;
+}
+
+.password-manager .password-manager-batch-list {
+  display: grid;
+  gap: 10px;
+}
+
+.password-manager .password-manager-batch-item {
+  border: var(--glass-border-subtle);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+}
+
+.password-manager .password-manager-batch-item-heading {
+  color: var(--texto);
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.password-manager .password-manager-batch-item > label,
+.password-manager .password-manager-batch-item .modal-inline-grid > label {
+  min-width: 0;
+}
+
+/* Modal de cadastro da Central de Senhas: estilos limitados a esta janela. */
+.password-manager .password-manager-batch-modal {
+  display: grid;
+  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: calc(100dvh - var(--hub-content-offset, 72px) - 36px);
+  max-width: min(860px, 100%);
+  overflow: hidden;
+  padding: 0;
+  width: min(860px, 100%);
+}
+
+.hub-layout .password-manager-modal-backdrop {
+  align-items: center;
+  background: rgba(15, 31, 50, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  justify-items: center;
+}
+
+.password-manager .password-manager-modal-header {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--borda) 58%, transparent);
+  display: flex;
+  justify-content: space-between;
+  padding: 17px 24px 15px;
+}
+
+.password-manager .password-manager-modal-heading {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.password-manager .password-manager-modal-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--surface-glass-strong));
+  border-radius: 12px;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: 0 0 48px;
+  height: 48px;
+  justify-content: center;
+  width: 48px;
+}
+
+.password-manager .password-manager-modal-icon svg {
+  height: 23px;
+  width: 23px;
+}
+
+.password-manager .password-manager-modal-heading h3 {
+  color: var(--texto);
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.password-manager .password-manager-modal-close {
+  align-items: center;
+  background: color-mix(in srgb, var(--texto-suave) 8%, transparent);
+  border: 0;
+  border-radius: 50%;
+  color: var(--texto);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 38px;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.password-manager .password-manager-modal-close:hover {
+  background: color-mix(in srgb, var(--texto-suave) 14%, transparent);
+}
+
+.password-manager .password-manager-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
+  scrollbar-color: color-mix(in srgb, var(--texto-suave) 35%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.password-manager .password-manager-form-section {
+  border-bottom: 1px solid color-mix(in srgb, var(--borda) 58%, transparent);
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.password-manager .password-manager-form-section-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.password-manager .password-manager-step-number {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 11%, var(--surface-glass-strong));
+  border-radius: 50%;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: 0 0 28px;
+  font-size: 13px;
+  font-weight: 750;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.password-manager .password-manager-form-section-heading > div {
+  min-width: 0;
+}
+
+.password-manager .password-manager-form-section-heading h4 {
+  color: var(--texto);
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.password-manager .password-manager-form-section-heading > .password-manager-icon-button {
+  margin-left: auto;
+}
+
+.password-manager .password-manager-form-grid {
+  display: grid;
+  gap: 12px 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.password-manager .password-manager-form-grid-insurer {
+  grid-template-columns: 1.3fr 1fr;
+}
+
+.password-manager .password-manager-form-grid-login {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.password-manager .password-manager-form-full {
+  grid-column: 1 / -1;
+}
+
+.password-manager .password-manager-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.password-manager .password-manager-form-field > span:first-child {
+  color: var(--texto-suave);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.password-manager .password-manager-form-field b {
+  color: var(--color-danger, #d94a4a);
+}
+
+.password-manager .password-manager-input-shell {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+.password-manager .password-manager-input-shell > svg {
+  color: var(--texto-suave);
+  height: 17px;
+  left: 13px;
+  pointer-events: none;
+  position: absolute;
+  width: 17px;
+  z-index: 1;
+}
+
+.password-manager .password-manager-input-shell > .config-input {
+  background: color-mix(in srgb, var(--surface-glass-strong) 88%, var(--glass-blue-bg));
+  border: 1px solid color-mix(in srgb, var(--borda) 82%, transparent);
+  border-radius: 11px;
+  box-sizing: border-box;
+  color: var(--texto);
+  font-size: 13px;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0 13px 0 41px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  width: 100%;
+}
+
+.password-manager .password-manager-input-shell > .config-input::placeholder {
+  color: var(--texto-suave);
+  opacity: 0.72;
+}
+
+.password-manager .password-manager-input-shell > .config-input:focus {
+  background: var(--surface-glass-strong);
+  border-color: color-mix(in srgb, var(--color-primary) 70%, var(--borda));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  outline: 0;
+}
+
+.password-manager .password-manager-input-shell > .config-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.password-manager .password-manager-input-shell > select.config-input {
+  cursor: pointer;
+  padding-right: 34px;
+}
+
+.password-manager .password-manager-input-shell-action > .config-input {
+  padding-right: 48px;
+}
+
+.password-manager .password-manager-input-action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--texto-suave);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 8px;
+  width: 32px;
+}
+
+.password-manager .password-manager-input-action:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+}
+
+.password-manager .password-manager-input-action svg {
+  height: 17px;
+  width: 17px;
+}
+
+.password-manager .password-manager-status-select {
+  display: flex;
+  min-width: 0;
+  position: relative;
+}
+
+.password-manager .password-manager-status-select > .config-input {
+  padding-left: 34px;
+}
+
+.password-manager .password-manager-status-dot {
+  background: #22b573;
+  border-radius: 50%;
+  height: 9px;
+  left: 14px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 9px;
+  z-index: 1;
+}
+
+.password-manager .password-manager-status-dot.is-inactive {
+  background: #94a3b8;
+}
+
+.password-manager .password-manager-access-fields {
+  border-bottom: 0;
+  padding-bottom: 14px;
+}
+
+.password-manager .password-manager-access-notes {
+  padding-top: 14px;
+}
+
+.password-manager .password-manager-textarea-shell {
+  align-items: flex-start;
+}
+
+.password-manager .password-manager-textarea-shell > svg {
+  top: 13px;
+}
+
+.password-manager .password-manager-input-shell > textarea.config-input {
+  line-height: 1.45;
+  min-height: 82px;
+  padding: 12px 13px 12px 41px;
+  resize: vertical;
+}
+
+.password-manager .password-manager-form-error:empty {
+  display: none;
+}
+
+.password-manager .password-manager-form-error {
+  color: var(--color-danger, #d94a4a);
+  font-size: 12px;
+  margin: 10px 0;
+}
+
+.password-manager .password-manager-visually-hidden {
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.password-manager .password-manager-modal-footer {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border-top: 1px solid color-mix(in srgb, var(--borda) 58%, transparent);
+  display: flex;
+  gap: 9px;
+  justify-content: flex-end;
+  padding: 13px 24px 16px;
+  box-shadow: none;
+}
+
+.password-manager .password-manager-modal-footer .save-btn {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  border-radius: var(--radius-button-primary);
+  min-height: 42px;
+  min-width: 190px;
+  padding: 8px 18px;
+}
+
+.password-manager .password-manager-modal-footer .secondary-btn {
+  border-radius: var(--radius-button-secondary);
+  min-height: 42px;
+  min-width: 126px;
+  padding: 8px 18px;
+}
+
+.password-manager .password-manager-modal-footer .save-btn svg {
+  height: 16px;
+  width: 16px;
+}
+
+/* Compactação proporcional do modal de cadastro (largura reduzida em ~35%). */
+.password-manager .password-manager-batch-modal {
+  max-width: min(560px, 100%);
+  width: min(560px, 100%);
+}
+
+.password-manager .password-manager-batch-heading {
+  margin: 12px 0 8px;
+}
+
+.password-manager .password-manager-batch-heading > .secondary-btn {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.password-manager .password-manager-batch-heading > .secondary-btn svg {
+  height: 14px;
+  width: 14px;
+}
+
+.password-manager .password-manager-batch-item {
+  gap: 8px;
+  padding: 9px;
+}
+
+.password-manager .password-manager-modal-header {
+  padding: 14px 18px 12px;
+}
+
+.password-manager .password-manager-modal-heading {
+  gap: 10px;
+}
+
+.password-manager .password-manager-modal-icon {
+  flex-basis: 40px;
+  height: 40px;
+  width: 40px;
+}
+
+.password-manager .password-manager-modal-icon svg {
+  height: 20px;
+  width: 20px;
+}
+
+.password-manager .password-manager-modal-heading h3 {
+  font-size: 18px;
+}
+
+.password-manager .password-manager-modal-close {
+  flex-basis: 34px;
+  height: 34px;
+  width: 34px;
+}
+
+.password-manager .password-manager-modal-body {
+  padding-inline: 18px;
+}
+
+.password-manager .password-manager-form-section {
+  gap: 10px;
+  padding-block: 12px;
+}
+
+.password-manager .password-manager-form-section-heading {
+  gap: 8px;
+}
+
+.password-manager .password-manager-step-number {
+  flex-basis: 24px;
+  font-size: 11px;
+  height: 24px;
+  width: 24px;
+}
+
+.password-manager .password-manager-form-section-heading > .password-manager-icon-button {
+  flex-basis: 24px;
+  height: 24px;
+  padding: 4px;
+  width: 24px;
+}
+
+.password-manager .password-manager-form-section-heading > .password-manager-icon-button svg {
+  height: 14px;
+  width: 14px;
+}
+
+.password-manager .password-manager-form-section-heading h4 {
+  font-size: 13px;
+}
+
+.password-manager .password-manager-form-grid {
+  gap: 9px 10px;
+}
+
+.password-manager .password-manager-form-field {
+  gap: 4px;
+}
+
+.password-manager .password-manager-form-field > span:first-child {
+  font-size: 11px;
+}
+
+.password-manager .password-manager-input-shell > svg {
+  height: 15px;
+  left: 11px;
+  width: 15px;
+}
+
+.password-manager .password-manager-input-shell > .config-input {
+  border-radius: 9px;
+  font-size: 12px;
+  min-height: 36px;
+  padding: 0 10px 0 35px;
+}
+
+.password-manager .password-manager-input-shell > select.config-input {
+  padding-right: 30px;
+}
+
+.password-manager .password-manager-input-shell-action > .config-input {
+  padding-right: 42px;
+}
+
+.password-manager .password-manager-input-action {
+  height: 28px;
+  right: 6px;
+  width: 28px;
+}
+
+.password-manager .password-manager-input-action svg {
+  height: 15px;
+  width: 15px;
+}
+
+.password-manager .password-manager-status-select > .config-input {
+  padding-left: 30px;
+}
+
+.password-manager .password-manager-status-dot {
+  height: 8px;
+  left: 12px;
+  width: 8px;
+}
+
+.password-manager .password-manager-access-fields {
+  padding-bottom: 10px;
+}
+
+.password-manager .password-manager-access-notes {
+  padding-top: 10px;
+}
+
+.password-manager .password-manager-textarea-shell > svg {
+  top: 11px;
+}
+
+.password-manager .password-manager-input-shell > textarea.config-input {
+  min-height: 62px;
+  padding: 9px 10px 9px 35px;
+}
+
+.password-manager .password-manager-modal-footer {
+  gap: 8px;
+  padding: 10px 18px 12px;
+}
+
+.password-manager .password-manager-modal-footer .save-btn {
+  min-height: 36px;
+  min-width: 150px;
+  padding: 6px 12px;
+}
+
+.password-manager .password-manager-modal-footer .secondary-btn {
+  min-height: 36px;
+  min-width: 108px;
+  padding: 6px 12px;
+}
+
+.password-manager .password-manager-modal-footer .save-btn svg {
+  height: 14px;
+  width: 14px;
+}
+
+@media (max-width: 900px) {
+  .password-manager .password-manager-form-grid-credentials {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .password-manager .password-manager-batch-modal {
+    max-height: calc(100dvh - var(--hub-content-offset, 0px) - 16px);
+    width: min(100%, 560px);
+  }
+
+  .password-manager .password-manager-modal-header {
+    padding: 15px 18px 13px;
+  }
+
+  .password-manager .password-manager-modal-heading {
+    gap: 10px;
+  }
+
+  .password-manager .password-manager-modal-icon {
+    flex-basis: 42px;
+    height: 42px;
+    width: 42px;
+  }
+
+  .password-manager .password-manager-modal-heading h3 {
+    font-size: 17px;
+  }
+
+  .password-manager .password-manager-modal-body {
+    padding: 0 18px;
+  }
+
+  .password-manager .password-manager-modal-footer {
+    gap: 8px;
+    padding: 12px 18px 14px;
+  }
+
+  .password-manager .password-manager-form-grid,
+  .password-manager .password-manager-form-grid-insurer,
+  .password-manager .password-manager-form-grid-credentials,
+  .password-manager .password-manager-form-grid-login {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .password-manager .password-manager-form-full {
+    grid-column: 1;
+  }
+
+  .password-manager .password-manager-batch-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .password-manager .password-manager-modal-footer > button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .password-manager .password-manager-modal-footer .save-btn {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .password-manager .password-manager-modal-header {
+    padding: 12px 14px 10px;
+  }
+
+  .password-manager .password-manager-modal-icon {
+    flex-basis: 34px;
+    height: 34px;
+    width: 34px;
+  }
+
+  .password-manager .password-manager-modal-heading h3 {
+    font-size: 16px;
+  }
+
+  .password-manager .password-manager-modal-body {
+    padding: 0 14px;
+  }
+
+  .password-manager .password-manager-modal-footer {
+    padding: 9px 14px 11px;
+  }
+}
+
+@media (max-width: 720px) {
+  .password-manager .password-manager-toolbar,
+  .password-manager .password-manager-toolbar:not(.is-manager) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .password-manager .password-manager-search {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .password-manager .password-manager-filter-menu {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .password-manager .password-manager-add {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .password-manager .password-manager-table-scroll {
+    overflow-x: auto;
+  }
+
+  .password-manager .password-manager-table {
+    min-width: 860px;
+  }
+}
+
+@media (max-width: 520px) {
+  .password-manager .password-manager-batch-modal .modal-inline-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .password-manager .password-manager-category-toggle {
+    gap: 6px;
+    padding-right: 96px;
+  }
+
+  .password-manager .password-manager-insurer-actions {
+    right: 4px;
+  }
+}
+
+.password-manager .password-manager-category-toggle:hover {
+  color: var(--color-primary);
+}
+
+.password-manager .password-manager-category-toggle svg {
+  color: var(--texto-suave);
+  height: 16px;
+  width: 16px;
+}
+
+.password-manager .password-manager-category-toggle strong {
+  font-size: 13px;
+}
+
+.password-manager .password-manager-category-toggle span {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-glass-strong));
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font-size: 11px;
+  margin-left: 2px;
+  padding: 3px 9px;
+}
+
+.password-manager .password-manager-access-title,
+.password-manager .password-manager-secret,
+.password-manager .password-manager-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.password-manager .password-manager-tree-indent {
+  border-bottom: 1px solid color-mix(in srgb, var(--texto-suave) 38%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--texto-suave) 38%, transparent);
+  border-bottom-left-radius: 6px;
+  flex: 0 0 15px;
+  height: 19px;
+  margin: -9px 1px 0 7px;
+}
+
+.password-manager .password-manager-access-title > svg {
+  color: var(--color-primary);
+  flex: 0 0 16px;
+  height: 16px;
+  width: 16px;
+}
+
+.password-manager .password-manager-access-title a,
+.password-manager .password-manager-access-title strong {
+  align-items: center;
+  color: var(--texto);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-access-title a:hover {
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.password-manager .password-manager-access-title a svg {
+  flex: 0 0 13px;
+  height: 13px;
+  width: 13px;
+}
+
+.password-manager .password-manager-access-title small {
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--surface-glass-strong));
+  border-radius: 999px;
+  color: var(--texto-suave);
+  flex: 0 0 auto;
+  font-size: 10px;
+  max-width: 100px;
+  overflow: hidden;
+  padding: 3px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-cell-text {
+  color: var(--texto);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 6px 10px;
+  text-decoration: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.password-manager .password-manager-description {
+  color: var(--texto-suave);
+  max-width: 300px;
+}
+
+.password-manager .password-manager-secret-value {
+  color: var(--texto-suave);
+  font-size: 12px;
+  letter-spacing: 1px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-icon-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 28px;
+  height: 28px;
+  justify-content: center;
+  padding: 5px;
+  width: 28px;
+}
+
+.password-manager .password-manager-icon-button:hover,
+.password-manager .password-manager-icon-button:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  outline: 0;
+}
+
+.password-manager .password-manager-icon-button svg {
+  height: 16px;
+  width: 16px;
+}
+
+.password-manager .password-manager-icon-button.is-danger {
+  color: var(--color-danger, #dc3545);
+}
+
+.password-manager .password-manager-status {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 750;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.password-manager .password-manager-status.is-active {
+  background: #def5e9;
+  color: #087849;
+}
+
+.password-manager .password-manager-status.is-inactive {
+  background: #f1f3f5;
+  color: #64748b;
+}
+
+.password-manager .password-manager-empty-row td {
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+body.dark .password-manager .password-manager-status.is-active {
+  background: rgba(21, 134, 92, 0.22);
+  color: #8de0b5;
+}
+
+body.dark .password-manager .password-manager-status.is-inactive {
+  background: rgba(148, 163, 184, 0.16);
+  color: #c2ccda;
+}
+
+@media (max-width: 1100px) {
+  .password-manager .password-manager-toolbar.is-manager {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .password-manager .password-manager-toolbar:not(.is-manager) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .password-manager .password-manager-search {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .password-manager .password-manager-filter-menu {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .password-manager .password-manager-add {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 640px) {
+  .password-manager .password-manager-toolbar,
+  .password-manager .password-manager-toolbar:not(.is-manager) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px;
+  }
+
+  .password-manager .password-manager-search {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .password-manager .password-manager-filter-menu {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .password-manager .password-manager-filter-button {
+    width: 100%;
+  }
+
+  .password-manager .password-manager-add {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .password-manager .password-manager-table {
+    min-width: 960px;
+  }
+}
+
 .audit-list {
   display: grid;
   gap: 8px;
@@ -12211,6 +13425,16 @@ body.dark .fin-company-select-inline .config-input {
   .fin-section-tab-short,
   .hub-module-nav-short,
   .fin-lancamento-tab-short {
+.hub-layout .password-manager-modal-backdrop {
+  background: rgba(15, 31, 50, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.hub-layout .password-manager .password-manager-batch-modal {
+  overflow: hidden;
+}
+
     display: none;
   }
 
