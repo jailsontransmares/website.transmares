@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveCrm2OpportunityRoute } from './crm2OpportunityRoute.js';
 
-test('CRM 2.0 root displays opportunities and leaves sequential registration separate', () => {
+test('CRM 2.0 root displays opportunities and the legacy cadastro path is not an opportunity route', () => {
   assert.deepEqual(resolveCrm2OpportunityRoute('/hub/painel-ar/200'), { active: true, view: 'list', id: '', isCrmHome: true });
   assert.deepEqual(resolveCrm2OpportunityRoute('/hub/painel-ar/200/cadastro'), { active: false, view: 'list', id: '' });
 });

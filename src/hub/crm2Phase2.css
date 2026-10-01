@@ -172,10 +172,6 @@
   color: var(--color-primary, #466fc1);
 }
 
-.crm2-phase1-roadmap-item.is-available .crm2-phase1-roadmap-status {
-  color: var(--color-success, #067647);
-}
-
 .crm2-pessoas-state {
   align-items: center;
   background: var(--surface-glass-strong);

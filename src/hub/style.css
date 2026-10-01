@@ -3666,153 +3666,6 @@ body.dark .admin-partners-actions-menu {
   font-size: 21px;
 }
 
-.crm2-phase1-section-header {
-  margin-top: 8px;
-}
-
-.crm2-phase1-section-header h4 {
-  color: var(--color-navy);
-  font-size: 16px;
-  margin: 0 0 4px;
-}
-
-.crm2-phase1-roadmap {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.crm2-phase1-header {
-  align-items: center;
-}
-
-.crm2-phase1-heading {
-  align-items: center;
-  display: flex;
-  gap: clamp(16px, 2vw, 30px);
-  justify-content: space-between;
-}
-
-.crm2-phase1-title {
-  flex: 0 0 auto;
-  min-width: max-content;
-}
-
-.crm2-phase1-shortcuts {
-  display: grid;
-  flex: 1 1 auto;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(112px, 1fr));
-  max-width: 680px;
-  min-width: 0;
-}
-
-.crm2-phase1-shortcut {
-  align-items: center;
-  background: var(--surface-glass-strong);
-  border: var(--glass-border-subtle);
-  border-radius: var(--radius-card);
-  color: var(--color-navy);
-  cursor: pointer;
-  display: flex;
-  gap: 9px;
-  justify-content: flex-start;
-  min-height: 46px;
-  min-width: 0;
-  padding: 7px 10px;
-  text-align: left;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
-}
-
-.crm2-phase1-shortcut:hover,
-.crm2-phase1-shortcut:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 10%, transparent);
-  outline: none;
-  transform: translateY(-1px);
-}
-
-.crm2-phase1-shortcut .crm2-phase1-roadmap-code {
-  flex: 0 0 34px;
-  min-height: 30px;
-}
-
-.crm2-phase1-shortcut strong {
-  font-size: 13px;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.crm2-phase1-roadmap.crm2-phase1-roadmap-secondary {
-  grid-template-columns: minmax(240px, 1fr);
-}
-
-.crm2-phase1-roadmap-item {
-  align-items: center;
-  background: var(--surface-glass-strong);
-  border: var(--glass-border-subtle);
-  border-radius: var(--radius-card);
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
-  padding: 13px 16px;
-}
-
-.crm2-phase1-roadmap-item > div {
-  min-width: 0;
-}
-
-.crm2-phase1-roadmap-code {
-  align-items: center;
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-radius: 10px;
-  color: var(--color-primary);
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 800;
-  justify-content: center;
-  min-height: 30px;
-}
-
-.crm2-phase1-roadmap-item strong {
-  color: var(--color-navy);
-  font-size: 14px;
-}
-
-.crm2-phase1-roadmap-item p {
-  color: var(--texto-suave);
-  font-size: 12px;
-  line-height: 1.4;
-  margin: 3px 0 0;
-}
-
-.crm2-phase1-roadmap-status {
-  color: var(--texto-suave);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.crm2-phase1-actions {
-  align-items: center;
-  flex-direction: row;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.crm2-phase1-roadmap-item.is-actionable {
-  cursor: pointer;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
-}
-
-.crm2-phase1-roadmap-item.is-actionable:hover,
-.crm2-phase1-roadmap-item.is-actionable:focus-visible {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--color-primary) 10%, transparent);
-  outline: none;
-  transform: translateY(-1px);
-}
-
 .crm2-pessoas-page,
 .crm2-pf-detail {
   display: grid;
@@ -5295,28 +5148,7 @@ body.dark .admin-partners-actions-menu {
   }
 }
 
-@media (max-width: 1180px) {
-  .crm2-phase1-roadmap {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
 
-@media (max-width: 960px) {
-  .crm2-phase1-roadmap {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .crm2-phase1-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .crm2-phase1-shortcuts {
-    max-width: none;
-    width: 100%;
-  }
-}
 
 @media (max-width: 780px) {
   .ar-crm-phase1-intro,
@@ -5332,20 +5164,6 @@ body.dark .admin-partners-actions-menu {
 
   .ar-crm-phase1-grid {
     grid-template-columns: 1fr;
-  }
-
-  .crm2-phase1-roadmap-item {
-    align-items: flex-start;
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .crm2-phase1-roadmap-status {
-    grid-column: 2;
-  }
-
-  .crm2-phase1-actions {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .ar-crm-list-filters,
@@ -6669,10 +6487,7 @@ body.dark .password-row h3 {
 
 .password-manager .password-manager-access-title a:hover {
   color: var(--color-primary);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  text-decoration: underline;
 }
 
 .password-manager .password-manager-access-title a svg {
@@ -6698,11 +6513,10 @@ body.dark .password-row h3 {
   color: var(--texto);
   display: block;
   font-size: 12px;
-  font-weight: 700;
-  min-height: 30px;
-  padding: 6px 10px;
-  text-decoration: none;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .password-manager .password-manager-description {
@@ -6771,9 +6585,8 @@ body.dark .password-row h3 {
 
 .password-manager .password-manager-empty-row td {
   color: var(--texto-suave);
-  font-size: 12px;
-  line-height: 1.35;
-  margin: 0;
+  padding: 18px;
+  text-align: center;
 }
 
 body.dark .password-manager .password-manager-status.is-active {
@@ -13425,16 +13238,6 @@ body.dark .fin-company-select-inline .config-input {
   .fin-section-tab-short,
   .hub-module-nav-short,
   .fin-lancamento-tab-short {
-.hub-layout .password-manager-modal-backdrop {
-  background: rgba(15, 31, 50, 0.34);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.hub-layout .password-manager .password-manager-batch-modal {
-  overflow: hidden;
-}
-
     display: none;
   }
 
@@ -13622,6 +13425,16 @@ body.dark .hub-layout .modal-backdrop {
   overflow-y: auto;
 }
 
+.hub-layout .password-manager-modal-backdrop {
+  background: rgba(15, 31, 50, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.hub-layout .password-manager .password-manager-batch-modal {
+  overflow: hidden;
+}
+
 .hub-layout .admin-user-modal:not(.is-permissions-stage),
 .hub-layout .partner-modal-backdrop .partner-modal {
   max-height: calc(100dvh - 170px);
@@ -13802,24 +13615,6 @@ body.dark .hub-layout .fin-modal-backdrop {
   .hub-layout .modal-backdrop.hub-modal-backdrop--contained,
   .hub-layout .fin-modal-backdrop.hub-modal-backdrop--contained {
     padding: 8px;
-  }
-
-  .crm2-phase1-roadmap {
-    grid-template-columns: 1fr;
-  }
-
-  .crm2-phase1-roadmap.crm2-phase1-roadmap-secondary {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .crm2-phase1-shortcuts {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .crm2-phase1-shortcut {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
   }
 
   .hub-layout .modal-backdrop.hub-modal-backdrop--contained > .small-modal,

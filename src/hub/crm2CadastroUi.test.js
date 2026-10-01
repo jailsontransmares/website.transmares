@@ -18,7 +18,7 @@ test('shared cadastro header can hide the route kicker and customize the back la
   const html = renderCrm2CadastroListHeader({ title: 'Pessoas físicas', titleId: 'pf-title', routeCode: '201', showRouteCode: false, backLabel: 'Voltar' });
   assert.doesNotMatch(html, /ROTA 201/);
   assert.match(html, /id="pf-title">Pessoas físicas/);
-  assert.match(html, />Voltar<\/button>/);
+  assert.match(html, /aria-label="Voltar" title="Voltar"/);
 });
 
 test('shared toolbar preserves each module submit handler and filter controls', () => {

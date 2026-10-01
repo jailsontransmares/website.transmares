@@ -1030,35 +1030,6 @@ function enhancePeopleTableCrm2() {
   });
 }
 
-function enhanceCrm2Overview() {
-  const title = document.getElementById('crm2-title');
-  const panel = title?.closest('.admin-panel');
-  if (!panel || panel.dataset.crm2Phase2Overview === 'true') return;
-
-  const item201 = [...panel.querySelectorAll('.crm2-phase1-roadmap-item')]
-    .find((item) => item.querySelector('.crm2-phase1-roadmap-code')?.textContent?.trim() === '201');
-  if (item201) {
-    item201.classList.add('is-actionable', 'is-available');
-    item201.setAttribute('role', 'button');
-    item201.setAttribute('tabindex', '0');
-    item201.setAttribute('onclick', "navegarParaCrm2Rota('201')");
-    item201.setAttribute('onkeydown', "if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navegarParaCrm2Rota('201'); }");
-    const status = item201.querySelector('.crm2-phase1-roadmap-status');
-    if (status) status.textContent = 'Disponível';
-  }
-
-  const primaryAction = panel.querySelector('.crm2-phase1-actions .primary-btn');
-  if (primaryAction) {
-    primaryAction.disabled = false;
-    primaryAction.textContent = 'Abrir Cadastro';
-    primaryAction.setAttribute('onclick', "navegarParaCrm2Rota('201')");
-  }
-
-  const kicker = panel.querySelector('.ar-crm-phase1-kicker');
-  if (kicker) kicker.textContent = 'FASES 1 E 2 · MOCK FUNCIONAL';
-  panel.dataset.crm2Phase2Overview = 'true';
-}
-
 function mountCrm2Phase2() {
   if (window.crm2PfArActive === false) {
     removeCrm2PfFooterPortal();
@@ -1072,7 +1043,6 @@ function mountCrm2Phase2() {
     removeCrm2Toast();
     resetFormCrm2();
     setMessageCrm2('');
-    enhanceCrm2Overview();
     return;
   }
   if (code !== '201') {
