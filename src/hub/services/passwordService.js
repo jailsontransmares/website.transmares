@@ -195,10 +195,11 @@ function montarResumo(acessos) {
 
 export async function carregarPasswordsData(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
+  const statusAcessos = payload.status === undefined ? 'ativo' : payload.status;
   const [taxonomias, acessos, seguradorasResult] = await Promise.all([
     carregarTaxonomias(),
     listarAcessosSanitizados(supabase),
-    supabase.rpc('app_listar_seguradoras')
+    supabase.rpc('app_listar_seguradoras', { p_status: 'todos' })
   ]);
 
   if (seguradorasResult.error) throw new Error(seguradorasResult.error.message || 'Não foi possível carregar seguradoras.');
@@ -206,7 +207,7 @@ export async function carregarPasswordsData(payload = {}) {
   return {
     ...taxonomias,
     seguradoras: seguradorasResult.data || [],
-    acessos: filtrarAcessos(acessos, payload),
+    acessos: filtrarAcessos(acessos, { ...payload, status: statusAcessos }),
     resumo: montarResumo(acessos),
     historico: []
   };
@@ -252,6 +253,19 @@ export async function renomearSeguradora(payload = {}) {
   const { error } = await supabase.rpc('app_renomear_seguradora', { p_id: payload.id, p_nome: payload.nome });
   if (error) throw new Error(error.message || 'Não foi possível renomear seguradora.');
   return { id: payload.id };
+}
+
+export async function alterarStatusSeguradora(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  if (!payload.id || !['ativo', 'inativo'].includes(payload.status)) {
+    throw new Error('Informe a seguradora e o status válido.');
+  }
+  const { error } = await supabase.rpc('app_alterar_status_seguradora', {
+    p_id: payload.id,
+    p_status: payload.status
+  });
+  if (error) throw new Error(error.message || 'Não foi possível alterar o status da seguradora.');
+  return { id: payload.id, status: payload.status };
 }
 
 export async function excluirSeguradora(payload = {}) {

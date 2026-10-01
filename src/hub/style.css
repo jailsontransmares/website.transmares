@@ -5655,8 +5655,7 @@ body.dark .password-row h3 {
   width: 23%;
 }
 
-.password-manager .password-manager-table thead th:nth-child(5),
-.password-manager .password-manager-table thead th:nth-child(6) {
+.password-manager .password-manager-table thead th:nth-child(5) {
   width: 90px;
 }
 
@@ -6445,6 +6444,12 @@ body.dark .password-row h3 {
   padding: 3px 9px;
 }
 
+.password-manager .password-manager-category-toggle .password-manager-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 3px 7px;
+}
+
 .password-manager .password-manager-access-title,
 .password-manager .password-manager-secret,
 .password-manager .password-manager-actions {
@@ -6522,6 +6527,9 @@ body.dark .password-row h3 {
 .password-manager .password-manager-description {
   color: var(--texto-suave);
   max-width: 300px;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: pre-line;
 }
 
 .password-manager .password-manager-secret-value {

@@ -48,6 +48,7 @@ import {
 } from './services/linksService.js';
 import {
   carregarPasswordsData,
+  alterarStatusSeguradora,
   criarAcessosSeguradora,
   excluirSeguradora,
   excluirPasswordItem,
@@ -270,6 +271,7 @@ export async function chamarApi(action, payload = {}) {
       deletePasswordItem: () => excluirPasswordItem(payload),
       savePasswordItem: () => salvarPasswordItem(payload),
       createInsurerAccesses: () => criarAcessosSeguradora(payload),
+      setInsurerStatus: () => alterarStatusSeguradora(payload),
       renameInsurer: () => renomearSeguradora(payload),
       deleteInsurer: () => excluirSeguradora(payload)
     };

@@ -385,7 +385,8 @@ const state = {
     filtros: {
       seguradoraId: '',
       grupo: '',
-      status: ''
+      status: 'ativo',
+      statusSeguradora: 'ativo'
     },
     filtrosAbertos: false,
     busca: '',
@@ -6943,7 +6944,8 @@ async function carregarCentralSenhas() {
     const response = await chamarApi('getPasswordsData', {
       seguradoraId: state.passwords.filtros.seguradoraId,
       grupo: state.passwords.filtros.grupo,
-      status: state.passwords.filtros.status
+      status: state.passwords.filtros.status,
+      statusSeguradora: state.passwords.filtros.statusSeguradora
     });
 
     if (!response.ok) {
@@ -7021,7 +7023,12 @@ function renderCentralSenhas() {
 
 function renderToolbarSenhas(gestor) {
   const filtros = state.passwords.filtros;
-  const totalFiltrosAtivos = [filtros.seguradoraId, filtros.grupo, gestor ? filtros.status : ''].filter(Boolean).length;
+  const totalFiltrosAtivos = [
+    filtros.seguradoraId,
+    filtros.grupo,
+    gestor && filtros.status !== 'ativo' ? 'status' : '',
+    pode('central_senhas', 'update') && filtros.statusSeguradora !== 'ativo' ? filtros.statusSeguradora : ''
+  ].filter(Boolean).length;
   return `
     <div class="links-toolbar password-manager-toolbar ${gestor ? 'is-manager' : ''}">
       <label class="password-manager-search">
@@ -7042,10 +7049,15 @@ function renderToolbarSenhas(gestor) {
               <option value="">Todos os grupos</option>
               ${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
             </select></label>
-            ${gestor ? `<label><span>Status</span><select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
-              <option value="">Todos os status</option>
+            ${gestor ? `<label><span>Status dos acessos</span><select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
               <option value="ativo" ${filtros.status === 'ativo' ? 'selected' : ''}>Ativos</option>
+              <option value="" ${filtros.status === '' ? 'selected' : ''}>Todos os status</option>
               <option value="inativo" ${filtros.status === 'inativo' ? 'selected' : ''}>Inativos</option>
+            </select></label>` : ''}
+            ${pode('central_senhas', 'update') ? `<label><span>Status das seguradoras</span><select class="config-input" onchange="alterarFiltroSenha('statusSeguradora', this.value)">
+              <option value="ativo" ${filtros.statusSeguradora === 'ativo' ? 'selected' : ''}>Ativas</option>
+              <option value="todos" ${filtros.statusSeguradora === 'todos' ? 'selected' : ''}>Todas</option>
+              <option value="inativo" ${filtros.statusSeguradora === 'inativo' ? 'selected' : ''}>Inativas</option>
             </select></label>` : ''}
             <div class="password-manager-filter-actions">
               <button class="secondary-btn" type="button" onclick="limparFiltrosSenhas()" ${totalFiltrosAtivos ? '' : 'disabled'}>Limpar filtros</button>
@@ -7073,8 +7085,13 @@ function renderListaSenhas(gestor, podeVerSenha) {
   }
 
   const busca = normalizarTextoBuscaSenha(state.passwords.busca || '');
-  const grupos = new Map((state.passwords.seguradoras || []).map(seguradora => [seguradora.id, { seguradora, acessos: [] }]));
+  const statusSeguradora = state.passwords.filtros.statusSeguradora || 'ativo';
+  const seguradorasVisiveis = (state.passwords.seguradoras || []).filter(seguradora =>
+    statusSeguradora === 'todos' || seguradora.status === statusSeguradora
+  );
+  const grupos = new Map(seguradorasVisiveis.map(seguradora => [seguradora.id, { seguradora, acessos: [] }]));
   state.passwords.items.forEach(item => {
+    if (item.seguradoraId && !grupos.has(item.seguradoraId)) return;
     const id = item.seguradoraId || `legacy:${item.categoria || ''}`;
     if (!grupos.has(id)) grupos.set(id, { seguradora: { id, nome: item.seguradoraNome || item.categoria || 'Sem seguradora' }, acessos: [] });
     grupos.get(id).acessos.push(item);
@@ -7090,18 +7107,21 @@ function renderListaSenhas(gestor, podeVerSenha) {
     const chaveGrupo = id;
     const recolhido = !seguradoraCorresponde && !busca && Boolean(state.passwords.categoriasRecolhidas?.[chaveGrupo]);
     const nomeCategoria = seguradora.nome;
+    const seguradoraAtiva = seguradora.status !== 'inativo';
     const acoesSeguradora = `
-      ${pode('central_senhas', 'create') ? `<button class="password-manager-icon-button" type="button" onclick="abrirCadastroSeguradora('${escapeAttr(seguradora.id)}')" title="Adicionar acesso" aria-label="Adicionar acesso"><i data-lucide="plus" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'create') && seguradoraAtiva ? `<button class="password-manager-icon-button" type="button" onclick="abrirCadastroSeguradora('${escapeAttr(seguradora.id)}')" title="Adicionar acesso" aria-label="Adicionar acesso"><i data-lucide="plus" aria-hidden="true"></i></button>` : ''}
       ${pode('central_senhas', 'update') ? `<button class="password-manager-icon-button" type="button" onclick="renomearSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Renomear seguradora" aria-label="Renomear seguradora"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'update') ? `<button class="password-manager-icon-button ${seguradoraAtiva ? 'is-danger' : ''}" type="button" onclick="alterarStatusSeguradoraUI('${escapeAttr(seguradora.id)}')" title="${seguradoraAtiva ? 'Inativar seguradora' : 'Reativar seguradora'}" aria-label="${seguradoraAtiva ? 'Inativar seguradora' : 'Reativar seguradora'}"><i data-lucide="${seguradoraAtiva ? 'x' : 'rotate-ccw'}" aria-hidden="true"></i></button>` : ''}
       ${pode('central_senhas', 'delete') && !acessos.length ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Excluir seguradora" aria-label="Excluir seguradora"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
     `;
 
     return `
       <tr class="password-manager-category-row" data-password-category-row data-category-key="${escapeAttr(chaveGrupo)}" data-search-category="${escapeAttr(termoSeguradora)}">
-        <th colspan="6">
+        <th colspan="5">
           <button class="password-manager-category-toggle" type="button" onclick="alternarCategoriaSenhas(this.closest('tr').dataset.categoryKey)" aria-expanded="${!recolhido}">
             <i data-lucide="${recolhido ? 'chevron-right' : 'chevron-down'}" aria-hidden="true"></i>
             <strong>${escapeHtml(nomeCategoria)}</strong>
+            <span class="password-manager-status ${seguradoraAtiva ? 'is-active' : 'is-inactive'}">${seguradoraAtiva ? 'Ativa' : 'Inativa'}</span>
             <span>${acessos.length} ${acessos.length === 1 ? 'acesso' : 'acessos'}</span>
           </button>
           <div class="password-manager-insurer-actions">${acoesSeguradora}</div>
@@ -7122,12 +7142,11 @@ function renderListaSenhas(gestor, podeVerSenha) {
             <th scope="col">Login</th>
             <th scope="col">Senha</th>
             <th scope="col">Descrição</th>
-            <th scope="col">Status</th>
             <th scope="col">Ações</th>
           </tr></thead>
           <tbody>
             ${linhas}
-            <tr class="password-manager-empty-row" data-password-empty-row hidden><td colspan="6">Nenhum acesso corresponde à busca.</td></tr>
+            <tr class="password-manager-empty-row" data-password-empty-row hidden><td colspan="5">Nenhum acesso corresponde à busca.</td></tr>
           </tbody>
         </table>
       </div>
@@ -7141,7 +7160,6 @@ function renderSenhaItem(item, gestor, podeVerSenha, recolhido = false, chaveGru
   const senhaVisivel = Boolean(state.passwords.senhasVisiveis?.[item.id]);
   const senhaTexto = item.senha || '';
   const termoBusca = normalizarTextoBuscaSenha([item.seguradoraNome || item.categoria || 'Sem seguradora', item.titulo, item.login, item.descricao].join(' '));
-  const statusAtivo = String(item.status || '').toLowerCase() === 'ativo';
 
   return `
     <tr class="password-manager-access-row status-line-${escapeAttr(item.status || 'inativo')}" data-password-access-row data-category-key="${escapeAttr(chaveGrupo)}" data-collapsed="${recolhido}" data-search="${escapeAttr(termoBusca)}" ${recolhido || ocultoPorBusca ? 'hidden' : ''}>
@@ -7163,8 +7181,7 @@ function renderSenhaItem(item, gestor, podeVerSenha, recolhido = false, chaveGru
           ` : ''}
         </div>
       </td>
-      <td><span class="password-manager-cell-text password-manager-description" title="${escapeAttr(item.descricao || '-')}" >${escapeHtml(item.descricao || '-')}</span></td>
-      <td><span class="password-manager-status ${statusAtivo ? 'is-active' : 'is-inactive'}">${statusAtivo ? 'Ativo' : 'Inativo'}</span></td>
+      <td><span class="password-manager-cell-text password-manager-description" title="${escapeAttr(item.descricao || '-')}">${escapeHtml(item.descricao || '-')}</span></td>
       <td><div class="password-manager-actions">
         ${gestor && podeEditar ? `<button class="password-manager-icon-button" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" aria-label="Editar acesso" title="Editar"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
         ${gestor && podeExcluir ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
@@ -7267,31 +7284,52 @@ function renderModalSenha() {
   const item = obterSenhaModalAtual();
   const erros = state.passwords.erros || {};
   const editando = Boolean(item.id);
-  const botaoTexto = state.passwords.salvo ? 'Salvo' : (state.passwords.salvando ? 'Salvando...' : 'Salvar');
+  const botaoTexto = state.passwords.salvo ? 'Salvo' : (state.passwords.salvando ? 'Salvando...' : 'Salvar alterações');
+  const statusInativo = item.status === 'inativo';
 
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Acesso">
-      <section class="small-modal link-modal">
-        <div class="small-modal-header">
-          <h3>${editando ? 'Editar acesso' : 'Adicionar acesso'}</h3>
-          <button class="icon-btn" type="button" onclick="fecharModalSenha()" title="Fechar" aria-label="Fechar">×</button>
+    <div class="modal-backdrop password-manager-modal-backdrop" role="dialog" aria-modal="true" aria-label="${editando ? 'Editar acesso' : 'Cadastro de acesso'}">
+      <section class="small-modal link-modal password-manager-batch-modal">
+        <header class="password-manager-modal-header">
+          <div class="password-manager-modal-heading">
+            <span class="password-manager-modal-icon"><i data-lucide="pencil" aria-hidden="true"></i></span>
+            <div><h3>${editando ? 'Editar acesso' : 'Adicionar acesso'}</h3></div>
+          </div>
+          <button class="password-manager-modal-close" type="button" onclick="fecharModalSenha()" title="Fechar" aria-label="Fechar"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+
+        <div class="password-manager-modal-body">
+          <section class="password-manager-form-section" aria-labelledby="edicao_secao_seguradora">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">1</span><div><h4 id="edicao_secao_seguradora">Seguradora</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-insurer">
+              <label class="password-manager-form-field password-manager-form-full"><span>Seguradora <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="senha_seguradora" class="config-input"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.map(seguradora => `<option value="${escapeAttr(seguradora.id)}" ${item.seguradoraId === seguradora.id ? 'selected' : ''}>${escapeHtml(seguradora.nome)}${seguradora.status === 'inativo' ? ' (Inativa)' : ''}</option>`).join('')}</select></span>${renderErroCampo(erros.seguradoraId)}</label>
+            </div>
+          </section>
+
+          <section class="password-manager-form-section password-manager-access-fields" aria-labelledby="edicao_secao_acesso">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">2</span><div><h4 id="edicao_secao_acesso">Dados do acesso</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-credentials">
+              <label class="password-manager-form-field"><span>Título <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="file-text" aria-hidden="true"></i><input id="senha_titulo" class="config-input" type="text" required placeholder="Ex.: Portal Principal" value="${escapeAttr(item.titulo || '')}"></span>${renderErroCampo(erros.titulo)}</label>
+              <label class="password-manager-form-field"><span>Grupo</span><span class="password-manager-input-shell"><i data-lucide="layout-grid" aria-hidden="true"></i><select id="senha_grupo" class="config-input"><option value="">Sem grupo</option>${state.passwords.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></span></label>
+              <label class="password-manager-form-field"><span>Status</span><span class="password-manager-status-select"><i class="password-manager-status-dot ${statusInativo ? 'is-inactive' : ''}" data-status-indicator aria-hidden="true"></i><select id="senha_status" class="config-input" onchange="atualizarIndicadorStatusAcesso(this)"><option value="ativo" ${!statusInativo ? 'selected' : ''}>Ativo</option><option value="inativo" ${statusInativo ? 'selected' : ''}>Inativo</option></select></span></label>
+              <label class="password-manager-form-field password-manager-form-full"><span>Link de acesso <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="external-link" aria-hidden="true"></i><input id="senha_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}"></span>${renderErroCampo(erros.url)}</label>
+            </div>
+            <div class="password-manager-form-grid password-manager-form-grid-login">
+              <label class="password-manager-form-field"><span>Login <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="at-sign" aria-hidden="true"></i><input id="senha_login" class="config-input" type="text" required placeholder="Usuário ou e-mail" autocomplete="username" value="${escapeAttr(item.login || '')}"></span>${renderErroCampo(erros.login)}</label>
+              <label class="password-manager-form-field"><span>Senha <b>*</b></span><span class="password-manager-input-shell password-manager-input-shell-action"><i data-lucide="key-round" aria-hidden="true"></i><input id="senha_senha" class="config-input" name="senha" type="password" required placeholder="Senha" autocomplete="new-password" value="${escapeAttr(item.senha || '')}"><button class="password-manager-input-action" type="button" onclick="alternarVisibilidadeSenhaCadastro(this)" aria-label="Visualizar senha" title="Visualizar senha"><i data-lucide="eye" aria-hidden="true"></i></button></span>${renderErroCampo(erros.senha)}</label>
+            </div>
+          </section>
+
+          <section class="password-manager-form-section password-manager-access-notes" aria-labelledby="edicao_secao_observacoes">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">3</span><div><h4 id="edicao_secao_observacoes">Observações</h4></div></div>
+            <label class="password-manager-form-field"><span class="password-manager-visually-hidden">Observações adicionais</span><span class="password-manager-input-shell password-manager-textarea-shell"><i data-lucide="file-text" aria-hidden="true"></i><textarea id="senha_descricao" class="config-input" placeholder="Descreva informações adicionais, observações, etc.">${escapeHtml(item.descricao || '')}</textarea></span></label>
+          </section>
         </div>
 
-        <label><span>Título</span><input id="senha_titulo" class="config-input" type="text" value="${escapeAttr(item.titulo || '')}">${renderErroCampo(erros.titulo)}</label>
-        <label><span>Observações adicionais</span><input id="senha_descricao" class="config-input" type="text" value="${escapeAttr(item.descricao || '')}"></label>
-        <label><span>URL/Sistema</span><input id="senha_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}">${renderErroCampo(erros.url)}</label>
-        <label><span>Login</span><input id="senha_login" class="config-input" type="text" value="${escapeAttr(item.login || '')}">${renderErroCampo(erros.login)}</label>
-        <label><span>Senha</span><input id="senha_senha" class="config-input" type="text" value="${escapeAttr(item.senha || '')}">${renderErroCampo(erros.senha)}</label>
-        <div class="modal-inline-grid">
-          <label><span>Seguradora</span><select id="senha_seguradora" class="config-input"><option value="">Selecione</option>${state.passwords.seguradoras.map(seguradora => `<option value="${escapeAttr(seguradora.id)}" ${item.seguradoraId === seguradora.id ? 'selected' : ''}>${escapeHtml(seguradora.nome)}</option>`).join('')}</select></label>
-          <label><span>Grupo</span><select id="senha_grupo" class="config-input"><option value="">Sem grupo</option>${state.passwords.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></label>
-          <label><span>Status</span><select id="senha_status" class="config-input"><option value="ativo" ${item.status !== 'inativo' ? 'selected' : ''}>ativo</option><option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option></select></label>
-        </div>
-
-        <div class="small-modal-actions">
+        <footer class="password-manager-modal-footer">
           <button class="secondary-btn" type="button" onclick="fecharModalSenha()">Cancelar</button>
-          <button id="senha_salvar" class="save-btn saving-btn ${state.passwords.salvando ? 'is-saving' : ''} ${state.passwords.salvo ? 'is-saved' : ''}" type="button" onclick="salvarSenhaItem('${escapeAttr(item.id || '')}')" ${state.passwords.salvando ? 'disabled' : ''}>${botaoTexto}</button>
-        </div>
+          <button id="senha_salvar" class="save-btn saving-btn ${state.passwords.salvando ? 'is-saving' : ''} ${state.passwords.salvo ? 'is-saved' : ''}" type="button" onclick="salvarSenhaItem('${escapeAttr(item.id || '')}')" ${state.passwords.salvando ? 'disabled' : ''}><i data-lucide="lock-keyhole" aria-hidden="true"></i>${botaoTexto}</button>
+        </footer>
       </section>
     </div>
   `;
@@ -7315,7 +7353,7 @@ function renderModalCadastroSeguradora() {
           <section class="password-manager-form-section" aria-labelledby="cadastro_secao_seguradora">
             <div class="password-manager-form-section-heading"><span class="password-manager-step-number">1</span><div><h4 id="cadastro_secao_seguradora">Seguradora</h4></div></div>
             <div class="password-manager-form-grid password-manager-form-grid-insurer">
-              <label class="password-manager-form-field"><span>Seguradora</span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="cadastro_seguradora_existente" class="config-input" onchange="alternarNovaSeguradora(this.value)"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.map(item => `<option value="${escapeAttr(item.id)}" ${item.id === seguradoraSelecionada ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
+              <label class="password-manager-form-field"><span>Seguradora</span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="cadastro_seguradora_existente" class="config-input" onchange="alternarNovaSeguradora(this.value)"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.filter(item => item.status !== 'inativo').map(item => `<option value="${escapeAttr(item.id)}" ${item.id === seguradoraSelecionada ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
               <label class="password-manager-form-field"><span>Nome da seguradora (opcional)</span><input id="cadastro_seguradora_nome" class="config-input" type="text" maxlength="120" placeholder="Ex.: Alfa Seguros" ${seguradoraSelecionada ? 'disabled' : ''} oninput="digitarNomeNovaSeguradora(this.value)"></label>
             </div>
           </section>
@@ -7500,6 +7538,20 @@ async function excluirSeguradoraUI(id) {
   await carregarCentralSenhas();
 }
 
+async function alterarStatusSeguradoraUI(id) {
+  if (!pode('central_senhas', 'update')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  if (!seguradora) return;
+  const status = seguradora.status === 'inativo' ? 'ativo' : 'inativo';
+  const response = await chamarApi('setInsurerStatus', { id, status });
+  if (!response.ok) {
+    state.passwords.message = obterMensagemApi(response, 'Não foi possível alterar o status da seguradora.');
+  } else {
+    state.passwords.message = `Seguradora ${status === 'ativo' ? 'reativada' : 'inativada'}.`;
+  }
+  await carregarCentralSenhas();
+}
+
 function obterSenhaModalAtual() {
   if (!state.passwords.modalId) {
     return {};
@@ -7526,7 +7578,7 @@ function fecharFiltrosSenhasAoClicarFora(event) {
 }
 
 function limparFiltrosSenhas() {
-  state.passwords.filtros = { seguradoraId: '', grupo: '', status: '' };
+  state.passwords.filtros = { seguradoraId: '', grupo: '', status: 'ativo', statusSeguradora: 'ativo' };
   carregarCentralSenhas();
 }
 
@@ -15295,6 +15347,7 @@ Object.assign(window, {
   abrirModalUsuarioAdmin,
   abrirModalSenha,
   abrirCadastroSeguradora,
+  alterarStatusSeguradoraUI,
   adicionarLinhaAcessoSeguradora,
   alternarNovaSeguradora,
   alternarVisibilidadeSenhaCadastro,
