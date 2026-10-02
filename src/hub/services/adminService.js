@@ -568,6 +568,7 @@ export async function listarUsuariosAdmin() {
     return {
       id: usuario.id,
       nome: usuario.nome || usuario.email || 'Usuário',
+      nome_usuario: usuario.nome_usuario || '',
       email: usuario.email || '',
       cpf: usuario.cpf || '',
       telefone: usuario.telefone || '',
@@ -619,7 +620,7 @@ export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
   };
 }
 
-export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfil_id, status, password }) {
+export async function salvarUsuarioAdmin({ id, nome, nome_usuario, email, cpf, telefone, perfil_id, status, password }) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: {
@@ -627,6 +628,7 @@ export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfi
       user: {
         id: id || null,
         nome,
+        nome_usuario,
         email,
         cpf,
         telefone,

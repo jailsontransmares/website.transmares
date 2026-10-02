@@ -281,7 +281,7 @@ async function carregarUsuario(id) {
     const client = exigirSupabaseConfigurado();
     const { data, error } = await client
       .from('usuarios')
-      .select('id, nome, email, perfil_id, status, cpf, telefone')
+      .select('id, nome, nome_usuario, email, perfil_id, status, cpf, telefone')
       .eq('id', id)
       .maybeSingle();
 
@@ -330,6 +330,7 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
         </div>
         <div class="admin-user-direct-fields">
           <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
+          <label><span>Nome de usuário *</span><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="ex.: joao.silva"><small>Use de 3 a 32 letras sem acento, números, ponto, hífen ou sublinhado.</small></label>
           <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
           <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" value="${escapeAttr(usuario.cpf || '')}" placeholder="000.000.000-00"></label>
           <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" value="${escapeAttr(usuario.telefone || '')}" placeholder="(00) 00000-0000"></label>

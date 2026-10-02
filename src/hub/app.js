@@ -251,6 +251,7 @@ const state = {
   },
   auth: {
     email: '',
+    identificador: '',
     loading: false,
     message: ''
   },
@@ -779,12 +780,13 @@ function renderLogin() {
       </div>
 
     <h1>Hub Transmares</h1>
-      <p>Entre com seu e-mail e senha para acessar o Hub.</p>
+      <p>Entre com seu nome de usuário e senha para acessar o Hub.</p>
 
       <form class="login-form" onsubmit="entrarNoHub(event)">
         <label>
-          <span>E-mail</span>
-          <input id="login_email" class="config-input" type="email" value="${escapeAttr(state.auth.email)}" autocomplete="email" required>
+          <span>Nome de usuário</span>
+          <input id="login_username" class="config-input" type="text" value="${escapeAttr(state.auth.identificador)}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+          <small>Enquanto sua conta não tiver nome de usuário cadastrado, você também pode entrar com o e-mail.</small>
         </label>
 
         <label>
@@ -877,20 +879,22 @@ async function concluirTrocaSenhaObrigatoria(event) {
 async function entrarNoHub(event) {
   event.preventDefault();
 
-  const email = document.getElementById('login_email')?.value || '';
+  const identificador = document.getElementById('login_username')?.value || '';
   const password = document.getElementById('login_password')?.value || '';
 
   try {
-    state.auth.email = email;
+    state.auth.identificador = identificador;
     state.auth.loading = true;
     state.auth.message = '';
     renderLoginLoading();
 
-    const sessao = await entrarComSenha(email, password);
+    const sessao = await entrarComSenha(identificador, password);
 
     if (!sessao?.user?.email) {
       throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
     }
+
+    state.auth.email = sessao.user.email;
 
     const carregou = await iniciarApp(false);
 
@@ -899,7 +903,7 @@ async function entrarNoHub(event) {
     }
   } catch (erro) {
     state.auth.loading = false;
-    state.auth.message = erro.message || 'Não foi possível entrar. Confira e-mail e senha.';
+    state.auth.message = erro.message || 'Não foi possível entrar. Confira nome de usuário e senha.';
     renderLogin();
   }
 }
@@ -1177,7 +1181,7 @@ function renderModalConfigurarModulosHome() {
   const alterado = verificarAlteracoesModulosHome();
 
   return `
-    <div class="modal-backdrop admin-user-modal-backdrop" role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
+    <div class="modal-backdrop admin-user-modal-backdrop" data-home-modules-modal-root role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
       <section class="small-modal admin-user-modal is-permissions-stage home-modules-modal">
         <div class="small-modal-header">
           <div class="home-modules-modal-title">
@@ -1218,7 +1222,7 @@ function renderConteudoModalConfigurarModulosHome() {
       <div class="home-modules-toolbar">
         <label class="home-modules-search">
           <i data-lucide="search" aria-hidden="true"></i>
-          <input type="search" data-home-modules-search value="${escapeAttr(state.modulosHome.busca || '')}" placeholder="Buscar módulo..." aria-label="Buscar módulo ou submódulo" oninput="alterarBuscaModuloHome(this.value)">
+          <input type="search" data-home-modules-search data-home-module-focus="search" value="${escapeAttr(state.modulosHome.busca || '')}" placeholder="Buscar módulo..." aria-label="Buscar módulo ou submódulo" oninput="alterarBuscaModuloHome(this.value)">
         </label>
         <div class="home-modules-filters" role="group" aria-label="Filtrar por visibilidade">
           ${renderFiltroModulosHome('todos', 'Todos', resumo.total)}
@@ -1227,7 +1231,7 @@ function renderConteudoModalConfigurarModulosHome() {
         </div>
         <label class="home-modules-area-select-label">
           <span class="sr-only">Filtrar por área</span>
-          <select class="home-modules-area-select" aria-label="Filtrar por área" onchange="alterarAreaModuloHome(this.value)">
+          <select class="home-modules-area-select" data-home-module-focus="area-select" aria-label="Filtrar por área" onchange="alterarAreaModuloHome(this.value)">
             <option value="todas" ${state.modulosHome.area === 'todas' ? 'selected' : ''}>Todas as áreas</option>
             ${AREAS_MODULOS_HOME.map(area => `<option value="${area.id}" ${state.modulosHome.area === area.id ? 'selected' : ''}>${escapeHtml(area.label)}</option>`).join('')}
           </select>
@@ -1262,7 +1266,7 @@ function renderFiltroModulosHome(filtro, label, total) {
   ].filter(Boolean).join(' ');
 
   return `
-    <button class="${classes}" type="button" onclick="selecionarFiltroModulosHome('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
+    <button class="${classes}" type="button" data-home-module-filter="${filtro}" data-home-module-focus="filter-${filtro}" onclick="selecionarFiltroModulosHome('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
       ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
     </button>
   `;
@@ -1410,14 +1414,14 @@ function renderListaModulosHomeModal() {
         const recolhido = state.modulosHome.gruposRecolhidos?.[area.id] === true;
         const idConteudo = `home-modules-area-${area.id}`;
         return `
-          <section class="home-modules-area-card${recolhido ? ' is-collapsed' : ''}">
+          <section class="home-modules-area-card${recolhido ? ' is-collapsed' : ''}" data-home-module-area="${area.id}" data-home-module-area-items="${area.virtualParents?.length ? 'true' : 'false'}">
             <header class="home-modules-area-card-header">
               <div class="home-modules-area-title">
                 <span class="home-modules-area-icon"><i data-lucide="folder" aria-hidden="true"></i></span>
                 <strong>${escapeHtml(area.label)}</strong>
                 <span class="home-modules-area-count">${quantidade} ${unidadeQuantidade}</span>
               </div>
-              <button class="home-modules-collapse-button" type="button" onclick="alternarGrupoModulosHome('${area.id}')" aria-expanded="${!recolhido}" aria-controls="${idConteudo}" aria-label="${recolhido ? 'Expandir' : 'Recolher'} área ${escapeAttr(area.label)}">
+              <button class="home-modules-collapse-button" type="button" data-home-module-focus="area-${area.id}" onclick="alternarGrupoModulosHome('${area.id}')" aria-expanded="${!recolhido}" aria-controls="${idConteudo}" aria-label="${recolhido ? 'Expandir' : 'Recolher'} área ${escapeAttr(area.label)}">
                 <i data-lucide="chevron-${recolhido ? 'down' : 'up'}" aria-hidden="true"></i>
               </button>
             </header>
@@ -1448,12 +1452,111 @@ function renderAcoesLoteAreaModulosHome(area) {
   return `
     <div class="home-modules-area-bulk-actions" role="group" aria-label="Ações em lote para ${escapeAttr(area.label)}">
       <span>Aplicar ao grupo:</span>
-      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ativar todos</button>
-      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" ${state.modulosHome.saving ? 'disabled' : ''}>Inativar todos</button>
-      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Exibir todos</button>
-      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ocultar todos</button>
+      <button type="button" data-home-module-focus="bulk-${area.id}-ativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ativar todos</button>
+      <button type="button" data-home-module-focus="bulk-${area.id}-inativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" ${state.modulosHome.saving ? 'disabled' : ''}>Inativar todos</button>
+      <button type="button" data-home-module-focus="bulk-${area.id}-exibir" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Exibir todos</button>
+      <button type="button" data-home-module-focus="bulk-${area.id}-ocultar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ocultar todos</button>
     </div>
   `;
+}
+
+function atualizarModalConfigurarModulosHome({ preservarBusca = false } = {}) {
+  const raizAtual = document.querySelector('[data-home-modules-modal-root]');
+  if (!raizAtual) {
+    renderDashboard();
+    return;
+  }
+
+  const ativo = document.activeElement;
+  const foco = ativo?.closest('[data-home-module-focus]')?.dataset.homeModuleFocus;
+  const cursor = ativo?.matches('[data-home-modules-search]') ? ativo.selectionStart : null;
+  const scrollTop = raizAtual.querySelector('.permission-modal-content')?.scrollTop || 0;
+
+  if (preservarBusca) {
+    const listaAtual = raizAtual.querySelector('.home-modules-modal-table-wrap');
+    if (listaAtual) listaAtual.innerHTML = renderListaModulosHomeModal();
+    return;
+  }
+
+  raizAtual.outerHTML = renderModalConfigurarModulosHome();
+  const novaRaiz = document.querySelector('[data-home-modules-modal-root]');
+  const conteudo = novaRaiz?.querySelector('.permission-modal-content');
+  if (conteudo) conteudo.scrollTop = scrollTop;
+
+  if (foco && novaRaiz) {
+    const novoAtivo = [...novaRaiz.querySelectorAll('[data-home-module-focus]')]
+      .find(elemento => elemento.dataset.homeModuleFocus === foco);
+    novoAtivo?.focus({ preventScroll: true });
+    if (cursor !== null) novoAtivo?.setSelectionRange?.(cursor, cursor);
+  }
+}
+
+function atualizarControlesModalModulosHome() {
+  const raiz = document.querySelector('[data-home-modules-modal-root]');
+  if (!raiz) return;
+
+  const resumo = obterResumoVisibilidadeModulosHome();
+  const contagens = { todos: resumo.total, visiveis: resumo.visiveis, ocultos: resumo.ocultos };
+  raiz.querySelectorAll('[data-home-module-filter]').forEach(botao => {
+    const total = botao.querySelector('span');
+    if (total) total.textContent = String(contagens[botao.dataset.homeModuleFilter] ?? 0);
+  });
+
+  raiz.querySelectorAll('[data-home-module-area]').forEach(area => {
+    const quantidade = [...area.querySelectorAll('[data-home-module-row]')]
+      .filter(linha => !linha.hidden).length;
+    const unidade = area.dataset.homeModuleAreaItems === 'true'
+      ? (quantidade === 1 ? 'item' : 'itens')
+      : (quantidade === 1 ? 'módulo' : 'módulos');
+    const contador = area.querySelector('.home-modules-area-count');
+    if (contador) contador.textContent = `${quantidade} ${unidade}`;
+  });
+
+  const salvar = raiz.querySelector('.home-modules-footer-actions .save-btn');
+  if (salvar) {
+    salvar.disabled = state.modulosHome.saving || !verificarAlteracoesModulosHome();
+    salvar.textContent = state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações';
+  }
+}
+
+function atualizarLinhasVisibilidadeModalModulosHome() {
+  const raiz = document.querySelector('[data-home-modules-modal-root]');
+  if (!raiz) return;
+
+  raiz.querySelectorAll('[data-home-module-row]').forEach(linha => {
+    const id = linha.dataset.homeModuleRow;
+    const status = obterStatusModuloHomeDraft(id);
+    const visivel = obterVisibilidadeModuloHomeDraft(id);
+    const submodulo = (state.modulosHome.submodules || []).find(item => item.key === id);
+    const moduloPai = submodulo
+      ? (state.modulosHome.modules || []).find(item => item.slug === submodulo.parent)
+      : null;
+    const grupo = submodulo?.group
+      ? (state.modulosHome.submodules || []).find(item => item.key === submodulo.group)
+      : null;
+    const paiInativo = moduloPai && obterStatusModuloHomeDraft(moduloPai.id) === 'inativo';
+    const grupoInativo = grupo && obterStatusModuloHomeDraft(grupo.key) === 'inativo';
+    const seletorStatus = linha.querySelector('.home-modules-status-select');
+    const checkbox = linha.querySelector('.home-modules-visibility input[type="checkbox"]');
+
+    if (seletorStatus) {
+      seletorStatus.value = status;
+      seletorStatus.disabled = state.modulosHome.saving || Boolean(paiInativo);
+    }
+    if (checkbox) {
+      checkbox.checked = visivel;
+      checkbox.disabled = status === 'inativo' || state.modulosHome.saving || Boolean(paiInativo || grupoInativo);
+      const nome = linha.querySelector('.home-modules-item-name strong')?.textContent || 'módulo';
+      checkbox.setAttribute('aria-label', `${visivel ? 'Ocultar' : 'Exibir'} ${nome} na Home`);
+      checkbox.closest('.home-modules-visibility')?.classList.toggle('is-disabled', checkbox.disabled);
+      const rotulo = linha.querySelector('.home-modules-visibility-label');
+      if (rotulo) rotulo.textContent = visivel ? 'Visível' : 'Oculto';
+    }
+
+    linha.hidden = !passaFiltroVisibilidadeModuloHome(id);
+  });
+
+  atualizarControlesModalModulosHome();
 }
 
 function aplicarAcaoLoteAreaModulosHome(areaId, acao) {
@@ -1504,7 +1607,7 @@ function aplicarAcaoLoteAreaModulosHome(areaId, acao) {
   }
 
   state.modulosHome.draft = draft;
-  renderDashboard();
+  atualizarModalConfigurarModulosHome();
 }
 
 function normalizarTextoBuscaModuloHome(valor = '') {
@@ -1555,7 +1658,7 @@ function renderLinhaModuloHomeModal(modulo) {
   const nome = modulo.nome || modulo.label || modulo.slug || 'Módulo';
 
   return `
-    <article class="home-modules-modal-row home-modules-modal-grid${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}">
+    <article class="home-modules-modal-row home-modules-modal-grid${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}" data-home-module-row="${id}">
       <div class="home-modules-item-name${modulo.isSubmodule ? ' home-submodule-identity' : ''}">
         <span class="home-modules-item-icon"><i data-lucide="${modulo.isSubmodule ? 'link-2' : 'layout-grid'}" aria-hidden="true"></i></span>
         <strong>${escapeHtml(nome)}</strong>
@@ -1564,14 +1667,14 @@ function renderLinhaModuloHomeModal(modulo) {
         ${protegido
           ? '<span class="home-modules-protected-status">Protegido</span>'
           : `<label class="sr-only" for="home-module-status-${id}">Status de ${escapeAttr(nome)}</label>
-            <select id="home-module-status-${id}" class="home-modules-status-select" onchange="alterarStatusModuloHome('${id}', this.value)" ${statusDisabled ? 'disabled' : ''}>
+            <select id="home-module-status-${id}" class="home-modules-status-select" data-home-module-focus="status-${id}" onchange="alterarStatusModuloHome('${id}', this.value)" ${statusDisabled ? 'disabled' : ''}>
               <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>Ativo</option>
               <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>Inativo</option>
             </select>`}
       </div>
       <div class="home-modules-modal-action home-modules-visibility-action">
         <label class="home-modules-visibility${toggleDisabled ? ' is-disabled' : ''}">
-          <input type="checkbox" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
+          <input type="checkbox" data-home-module-focus="visibility-${id}" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
           <span class="home-modules-switch" aria-hidden="true"></span>
           <span class="home-modules-visibility-label">${visivel ? 'Visível' : 'Oculto'}</span>
         </label>
@@ -1611,11 +1714,11 @@ async function abrirModalConfigurarModulosHome() {
 
     aplicarSnapshotConfiguracaoModulosHome(response.data);
     state.modulosHome.loading = false;
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
   } catch (erro) {
     state.modulosHome.loading = false;
     state.modulosHome.message = erro.message || 'Erro ao carregar módulos.';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
   }
 }
 
@@ -1639,22 +1742,17 @@ function fecharModalConfigurarModulosHome() {
 
 function selecionarFiltroModulosHome(filtro) {
   state.modulosHome.filtro = filtro;
-  renderDashboard();
+  atualizarModalConfigurarModulosHome();
 }
 
 function alterarBuscaModuloHome(valor = '') {
-  const inputAtual = document.querySelector('[data-home-modules-search]');
-  const posicaoCursor = inputAtual?.selectionStart ?? String(valor).length;
   state.modulosHome.busca = valor;
-  renderDashboard();
-  const novoInput = document.querySelector('[data-home-modules-search]');
-  novoInput?.focus();
-  novoInput?.setSelectionRange?.(posicaoCursor, posicaoCursor);
+  atualizarModalConfigurarModulosHome({ preservarBusca: true });
 }
 
 function alterarAreaModuloHome(area) {
   state.modulosHome.area = area;
-  renderDashboard();
+  atualizarModalConfigurarModulosHome();
 }
 
 function alternarGrupoModulosHome(area) {
@@ -1663,7 +1761,7 @@ function alternarGrupoModulosHome(area) {
     ...gruposRecolhidos,
     [area]: !gruposRecolhidos[area]
   };
-  renderDashboard();
+  atualizarModalConfigurarModulosHome();
 }
 
 function alterarVisibilidadeModuloHome(id, exibirHome) {
@@ -1676,7 +1774,7 @@ function alterarVisibilidadeModuloHome(id, exibirHome) {
       exibir_home: Boolean(exibirHome)
     }
   };
-  renderDashboard();
+  atualizarLinhasVisibilidadeModalModulosHome();
 }
 
 function alterarStatusModuloHome(id, status) {
@@ -1691,7 +1789,7 @@ function alterarStatusModuloHome(id, status) {
       exibir_home: obterExibicaoModuloAposStatus(atual, proximoStatus)
     }
   };
-  renderDashboard();
+  atualizarLinhasVisibilidadeModalModulosHome();
 }
 
 function obterExibicaoModuloAposStatus(moduloDraft, status) {
@@ -1755,7 +1853,7 @@ async function salvarConfigModulosHome() {
   try {
     state.modulosHome.saving = true;
     state.modulosHome.message = '';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
 
     const alteracoesStatus = alteracoes.filter(item => {
       const original = state.modulosHome.original?.[item.id] || {};
@@ -1822,7 +1920,7 @@ async function salvarConfigModulosHome() {
     } else {
       state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
     }
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
   }
 }
 
@@ -4202,6 +4300,7 @@ function renderUsuarioAdmin(usuario) {
       <div class="admin-user-main">
         <div class="admin-user-identity">
           <strong>${escapeHtml(usuario.nome || 'Sem nome')}</strong>
+          ${usuario.nome_usuario ? `<small>@${escapeHtml(usuario.nome_usuario)}</small>` : ''}
           ${usuario.email ? `<small>${escapeHtml(usuario.email)}</small>` : ''}
         </div>
       </div>
@@ -4250,6 +4349,7 @@ function obterUsuariosFiltradosAdmin(records) {
   return filtrados.filter(usuario => {
     const baseBusca = normalizarBuscaAr([
       usuario.nome,
+      usuario.nome_usuario,
       usuario.email
     ].filter(Boolean).join(' '));
 
@@ -4814,6 +4914,7 @@ function renderModalUsuarioAdmin() {
           `
           : `
             <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
+            <label><span>Nome de usuário *</span><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="ex.: joao.silva"><small>Use de 3 a 32 letras sem acento, números, ponto, hífen ou sublinhado.</small></label>
             <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
             <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
             <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
@@ -6208,6 +6309,7 @@ async function salvarUsuarioAdmin(id) {
   const payload = {
     id,
     nome: document.getElementById(`${prefixo}_nome`)?.value || '',
+    nome_usuario: document.getElementById(`${prefixo}_nome_usuario`)?.value || '',
     email: document.getElementById(`${prefixo}_email`)?.value || '',
     cpf: document.getElementById(`${prefixo}_cpf`)?.value || '',
     telefone: document.getElementById(`${prefixo}_telefone`)?.value || '',

@@ -97,6 +97,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
   const user = (payload.user || {}) as Record<string, unknown>;
   const id = normalizeText(user.id);
   const nome = normalizeText(user.nome);
+  const nomeUsuario = normalizeText(user.nome_usuario).toLowerCase();
   const email = normalizeEmail(user.email);
   const perfilId = normalizeText(user.perfil_id) || null;
   const status = normalizeStatus(user.status);
@@ -108,6 +109,10 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     throw new Error("Informe o nome do usuário.");
   }
 
+  if (!/^[a-z0-9._-]{3,32}$/.test(nomeUsuario)) {
+    throw new Error("O nome de usuário deve ter de 3 a 32 caracteres: letras sem acento, números, ponto, hífen ou sublinhado.");
+  }
+
   if (!email) {
     throw new Error("Informe o e-mail do usuário.");
   }
@@ -115,6 +120,15 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
   if (!perfilId) {
     throw new Error("Informe o perfil do usuário.");
   }
+
+  let nomeUsuarioQuery = serviceClient
+    .from("usuarios")
+    .select("id")
+    .ilike("nome_usuario", nomeUsuario);
+  if (id) nomeUsuarioQuery = nomeUsuarioQuery.neq("id", id);
+  const { data: nomeUsuarioExistente, error: nomeUsuarioError } = await nomeUsuarioQuery.limit(1).maybeSingle();
+  if (nomeUsuarioError) throw new Error(nomeUsuarioError.message || "Não foi possível validar o nome de usuário.");
+  if (nomeUsuarioExistente) throw new Error("Este nome de usuário já está em uso.");
 
   let authUserId = "";
   let temporaryPassword = "";
@@ -172,6 +186,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
       .update({
         auth_user_id: authUserId || null,
         nome,
+        nome_usuario: nomeUsuario,
         email,
         perfil_id: perfilId,
         status,
@@ -192,7 +207,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
       p_acao: "usuario.atualizar",
       p_recurso: "admin.usuarios",
       p_alvo_usuario_id: data.id,
-      p_detalhes: { email, status, perfil_id: perfilId }
+      p_detalhes: { email, nome_usuario: nomeUsuario, status, perfil_id: perfilId }
     });
 
     return { record: data, temporary_password: temporaryPassword || null };
@@ -222,6 +237,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     .insert({
       auth_user_id: authUserId,
       nome,
+      nome_usuario: nomeUsuario,
       email,
       perfil_id: perfilId,
       status,
@@ -241,7 +257,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     p_acao: "usuario.criar",
     p_recurso: "admin.usuarios",
     p_alvo_usuario_id: data.id,
-    p_detalhes: { email, status, perfil_id: perfilId }
+    p_detalhes: { email, nome_usuario: nomeUsuario, status, perfil_id: perfilId }
   });
 
   return { record: data, temporary_password: temporaryPassword };
