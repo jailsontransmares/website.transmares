@@ -31,6 +31,57 @@ export async function getSimuladorSaudeCatalog() {
   };
 }
 
+export async function saveSimuladorSaudePlan(draft) {
+  const supabase = exigirSupabaseConfigurado();
+  const operatorId = draft.operadora_id || await ensureOperator(supabase, draft.operadora_nome);
+  const plan = {
+    operadora_id: operatorId,
+    nome: String(draft.plano_nome || '').trim(),
+    modalidade: String(draft.modalidade || '').trim(),
+    acomodacao: draft.acomodacao,
+    coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
+    abrangencia: String(draft.abrangencia || '').trim(),
+    codigo_interno: String(draft.codigo_interno || '').trim() || null,
+    detalhes: draft.detalhes && typeof draft.detalhes === 'object' ? draft.detalhes : {},
+    status: draft.status || 'ativo'
+  };
+  if (!plan.nome || !plan.modalidade || !plan.abrangencia) throw new Error('Preencha plano, modalidade e abrangência.');
+  if (!['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(plan.acomodacao)) throw new Error('Selecione a acomodação do plano.');
+  if (draft.plano_id) {
+    unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', draft.plano_id), 'Não foi possível atualizar o plano.');
+    return draft.plano_id;
+  }
+  return unwrap(await supabase.from(TABLES.plans).insert(plan).select('id').single(), 'Não foi possível cadastrar o plano.').id;
+}
+
+export async function setSimuladorSaudePlanStatus(id, status) {
+  if (!id || !['ativo', 'inativo'].includes(status)) throw new Error('Informe o plano e um status válido.');
+  const supabase = exigirSupabaseConfigurado();
+  return unwrap(await supabase.from(TABLES.plans).update({ status }).eq('id', id).select('*').single(), 'Não foi possível alterar o status do plano.');
+}
+
+export async function deleteSimuladorSaudePlan(id) {
+  if (!id) throw new Error('Informe o plano que deseja excluir.');
+  const supabase = exigirSupabaseConfigurado();
+  return unwrap(await supabase.rpc('simulador_saude_excluir_plano', { p_plano_id: id }), 'Não foi possível excluir o plano.');
+}
+
+export async function saveSimuladorSaudeOperator(draft) {
+  const supabase = exigirSupabaseConfigurado();
+  const operator = {
+    nome: String(draft.nome || '').trim(),
+    logo_url: String(draft.logo_url || '').trim() || null,
+    cor_marca: /^#[0-9A-Fa-f]{6}$/.test(draft.cor_marca || '') ? draft.cor_marca : '#174A8B',
+    status: draft.status || 'ativo'
+  };
+  if (!operator.nome) throw new Error('Informe o nome da operadora.');
+  if (draft.id) {
+    unwrap(await supabase.from(TABLES.operators).update(operator).eq('id', draft.id), 'Não foi possível atualizar a operadora.');
+    return draft.id;
+  }
+  return unwrap(await supabase.from(TABLES.operators).insert(operator).select('id').single(), 'Não foi possível cadastrar a operadora.').id;
+}
+
 async function ensureOperator(supabase, operatorName) {
   const name = String(operatorName || '').trim();
   if (!name) throw new Error('Informe a operadora.');
@@ -40,6 +91,10 @@ async function ensureOperator(supabase, operatorName) {
 }
 
 async function ensurePlan(supabase, draft, operatorId) {
+  if (draft.plano_id) {
+    const existing = unwrap(await supabase.from(TABLES.plans).select('id').eq('id', draft.plano_id).single(), 'Não foi possível localizar o plano selecionado.');
+    return existing.id;
+  }
   const plan = {
     operadora_id: operatorId,
     nome: String(draft.plano_nome || '').trim(),
@@ -48,6 +103,7 @@ async function ensurePlan(supabase, draft, operatorId) {
     coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
     abrangencia: String(draft.abrangencia || '').trim(),
     codigo_interno: String(draft.codigo_interno || '').trim() || null,
+    ...(draft.condicoes && Object.keys(draft.condicoes).length ? { detalhes: draft.condicoes } : {}),
     status: 'ativo'
   };
   if (!plan.nome || !plan.modalidade || !plan.abrangencia) throw new Error('Preencha plano, modalidade e abrangência.');
@@ -63,27 +119,37 @@ async function ensurePlan(supabase, draft, operatorId) {
   return unwrap(await supabase.from(TABLES.plans).insert(plan).select('id').single(), 'Não foi possível cadastrar o plano.').id;
 }
 
-function normalizePrices(prices = {}) {
-  return Object.entries(prices).map(([faixa_etaria, raw]) => ({
+function normalizePrices(prices = {}, tipoContratacao = 'Empresarial (PJ)') {
+  const variants = Object.values(prices).some(value => value && typeof value === 'object' && !Array.isArray(value))
+    ? prices
+    : { [tipoContratacao === 'Individual' ? 'uma_vida' : 'geral']: prices };
+  return Object.entries(variants).flatMap(([regra_vidas, bands]) => Object.entries(bands || {}).map(([faixa_etaria, raw]) => ({
     faixa_etaria,
+    regra_vidas,
     valor: String(raw ?? '').trim() === '' ? null : Number(String(raw).replace(',', '.'))
-  })).filter(row => row.valor !== null && Number.isFinite(row.valor) && row.valor >= 0);
+  }))).filter(row => row.valor !== null && Number.isFinite(row.valor) && row.valor >= 0);
 }
 
 export async function saveSimuladorSaudeTable(draft) {
   const supabase = exigirSupabaseConfigurado();
-  const operatorId = await ensureOperator(supabase, draft.operadora_nome);
+  const operatorId = draft.plano_id ? null : await ensureOperator(supabase, draft.operadora_nome);
   const planId = await ensurePlan(supabase, draft, operatorId);
   const requestedStatus = draft.status || 'em_revisao';
   const table = {
     plano_id: planId,
     nome: String(draft.nome || '').trim(),
-    vigencia_inicio: draft.vigencia_inicio,
+    vigencia_inicio: draft.vigencia_inicio || null,
     vigencia_fim: draft.vigencia_fim || null,
+    tipo_contratacao: draft.tipo_contratacao || 'Empresarial (PJ)',
+    min_vidas: Number(draft.min_vidas) || 1,
+    condicoes: {},
     status: 'em_revisao',
     observacoes: String(draft.observacoes || '').trim() || null
   };
-  if (!table.nome || !table.vigencia_inicio) throw new Error('Informe o nome da tabela e o início da vigência.');
+  if (!table.nome) throw new Error('Informe o nome da tabela.');
+  if (!table.vigencia_inicio && requestedStatus === 'vigente') throw new Error('Informe o início da vigência antes de ativar a tabela.');
+  if (!['Individual', 'Empresarial (PJ)'].includes(table.tipo_contratacao)) throw new Error('Selecione Individual ou Empresarial (PJ).');
+  table.min_vidas = 1;
   let tableId = draft.id;
   if (tableId) {
     unwrap(await supabase.from(TABLES.prices).update(table).eq('id', tableId), 'Não foi possível salvar a tabela.');
@@ -92,10 +158,10 @@ export async function saveSimuladorSaudeTable(draft) {
     tableId = unwrap(await supabase.from(TABLES.prices).insert(table).select('id').single(), 'Não foi possível criar a tabela.').id;
   }
 
-  const prices = normalizePrices(draft.precos);
+  const prices = normalizePrices(draft.precos, table.tipo_contratacao);
   if (prices.length) {
-    const payload = prices.map(row => ({ tabela_preco_id: tableId, faixa_etaria: row.faixa_etaria, valor: row.valor }));
-    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,faixa_etaria' }), 'Não foi possível salvar os preços por faixa.');
+    const payload = prices.map(row => ({ tabela_preco_id: tableId, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
+    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por faixa.');
   }
   if (requestedStatus !== 'em_revisao') {
     unwrap(await supabase.from(TABLES.prices).update({ status: requestedStatus }).eq('id', tableId), 'Não foi possível atualizar o status da tabela.');
@@ -106,6 +172,12 @@ export async function saveSimuladorSaudeTable(draft) {
 export async function setSimuladorSaudeTableStatus(id, status) {
   const supabase = exigirSupabaseConfigurado();
   return unwrap(await supabase.from(TABLES.prices).update({ status }).eq('id', id).select('*').single(), 'Não foi possível alterar o status da tabela.');
+}
+
+export async function deleteSimuladorSaudeTable(id) {
+  if (!id) throw new Error('Informe a tabela que deseja excluir.');
+  const supabase = exigirSupabaseConfigurado();
+  return unwrap(await supabase.rpc('simulador_saude_excluir_tabela', { p_tabela_preco_id: id }), 'Não foi possível excluir a tabela.');
 }
 
 const QUOTE_LIST_COLUMNS = 'id,codigo,cliente_nome,cliente_cnpj,cliente_cidade,status,snapshot_version,snapshot,created_at,updated_at';
@@ -148,6 +220,7 @@ export async function getSimuladorSaudeQuoteById(id) {
 
 export async function saveSimuladorSaudeQuote(payload) {
   const supabase = exigirSupabaseConfigurado();
+  if (!['Individual', 'Empresarial (PJ)'].includes(payload.tipo_contratacao || 'Empresarial (PJ)')) throw new Error('Selecione Individual ou Empresarial (PJ).');
   const record = {
     cliente_nome: String(payload.cliente_nome || '').trim(),
     cliente_cnpj: String(payload.cliente_cnpj || '').replace(/\D/g, '') || null,

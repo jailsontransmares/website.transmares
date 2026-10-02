@@ -284,6 +284,7 @@ function acoesDisponiveis(recurso) {
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
+    'simulador_saude.catalogo': ['view', 'create', 'update', 'delete'],
     admin: ['view'],
     'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],

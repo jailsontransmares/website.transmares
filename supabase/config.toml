@@ -10,6 +10,9 @@ verify_jwt = false
 [functions.clickup-sync-worker]
 verify_jwt = false
 
+[functions.rh-google-sheets-sync]
+verify_jwt = false
+
 [functions.cnpj-lookup]
 verify_jwt = true
 

@@ -79,7 +79,12 @@ import {
   getSimuladorSaudeQuoteById,
   getSimuladorSaudeBrokerBranding,
   saveSimuladorSaudeQuote,
+  saveSimuladorSaudeOperator,
+  saveSimuladorSaudePlan,
+  deleteSimuladorSaudePlan,
+  setSimuladorSaudePlanStatus,
   saveSimuladorSaudeTable,
+  deleteSimuladorSaudeTable,
   setSimuladorSaudeTableStatus
 } from './services/simuladorSaudeService.js';
 
@@ -157,8 +162,13 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'getRecentSimuladorSaudeQuotes') return { ok: true, data: await getRecentSimuladorSaudeQuotes(payload.limit) };
     if (action === 'getSimuladorSaudeQuoteById') return { ok: true, data: await getSimuladorSaudeQuoteById(payload.id) };
     if (action === 'saveSimuladorSaudeQuote') return { ok: true, data: await saveSimuladorSaudeQuote(payload) };
+    if (action === 'saveSimuladorSaudeOperator') return { ok: true, data: await saveSimuladorSaudeOperator(payload) };
+    if (action === 'saveSimuladorSaudePlan') return { ok: true, data: await saveSimuladorSaudePlan(payload) };
+    if (action === 'deleteSimuladorSaudePlan') return { ok: true, data: await deleteSimuladorSaudePlan(payload.id) };
+    if (action === 'setSimuladorSaudePlanStatus') return { ok: true, data: await setSimuladorSaudePlanStatus(payload.id, payload.status) };
     if (action === 'getSimuladorSaudeBrokerBranding') return { ok: true, data: await getSimuladorSaudeBrokerBranding() };
     if (action === 'saveSimuladorSaudeTable') return { ok: true, data: await saveSimuladorSaudeTable(payload) };
+    if (action === 'deleteSimuladorSaudeTable') return { ok: true, data: await deleteSimuladorSaudeTable(payload.id) };
     if (action === 'setSimuladorSaudeTableStatus') return { ok: true, data: await setSimuladorSaudeTableStatus(payload.id, payload.status) };
 
     if (action === 'getArCrmFormOptions') {

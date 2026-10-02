@@ -7,8 +7,10 @@
 .simsaude-filters { align-items: end; background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); display: grid; gap: 10px; grid-template-columns: minmax(190px,1.5fr) repeat(5,minmax(120px,1fr)) auto auto; margin-bottom: 12px; padding: 12px; }
 .simsaude-filters label, .simsaude-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .simsaude-filters label span, .simsaude-field > span { color: var(--texto-suave); font-size: 11px; }
-.simsaude-filters input, .simsaude-filters select, .simsaude-field input, .simsaude-field select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 35px; min-width: 0; padding: 0 9px; width: 100%; }
-.simsaude-filters input:focus, .simsaude-filters select:focus, .simsaude-field input:focus, .simsaude-field select:focus { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-filters input, .simsaude-filters select, .simsaude-field input, .simsaude-field select, .simsaude-field textarea { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); min-width: 0; padding: 8px 9px; width: 100%; }
+.simsaude-filters input, .simsaude-filters select, .simsaude-field input, .simsaude-field select { height: 35px; padding: 0 9px; }
+.simsaude-field textarea { font: inherit; line-height: 1.45; resize: vertical; }
+.simsaude-filters input:focus, .simsaude-filters select:focus, .simsaude-field input:focus, .simsaude-field select:focus, .simsaude-field textarea:focus { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
 .simsaude-layout { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0,1fr) 300px; }
 .simsaude-card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); min-width: 0; overflow: hidden; }
 .simsaude-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; padding: 12px 14px; }
@@ -19,10 +21,21 @@
 .simsaude-table-card th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 10px; font-weight: 650; padding: 9px 8px; text-align: left; white-space: nowrap; }
 .simsaude-table-card td { border-top: 1px solid var(--borda); font-size: 11px; padding: 8px; vertical-align: middle; }
 .simsaude-table-card td small { color: var(--texto-suave); display: block; margin-top: 2px; }
+.simsaude-table-card > header { align-items: center; gap: 12px; }
+.simsaude-bulk-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.simsaude-bulk-actions > span { color: var(--texto-suave); font-size: 11px; }
+.simsaude-bulk-actions .secondary-btn { min-height: 30px; padding: 0 9px; }
+.simsaude-select-row { accent-color: var(--cor-principal); cursor: pointer; height: 15px; width: 15px; }
+.simsaude-select-row:disabled { cursor: not-allowed; }
 .simsaude-row:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
 .simsaude-row.is-expanded { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); }
 .simsaude-expand { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); cursor: pointer; height: 27px; width: 27px; }
 .simsaude-link { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font-size: 11px; font-weight: 650; padding: 3px; }
+.simsaude-delete-link { color: #b42318; }
+.simsaude-delete-link:disabled { cursor: wait; opacity: .6; }
+.simsaude-plan-actions { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--cor-principal); cursor: pointer; font: inherit; font-size: 11px; min-height: 30px; padding: 0 7px; }
+.simsaude-plan-actions:focus-visible { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-plan-inactive { background: #ffebed; border-radius: 99px; color: #b52c39; display: inline-block; font-size: 9px; font-weight: 700; margin-left: 6px; padding: 3px 7px; vertical-align: middle; }
 .simsaude-status { border-radius: 99px; display: inline-flex; font-size: 10px; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
 .simsaude-status-vigente { background: #e9f7ee; color: #087c38; }
 .simsaude-status-em-revisão { background: #fff4dd; color: #9a6200; }
@@ -55,18 +68,28 @@
 .simsaude-form-grid { display: grid; gap: 10px; grid-template-columns: repeat(4,minmax(140px,1fr)); }
 .simsaude-field { font-size: 12px; }
 .simsaude-field.is-wide { grid-column: span 2; }
+.simsaude-catalog-tabs { border-bottom: 1px solid var(--borda); display: flex; gap: 6px; margin: 0 0 14px; }
+.simsaude-catalog-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--texto-suave); cursor: pointer; font: inherit; font-size: 13px; padding: 10px 14px; }
+.simsaude-catalog-tabs button.is-active { border-color: var(--cor-principal); color: var(--cor-principal); font-weight: 700; }
+.simsaude-plan-editor h4 { font-size: 13px; margin: 14px 0 8px; }
+.simsaude-plan-editor > .simsaude-muted { font-size: 11px; margin: 0 0 10px; }
 .simsaude-band-editor { border-top: 1px solid var(--borda); margin-top: 15px; padding-top: 13px; }
 .simsaude-band-editor h4 { font-size: 13px; margin: 0 0 3px; }
 .simsaude-band-editor > div:first-child p { color: var(--texto-suave); font-size: 11px; margin: 0 0 12px; }
 .simsaude-band-grid { display: grid; gap: 9px; grid-template-columns: repeat(5,minmax(100px,1fr)); }
+.simsaude-band-table-wrap { overflow-x: auto; }
+.simsaude-band-table { border-collapse: collapse; min-width: 580px; width: 100%; }
+.simsaude-band-table th, .simsaude-band-table td { border-bottom: 1px solid var(--borda); padding: 7px 9px; text-align: left; vertical-align: top; }
+.simsaude-band-table thead th { color: var(--texto-suave); font-size: 11px; }
+.simsaude-band-table tbody th { color: var(--texto); font-size: 11px; white-space: nowrap; }
+.simsaude-band-table td .simsaude-field { min-width: 120px; }
+.simsaude-band-note { color: var(--texto-suave); display: block; font-size: 10px; margin-top: 4px; }
 .simsaude-message { align-items: center; background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--cor-destaque) 30%, var(--borda)); border-radius: 7px; display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 12px; }
 .simsaude-message.is-error { background: #fff1f1; border-color: #f1c2c5; color: #8e2932; }
 .simsaude-message span { flex: 1; font-size: 12px; }
 .simsaude-message button { background: transparent; border: 0; cursor: pointer; font-size: 19px; }
 .simsaude-state { align-items: center; color: var(--texto-suave); display: flex; gap: 10px; justify-content: center; min-height: 180px; }
-.simsaude-modal-backdrop { align-items: center; background: #10203380; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 9999; }
-.simsaude-history-modal { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); max-height: 80vh; max-width: 540px; overflow: auto; padding: 15px; width: 100%; }
-.simsaude-history-modal header { align-items: center; display: flex; justify-content: space-between; margin-bottom: 10px; }
+.simsaude-history-modal { max-width: 540px; width: 100%; }
 .simsaude-history-modal h3 { margin: 3px 0; }
 .simsaude-history-modal article { border-top: 1px solid var(--borda); display: grid; font-size: 12px; grid-template-columns: 1fr auto; padding: 9px 0; }
 .simsaude-history-modal article p { color: var(--texto-suave); grid-column: 1/-1; margin: 3px 0 0; }
@@ -74,7 +97,6 @@
 .simsaude-import-modal { max-width: 900px; }
 .simsaude-import-modal header { align-items: start; }
 .simsaude-import-modal header p { color: var(--texto-suave); font-size: 12px; margin: 4px 0; }
-.simsaude-import-modal footer { border-top: 1px solid var(--borda); display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; }
 .simsaude-import-errors { background: #fff5e5; border: 1px solid #f0d4a1; border-radius: 6px; color: #73501a; font-size: 11px; margin-bottom: 10px; max-height: 140px; overflow: auto; padding: 9px 11px; }
 .simsaude-import-errors p { margin: 4px 0 0; }
 @media (max-width: 1300px) { .simsaude-filters { grid-template-columns: repeat(4,minmax(130px,1fr)); } }
@@ -84,16 +106,21 @@
 
 /* Ajustes visuais restritos ao Catálogo de Planos e Preços. */
 .simulador-saude-page { container-type: inline-size; min-width: 0; }
-.simulador-saude-page .primary-btn,
-.simulador-saude-page .secondary-btn { align-items: center; border-radius: 6px; display: inline-flex; font-size: 11px; gap: 7px; justify-content: center; min-height: 35px; padding: 0 12px; white-space: nowrap; }
-.simulador-saude-page .primary-btn svg,
+.simulador-saude-page .save-btn,
+.simulador-saude-page .secondary-btn { align-items: center; display: inline-flex; gap: 7px; justify-content: center; white-space: nowrap; }
+.simulador-saude-page .save-btn svg,
 .simulador-saude-page .secondary-btn svg { height: 15px; width: 15px; }
 .simsaude-page-head { margin-bottom: 12px; }
 .simsaude-page-title { align-items: center; display: flex; gap: 12px; min-width: 0; }
 .simsaude-page-title h2 { font-size: 21px; }
 .simsaude-page-title p { font-size: 12px; }
 .simsaude-page-actions { align-items: center; }
-.simsaude-page-actions .primary-btn { min-height: 39px; }
+.simsaude-toolbar-search { align-items: center; display: flex; gap: 6px; min-width: min(300px, 28vw); }
+.simsaude-toolbar-search .simsaude-search-control { flex: 1; min-width: 0; }
+.simsaude-toolbar-search input { width: 100%; }
+.simsaude-toolbar-search > button { flex: 0 0 38px; }
+.simsaude-filter-trigger { gap: 6px; }
+.simsaude-filter-count { align-items: center; background: color-mix(in srgb, var(--cor-principal) 10%, var(--card)); border-radius: 99px; color: var(--cor-principal); display: inline-flex; font-size: 10px; font-weight: 700; height: 18px; justify-content: center; min-width: 18px; padding: 0 5px; }
 .saude-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
 .saude-title-icon svg { height: 23px; width: 23px; }
 .simsaude-filters { align-items: end; border-radius: 8px; gap: 8px; grid-template-columns: minmax(190px,1.5fr) repeat(6,minmax(88px,1fr)) auto auto; margin-bottom: 12px; padding: 11px 12px; }
@@ -129,6 +156,19 @@
 .simsaude-operator-mark.is-bradesco { background: #c41426; }
 .simsaude-operator-mark.is-sulamerica { background: #f27612; }
 .simsaude-operator-mark.is-default { background: var(--cor-principal); }
+.simsaude-operator-mark { background: var(--operator-color, #174a8b); }
+.simsaude-operator-logo { background: var(--card); border: 1px solid var(--borda); border-radius: 8px; height: 46px; object-fit: contain; padding: 5px; width: 100px; }
+.simsaude-operator-logo.is-compact { border-radius: 50%; height: 32px; padding: 3px; width: 32px; }
+.simsaude-operator-mark.is-compact { flex-basis: 32px; height: 32px; width: 32px; }
+.simsaude-operator-preview { align-items: center; background: var(--fundo); border: 1px solid var(--borda); border-radius: 7px; display: flex; gap: 12px; min-height: 64px; padding: 10px 12px; }
+.simsaude-operator-preview[hidden] { display: none; }
+.simsaude-operator-preview img { background: var(--card); border-radius: 6px; max-height: 64px; max-width: 180px; object-fit: contain; padding: 4px; }
+.simsaude-operator-preview span { color: var(--texto-suave); font-size: 11px; }
+.simsaude-operator-summary { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; padding: 14px; }
+.simsaude-operator-summary > div { align-items: center; display: flex; gap: 12px; }
+.simsaude-operator-summary h3 { margin: 0 0 4px; }
+.simsaude-operator-summary span { align-items: center; color: var(--texto-suave); display: flex; font-size: 11px; gap: 6px; }
+.simsaude-color-swatch { border: 1px solid var(--borda); border-radius: 50%; display: inline-block; height: 13px; vertical-align: middle; width: 13px; }
 .simsaude-summary { gap: 7px; }
 .simsaude-summary article { align-items: center; border: 1px solid transparent; display: flex; gap: 8px; min-height: 66px; padding: 9px; }
 .simsaude-summary article > svg { flex: 0 0 21px; height: 21px; width: 21px; }
@@ -159,8 +199,28 @@
 .simsaude-pagination label { font-size: 10px; }
 .simsaude-pagination label > span { color: var(--texto-suave); }
 .simsaude-current-page { align-items: center; background: var(--cor-principal); border-radius: 5px; color: #fff; display: inline-flex; height: 29px; justify-content: center; min-width: 29px; }
-.simsaude-editor,
-.simsaude-history-modal { border-radius: 8px; }
+.simsaude-editor { border-radius: 8px; }
+.simsaude-filter-modal { max-width: 680px; }
+.simsaude-filter-modal > header { align-items: flex-start; }
+.simsaude-filter-modal > header p { color: var(--texto-suave); font-size: 12px; margin: 4px 0 0; }
+.simsaude-filter-close svg { height: 16px; width: 16px; }
+.simsaude-filter-modal .simsaude-filters { background: none; border: 0; border-radius: 0; gap: 14px 12px; grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0; padding: 0; }
+.simsaude-filter-modal .simsaude-filters label span { font-size: 11px; }
+.simsaude-filter-modal .simsaude-filters input,
+.simsaude-filter-modal .simsaude-filters select { border-radius: 6px; font-size: 12px; height: 38px; }
+.simsaude-filter-actions { align-items: center; border-top: 1px solid var(--borda); grid-column: 1 / -1; justify-content: space-between; margin: 2px 0 0; padding: 14px 0 0; }
+.simsaude-filter-actions > div { display: flex; gap: 8px; }
+@container (max-width: 850px) {
+  .simsaude-page-actions { align-items: stretch; display: grid; grid-template-columns: minmax(0,1fr) auto; width: 100%; }
+  .simsaude-toolbar-search { min-width: 0; }
+}
+@container (max-width: 520px) {
+  .simsaude-page-actions { grid-template-columns: minmax(0,1fr); }
+  .simsaude-toolbar-search { width: 100%; }
+  .simsaude-filter-modal .simsaude-filters { grid-template-columns: 1fr; }
+  .simsaude-filter-actions { align-items: stretch; flex-direction: column-reverse; }
+  .simsaude-filter-actions > div { justify-content: flex-end; }
+}
 @container (max-width: 1280px) {
   .simsaude-filters { grid-template-columns: repeat(4,minmax(0,1fr)); }
   .simsaude-layout { grid-template-columns: minmax(0,1fr) 285px; }

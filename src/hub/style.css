@@ -3428,7 +3428,7 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-area-card-header.has-profile-column {
-  grid-template-columns: minmax(120px, 1fr) 232px 416px 32px;
+  grid-template-columns: minmax(120px, 1fr) 232px 484px 32px;
 }
 
 .home-modules-area-title {
@@ -3500,7 +3500,7 @@ body.dark .admin-partners-actions-menu {
   font-size: 10px;
   font-weight: 750;
   column-gap: 12px;
-  grid-template-columns: 128px 132px 132px;
+  grid-template-columns: 128px 132px 148px;
   letter-spacing: .04em;
   text-align: center;
   text-transform: uppercase;
@@ -3512,12 +3512,16 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-list-header.has-profile-column {
-  width: 416px;
+  width: 432px;
 }
 
 .home-modules-area-card-header > .home-modules-list-header {
   grid-column: 3;
   transform: translateX(32px);
+}
+
+.home-modules-area-card-header.has-profile-column > .home-modules-list-header {
+  transform: translateX(48px);
 }
 
 .home-modules-area-bulk-actions {
@@ -3640,7 +3644,7 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-modal-grid.has-profile-column {
-  grid-template-columns: minmax(160px, 1fr) 128px 132px 132px;
+  grid-template-columns: minmax(160px, 1fr) 128px 132px 148px;
 }
 
 .home-modules-parent-group > .home-modules-modal-row:last-child {
@@ -3904,7 +3908,7 @@ body.dark .admin-partners-actions-menu {
   }
 
   .home-modules-modal-grid.has-profile-column {
-    grid-template-columns: minmax(140px, 1fr) 108px 112px 112px;
+    grid-template-columns: minmax(140px, 1fr) 108px 112px 128px;
   }
 
   .home-modules-area-card-header {
@@ -3912,7 +3916,7 @@ body.dark .admin-partners-actions-menu {
   }
 
   .home-modules-area-card-header.has-profile-column {
-    grid-template-columns: minmax(0, 1fr) 200px 356px 32px;
+    grid-template-columns: minmax(0, 1fr) 200px 424px 32px;
   }
 
   .home-modules-area-bulk-actions {
@@ -3928,8 +3932,12 @@ body.dark .admin-partners-actions-menu {
 
   .home-modules-list-header {
     grid-column: 3;
-    grid-template-columns: 108px 112px 112px;
-    width: 356px;
+    grid-template-columns: 108px 112px 128px;
+    width: 372px;
+  }
+
+  .home-modules-list-header.has-profile-column {
+    width: 372px;
   }
 
   .home-modules-list-header:not(.has-profile-column) {
