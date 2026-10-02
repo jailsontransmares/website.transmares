@@ -15,7 +15,7 @@ type QueueRow = {
   attempts: number;
 };
 type Sheet = { properties: { sheetId: number; title: string; gridProperties?: { columnCount?: number } } };
-type SheetRows = { headers: unknown[]; rows: unknown[][] };
+type SheetRows = { headers: unknown[]; rows: unknown[][]; headerRowIndex: number };
 
 const SHEET_ID = "1NG_kq5afXgsqhaklu-D0JXPhd4ICyV_U6x7M8dN2V-8";
 const TAB_COLABORADOR = "CAD_COLABORADOR";
@@ -146,13 +146,13 @@ function multiPart(...values: unknown[]) {
 
 function rowsFrom(values: unknown[][] | undefined, headerRowIndex = 0): SheetRows {
   const all = values || [];
-  return { headers: all[headerRowIndex] || [], rows: all.slice(headerRowIndex + 1) };
+  return { headers: all[headerRowIndex] || [], rows: all.slice(headerRowIndex + 1), headerRowIndex };
 }
 
 function keyRows(data: SheetRows, label: string) {
   const index = headerIndex(data.headers, label);
   if (index < 0) throw new Error(`A aba não possui o cabeçalho obrigatório “${label}”.`);
-  return data.rows.flatMap((row, rowIndex) => text(row[index]) ? [{ rowIndex: rowIndex + 2, key: text(row[index]) }] : []);
+  return data.rows.flatMap((row, rowIndex) => text(row[index]) ? [{ rowIndex: rowIndex + data.headerRowIndex + 2, key: text(row[index]) }] : []);
 }
 
 function collaboratorValues(record: Data, docs: Data, link: Data, dependents: Data[], dismissal: Data | null) {
@@ -347,8 +347,8 @@ async function updateCells(cells: Array<{ range: string; values: unknown[][] }>,
   });
 }
 
-async function ensureHeader(tab: string, label: string, token: string) {
-  let rows = await readTab(tab, token);
+async function ensureHeader(tab: string, label: string, token: string, headerRowIndex = 0) {
+  let rows = await readTab(tab, token, "UNFORMATTED_VALUE", headerRowIndex);
   if (headerIndex(rows.headers, label) >= 0) return rows;
   const metadata = await spreadsheetMetadata(token);
   const sheet = metadata.sheets?.find((item) => item.properties.title === tab);
@@ -361,16 +361,16 @@ async function ensureHeader(tab: string, label: string, token: string) {
     });
   }
   const nextColumn = columnName(rows.headers.length);
-  await updateCells([{ range: `'${tab}'!${nextColumn}1`, values: [[label]] }], token);
-  rows = await readTab(tab, token);
+  await updateCells([{ range: `'${tab}'!${nextColumn}${headerRowIndex + 1}`, values: [[label]] }], token);
+  rows = await readTab(tab, token, "UNFORMATTED_VALUE", headerRowIndex);
   return rows;
 }
 
-async function appendSheetRow(tab: string, token: string, metadata: { sheets: Sheet[] }) {
+async function appendSheetRow(tab: string, token: string, metadata: { sheets: Sheet[] }, headerRowIndex = 0) {
   const sheet = metadata.sheets?.find((item) => item.properties.title === tab);
   if (!sheet) throw new Error(`A aba “${tab}” não foi encontrada na planilha.`);
-  const rows = await readTab(tab, token);
-  const sheetRowIndex = rows.rows.length + 1;
+  const rows = await readTab(tab, token, "UNFORMATTED_VALUE", headerRowIndex);
+  const sheetRowIndex = rows.rows.length + headerRowIndex + 1;
   await googleRequest(`spreadsheets/${SHEET_ID}:batchUpdate`, token, {
     method: "POST",
     body: JSON.stringify({
@@ -424,13 +424,13 @@ async function upsertCollaborator(client: ReturnType<typeof createClient>, row: 
   const current = await getCollaborator(client, row.colaborador_id);
   const cpf = digits(current.docs.cpf);
   if (cpf.length !== 11) throw new Error("O cadastro não tem CPF válido para localizar a linha na planilha.");
-  let sheet = await ensureHeader(TAB_COLABORADOR, "STATUS HUB", token);
+  let sheet = await ensureHeader(TAB_COLABORADOR, "STATUS HUB", token, 1);
   const cpfIndex = headerAliases(sheet.headers, ["SEU CPF"]);
   if (cpfIndex < 0) throw new Error("A aba CAD_COLABORADOR não possui a coluna SEU CPF.");
   const rows = keyRows(sheet, "SEU CPF");
   const matches = rows.filter((item) => digits(item.key) === cpf);
   if (matches.length > 1) throw new Error("Há mais de uma linha com o mesmo CPF em CAD_COLABORADOR; a sincronização parou para evitar atualizar a pessoa errada.");
-  const targetRow = matches[0]?.rowIndex ?? await appendSheetRow(TAB_COLABORADOR, token, metadata);
+  const targetRow = matches[0]?.rowIndex ?? await appendSheetRow(TAB_COLABORADOR, token, metadata, 1);
   const values = collaboratorValues(current.person, current.docs, current.link, current.dependents, current.dismissal);
   const allowed = [
     "Carimbo de data/hora", "Nome Completo", "Data de Nascimento", "Estado Civil", "Nacionalidade", "Naturalidade",
@@ -458,18 +458,18 @@ async function upsertAlteration(client: ReturnType<typeof createClient>, row: Qu
   const { data: person, error: personError } = await client.from("rh_colaboradores").select("nome_completo").eq("id", event.colaborador_id).maybeSingle();
   if (personError) throw personError;
   if (!person?.nome_completo) throw new Error("O nome do colaborador da alteração não está disponível.");
-  const sheet = await readTab(TAB_ALTERACOES, token);
+  const sheet = await readTab(TAB_ALTERACOES, token, "UNFORMATTED_VALUE", 1);
   const ids = keyRows(sheet, "REGISTRO DA ALTERAÇÃO");
   const matches = exactMatches(ids, row.source_id);
   if (matches.length > 1) throw new Error("Há mais de uma linha com o mesmo REGISTRO DA ALTERAÇÃO.");
-  const targetRow = matches[0]?.rowIndex ?? await appendSheetRow(TAB_ALTERACOES, token, metadata);
+  const targetRow = matches[0]?.rowIndex ?? await appendSheetRow(TAB_ALTERACOES, token, metadata, 1);
   const values = alterationValues(event, text(person.nome_completo), row.source_table);
   const allowed = ["NOME COMPLETO", "DATA", "TIPO DE REGISTRO", "ALT SAL-CARGO E FUNCAO", "AFASTAMENTO", "REGISTRO DA ALTERACAO", "FÉRIAS - S-AQUISIÇÃO", "FÉRIAS - E-AQUISIÇÃO", "FÉRIAS - S-GOZO", "FÉRIAS - E-GOZO", "FERIAS - ABONO", "OBSERVAÇÕES"];
   await updateCells(toCellUpdates(sheet.headers, values, targetRow, TAB_ALTERACOES, allowed), token);
 }
 
 async function deleteAlteration(id: string, token: string, metadata: { sheets: Sheet[] }) {
-  const sheet = await readTab(TAB_ALTERACOES, token);
+  const sheet = await readTab(TAB_ALTERACOES, token, "UNFORMATTED_VALUE", 1);
   const matches = exactMatches(keyRows(sheet, "REGISTRO DA ALTERAÇÃO"), id);
   for (const item of matches.sort((left, right) => right.rowIndex - left.rowIndex)) {
     await deleteSheetRow(TAB_ALTERACOES, item.rowIndex, token, metadata);

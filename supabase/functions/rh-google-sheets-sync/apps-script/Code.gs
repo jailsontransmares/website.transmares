@@ -1,6 +1,7 @@
 const RH_SHEET_ID = "1NG_kq5afXgsqhaklu-D0JXPhd4ICyV_U6x7M8dN2V-8";
 const RH_SYNC_FUNCTION = "https://lmzdtsqhlrosovbxiadx.supabase.co/functions/v1/rh-google-sheets-sync";
 const RH_INBOUND_TOKEN_PROPERTY = "RH_GOOGLE_SHEETS_INBOUND_TOKEN";
+const RH_HEADER_ROW = 2;
 
 const RH_EDITABLE_HEADERS = {
   CAD_COLABORADOR: new Set([
@@ -51,8 +52,8 @@ function rhProcessSheetEdit(event) {
   if (!(sheetName in RH_EDITABLE_HEADERS)) return;
 
   const rowNumber = range.getRow();
-  if (rowNumber < 2) return;
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  if (rowNumber <= RH_HEADER_ROW) return;
+  const headers = sheet.getRange(RH_HEADER_ROW, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const header = headers[range.getColumn() - 1];
   const normalizedHeader = rhNormalizeHeader_(header);
   const dependentField = /^dependentelegal0?[1-3](nomecompleto|datadenascimento)$/.test(normalizedHeader);

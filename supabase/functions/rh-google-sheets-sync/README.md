@@ -2,6 +2,7 @@
 
 ## Fluxos
 
+- Nas duas abas, o worker e o Apps Script tratam a linha 2 como cabeçalho e começam a ler registros a partir da linha 3.
 - **Hub → Supabase → Sheets:** os triggers do Postgres enfileiram mudanças; o cron chama o worker a cada minuto. As linhas de colaboradores são localizadas pelo CPF e as alterações pelo UUID em `REGISTRO DA ALTERAÇÃO`.
 - **Sheets → Supabase → Hub:** o Apps Script envia edições individuais feitas por uma pessoa nas duas abas para esta Edge Function. Ela só grava colunas com mapeamento explícito; o trigger do Postgres atualiza a fila e o worker devolve a versão canônica do Hub à planilha. Escritas feitas pela API do Sheets não disparam o gatilho `onEdit`, evitando eco.
 
