@@ -144,9 +144,9 @@ function multiPart(...values: unknown[]) {
   return values.map(text).filter(Boolean).join(" | ");
 }
 
-function rowsFrom(values: unknown[][] | undefined): SheetRows {
+function rowsFrom(values: unknown[][] | undefined, headerRowIndex = 0): SheetRows {
   const all = values || [];
-  return { headers: all[0] || [], rows: all.slice(1) };
+  return { headers: all[headerRowIndex] || [], rows: all.slice(headerRowIndex + 1) };
 }
 
 function keyRows(data: SheetRows, label: string) {
@@ -334,9 +334,9 @@ async function spreadsheetMetadata(token: string) {
   return await googleRequest(`spreadsheets/${SHEET_ID}?fields=sheets.properties`, token) as { sheets: Sheet[] };
 }
 
-async function readTab(tab: string, token: string, valueRenderOption = "UNFORMATTED_VALUE") {
+async function readTab(tab: string, token: string, valueRenderOption = "UNFORMATTED_VALUE", headerRowIndex = 0) {
   const result = await googleRequest(`spreadsheets/${SHEET_ID}/values/${sheetRange(tab, "A:ZZ")}?valueRenderOption=${valueRenderOption}&majorDimension=ROWS`, token) as { values?: unknown[][] };
-  return rowsFrom(result.values);
+  return rowsFrom(result.values, headerRowIndex);
 }
 
 async function updateCells(cells: Array<{ range: string; values: unknown[][] }>, token: string) {
@@ -622,7 +622,8 @@ function safeImportFailure(error: unknown) {
 }
 
 async function importFromSheet(userClient: ReturnType<typeof createClient>, adminClient: ReturnType<typeof createClient>, token: string) {
-  const data = await readTab(TAB_COLABORADOR, token, "FORMATTED_VALUE");
+  // CAD_COLABORADOR has a title/intro row above the table headers.
+  const data = await readTab(TAB_COLABORADOR, token, "FORMATTED_VALUE", 1);
   const cpfIndex = headerAliases(data.headers, ["SEU CPF"]);
   const nameIndex = headerAliases(data.headers, ["NOME COMPLETO"]);
   const birthIndex = headerAliases(data.headers, ["Data de Nascimento"]);
@@ -644,10 +645,10 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
     if (cpf) occurrences.set(cpf, (occurrences.get(cpf) || 0) + 1);
     if (!cpf && !text(row[nameIndex]) && !text(row[birthIndex])) return;
     if (!validCpf(cpf)) {
-      failures.push({ row: index + 2, message: "CPF ausente ou inválido." });
+      failures.push({ row: index + 3, message: "CPF ausente ou inválido." });
       return;
     }
-    candidates.push({ rowNumber: index + 2, row, cpf });
+    candidates.push({ rowNumber: index + 3, row, cpf });
   });
   for (const item of candidates) {
     if ((occurrences.get(item.cpf) || 0) > 1) failures.push({ row: item.rowNumber, message: "CPF duplicado na planilha; nenhuma linha com esse CPF foi importada." });
