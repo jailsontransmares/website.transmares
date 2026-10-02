@@ -430,7 +430,12 @@ export async function sincronizarPlanilhaRhDp() {
   });
 
   if (error) {
-    throw new Error(error.message || 'Não foi possível iniciar a sincronização com a planilha.');
+    let mensagemDetalhada = '';
+    if (error.context instanceof Response) {
+      const resposta = await error.context.clone().json().catch(() => null);
+      mensagemDetalhada = resposta?.message || resposta?.error || '';
+    }
+    throw new Error(mensagemDetalhada || error.message || 'Não foi possível iniciar a sincronização com a planilha.');
   }
   if (!data?.ok) {
     throw new Error(data?.message || 'A sincronização com a planilha não foi concluída.');
