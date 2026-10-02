@@ -1,0 +1,181 @@
+.simulador-saude-page { min-width: 0; }
+.simsaude-page-head { align-items: center; display: flex; gap: 16px; justify-content: space-between; margin: 0 0 16px; }
+.simsaude-page-head h2 { margin: 3px 0; }
+.simsaude-page-head p, .simsaude-editor header p { color: var(--texto-suave); margin: 4px 0 0; }
+.simsaude-page-head > div:last-child, .simsaude-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.simsaude-file-input { display: none; }
+.simsaude-filters { align-items: end; background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); display: grid; gap: 10px; grid-template-columns: minmax(190px,1.5fr) repeat(5,minmax(120px,1fr)) auto auto; margin-bottom: 12px; padding: 12px; }
+.simsaude-filters label, .simsaude-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.simsaude-filters label span, .simsaude-field > span { color: var(--texto-suave); font-size: 11px; }
+.simsaude-filters input, .simsaude-filters select, .simsaude-field input, .simsaude-field select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 35px; min-width: 0; padding: 0 9px; width: 100%; }
+.simsaude-filters input:focus, .simsaude-filters select:focus, .simsaude-field input:focus, .simsaude-field select:focus { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-layout { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0,1fr) 300px; }
+.simsaude-card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); min-width: 0; overflow: hidden; }
+.simsaude-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; padding: 12px 14px; }
+.simsaude-card > header h3 { font-size: 15px; margin: 0; }
+.simsaude-card > header > span { color: var(--texto-suave); font-size: 12px; }
+.simsaude-table-wrap { overflow-x: auto; }
+.simsaude-table-card table { border-collapse: collapse; min-width: 1120px; width: 100%; }
+.simsaude-table-card th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 10px; font-weight: 650; padding: 9px 8px; text-align: left; white-space: nowrap; }
+.simsaude-table-card td { border-top: 1px solid var(--borda); font-size: 11px; padding: 8px; vertical-align: middle; }
+.simsaude-table-card td small { color: var(--texto-suave); display: block; margin-top: 2px; }
+.simsaude-row:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
+.simsaude-row.is-expanded { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); }
+.simsaude-expand { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); cursor: pointer; height: 27px; width: 27px; }
+.simsaude-link { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font-size: 11px; font-weight: 650; padding: 3px; }
+.simsaude-status { border-radius: 99px; display: inline-flex; font-size: 10px; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
+.simsaude-status-vigente { background: #e9f7ee; color: #087c38; }
+.simsaude-status-em-revisão { background: #fff4dd; color: #9a6200; }
+.simsaude-status-inativo { background: #ffebed; color: #b52c39; }
+.simsaude-status-vencido { background: #edf0f4; color: #596779; }
+.simsaude-empty { color: var(--texto-suave); height: 110px; text-align: center; }
+.simsaude-pagination { align-items: center; border-top: 1px solid var(--borda); color: var(--texto-suave); display: flex; gap: 12px; min-height: 48px; padding: 8px 12px; }
+.simsaude-pagination label { align-items: center; display: flex; gap: 6px; margin-left: auto; }
+.simsaude-pagination select, .simsaude-pagination button { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); height: 29px; padding: 0 8px; }
+.simsaude-pagination button { cursor: pointer; }
+.simsaude-pagination button:disabled { cursor: default; opacity: .45; }
+.simsaude-sidebar { display: flex; flex-direction: column; gap: 12px; }
+.simsaude-sidebar > .simsaude-card { padding: 13px; }
+.simsaude-sidebar h3 { font-size: 14px; margin: 0 0 10px; }
+.simsaude-summary { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+.simsaude-summary article { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); border-radius: 7px; min-height: 68px; padding: 10px; }
+.simsaude-summary strong { color: var(--cor-principal); display: block; font-size: 21px; }
+.simsaude-summary span, .simsaude-muted { color: var(--texto-suave); font-size: 11px; }
+.simsaude-activity { align-items: start; border-top: 1px solid var(--borda); display: flex; font-size: 11px; gap: 8px; justify-content: space-between; padding: 9px 0; }
+.simsaude-activity time { color: var(--texto-suave); white-space: nowrap; }
+.simsaude-band-reference { counter-reset: bands; list-style: none; margin: 0; padding: 0; }
+.simsaude-band-reference li { align-items: center; border-top: 1px solid var(--borda); color: var(--texto-suave); display: grid; font-size: 10px; gap: 6px; grid-template-columns: 18px 42px 1fr; padding: 5px 0; }
+.simsaude-band-reference li span { color: var(--texto-suave); }
+.simsaude-band-reference li strong { color: var(--texto); }
+.simsaude-expanded td { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); padding: 0; }
+.simsaude-editor { padding: 13px; }
+.simsaude-editor > header { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
+.simsaude-editor header h3 { font-size: 15px; margin: 2px 0; }
+.simsaude-editor header p { font-size: 11px; }
+.simsaude-form-grid { display: grid; gap: 10px; grid-template-columns: repeat(4,minmax(140px,1fr)); }
+.simsaude-field { font-size: 12px; }
+.simsaude-field.is-wide { grid-column: span 2; }
+.simsaude-band-editor { border-top: 1px solid var(--borda); margin-top: 15px; padding-top: 13px; }
+.simsaude-band-editor h4 { font-size: 13px; margin: 0 0 3px; }
+.simsaude-band-editor > div:first-child p { color: var(--texto-suave); font-size: 11px; margin: 0 0 12px; }
+.simsaude-band-grid { display: grid; gap: 9px; grid-template-columns: repeat(5,minmax(100px,1fr)); }
+.simsaude-message { align-items: center; background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--cor-destaque) 30%, var(--borda)); border-radius: 7px; display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 12px; }
+.simsaude-message.is-error { background: #fff1f1; border-color: #f1c2c5; color: #8e2932; }
+.simsaude-message span { flex: 1; font-size: 12px; }
+.simsaude-message button { background: transparent; border: 0; cursor: pointer; font-size: 19px; }
+.simsaude-state { align-items: center; color: var(--texto-suave); display: flex; gap: 10px; justify-content: center; min-height: 180px; }
+.simsaude-modal-backdrop { align-items: center; background: #10203380; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; z-index: 9999; }
+.simsaude-history-modal { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); max-height: 80vh; max-width: 540px; overflow: auto; padding: 15px; width: 100%; }
+.simsaude-history-modal header { align-items: center; display: flex; justify-content: space-between; margin-bottom: 10px; }
+.simsaude-history-modal h3 { margin: 3px 0; }
+.simsaude-history-modal article { border-top: 1px solid var(--borda); display: grid; font-size: 12px; grid-template-columns: 1fr auto; padding: 9px 0; }
+.simsaude-history-modal article p { color: var(--texto-suave); grid-column: 1/-1; margin: 3px 0 0; }
+.simsaude-history-modal article time { color: var(--texto-suave); }
+.simsaude-import-modal { max-width: 900px; }
+.simsaude-import-modal header { align-items: start; }
+.simsaude-import-modal header p { color: var(--texto-suave); font-size: 12px; margin: 4px 0; }
+.simsaude-import-modal footer { border-top: 1px solid var(--borda); display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 12px; }
+.simsaude-import-errors { background: #fff5e5; border: 1px solid #f0d4a1; border-radius: 6px; color: #73501a; font-size: 11px; margin-bottom: 10px; max-height: 140px; overflow: auto; padding: 9px 11px; }
+.simsaude-import-errors p { margin: 4px 0 0; }
+@media (max-width: 1300px) { .simsaude-filters { grid-template-columns: repeat(4,minmax(130px,1fr)); } }
+@media (max-width: 1150px) { .simsaude-layout { grid-template-columns: 1fr; } .simsaude-sidebar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 850px) { .simsaude-page-head { align-items: start; flex-direction: column; } .simsaude-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .simsaude-form-grid { grid-template-columns: repeat(2,minmax(130px,1fr)); } .simsaude-band-grid { grid-template-columns: repeat(2,minmax(100px,1fr)); } .simsaude-sidebar { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .simsaude-filters { grid-template-columns: 1fr; } .simsaude-field.is-wide { grid-column: auto; } .simsaude-editor-actions { width: 100%; } .simsaude-pagination { flex-wrap: wrap; } .simsaude-pagination label { margin-left: 0; } }
+
+/* Ajustes visuais restritos ao Catálogo de Planos e Preços. */
+.simulador-saude-page { container-type: inline-size; min-width: 0; }
+.simulador-saude-page .primary-btn,
+.simulador-saude-page .secondary-btn { align-items: center; border-radius: 6px; display: inline-flex; font-size: 11px; gap: 7px; justify-content: center; min-height: 35px; padding: 0 12px; white-space: nowrap; }
+.simulador-saude-page .primary-btn svg,
+.simulador-saude-page .secondary-btn svg { height: 15px; width: 15px; }
+.simsaude-page-head { margin-bottom: 12px; }
+.simsaude-page-title { align-items: center; display: flex; gap: 12px; min-width: 0; }
+.simsaude-page-title h2 { font-size: 21px; }
+.simsaude-page-title p { font-size: 12px; }
+.simsaude-page-actions { align-items: center; }
+.simsaude-page-actions .primary-btn { min-height: 39px; }
+.saude-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
+.saude-title-icon svg { height: 23px; width: 23px; }
+.simsaude-filters { align-items: end; border-radius: 8px; gap: 8px; grid-template-columns: minmax(190px,1.5fr) repeat(6,minmax(88px,1fr)) auto auto; margin-bottom: 12px; padding: 11px 12px; }
+.simsaude-filters label span { font-size: 10px; }
+.simsaude-filters input,
+.simsaude-filters select { border-radius: 5px; font-size: 11px; height: 34px; }
+.simsaude-search-control { align-items: center; background: var(--card); border: 1px solid var(--borda); border-radius: 5px; display: flex; gap: 7px; height: 34px; padding: 0 8px; }
+.simsaude-search-control svg { color: var(--texto-suave); flex: 0 0 14px; height: 14px; width: 14px; }
+.simsaude-search-control input { background: transparent; border: 0; height: 30px; outline: 0; padding: 0; }
+.simsaude-search-control:focus-within { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-date-control { display: block; }
+.simsaude-filters button { min-height: 34px !important; }
+.simsaude-filters .simsaude-link { align-items: center; background: transparent; border: 1px solid color-mix(in srgb, var(--cor-principal) 24%, var(--borda)); border-radius: 5px; color: var(--cor-principal); cursor: pointer; display: inline-flex; font-size: 11px; gap: 6px; justify-content: center; min-height: 34px; padding: 0 9px; }
+.simsaude-filters .simsaude-link svg { height: 14px; width: 14px; }
+.simsaude-layout { gap: 10px; grid-template-columns: minmax(0,3fr) minmax(285px,.9fr); }
+.simsaude-card { border-radius: 8px; }
+.simsaude-sidebar > .simsaude-card { padding: 12px; }
+.simsaude-card > header { padding: 11px 13px; }
+.simsaude-card > header h3,
+.simsaude-sidebar h3 { align-items: center; display: flex; gap: 7px; }
+.simsaude-card > header h3 { font-size: 14px; }
+.simsaude-card > header h3 svg,
+.simsaude-sidebar h3 svg { color: var(--cor-principal); height: 16px; width: 16px; }
+.simsaude-count-pill { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); border-radius: 99px; color: var(--cor-principal); font-size: 10px; font-weight: 600; margin-left: 2px; padding: 4px 8px; }
+.simsaude-table-card table { min-width: 1050px; }
+.simsaude-table-card th { color: var(--texto); font-size: 10px; padding: 8px 7px; }
+.simsaude-table-card td { font-size: 10px; padding: 7px; }
+.simsaude-operator-cell { align-items: center; display: inline-flex; gap: 7px; white-space: nowrap; }
+.simsaude-operator-cell strong { font-size: 10px; }
+.simsaude-operator-mark { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 25px; font-size: 10px; font-weight: 800; height: 25px; justify-content: center; width: 25px; }
+.simsaude-operator-mark.is-unimed { background: #078d48; }
+.simsaude-operator-mark.is-hapvida { background: #268ee8; }
+.simsaude-operator-mark.is-bradesco { background: #c41426; }
+.simsaude-operator-mark.is-sulamerica { background: #f27612; }
+.simsaude-operator-mark.is-default { background: var(--cor-principal); }
+.simsaude-summary { gap: 7px; }
+.simsaude-summary article { align-items: center; border: 1px solid transparent; display: flex; gap: 8px; min-height: 66px; padding: 9px; }
+.simsaude-summary article > svg { flex: 0 0 21px; height: 21px; width: 21px; }
+.simsaude-summary article > div { min-width: 0; }
+.simsaude-summary strong { font-size: 20px; line-height: 1.1; }
+.simsaude-summary span { display: block; font-size: 10px; }
+.simsaude-summary .is-blue { background: #eff7ff; border-color: #e1efff; color: #0661db; }
+.simsaude-summary .is-blue strong,
+.simsaude-summary .is-blue svg { color: #0661db; }
+.simsaude-summary .is-green { background: #effaf3; border-color: #e2f3e8; color: #07823e; }
+.simsaude-summary .is-green strong,
+.simsaude-summary .is-green svg { color: #07823e; }
+.simsaude-summary .is-violet { background: #f5f0ff; border-color: #ede5ff; color: #692be5; }
+.simsaude-summary .is-violet strong,
+.simsaude-summary .is-violet svg { color: #692be5; }
+.simsaude-summary .is-amber { background: #fff8eb; border-color: #f9ecd2; color: #e36c00; }
+.simsaude-summary .is-amber strong,
+.simsaude-summary .is-amber svg { color: #e36c00; }
+.simsaude-activity { align-items: center; justify-content: start; padding: 8px 0; }
+.simsaude-activity > div { flex: 1; min-width: 0; }
+.simsaude-activity strong { display: block; font-size: 10px; }
+.simsaude-activity small { color: var(--texto-suave); display: block; font-size: 9px; margin-top: 3px; }
+.simsaude-activity time { display: none; }
+.simsaude-activity-mark { align-items: center; background: color-mix(in srgb, var(--cor-principal) 8%, var(--card)); border-radius: 50%; color: var(--cor-principal); display: inline-flex; flex: 0 0 29px; height: 29px; justify-content: center; width: 29px; }
+.simsaude-activity-mark svg { height: 15px; width: 15px; }
+.simsaude-band-reference li { font-size: 10px; grid-template-columns: 20px 50px 1fr; padding: 6px 0; }
+.simsaude-pagination { min-height: 43px; }
+.simsaude-pagination label { font-size: 10px; }
+.simsaude-pagination label > span { color: var(--texto-suave); }
+.simsaude-current-page { align-items: center; background: var(--cor-principal); border-radius: 5px; color: #fff; display: inline-flex; height: 29px; justify-content: center; min-width: 29px; }
+.simsaude-editor,
+.simsaude-history-modal { border-radius: 8px; }
+@container (max-width: 1280px) {
+  .simsaude-filters { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .simsaude-layout { grid-template-columns: minmax(0,1fr) 285px; }
+}
+@container (max-width: 1120px) {
+  .simsaude-layout { grid-template-columns: minmax(0,1fr); }
+  .simsaude-sidebar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+@container (max-width: 850px) {
+  .simsaude-page-head { align-items: flex-start; flex-direction: column; }
+  .simsaude-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .simsaude-sidebar { grid-template-columns: 1fr; }
+}
+@container (max-width: 520px) {
+  .simsaude-filters { grid-template-columns: 1fr; }
+  .simsaude-page-title { align-items: flex-start; }
+  .saude-title-icon { flex-basis: 34px; height: 34px; width: 34px; }
+}

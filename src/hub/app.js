@@ -18,6 +18,14 @@ import './crm2Comunicacao.css';
 import './crm2Automacoes.js';
 import './crm2Automacoes.css';
 import { CONSULTORIA360_ROUTE, mountConsultoria360Page, renderCorretoraOperationalPage } from './consultoria360.js';
+import {
+  SIMULADOR_SAUDE_COTACAO_ROUTE,
+  SIMULADOR_SAUDE_CATALOGO_ROUTE,
+  SIMULADOR_SAUDE_ROUTE,
+} from './simuladorSaudeRoutes.js';
+import { mountSimuladorSaudeCatalogPage } from './simuladorSaudeCatalogo.js';
+import { mountSimuladorSaudeHomePage } from './simuladorSaudeInicio.js';
+import { mountSimuladorSaudeQuotePage } from './simuladorSaudeCotacao.js';
 import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
 import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
@@ -15264,6 +15272,33 @@ const renderizarRotaAtualHubPhase2 = async function() {
 
   if (rotaRelativa === CONSULTORIA360_ROUTE) {
     await mountConsultoria360Page({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_ROUTE) {
+    await mountSimuladorSaudeHomePage({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_COTACAO_ROUTE) {
+    await mountSimuladorSaudeQuotePage({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_CATALOGO_ROUTE) {
+    await mountSimuladorSaudeCatalogPage({
       renderShell: renderHubShell,
       pode,
       navegarParaRota

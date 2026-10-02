@@ -1,0 +1,218 @@
+.saude-quote-page { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.saude-quote-header { align-items: center; display: flex; gap: 16px; justify-content: space-between; }
+.saude-quote-header h2 { margin: 3px 0; }
+.saude-quote-header p, .saude-quote-result-tools p { color: var(--texto-suave); font-size: 12px; margin: 4px 0 0; }
+.saude-quote-header-actions, .saude-quote-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.saude-quote-card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); min-width: 0; overflow: hidden; }
+.saude-quote-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; padding: 11px 14px; }
+.saude-quote-card > header h3, .saude-quote-result-tools h3 { font-size: 15px; margin: 0; }
+.saude-quote-card > header > div > span { color: var(--texto-suave); display: block; font-size: 11px; margin-top: 4px; }
+.saude-quote-company-grid { display: grid; gap: 10px; grid-template-columns: 1.6fr 1fr 1fr 1.2fr 1fr; padding: 12px 14px; }
+.saude-quote-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.saude-quote-field > span { color: var(--texto-suave); font-size: 11px; }
+.saude-quote-field input, .saude-quote-field select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 35px; min-width: 0; padding: 0 9px; width: 100%; }
+.saude-quote-field textarea { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); min-height: 145px; padding: 9px; resize: vertical; width: 100%; }
+.saude-quote-lives-layout { display: grid; gap: 14px; grid-template-columns: minmax(0,1fr) 250px; padding: 12px; }
+.saude-quote-table-wrap { min-width: 0; overflow-x: auto; }
+.saude-quote-lives-table { border-collapse: collapse; min-width: 720px; width: 100%; }
+.saude-quote-lives-table th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 10px; padding: 8px; text-align: left; white-space: nowrap; }
+.saude-quote-lives-table td { border-bottom: 1px solid var(--borda); font-size: 11px; padding: 7px 8px; white-space: nowrap; }
+.saude-life-badge { border-radius: 99px; font-size: 10px; font-weight: 700; padding: 4px 7px; }
+.saude-life-badge.titular { background: color-mix(in srgb, var(--cor-principal) 12%, var(--card)); color: var(--cor-principal); }
+.saude-life-badge.dependente { background: #eaf7ef; color: #147940; }
+.saude-quote-link { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font-size: 11px; margin-right: 8px; padding: 2px; }
+.saude-quote-link.is-danger { color: #b52d38; }
+.saude-quote-summary { background: color-mix(in srgb, var(--cor-principal) 4%, var(--card)); border: 1px solid var(--borda); border-radius: 7px; padding: 11px; }
+.saude-quote-summary h4 { font-size: 12px; margin: 0 0 8px; }
+.saude-quote-summary h5 { border-top: 1px solid var(--borda); font-size: 11px; margin: 10px 0 5px; padding-top: 9px; }
+.saude-quote-summary-counts { display: grid; gap: 5px; grid-template-columns: repeat(3,1fr); }
+.saude-quote-summary-counts strong { color: var(--cor-principal); font-size: 18px; }
+.saude-quote-summary-counts small { color: var(--texto-suave); display: block; font-size: 9px; font-weight: 500; }
+.saude-quote-summary ul { display: grid; gap: 3px; grid-template-columns: 1fr 1fr; list-style: none; margin: 0; padding: 0; }
+.saude-quote-summary li { color: var(--texto-suave); display: flex; font-size: 10px; justify-content: space-between; padding: 3px 2px; }
+.saude-quote-summary li strong { color: var(--texto); }
+.saude-quote-empty { color: var(--texto-suave); font-size: 12px; padding: 22px 14px; text-align: center; }
+.saude-quote-result-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 14px; }
+.saude-quote-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; }
+.saude-quote-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 115px; }
+.saude-quote-filters label span { color: var(--texto-suave); font-size: 10px; }
+.saude-quote-filters select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 33px; padding: 0 8px; }
+.saude-quote-results { border-collapse: collapse; min-width: 720px; width: 100%; }
+.saude-quote-results th, .saude-quote-results td { border-bottom: 1px solid var(--borda); border-right: 1px solid var(--borda); font-size: 11px; padding: 9px; text-align: center; vertical-align: top; }
+.saude-quote-results th:last-child, .saude-quote-results td:last-child { border-right: 0; }
+.saude-quote-results thead > tr:first-child > th { background: color-mix(in srgb, var(--cor-principal) 5%, var(--card)); }
+.saude-quote-results .saude-result-stub { min-width: 200px; text-align: left; vertical-align: middle; }
+.saude-plan-heading { min-width: 185px; }
+.saude-plan-heading > strong, .saude-plan-heading > span, .saude-plan-heading > small { display: block; }
+.saude-plan-heading > span { margin-top: 3px; }
+.saude-plan-heading > small { color: var(--texto-suave); font-size: 10px; font-weight: 500; margin-top: 3px; }
+.saude-plan-total { border-top: 1px solid var(--borda); margin-top: 8px; padding-top: 8px; }
+.saude-plan-total > b { color: var(--cor-principal); font-size: 16px; }
+.saude-plan-total > b.is-incomplete, .is-incomplete { color: #9a6200; }
+.saude-plan-total small { color: var(--texto-suave); display: block; font-size: 10px; font-weight: 500; margin-top: 3px; }
+.saude-plan-select { align-items: center; display: flex; font-size: 10px; gap: 5px; justify-content: center; margin-top: 6px; }
+.saude-plan-select input { accent-color: var(--cor-principal); }
+.saude-total-row th, .saude-total-row td { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); }
+.saude-total-row th { text-align: left; }
+.saude-total-row td strong, .saude-total-row td small { display: block; }
+.saude-total-row td small { font-size: 9px; margin-top: 3px; }
+.saude-group-row td { background: var(--card); font-weight: 650; }
+.saude-group-row > td:first-child { text-align: left; }
+.saude-group-row button { background: transparent; border: 0; color: var(--texto); cursor: pointer; font-size: 11px; font-weight: 700; padding: 2px; text-align: left; }
+.saude-group-row small { color: var(--texto-suave); display: block; font-size: 10px; font-weight: 400; margin: 4px 0 0 18px; }
+.saude-group-detail > td { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); padding: 0; }
+.saude-group-people { overflow-x: auto; padding: 7px 9px 9px 20px; }
+.saude-group-people table { border-collapse: collapse; min-width: 680px; width: 100%; }
+.saude-group-people th { color: var(--texto-suave); font-size: 9px; white-space: nowrap; }
+.saude-group-people td, .saude-group-people th { border-bottom: 1px solid var(--borda); font-size: 10px; padding: 6px; text-align: left; white-space: nowrap; }
+.saude-group-total td { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); font-weight: 700; }
+.saude-quote-overlay { align-items: center; background: #10203380; display: flex; inset: 0; justify-content: center; padding: 18px; position: fixed; z-index: 9999; }
+.saude-quote-modal { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: 12px; max-width: 480px; padding: 16px; width: 100%; }
+.saude-quote-modal.saude-manual-plan-modal { max-height: calc(100vh - 36px); max-width: 760px; overflow: auto; }
+.saude-quote-modal > header, .saude-quote-modal > footer { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
+.saude-quote-modal h3 { margin: 3px 0; }
+.saude-quote-modal > header p { color: var(--texto-suave); font-size: 11px; margin: 4px 0 0; }
+.saude-quote-modal > footer { border-top: 1px solid var(--borda); justify-content: flex-end; padding-top: 11px; }
+.saude-plan-catalog-form { display: flex; flex-direction: column; gap: 12px; }
+.saude-plan-catalog-form > footer { display: flex; justify-content: flex-end; }
+.saude-manual-plan-fields { display: grid; gap: 10px; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.saude-manual-price-section { border-top: 1px solid var(--borda); padding-top: 11px; }
+.saude-manual-price-section > header h4, .saude-manual-entry h4 { font-size: 13px; margin: 0; }
+.saude-manual-price-section > header p, .saude-manual-entry p { color: var(--texto-suave); font-size: 11px; margin: 4px 0 10px; }
+.saude-manual-price-grid { display: grid; gap: 8px; grid-template-columns: repeat(5,minmax(0,1fr)); }
+.saude-manual-price-grid .saude-quote-field input { font-variant-numeric: tabular-nums; }
+.saude-manual-entry { align-items: center; background: color-mix(in srgb, var(--cor-principal) 4%, var(--card)); border: 1px solid var(--borda); border-radius: 7px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 11px; }
+.saude-manual-entry p { margin: 3px 0 0; }
+.saude-quote-import-modal { max-width: 680px; }
+.saude-quote-import-modal > header { align-items: start; }
+.saude-quote-import-modal > header p { color: var(--texto-suave); font-size: 11px; margin: 4px 0 0; }
+.saude-import-results { background: #f4f7fb; border: 1px solid var(--borda); border-radius: 6px; font-size: 11px; max-height: 280px; overflow: auto; padding: 10px; }
+.saude-import-results.has-errors { background: #fff6eb; border-color: #efd6ac; }
+.saude-import-results p { margin: 6px 0; }
+.saude-import-preview { border-top: 1px solid var(--borda); display: grid; font-size: 10px; gap: 4px; margin-top: 8px; padding-top: 8px; }
+.saude-quote-notice { align-items: center; background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); border: 1px solid color-mix(in srgb, var(--cor-principal) 20%, var(--borda)); border-radius: 7px; display: flex; flex-wrap: wrap; font-size: 12px; gap: 8px; padding: 10px 12px; }
+.saude-quote-notice span { flex: 1; }
+.saude-quote-notice button { background: transparent; border: 0; color: var(--cor-principal); cursor: pointer; }
+.saude-quote-notice.is-error { background: #fff3e7; border-color: #edd4ad; color: #76521c; }
+@media (max-width: 1050px) { .saude-quote-company-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } .saude-quote-lives-layout { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .saude-quote-header { align-items: start; flex-direction: column; } .saude-quote-company-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } .saude-quote-card > header { align-items: start; flex-direction: column; } .saude-quote-result-tools { align-items: start; flex-direction: column; } .saude-quote-filters { width: 100%; } .saude-quote-filters label { flex: 1 1 140px; } .saude-manual-price-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 480px) { .saude-quote-company-grid, .saude-manual-plan-fields { grid-template-columns: 1fr; } .saude-quote-actions { width: 100%; } .saude-manual-price-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Ajustes locais do Simulador - Saúde para aproximar as telas da referência. */
+.saude-quote-page .primary-btn,
+.saude-quote-page .secondary-btn { align-items: center; border-radius: 6px; display: inline-flex; font-size: 11px; gap: 7px; justify-content: center; min-height: 35px; padding: 0 12px; white-space: nowrap; }
+.saude-quote-page .primary-btn svg,
+.saude-quote-page .secondary-btn svg { height: 15px; width: 15px; }
+.saude-quote-title { align-items: center; display: flex; gap: 12px; min-width: 0; }
+.saude-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
+.saude-title-icon svg { height: 23px; width: 23px; }
+.saude-quote-header h2 { font-size: 21px; }
+.saude-quote-card { border-radius: 8px; }
+.saude-quote-card > header h3 { align-items: center; display: flex; gap: 7px; }
+.saude-quote-card > header h3 svg,
+.saude-result-title h3 svg { color: var(--cor-principal); height: 17px; width: 17px; }
+.saude-quote-company-grid { padding: 11px 14px; }
+.saude-quote-lives-layout { gap: 12px; grid-template-columns: minmax(0,1.8fr) minmax(330px,1fr); }
+.saude-lives-header { align-items: center !important; }
+.saude-lives-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 14px; }
+.saude-quote-count-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.saude-quote-count-chips span { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); border-radius: 99px; color: var(--texto); font-size: 10px; font-weight: 650; padding: 5px 9px; }
+.saude-quote-count-chips span.is-total { background: color-mix(in srgb, var(--cor-principal) 12%, var(--card)); color: var(--cor-principal); }
+.saude-quote-actions { gap: 7px; }
+.saude-quote-lives-table { min-width: 690px; }
+.saude-quote-lives-table th { color: var(--texto); font-size: 10px; padding: 8px 9px; }
+.saude-quote-lives-table td { color: var(--texto); padding: 6px 9px; }
+.saude-life-badge { border-radius: 4px; display: inline-block; min-width: 48px; text-align: center; }
+.saude-life-badge.titular { background: #dcecff; color: #0759c7; }
+.saude-life-badge.dependente { background: #d9f7e5; color: #087b39; }
+.saude-life-actions { text-align: center; }
+.saude-quote-icon-button { align-items: center; background: transparent; border: 0; color: #61738b; cursor: pointer; display: inline-flex; height: 25px; justify-content: center; padding: 3px; width: 25px; }
+.saude-quote-icon-button svg { height: 14px; width: 14px; }
+.saude-quote-icon-button.is-danger:hover { color: #b52d38; }
+.saude-quote-summary { background: var(--card); border-radius: 8px; padding: 10px; }
+.saude-quote-summary h4 { font-size: 13px; margin-bottom: 8px; }
+.saude-quote-summary-counts { gap: 7px; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.saude-quote-summary-counts article { align-items: center; border: 1px solid transparent; border-radius: 6px; display: flex; gap: 8px; min-width: 0; padding: 8px; }
+.saude-quote-summary-counts article svg { flex: 0 0 20px; height: 20px; width: 20px; }
+.saude-quote-summary-counts article div { min-width: 0; }
+.saude-quote-summary-counts article strong { font-size: 18px; line-height: 1.1; }
+.saude-quote-summary-counts article small { font-size: 9px; white-space: nowrap; }
+.saude-quote-summary-counts .is-blue { background: #eff7ff; border-color: #e1efff; color: #0661db; }
+.saude-quote-summary-counts .is-blue strong,
+.saude-quote-summary-counts .is-blue svg { color: #0661db; }
+.saude-quote-summary-counts .is-green { background: #effaf3; border-color: #e2f3e8; color: #07823e; }
+.saude-quote-summary-counts .is-green strong,
+.saude-quote-summary-counts .is-green svg { color: #07823e; }
+.saude-quote-summary-counts .is-violet { background: #f5f0ff; border-color: #ede5ff; color: #692be5; }
+.saude-quote-summary-counts .is-violet strong,
+.saude-quote-summary-counts .is-violet svg { color: #692be5; }
+.saude-quote-summary-lower { display: grid; gap: 10px; grid-template-columns: minmax(0,1.25fr) minmax(145px,.9fr); margin-top: 10px; }
+.saude-quote-summary-lower h5 { align-items: center; border: 0; margin: 0 0 6px; padding: 0; }
+.saude-quote-summary-lower h5 svg { height: 14px; margin-right: 4px; vertical-align: -3px; width: 14px; }
+.saude-age-distribution ul { display: grid; gap: 3px; grid-template-columns: 1fr; }
+.saude-age-distribution li { align-items: center; display: grid; gap: 6px; grid-template-columns: 62px minmax(35px,1fr) 14px; padding: 1px 0; }
+.saude-age-bar { background: color-mix(in srgb, var(--texto-suave) 13%, var(--card)); border-radius: 3px; height: 10px; overflow: hidden; }
+.saude-age-bar i { background: #77bfff; border-radius: inherit; display: block; height: 100%; }
+.saude-age-distribution li > strong { color: var(--texto); font-size: 9px; font-weight: 500; text-align: right; }
+.saude-quote-summary-stats { display: flex; flex-direction: column; gap: 8px; }
+.saude-quote-summary-stats > section { border: 1px solid var(--borda); border-radius: 6px; padding: 8px; }
+.saude-quote-summary-stats h5 { color: var(--texto); font-size: 10px; }
+.saude-quote-summary-stats p { align-items: center; border-top: 1px solid var(--borda); display: flex; font-size: 10px; justify-content: space-between; margin: 0; padding: 5px 0 0; }
+.saude-quote-summary-stats p + p { margin-top: 4px; }
+.saude-quote-summary-stats p strong { color: var(--texto); }
+.saude-group-count { color: var(--texto); font-size: 17px; }
+.saude-quote-result-tools { padding: 10px 14px 9px; }
+.saude-result-title h3 { align-items: center; display: flex; gap: 7px; font-size: 16px; }
+.saude-quote-result-card .saude-quote-table-wrap { padding: 0 12px 12px; }
+.saude-quote-results { min-width: 760px; }
+.saude-quote-results th,
+.saude-quote-results td { padding: 7px 8px; }
+.saude-quote-results thead > tr:first-child > th { background: var(--card); padding: 0; }
+.saude-quote-results .saude-result-stub { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)) !important; min-width: 235px; padding: 12px !important; }
+.saude-plan-heading { min-width: 180px; padding: 0 !important; }
+.saude-plan-brand { align-items: center; color: #fff; display: flex; flex-direction: column; gap: 3px; min-height: 78px; padding: 9px 8px 7px; }
+.saude-plan-brand > strong { font-size: 14px; }
+.saude-plan-brand > span:not(.saude-plan-mark) { font-size: 11px; font-weight: 700; }
+.saude-plan-brand > small { font-size: 9px; font-weight: 500; }
+.saude-plan-mark { align-items: center; border: 1px solid #ffffff8a; border-radius: 50%; display: inline-flex; font-size: 12px; font-weight: 800; height: 21px; justify-content: center; width: 21px; }
+.saude-plan-brand.is-unimed { background: #079447; }
+.saude-plan-brand.is-hapvida { background: #268ee8; }
+.saude-plan-brand.is-bradesco { background: #c41426; }
+.saude-plan-brand.is-sulamerica { background: #f27612; }
+.saude-plan-brand.is-default { background: var(--cor-principal); }
+.saude-plan-total { border: 0; margin: 0; padding: 7px 4px 2px; }
+.saude-plan-total.saude-price-unimed > b,
+.saude-total-row td.saude-price-unimed strong,
+.saude-price-unimed { color: #078a3c; }
+.saude-price-hapvida { color: #075ed2; }
+.saude-price-bradesco { color: #d20d1b; }
+.saude-price-sulamerica { color: #ef6b00; }
+.saude-total-row td.saude-price-hapvida strong { color: #075ed2; }
+.saude-total-row td.saude-price-bradesco strong { color: #d20d1b; }
+.saude-total-row td.saude-price-sulamerica strong { color: #ef6b00; }
+.saude-plan-total.saude-price-hapvida > b,
+.saude-plan-total.saude-price-bradesco > b,
+.saude-plan-total.saude-price-sulamerica > b { color: inherit; }
+.saude-plan-total small { color: var(--texto-suave); }
+.saude-quote-results .saude-total-row th,
+.saude-quote-results .saude-total-row td { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
+.saude-quote-results .saude-total-row th { min-width: 235px; padding: 10px 12px; text-align: left; }
+.saude-total-row th small { color: var(--texto-suave); display: block; font-size: 10px; font-weight: 500; margin-top: 4px; }
+.saude-group-row td { padding: 8px 10px; }
+.saude-group-row > td:not(:first-child) { font-size: 14px; }
+.saude-group-total td { background: #fff6df; font-weight: 750; }
+.saude-group-total td:not(:first-child) { font-size: 13px; }
+.saude-group-detail > td { background: color-mix(in srgb, var(--cor-principal) 2%, var(--card)); }
+.saude-group-people { padding: 4px 8px 8px; }
+.saude-group-people th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto); }
+.saude-quote-results .saude-price-unimed.is-incomplete,
+.saude-quote-results .saude-price-hapvida.is-incomplete,
+.saude-quote-results .saude-price-bradesco.is-incomplete,
+.saude-quote-results .saude-price-sulamerica.is-incomplete { color: #9a6200; }
+.saude-plan-total.saude-price-unimed > b.is-incomplete,
+.saude-plan-total.saude-price-hapvida > b.is-incomplete,
+.saude-plan-total.saude-price-bradesco > b.is-incomplete,
+.saude-plan-total.saude-price-sulamerica > b.is-incomplete { color: #9a6200; }
+.saude-total-row td small { color: var(--texto-suave); }
+@media (max-width: 1100px) { .saude-quote-lives-layout { grid-template-columns: 1fr; } .saude-quote-summary-lower { grid-template-columns: minmax(0,1.4fr) minmax(170px,.8fr); } }
+@media (max-width: 720px) { .saude-quote-title { align-items: flex-start; } .saude-title-icon { flex-basis: 34px; height: 34px; width: 34px; } .saude-quote-summary-lower { grid-template-columns: 1fr; } .saude-quote-summary-counts { grid-template-columns: 1fr; } .saude-quote-summary-counts article { min-height: 48px; } }

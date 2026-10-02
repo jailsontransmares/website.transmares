@@ -72,6 +72,16 @@ import {
   saveConsultoria360Responses,
   updateConsultoria360Atendimento
 } from './services/consultoria360Service.js';
+import {
+  getSimuladorSaudeCatalog,
+  getLatestSimuladorSaudeQuote,
+  getRecentSimuladorSaudeQuotes,
+  getSimuladorSaudeQuoteById,
+  getSimuladorSaudeBrokerBranding,
+  saveSimuladorSaudeQuote,
+  saveSimuladorSaudeTable,
+  setSimuladorSaudeTableStatus
+} from './services/simuladorSaudeService.js';
 
 const ACOES_QUE_INVALIDAM_ACESSO = new Set([
   'saveAdminUser',
@@ -142,6 +152,14 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'saveConsultoria360Opportunity') return { ok: true, data: await saveConsultoria360Opportunity(payload) };
     if (action === 'addConsultoria360Event') return { ok: true, data: await addConsultoria360Event(payload) };
     if (action === 'deleteConsultoria360Atendimento') return { ok: true, data: await deleteConsultoria360Atendimento(payload.id, payload.empresaId) };
+    if (action === 'getSimuladorSaudeCatalog') return { ok: true, data: await getSimuladorSaudeCatalog() };
+    if (action === 'getLatestSimuladorSaudeQuote') return { ok: true, data: await getLatestSimuladorSaudeQuote() };
+    if (action === 'getRecentSimuladorSaudeQuotes') return { ok: true, data: await getRecentSimuladorSaudeQuotes(payload.limit) };
+    if (action === 'getSimuladorSaudeQuoteById') return { ok: true, data: await getSimuladorSaudeQuoteById(payload.id) };
+    if (action === 'saveSimuladorSaudeQuote') return { ok: true, data: await saveSimuladorSaudeQuote(payload) };
+    if (action === 'getSimuladorSaudeBrokerBranding') return { ok: true, data: await getSimuladorSaudeBrokerBranding() };
+    if (action === 'saveSimuladorSaudeTable') return { ok: true, data: await saveSimuladorSaudeTable(payload) };
+    if (action === 'setSimuladorSaudeTableStatus') return { ok: true, data: await setSimuladorSaudeTableStatus(payload.id, payload.status) };
 
     if (action === 'getArCrmFormOptions') {
       const dados = await carregarOpcoesCadastroCrmAr();

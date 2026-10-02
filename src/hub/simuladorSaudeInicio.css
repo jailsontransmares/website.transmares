@@ -1,0 +1,40 @@
+.saude-home-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.saude-home-header { align-items: center; display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
+.saude-home-header h2 { margin: 3px 0; }
+.saude-home-header p, .saude-home-card > header p { color: var(--texto-suave); font-size: 12px; margin: 4px 0 0; }
+.saude-home-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.saude-home-card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); min-width: 0; overflow: hidden; }
+.saude-home-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 14px; }
+.saude-home-card > header h3 { font-size: 15px; margin: 0; }
+.saude-home-table-wrap { overflow-x: auto; }
+.saude-home-table { border-collapse: collapse; min-width: 720px; width: 100%; }
+.saude-home-table th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 10px; font-weight: 650; padding: 10px; text-align: left; white-space: nowrap; }
+.saude-home-table td { border-top: 1px solid var(--borda); font-size: 12px; padding: 10px; vertical-align: middle; }
+.saude-home-table tbody tr:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
+.saude-home-table td small { color: var(--texto-suave); display: block; font-size: 10px; margin-top: 3px; }
+.saude-home-code { color: var(--cor-principal); font-weight: 700; white-space: nowrap; }
+.saude-home-status { background: color-mix(in srgb, var(--cor-principal) 8%, var(--card)); border-radius: 99px; color: var(--cor-principal); display: inline-flex; font-size: 10px; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
+.saude-home-status.is-proposta { background: #e9f7ee; color: #087c38; }
+.saude-home-status.is-arquivada { background: #edf0f4; color: #596779; }
+.saude-home-table time { color: var(--texto-suave); white-space: nowrap; }
+.saude-home-open { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font: inherit; font-weight: 700; padding: 4px 6px; }
+.saude-home-state, .saude-home-empty { align-items: center; color: var(--texto-suave); display: flex; flex-direction: column; gap: 10px; justify-content: center; min-height: 210px; padding: 24px; text-align: center; }
+.saude-home-state.is-error { color: #8e2932; }
+.saude-home-state p, .saude-home-empty p { font-size: 12px; margin: 0; max-width: 440px; }
+.saude-home-empty h3 { color: var(--texto); font-size: 15px; margin: 0; }
+.saude-home-empty-icon { align-items: center; background: color-mix(in srgb, var(--cor-principal) 8%, var(--card)); border-radius: 50%; color: var(--cor-principal); display: flex; font-size: 26px; height: 48px; justify-content: center; width: 48px; }
+@media (max-width: 620px) { .saude-home-header { align-items: flex-start; flex-direction: column; } .saude-home-actions { width: 100%; } .saude-home-card > header { align-items: flex-start; } }
+
+/* Identidade compacta, limitada à tela inicial do Simulador - Saúde. */
+.saude-home-header { justify-content: space-between; }
+.saude-home-title { align-items: center; display: flex; gap: 12px; min-width: 0; }
+.saude-home-title h2 { font-size: 21px; }
+.saude-home-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
+.saude-home-title-icon svg { height: 23px; width: 23px; }
+.saude-home-page .primary-btn,
+.saude-home-page .secondary-btn { align-items: center; border-radius: 6px; display: inline-flex; font-size: 11px; gap: 7px; justify-content: center; min-height: 35px; padding: 0 12px; white-space: nowrap; }
+.saude-home-card { border-radius: 8px; }
+.saude-home-card > header { padding: 11px 13px; }
+.saude-home-table th { color: var(--texto); font-size: 10px; padding: 9px 10px; }
+.saude-home-table td { font-size: 11px; padding: 9px 10px; }
+@media (max-width: 620px) { .saude-home-title { align-items: flex-start; } .saude-home-title-icon { flex-basis: 34px; height: 34px; width: 34px; } }

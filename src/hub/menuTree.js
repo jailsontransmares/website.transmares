@@ -70,6 +70,15 @@ export const HUB_MENU_TREE = [
             route: '/operacoes/corretora/consultoria-360',
             permission: { resource: 'consultoria_360', action: 'view' },
             status: 'active'
+          },
+          {
+            id: 'operacoes-corretora-simulador-saude',
+            label: 'Simulador - Saúde',
+            type: 'route',
+            route: '/operacoes/corretora/simulador-saude',
+            moduleId: 'simulador-saude',
+            permission: { resource: 'simulador_saude', action: 'view' },
+            status: 'active'
           }
         ]
       }
