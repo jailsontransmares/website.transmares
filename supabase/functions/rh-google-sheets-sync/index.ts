@@ -529,11 +529,21 @@ function validCpf(value: unknown) {
 }
 
 function importedTimeRange(value: unknown) {
-  const raw = text(value);
+  const raw = text(value).replace(/\u00a0/g, " ");
   if (!raw) return { start: null, end: null };
-  const match = raw.match(/(\d{1,2}:\d{2})\s*(?:às|as|a|-)\s*(\d{1,2}:\d{2})/i);
+  const match = raw.match(/(?:^|\D)(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*h?\s*(?:às|as|até|ate|a|[-–—])\s*(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*h?(?!\d)/i);
   if (!match) throw new Error("Horário inválido; use HH:MM às HH:MM.");
-  return { start: `${match[1].padStart(5, "0")}:00`, end: `${match[2].padStart(5, "0")}:00` };
+  const startHour = Number(match[1]);
+  const startMinute = Number(match[2]);
+  const endHour = Number(match[3]);
+  const endMinute = Number(match[4]);
+  if (startHour > 23 || endHour > 23 || startMinute > 59 || endMinute > 59) {
+    throw new Error("Horário inválido; use HH:MM às HH:MM.");
+  }
+  return {
+    start: `${String(startHour).padStart(2, "0")}:${String(startMinute).padStart(2, "0")}:00`,
+    end: `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}:00`
+  };
 }
 
 function importedLink(headers: unknown[], row: unknown[]): Data {
