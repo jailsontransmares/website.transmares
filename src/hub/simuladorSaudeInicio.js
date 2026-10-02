@@ -29,7 +29,7 @@ function statusLabel(value) {
 function renderTable() {
   if (state.loading && !state.quotes.length) return '<div class="saude-home-state" role="status">Carregando cotações…</div>';
   if (state.error) return `<div class="saude-home-state is-error" role="alert"><p>${esc(state.error)}</p><button class="secondary-btn" type="button" onclick="saudeHomeReload()">Tentar novamente</button></div>`;
-  if (!state.quotes.length) return `<div class="saude-home-empty"><div class="saude-home-empty-icon" aria-hidden="true">＋</div><h3>Nenhuma cotação salva</h3><p>As cotações salvas aparecerão aqui para você continuar ou consultar depois.</p><button class="primary-btn" type="button" onclick="saudeHomeNewQuote()">Nova Cotação</button></div>`;
+  if (!state.quotes.length) return `<div class="saude-home-empty"><div class="saude-home-empty-icon" aria-hidden="true">＋</div><h3>Nenhuma cotação salva</h3><p>As cotações salvas pela equipe aparecerão aqui para consulta e continuidade.</p><button class="primary-btn" type="button" onclick="saudeHomeNewQuote()">Nova Cotação</button></div>`;
 
   const rows = state.quotes.map(quote => {
     const livesCount = Array.isArray(quote.snapshot?.vidas) ? quote.snapshot.vidas.length : 0;
@@ -56,11 +56,11 @@ function renderPage() {
     : '';
   const content = `<section class="saude-home-page">
     <header class="saude-home-header">
-      <div class="saude-home-title"><span class="saude-home-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><span class="hub-page-kicker">Operações · Corretora</span><h2>Simulador - Saúde</h2><p>Acesse suas cotações recentes ou inicie uma nova simulação.</p></div></div>
+      <div class="saude-home-title"><span class="saude-home-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><span class="hub-page-kicker">Operações · Corretora</span><h2>Simulador - Saúde</h2><p>Consulte as cotações da equipe ou inicie uma nova simulação.</p></div></div>
       <div class="saude-home-actions">${catalogButton}<button class="primary-btn" type="button" onclick="saudeHomeNewQuote()">Nova Cotação</button></div>
     </header>
     <section class="saude-home-card" aria-labelledby="saude-home-list-title">
-      <header><div><h3 id="saude-home-list-title">Últimas cotações</h3><p>Até 10 cotações atualizadas recentemente na sua conta.</p></div><button class="secondary-btn" type="button" onclick="saudeHomeReload()" ${state.loading ? 'disabled' : ''}>${state.loading ? 'Atualizando…' : 'Atualizar'}</button></header>
+      <header><div><h3 id="saude-home-list-title">Todas as cotações</h3><p>Cotações salvas por toda a equipe, atualizadas recentemente primeiro.</p></div><button class="secondary-btn" type="button" onclick="saudeHomeReload()" ${state.loading ? 'disabled' : ''}>${state.loading ? 'Atualizando…' : 'Atualizar'}</button></header>
       ${renderTable()}
     </section>
   </section>`;
@@ -78,7 +78,7 @@ async function loadQuotes() {
   state.error = '';
   rerender();
   try {
-    const response = await chamarApi('getRecentSimuladorSaudeQuotes', { limit: 10 });
+    const response = await chamarApi('getRecentSimuladorSaudeQuotes');
     if (!response.ok) throw new Error(response.message || 'Não foi possível carregar as cotações.');
     if (requestId !== state.requestId) return;
     state.quotes = Array.isArray(response.data) ? response.data : [];

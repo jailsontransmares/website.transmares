@@ -268,6 +268,7 @@ export async function chamarApi(action, payload = {}) {
       archiveAdminPartnersBatch: () => arquivarParceirosIndicacaoAdminLote(payload),
       listAdminPermissions: () => listarPermissoesAdmin(),
       listAdminUserPermissions: () => listarPermissoesUsuarioAdmin(payload),
+      saveHomeModuleProfilePermissionsBatch: () => salvarPermissoesPerfilAdminLote(payload),
       listAdminRecords: () => listarRegistrosAdmin(payload),
       listAdminIntegrationLogs: () => listarLogsIntegracoesAdmin(payload),
       saveAdminUser: () => salvarUsuarioAdmin(payload),

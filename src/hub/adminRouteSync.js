@@ -1,4 +1,4 @@
-import { HUB_ADMIN_TABS, obterAbaAdminPorRota, normalizarRotaHub } from './routeConfig.js';
+import { HUB_ADMIN_ROUTE_TABS, HUB_ADMIN_TABS, obterAbaAdminPorRota, normalizarRotaHub } from './routeConfig.js';
 
 const ADMIN_ABAS_ROTEAVEIS = new Set([...HUB_ADMIN_TABS, 'permissoes']);
 
@@ -28,7 +28,12 @@ function obterAbaAdministrativaAlvo() {
 
   if (rota.startsWith('admin/')) {
     const aba = obterAbaAdminPorRota(rota);
-    return ADMIN_ABAS_ROTEAVEIS.has(aba) ? aba : '';
+    if (!ADMIN_ABAS_ROTEAVEIS.has(aba)) return '';
+
+    // Only synchronize canonical tab routes. Nested resource screens can end
+    // in a tab-like word such as "permissoes" without being that tab.
+    const rotaCanonica = `admin/${HUB_ADMIN_ROUTE_TABS[aba] || aba}`;
+    return rota === rotaCanonica ? aba : '';
   }
 
   return '';

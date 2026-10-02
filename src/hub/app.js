@@ -61,6 +61,7 @@ import {
   ChevronUp,
   Check,
   CheckCircle2,
+  CircleX,
   ClipboardList,
   Circle,
   CircleHelp,
@@ -79,6 +80,7 @@ import {
   FilePlus2,
   FileText,
   Filter,
+  Folder,
   House,
   HeartPulse,
   Info,
@@ -92,7 +94,10 @@ import {
   ListOrdered,
   MessageCircle,
   Menu,
+  Maximize2,
+  Minimize2,
   Moon,
+  MoreHorizontal,
   MoreVertical,
   Paperclip,
   Pin,
@@ -100,6 +105,7 @@ import {
   Pencil,
   RemoveFormatting,
   Search,
+  Save,
   ShieldCheck,
   Settings,
   Settings2,
@@ -133,6 +139,7 @@ const HUB_LUCIDE_ICONS = {
   Circle,
   CircleAlert,
   CircleHelp,
+  CircleX,
   Clock3,
   Download,
   DownloadCloud,
@@ -144,6 +151,7 @@ const HUB_LUCIDE_ICONS = {
   FilePlus2,
   FileText,
   Filter,
+  Folder,
   House,
   HeartPulse,
   Info,
@@ -157,7 +165,10 @@ const HUB_LUCIDE_ICONS = {
   ListOrdered,
   MessageCircle,
   Menu,
+  Maximize2,
+  Minimize2,
   Moon,
+  MoreHorizontal,
   MoreVertical,
   Paperclip,
   Pin,
@@ -165,6 +176,7 @@ const HUB_LUCIDE_ICONS = {
   Pencil,
   RemoveFormatting,
   Search,
+  Save,
   ShieldCheck,
   Settings,
   Settings2,
@@ -263,8 +275,14 @@ const state = {
     gruposRecolhidos: {},
     modules: [],
     submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
+    returnPath: '',
     loading: false,
     saving: false,
     message: ''
@@ -1164,9 +1182,9 @@ function renderBotaoConfigurarModulosHome() {
     <button
       class="icon-btn module-config-edit-btn"
       type="button"
-      onclick="abrirModalConfigurarModulosHome()"
-      title="Configurar módulos da Home"
-      aria-label="Configurar módulos da Home"
+      onclick="navegarParaConfiguracaoModulosHome()"
+      title="Configurar módulos"
+      aria-label="Configurar módulos"
     >✏️</button>
   `;
 }
@@ -1188,7 +1206,7 @@ function renderModalConfigurarModulosHome() {
             <span class="home-modules-modal-title-icon"><i data-lucide="layout-grid" aria-hidden="true"></i></span>
             <div>
             <h3>Configurar módulos</h3>
-              <p>Defina o status e a exibição dos módulos e submódulos.</p>
+              <p>Defina o status e a exibição globais e ajuste o acesso por perfil.</p>
             </div>
           </div>
           <button class="icon-btn" type="button" onclick="fecharModalConfigurarModulosHome()" title="Fechar" aria-label="Fechar" ${modal.saving ? 'disabled' : ''}>×</button>
@@ -1215,8 +1233,54 @@ function renderModalConfigurarModulosHome() {
   `;
 }
 
+function renderConteudoPaginaConfiguracaoModulosHome() {
+  const resumo = obterResumoVisibilidadeModulosHome();
+  const ativos = [
+    ...(state.modulosHome.modules || []),
+    ...(state.modulosHome.submodules || []).map(item => ({ id: item.key }))
+  ].filter(item => obterStatusModuloHomeDraft(item.id) === 'ativo').length;
+
+  return `
+    <section class="admin-panel home-modules-page" data-home-modules-page-root>
+      <div class="admin-panel-header home-modules-page-header">
+        <div>
+          <h2>Configurar módulos</h2>
+          <p>Defina status, presença na Home e acesso por perfil em um único lugar.</p>
+        </div>
+        <div class="home-modules-page-summary" aria-label="Resumo dos módulos">
+          <span><strong>${ativos}</strong> ativos</span>
+          <span><strong>${resumo.visiveis}</strong> visíveis</span>
+        </div>
+      </div>
+      ${state.modulosHome.message ? `<p class="admin-message ${state.modulosHome.message.includes('Erro') || state.modulosHome.message.includes('Não foi') ? 'error' : ''}" role="status">${escapeHtml(state.modulosHome.message)}</p>` : ''}
+      <div class="home-modules-page-body">
+        ${state.modulosHome.loading ? renderHubLoading('Carregando módulos...') : renderConteudoModalConfigurarModulosHome()}
+      </div>
+      <footer class="home-modules-page-actions">
+        <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
+        <div class="home-modules-footer-actions">
+          <button class="secondary-btn" type="button" onclick="voltarDaPaginaConfiguracaoModulosHome()" ${state.modulosHome.saving ? 'disabled' : ''}>Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${state.modulosHome.saving || !verificarAlteracoesModulosHome() ? 'disabled' : ''}>
+            ${state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </footer>
+    </section>
+  `;
+}
+
+function renderPaginaConfiguracaoModulosHome() {
+  return renderHubShell({
+    tituloPagina: 'Configuração de módulos',
+    descricaoPagina: 'Defina status, presença na Home e acesso por perfil em um único lugar.',
+    classeConteudo: 'home-modules-page-host',
+    conteudo: renderConteudoPaginaConfiguracaoModulosHome()
+  });
+}
+
 function renderConteudoModalConfigurarModulosHome() {
   const resumo = obterResumoVisibilidadeModulosHome();
+  const permiteVerPermissoesPerfil = pode('admin.permissoes', 'view');
   return `
     <div class="home-modules-modal-content">
       <div class="home-modules-toolbar">
@@ -1230,17 +1294,45 @@ function renderConteudoModalConfigurarModulosHome() {
           ${renderFiltroModulosHome('ocultos', 'Ocultos', resumo.ocultos)}
         </div>
         <label class="home-modules-area-select-label">
-          <span class="sr-only">Filtrar por área</span>
+          <span>Área</span>
           <select class="home-modules-area-select" data-home-module-focus="area-select" aria-label="Filtrar por área" onchange="alterarAreaModuloHome(this.value)">
             <option value="todas" ${state.modulosHome.area === 'todas' ? 'selected' : ''}>Todas as áreas</option>
             ${AREAS_MODULOS_HOME.map(area => `<option value="${area.id}" ${state.modulosHome.area === area.id ? 'selected' : ''}>${escapeHtml(area.label)}</option>`).join('')}
           </select>
         </label>
+        ${permiteVerPermissoesPerfil ? renderSeletorPerfilModulosHome() : ''}
       </div>
       <div class="home-modules-modal-table-wrap">
         ${renderListaModulosHomeModal()}
       </div>
     </div>
+  `;
+}
+
+function renderResumoListaModulosHome(total = 0) {
+  return `
+    <div class="home-modules-list-heading">
+      <div><h3>Módulos e submódulos</h3><p>${total} ${total === 1 ? 'item exibido' : 'itens exibidos'}</p></div>
+      <div class="home-modules-availability-legend" aria-label="Legenda de status">
+        <span><i class="is-available" aria-hidden="true"></i>Disponível</span>
+        <span><i class="is-unavailable" aria-hidden="true"></i>Indisponível</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderSeletorPerfilModulosHome() {
+  const modal = state.modulosHome;
+  const perfis = modal.profiles || [];
+
+  return `
+    <label class="home-modules-profile-select-label">
+      <span>Perfil</span>
+      <select class="home-modules-area-select" data-home-module-focus="profile-select" aria-label="Escolher perfil para configurar os módulos" title="Acesso por permissões de visualização; atalhos ligados ao mesmo recurso compartilham o acesso." onchange="selecionarPerfilModulosHome(this.value)" ${modal.saving || !perfis.length ? 'disabled' : ''}>
+        <option value="">Selecione um perfil</option>
+        ${perfis.map(perfil => `<option value="${escapeAttr(perfil.id)}" ${perfil.id === modal.selectedProfileId ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || 'Perfil')}</option>`).join('')}
+      </select>
+    </label>
   `;
 }
 
@@ -1336,6 +1428,8 @@ function obterStatusModuloHomeDraft(id) {
 function aplicarSnapshotConfiguracaoModulosHome(data = {}) {
   const modules = data.modules || [];
   const submodules = data.submodules || [];
+  const profiles = data.profiles || [];
+  const profilePermissions = data.profilePermissions || [];
   const original = [...modules, ...submodules.map(item => ({
     id: item.key,
     status: item.status,
@@ -1350,9 +1444,30 @@ function aplicarSnapshotConfiguracaoModulosHome(data = {}) {
 
   state.modulosHome.modules = modules;
   state.modulosHome.submodules = submodules;
+  state.modulosHome.profiles = profiles;
+  state.modulosHome.profilePermissions = profilePermissions;
+  state.modulosHome.profilePermissionOriginals = profiles.reduce((acc, perfil) => {
+    acc[perfil.id] = mapearPermissoesVisibilidadePerfilModulo(profilePermissions, perfil.id);
+    return acc;
+  }, {});
+  state.modulosHome.profilePermissionDrafts = Object.fromEntries(
+    Object.entries(state.modulosHome.profilePermissionOriginals).map(([perfilId, permissoes]) => [perfilId, { ...permissoes }])
+  );
+  if (!profiles.some(perfil => perfil.id === state.modulosHome.selectedProfileId)) {
+    state.modulosHome.selectedProfileId = profiles[0]?.id || '';
+  }
   state.modulosHome.original = original;
   state.modulosHome.draft = { ...original };
   state.homeModuleSettings = { modules, submodules };
+}
+
+function mapearPermissoesVisibilidadePerfilModulo(permissoes = [], perfilId = '') {
+  return (permissoes || []).reduce((acc, permissao) => {
+    if (permissao.perfil_id === perfilId && permissao.acao === 'view' && permissao.permitido !== false) {
+      acc[permissao.recurso_chave] = true;
+    }
+    return acc;
+  }, {});
 }
 
 function renderListaModulosHomeModal() {
@@ -1401,11 +1516,16 @@ function renderListaModulosHomeModal() {
     .filter(area => area.linhas.length);
 
   if (!grupos.length) {
-    return `<p class="home-modules-empty">${query ? 'Nenhum item encontrado.' : 'Nenhum módulo encontrado para este filtro.'}</p>`;
+    return `<div class="home-modules-list">${renderResumoListaModulosHome()}<p class="home-modules-empty">${query ? 'Nenhum item encontrado.' : 'Nenhum módulo encontrado para este filtro.'}</p></div>`;
   }
 
+  const quantidadeExibida = grupos.reduce((total, area) => total + area.linhas.reduce((subtotal, linha) => subtotal
+    + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0), 0);
+
   return `
-    <div class="home-modules-area-grid">
+    <div class="home-modules-list">
+      ${renderResumoListaModulosHome(quantidadeExibida)}
+      <div class="home-modules-area-grid">
       ${grupos.map(area => {
         const quantidade = area.linhas.reduce((total, linha) => total + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0);
         const unidadeQuantidade = area.virtualParents?.length
@@ -1413,20 +1533,21 @@ function renderListaModulosHomeModal() {
           : (quantidade === 1 ? 'módulo' : 'módulos');
         const recolhido = state.modulosHome.gruposRecolhidos?.[area.id] === true;
         const idConteudo = `home-modules-area-${area.id}`;
+        const mostraPerfil = pode('admin.permissoes', 'view');
         return `
           <section class="home-modules-area-card${recolhido ? ' is-collapsed' : ''}" data-home-module-area="${area.id}" data-home-module-area-items="${area.virtualParents?.length ? 'true' : 'false'}">
-            <header class="home-modules-area-card-header">
+            <header class="home-modules-area-card-header${mostraPerfil ? ' has-profile-column' : ''}">
               <div class="home-modules-area-title">
-                <span class="home-modules-area-icon"><i data-lucide="folder" aria-hidden="true"></i></span>
                 <strong>${escapeHtml(area.label)}</strong>
                 <span class="home-modules-area-count">${quantidade} ${unidadeQuantidade}</span>
               </div>
+              ${renderAcoesLoteAreaModulosHome(area)}
+              ${renderCabecalhoListaModulosHome(mostraPerfil)}
               <button class="home-modules-collapse-button" type="button" data-home-module-focus="area-${area.id}" onclick="alternarGrupoModulosHome('${area.id}')" aria-expanded="${!recolhido}" aria-controls="${idConteudo}" aria-label="${recolhido ? 'Expandir' : 'Recolher'} área ${escapeAttr(area.label)}">
                 <i data-lucide="chevron-${recolhido ? 'down' : 'up'}" aria-hidden="true"></i>
               </button>
             </header>
             <div class="home-modules-area-card-body" id="${idConteudo}" ${recolhido ? 'hidden' : ''}>
-              ${renderAcoesLoteAreaModulosHome(area)}
               ${area.linhas.map(({ modulo, submodulos, moduloContextual }) => `
                 <div class="home-modules-parent-group">
                   ${modulo.virtual ? '' : renderLinhaModuloHomeModal({ ...modulo, contexto: Boolean(moduloContextual) })}
@@ -1437,6 +1558,7 @@ function renderListaModulosHomeModal() {
           </section>
         `;
       }).join('')}
+      </div>
     </div>
   `;
 }
@@ -1447,22 +1569,33 @@ function renderAcoesLoteAreaModulosHome(area) {
     area.slugs.includes(modulo.slug) && modulo.bloqueavel === false
   );
   const titleInativar = possuiModuloProtegido
-    ? `${title} O módulo protegido permanece ativo; os demais itens podem ser inativados.`
-    : title;
+    ? `Inativar todos. ${title} Módulos protegidos permanecem ativos.`
+    : `Inativar todos. ${title}`;
   return `
     <div class="home-modules-area-bulk-actions" role="group" aria-label="Ações em lote para ${escapeAttr(area.label)}">
-      <span>Aplicar ao grupo:</span>
-      <button type="button" data-home-module-focus="bulk-${area.id}-ativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ativar todos</button>
-      <button type="button" data-home-module-focus="bulk-${area.id}-inativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" ${state.modulosHome.saving ? 'disabled' : ''}>Inativar todos</button>
-      <button type="button" data-home-module-focus="bulk-${area.id}-exibir" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Exibir todos</button>
-      <button type="button" data-home-module-focus="bulk-${area.id}-ocultar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ocultar todos</button>
+      <button class="is-activate" type="button" data-home-module-focus="bulk-${area.id}-ativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="Ativar todos. ${escapeAttr(title)}" aria-label="Ativar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="check-circle-2" aria-hidden="true"></i></button>
+      <button class="is-deactivate" type="button" data-home-module-focus="bulk-${area.id}-inativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" aria-label="Inativar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="circle-x" aria-hidden="true"></i></button>
+      <button class="is-show" type="button" data-home-module-focus="bulk-${area.id}-exibir" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="Exibir todos. ${escapeAttr(title)}" aria-label="Exibir todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="eye" aria-hidden="true"></i></button>
+      <button class="is-hide" type="button" data-home-module-focus="bulk-${area.id}-ocultar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="Ocultar todos. ${escapeAttr(title)}" aria-label="Ocultar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="eye-off" aria-hidden="true"></i></button>
+    </div>
+  `;
+}
+
+function renderCabecalhoListaModulosHome(mostraPerfil) {
+  return `
+    <div class="home-modules-list-header home-modules-modal-grid${mostraPerfil ? ' has-profile-column' : ''}" aria-hidden="true">
+      <span>Status</span>
+      <span>Na Home</span>
+      ${mostraPerfil ? '<span>Acesso</span>' : ''}
     </div>
   `;
 }
 
 function atualizarModalConfigurarModulosHome({ preservarBusca = false } = {}) {
   const raizAtual = document.querySelector('[data-home-modules-modal-root]');
-  if (!raizAtual) {
+  const raizPaginaAtual = document.querySelector('[data-home-modules-page-root]');
+  const raizComponente = raizPaginaAtual || raizAtual;
+  if (!raizComponente) {
     renderDashboard();
     return;
   }
@@ -1470,16 +1603,42 @@ function atualizarModalConfigurarModulosHome({ preservarBusca = false } = {}) {
   const ativo = document.activeElement;
   const foco = ativo?.closest('[data-home-module-focus]')?.dataset.homeModuleFocus;
   const cursor = ativo?.matches('[data-home-modules-search]') ? ativo.selectionStart : null;
-  const scrollTop = raizAtual.querySelector('.permission-modal-content')?.scrollTop || 0;
+  const scrollTop = raizAtual?.querySelector('.permission-modal-content')?.scrollTop || 0;
+  const pageScrollTop = window.scrollY || 0;
 
   if (preservarBusca) {
-    const listaAtual = raizAtual.querySelector('.home-modules-modal-table-wrap');
-    if (listaAtual) listaAtual.innerHTML = renderListaModulosHomeModal();
+    const listaAtual = raizComponente.querySelector('.home-modules-modal-table-wrap');
+    if (listaAtual) {
+      listaAtual.innerHTML = renderListaModulosHomeModal();
+      aplicarIconesLucideHub(listaAtual);
+      normalizarTooltipsGlobais(listaAtual);
+    }
+    return;
+  }
+
+  if (raizPaginaAtual) {
+    raizPaginaAtual.outerHTML = renderConteudoPaginaConfiguracaoModulosHome();
+    const novaRaizPagina = document.querySelector('[data-home-modules-page-root]');
+    if (novaRaizPagina) {
+      aplicarIconesLucideHub(novaRaizPagina);
+      normalizarTooltipsGlobais(novaRaizPagina);
+    }
+    if (foco && novaRaizPagina) {
+      const novoAtivo = [...novaRaizPagina.querySelectorAll('[data-home-module-focus]')]
+        .find(elemento => elemento.dataset.homeModuleFocus === foco);
+      novoAtivo?.focus({ preventScroll: true });
+      if (cursor !== null) novoAtivo?.setSelectionRange?.(cursor, cursor);
+    }
+    window.scrollTo(0, pageScrollTop);
     return;
   }
 
   raizAtual.outerHTML = renderModalConfigurarModulosHome();
   const novaRaiz = document.querySelector('[data-home-modules-modal-root]');
+  if (novaRaiz) {
+    aplicarIconesLucideHub(novaRaiz);
+    normalizarTooltipsGlobais(novaRaiz);
+  }
   const conteudo = novaRaiz?.querySelector('.permission-modal-content');
   if (conteudo) conteudo.scrollTop = scrollTop;
 
@@ -1492,7 +1651,7 @@ function atualizarModalConfigurarModulosHome({ preservarBusca = false } = {}) {
 }
 
 function atualizarControlesModalModulosHome() {
-  const raiz = document.querySelector('[data-home-modules-modal-root]');
+  const raiz = document.querySelector('[data-home-modules-modal-root], [data-home-modules-page-root]');
   if (!raiz) return;
 
   const resumo = obterResumoVisibilidadeModulosHome();
@@ -1520,7 +1679,7 @@ function atualizarControlesModalModulosHome() {
 }
 
 function atualizarLinhasVisibilidadeModalModulosHome() {
-  const raiz = document.querySelector('[data-home-modules-modal-root]');
+  const raiz = document.querySelector('[data-home-modules-modal-root], [data-home-modules-page-root]');
   if (!raiz) return;
 
   raiz.querySelectorAll('[data-home-module-row]').forEach(linha => {
@@ -1536,20 +1695,29 @@ function atualizarLinhasVisibilidadeModalModulosHome() {
       : null;
     const paiInativo = moduloPai && obterStatusModuloHomeDraft(moduloPai.id) === 'inativo';
     const grupoInativo = grupo && obterStatusModuloHomeDraft(grupo.key) === 'inativo';
-    const seletorStatus = linha.querySelector('.home-modules-status-select');
-    const checkbox = linha.querySelector('.home-modules-visibility input[type="checkbox"]');
+    const statusInput = linha.querySelector('.home-modules-status-toggle input[type="checkbox"]');
+    const statusLabel = statusInput?.closest('.home-modules-status-toggle');
+    const moduloStatus = (state.modulosHome.modules || []).find(item => item.id === id);
+    const protegido = !submodulo && !moduloStatus?.bloqueavel && status === 'ativo';
+    const nome = linha.querySelector('.home-modules-item-name strong')?.textContent || 'módulo';
+    const checkbox = linha.querySelector('.home-modules-visibility-action input[type="checkbox"]');
 
-    if (seletorStatus) {
-      seletorStatus.value = status;
-      seletorStatus.disabled = state.modulosHome.saving || Boolean(paiInativo);
+    if (statusInput) {
+      statusInput.checked = status !== 'inativo';
+      statusInput.disabled = state.modulosHome.saving || Boolean(paiInativo) || protegido;
+      statusInput.setAttribute('aria-label', protegido
+        ? 'Status Ativo, módulo protegido'
+        : `${status === 'inativo' ? 'Ativar' : 'Inativar'} ${nome}`);
+      statusLabel?.classList.toggle('is-disabled', statusInput.disabled);
+      const rotuloStatus = statusLabel?.querySelector('.home-modules-visibility-label');
+      if (rotuloStatus) rotuloStatus.textContent = status === 'inativo' ? 'Inativo' : 'Ativo';
     }
     if (checkbox) {
       checkbox.checked = visivel;
       checkbox.disabled = status === 'inativo' || state.modulosHome.saving || Boolean(paiInativo || grupoInativo);
-      const nome = linha.querySelector('.home-modules-item-name strong')?.textContent || 'módulo';
       checkbox.setAttribute('aria-label', `${visivel ? 'Ocultar' : 'Exibir'} ${nome} na Home`);
       checkbox.closest('.home-modules-visibility')?.classList.toggle('is-disabled', checkbox.disabled);
-      const rotulo = linha.querySelector('.home-modules-visibility-label');
+      const rotulo = checkbox.closest('.home-modules-visibility-action')?.querySelector('.home-modules-visibility-label');
       if (rotulo) rotulo.textContent = visivel ? 'Visível' : 'Oculto';
     }
 
@@ -1642,6 +1810,7 @@ function renderSubmodulosModal(modulo, submodules = []) {
       exibir_home: item.exibir_home,
       isSubmodule: true,
       nested: Boolean(item.group && existingKeys.has(item.group)),
+      permissionKey: item.permissionKey,
       parentInactive: obterStatusModuloHomeDraft(modulo.id) === 'inativo',
       groupInactive: Boolean(item.group && (state.modulosHome.submodules || []).some(grupo => grupo.key === item.group && obterStatusModuloHomeDraft(grupo.key) === 'inativo'))
     })}`;
@@ -1653,57 +1822,114 @@ function renderLinhaModuloHomeModal(modulo) {
   const status = obterStatusModuloHomeDraft(modulo.id);
   const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
   const toggleDisabled = status === 'inativo' || state.modulosHome.saving || Boolean(modulo.parentInactive || modulo.groupInactive);
-  const statusDisabled = state.modulosHome.saving || Boolean(modulo.parentInactive);
   const protegido = !modulo.isSubmodule && !modulo.bloqueavel && status === 'ativo';
+  const statusDisabled = state.modulosHome.saving || Boolean(modulo.parentInactive) || protegido;
   const nome = modulo.nome || modulo.label || modulo.slug || 'Módulo';
+  const permissionKey = modulo.permissionKey || '';
+  const mostraPerfil = pode('admin.permissoes', 'view');
+  const perfilSelecionado = (state.modulosHome.profiles || []).find(perfil => perfil.id === state.modulosHome.selectedProfileId);
+  const permiteEditarPermissao = pode('admin.permissoes', 'update');
+  const acessoPermitido = obterPermissaoPerfilModuloDraft(permissionKey);
+  const nomePerfil = perfilSelecionado?.nome || perfilSelecionado?.slug || 'perfil selecionado';
+  const perfilLabel = permissionKey
+    ? `${acessoPermitido ? 'Remover' : 'Conceder'} acesso a ${nome} para o perfil selecionado. Esta permissão também pode controlar outros atalhos associados ao mesmo recurso.`
+    : `Não há permissão cadastrada para ${nome}.`;
 
   return `
-    <article class="home-modules-modal-row home-modules-modal-grid${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}" data-home-module-row="${id}">
+    <article class="home-modules-modal-row home-modules-modal-grid${mostraPerfil ? ' has-profile-column' : ''}${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}" data-home-module-row="${id}">
       <div class="home-modules-item-name${modulo.isSubmodule ? ' home-submodule-identity' : ''}">
         <span class="home-modules-item-icon"><i data-lucide="${modulo.isSubmodule ? 'link-2' : 'layout-grid'}" aria-hidden="true"></i></span>
         <strong>${escapeHtml(nome)}</strong>
       </div>
-      <div class="home-modules-modal-action home-modules-status-action">
-        ${protegido
-          ? '<span class="home-modules-protected-status">Protegido</span>'
-          : `<label class="sr-only" for="home-module-status-${id}">Status de ${escapeAttr(nome)}</label>
-            <select id="home-module-status-${id}" class="home-modules-status-select" data-home-module-focus="status-${id}" onchange="alterarStatusModuloHome('${id}', this.value)" ${statusDisabled ? 'disabled' : ''}>
-              <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>Ativo</option>
-              <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>Inativo</option>
-            </select>`}
+      <div class="home-modules-row-setting">
+        <span id="home-module-status-label-${id}" class="home-modules-setting-label">Status</span>
+        <div class="home-modules-modal-action home-modules-status-action">
+          <label class="home-modules-visibility home-modules-status-toggle${statusDisabled ? ' is-disabled' : ''}">
+            <input type="checkbox" data-home-module-focus="status-${id}" ${status !== 'inativo' ? 'checked' : ''} onchange="alterarStatusModuloHome('${id}', this.checked ? 'ativo' : 'inativo')" aria-label="${protegido ? 'Status Ativo, módulo protegido' : `${status === 'inativo' ? 'Ativar' : 'Inativar'} ${escapeAttr(nome)}`}" ${statusDisabled ? 'disabled' : ''}>
+            <span class="home-modules-switch" aria-hidden="true"></span>
+            <span class="home-modules-visibility-label">${status === 'inativo' ? 'Inativo' : 'Ativo'}</span>
+            ${protegido ? '<small class="home-modules-status-protected">Protegido</small>' : ''}
+          </label>
+        </div>
       </div>
-      <div class="home-modules-modal-action home-modules-visibility-action">
-        <label class="home-modules-visibility${toggleDisabled ? ' is-disabled' : ''}">
-          <input type="checkbox" data-home-module-focus="visibility-${id}" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
-          <span class="home-modules-switch" aria-hidden="true"></span>
-          <span class="home-modules-visibility-label">${visivel ? 'Visível' : 'Oculto'}</span>
-        </label>
+      <div class="home-modules-row-setting">
+        <span class="home-modules-setting-label">Na Home</span>
+        <div class="home-modules-modal-action home-modules-visibility-action">
+          <label class="home-modules-visibility${toggleDisabled ? ' is-disabled' : ''}">
+            <input type="checkbox" data-home-module-focus="visibility-${id}" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
+            <span class="home-modules-switch" aria-hidden="true"></span>
+            <span class="home-modules-visibility-label">${visivel ? 'Visível' : 'Oculto'}</span>
+          </label>
+        </div>
       </div>
+      ${mostraPerfil ? `
+        <div class="home-modules-row-setting">
+          <span class="home-modules-setting-label">Acesso${perfilSelecionado ? `: ${escapeHtml(nomePerfil)}` : ''}</span>
+          <div class="home-modules-modal-action home-modules-profile-action">
+            ${permissionKey && perfilSelecionado
+              ? `<label class="home-modules-visibility${!permiteEditarPermissao || state.modulosHome.saving ? ' is-disabled' : ''}">
+                <input type="checkbox" data-home-module-focus="profile-permission-${escapeAttr(permissionKey)}" ${acessoPermitido ? 'checked' : ''} onchange="alterarPermissaoPerfilModulo('${escapeAttr(permissionKey)}', this.checked)" aria-label="${escapeAttr(perfilLabel)}" ${state.modulosHome.saving || !permiteEditarPermissao ? 'disabled' : ''}>
+                <span class="home-modules-switch" aria-hidden="true"></span>
+                <span class="home-modules-visibility-label">${acessoPermitido ? 'Liberado' : 'Bloqueado'}</span>
+              </label>`
+              : `<span class="home-modules-profile-unavailable" title="${escapeAttr(perfilLabel)}">${perfilSelecionado ? 'N/D' : '—'}</span>`}
+          </div>
+        </div>
+      ` : ''}
     </article>
   `;
 }
 
+function navegarParaConfiguracaoModulosHome() {
+  const rotaAtual = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+  const rotaConfiguracao = 'admin/modulos';
+  if (rotaAtual !== rotaConfiguracao) {
+    state.modulosHome.returnPath = window.location.pathname || montarCaminhoHub();
+  }
+  return navegarParaRota(`${montarCaminhoHub('admin')}/modulos`);
+}
+
+function voltarDaPaginaConfiguracaoModulosHome() {
+  const caminho = state.modulosHome.returnPath || montarCaminhoHub('admin');
+  state.modulosHome.returnPath = '';
+  return navegarParaRota(caminho);
+}
+
 async function abrirModalConfigurarModulosHome() {
+  return navegarParaConfiguracaoModulosHome();
+}
+
+async function abrirPaginaConfiguracaoModulosHome() {
   if (!podeConfigurarModulosHome()) {
-    alert('Seu usuário não possui permissão para configurar módulos.');
+    renderModuloIndisponivel('admin');
     return;
   }
 
+  const returnPath = state.modulosHome.returnPath || montarCaminhoHub('admin');
   state.modulosHome = {
-    aberto: true,
+    aberto: false,
     filtro: 'todos',
     busca: '',
     area: 'todas',
     gruposRecolhidos: {},
     modules: [],
     submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
+    returnPath,
     loading: true,
     saving: false,
     message: ''
   };
-  renderDashboard();
+  document.getElementById('app').innerHTML = renderPaginaConfiguracaoModulosHome();
+  aplicarIconesLucideHub(document.getElementById('app'));
+  normalizarTooltipsGlobais(document.getElementById('app'));
+  window.scrollTo(0, 0);
 
   try {
     const response = await chamarApi('listHomeModuleSettings');
@@ -1731,6 +1957,11 @@ function fecharModalConfigurarModulosHome() {
     gruposRecolhidos: {},
     modules: [],
     submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
     loading: false,
@@ -1742,6 +1973,32 @@ function fecharModalConfigurarModulosHome() {
 
 function selecionarFiltroModulosHome(filtro) {
   state.modulosHome.filtro = filtro;
+  atualizarModalConfigurarModulosHome();
+}
+
+function selecionarPerfilModulosHome(perfilId = '') {
+  if (!pode('admin.permissoes', 'view')) return;
+  if (perfilId && !(state.modulosHome.profiles || []).some(perfil => perfil.id === perfilId)) return;
+  state.modulosHome.selectedProfileId = perfilId;
+  atualizarModalConfigurarModulosHome();
+}
+
+function obterPermissaoPerfilModuloDraft(permissionKey = '') {
+  if (!permissionKey || !state.modulosHome.selectedProfileId) return false;
+  return Boolean(state.modulosHome.profilePermissionDrafts?.[state.modulosHome.selectedProfileId]?.[permissionKey]);
+}
+
+function alterarPermissaoPerfilModulo(permissionKey = '', permitido) {
+  if (!pode('admin.permissoes', 'update') || !permissionKey || state.modulosHome.saving) return;
+  const perfilId = state.modulosHome.selectedProfileId;
+  if (!perfilId) return;
+
+  const drafts = { ...(state.modulosHome.profilePermissionDrafts || {}) };
+  const profileDraft = { ...(drafts[perfilId] || {}) };
+  if (permitido) profileDraft[permissionKey] = true;
+  else delete profileDraft[permissionKey];
+  drafts[perfilId] = profileDraft;
+  state.modulosHome.profilePermissionDrafts = drafts;
   atualizarModalConfigurarModulosHome();
 }
 
@@ -1808,13 +2065,32 @@ function verificarAlteracoesModulosHome() {
     ...Object.keys(draft)
   ]);
 
-  return Array.from(chaves).some(chave => {
+  const alteracaoGlobal = Array.from(chaves).some(chave => {
     const originalModulo = original[chave] || {};
     const draftModulo = draft[chave] || {};
 
     return Boolean(originalModulo.exibir_home) !== Boolean(draftModulo.exibir_home)
       || String(originalModulo.status || 'ativo') !== String(draftModulo.status || 'ativo');
   });
+
+  return alteracaoGlobal || obterAlteracoesPermissoesPerfilModulos().length > 0;
+}
+
+function obterAlteracoesPermissoesPerfilModulos() {
+  if (!pode('admin.permissoes', 'update')) return [];
+  const permissionKeys = new Set([
+    ...(state.modulosHome.modules || []).map(item => item.permissionKey),
+    ...(state.modulosHome.submodules || []).map(item => item.permissionKey)
+  ].filter(Boolean));
+
+  return (state.modulosHome.profiles || []).map(perfil => {
+    const original = state.modulosHome.profilePermissionOriginals?.[perfil.id] || {};
+    const draft = state.modulosHome.profilePermissionDrafts?.[perfil.id] || {};
+    const alteracoes = [...permissionKeys]
+      .filter(recurso_chave => Boolean(original[recurso_chave]) !== Boolean(draft[recurso_chave]))
+      .map(recurso_chave => ({ recurso_chave, acao: 'view', permitido: Boolean(draft[recurso_chave]) }));
+    return { perfil_id: perfil.id, perfil_nome: perfil.nome || perfil.slug || 'Perfil', alteracoes };
+  }).filter(item => item.alteracoes.length);
 }
 
 function obterAlteracoesModulosHome() {
@@ -1839,13 +2115,14 @@ function obterAlteracoesModulosHome() {
 async function salvarConfigModulosHome() {
   if (!podeConfigurarModulosHome()) {
     state.modulosHome.message = 'Seu usuário não possui permissão para configurar módulos.';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
     return;
   }
 
   const alteracoes = obterAlteracoesModulosHome();
+  const alteracoesPermissoesPerfil = obterAlteracoesPermissoesPerfilModulos();
 
-  if (!alteracoes.length) {
+  if (!alteracoes.length && !alteracoesPermissoesPerfil.length) {
     return;
   }
 
@@ -1901,11 +2178,30 @@ async function salvarConfigModulosHome() {
       atualizacoesAplicadas.push(...alteracoesSubmodulos.map(item => `submódulo ${item.key}`));
     }
 
+    for (const perfil of alteracoesPermissoesPerfil) {
+      const response = await chamarApi('saveHomeModuleProfilePermissionsBatch', {
+        perfil_id: perfil.perfil_id,
+        alteracoes: perfil.alteracoes
+      });
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, `Não foi possível salvar o acesso aos módulos do perfil ${perfil.perfil_nome}.`));
+      }
+      atualizacoesAplicadas.push(`permissões do perfil ${perfil.perfil_nome}`);
+    }
+
     const recarga = await carregarDadosIniciaisSilencioso();
     if (!recarga.ok) {
       throw new Error(recarga.message || 'As alterações foram salvas, mas não foi possível atualizar os dados da Home.');
     }
-    fecharModalConfigurarModulosHome();
+    const snapshotAtualizado = await chamarApi('listHomeModuleSettings');
+    if (!snapshotAtualizado.ok) {
+      throw new Error(obterMensagemApi(snapshotAtualizado, 'As alterações foram salvas, mas não foi possível recarregar a configuração.'));
+    }
+    aplicarSnapshotConfiguracaoModulosHome(snapshotAtualizado.data);
+    state.modulosHome.saving = false;
+    state.modulosHome.message = 'Alterações salvas.';
+    atualizarModalConfigurarModulosHome();
   } catch (erro) {
     state.modulosHome.saving = false;
     if (atualizacoesAplicadas.length) {
@@ -2278,12 +2574,44 @@ async function abrirModuloDireto(id) {
   alert(`Módulo ainda não implementado: ${idModulo}`);
 }
 
+function sincronizarPaginaUsuarioAdminPelaRota() {
+  const partes = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  if (partes[0] !== 'admin' || partes[1] !== 'cadastros' || partes[2] !== 'usuarios') return false;
+
+  state.admin.aba = 'usuarios';
+  const sufixo = partes.slice(3);
+  if (!sufixo.length) {
+    state.admin.modalNovo = '';
+    state.admin.editando.usuarios = '';
+    state.admin.usuarioModalEtapa = 'dados';
+    return false;
+  }
+
+  if (sufixo[0] === 'novo') {
+    state.admin.modalNovo = 'usuarios';
+    state.admin.editando.usuarios = '';
+    state.admin.usuarioModalEtapa = 'dados';
+    return true;
+  }
+
+  if (sufixo.length < 2) return false;
+  let id = sufixo[0];
+  try { id = decodeURIComponent(id); } catch {}
+  if (!id) return false;
+
+  state.admin.modalNovo = 'usuarios';
+  state.admin.editando.usuarios = id;
+  state.admin.usuarioModalEtapa = sufixo[1] === 'permissoes' ? 'permissoes' : 'dados';
+  return true;
+}
+
 async function abrirAdministracao(preservarMensagem = false) {
   if (!hasPermission(state.permissions, 'admin', 'view')) {
     renderModuloIndisponivel('administracao');
     return;
   }
 
+  const paginaUsuarioSolicitada = sincronizarPaginaUsuarioAdminPelaRota();
   state.admin.loading = true;
   if (!preservarMensagem) {
     state.admin.message = '';
@@ -2300,6 +2628,12 @@ async function abrirAdministracao(preservarMensagem = false) {
     state.admin.config = response.data.config || [];
     state.admin.loading = false;
     renderAdministracao();
+    if (state.admin.aba === 'usuarios') {
+      const usuariosCarregados = await carregarUsuariosAdmin();
+      if (usuariosCarregados && paginaUsuarioSolicitada && state.admin.usuarioModalEtapa === 'permissoes') {
+        await abrirPermissoesUsuarioAdmin(state.admin.editando.usuarios, { skipRouteUpdate: true });
+      }
+    }
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar a administração.';
@@ -2335,6 +2669,9 @@ function renderAdministracao() {
           ${renderAdminTab('aparencia', 'Aparência')}
           ${renderAdminTab('logo', 'Logo e Marca')}
           ${renderAdminTab('limites', 'Limites do Painel')}
+          ${podeConfigurarModulosHome() ? `
+            <button class="admin-tab" type="button" onclick="navegarParaConfiguracaoModulosHome()">Configurar módulos</button>
+          ` : ''}
 
           <span class="admin-nav-label">Sistema</span>
           ${pode('admin.logs_integracoes', 'view') ? renderAdminTab('logs-integracoes', 'Logs') : ''}
@@ -4172,6 +4509,36 @@ async function salvarParceiroIndicacaoAdmin() {
 }
 
 function renderUsuariosAdmin() {
+  if (state.admin.modalNovo === 'usuarios' || state.admin.editando.usuarios) {
+    const mensagem = state.admin.message ? `<p class="admin-message" role="status">${escapeHtml(state.admin.message)}</p>` : '';
+    if (state.admin.loading) {
+      const id = state.admin.editando.usuarios || '';
+      const usuario = (state.admin.usuarios || []).find(item => item.id === id) || {};
+      const emPermissoes = state.admin.usuarioModalEtapa === 'permissoes' && Boolean(id);
+      const classeEtapaPagina = emPermissoes ? 'is-permissions-stage' : 'is-form-stage';
+      const titulo = emPermissoes ? 'Permissões Adicionais' : id ? (pode('admin.usuarios', 'update') ? 'Editar usuário' : 'Visualizar usuário') : 'Adicionar usuário';
+      return `
+        <section class="admin-user-page-shell ${classeEtapaPagina}">
+          ${mensagem}
+          <section class="admin-user-page admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}" aria-label="${escapeAttr(titulo)}">
+            <header class="small-modal-header admin-user-modal-header">
+              <div>
+                <h3>${escapeHtml(titulo)}</h3>
+                <p class="admin-user-page-description">${emPermissoes ? `Gerencie as permissões específicas de ${escapeHtml(usuario.nome || usuario.email || 'este usuário')}.` : 'Carregando os dados desta página.'}</p>
+              </div>
+              <button class="secondary-btn admin-user-back-btn" type="button" onclick="fecharModalNovoRegistro()">Voltar para usuários</button>
+            </header>
+            ${renderHubLoading(emPermissoes ? 'Carregando permissões do usuário...' : 'Carregando dados do usuário...')}
+          </section>
+        </section>
+      `;
+    }
+    const classeEtapaPagina = state.admin.usuarioModalEtapa === 'permissoes' && state.admin.editando.usuarios
+      ? 'is-permissions-stage'
+      : 'is-form-stage';
+    return `<section class="admin-user-page-shell ${classeEtapaPagina}">${mensagem}${renderModalUsuarioAdmin()}</section>`;
+  }
+
   const records = state.admin.usuarios || [];
   const recordsFiltrados = obterUsuariosFiltradosAdmin(records);
   const limite = Math.max(1, Number(state.admin.limiteUsuarios) || 15);
@@ -4179,12 +4546,6 @@ function renderUsuariosAdmin() {
   const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaUsuarios) || 1), totalPaginas);
   const inicio = (paginaAtual - 1) * limite;
   const recordsPagina = recordsFiltrados.slice(inicio, inicio + limite);
-  const resumo = records.reduce((acc, usuario) => {
-    acc.total += 1;
-    acc[usuario.status] = (acc[usuario.status] || 0) + 1;
-    return acc;
-  }, { total: 0 });
-
   state.admin.paginaUsuarios = paginaAtual;
 
   return `
@@ -4207,22 +4568,21 @@ function renderUsuariosAdmin() {
           </div>
         </div>
         <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos usuários">
-          ${renderFiltroUsuariosAdmin('todos', 'Todos', resumo.total)}
-          ${renderFiltroUsuariosAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-          ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos', (resumo.bloqueado || 0) + (resumo.inativo || 0))}
+          ${renderFiltroUsuariosAdmin('todos', 'Todos')}
+          ${renderFiltroUsuariosAdmin('ativo', 'Ativos')}
+          ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos')}
         </div>
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${state.admin.loading ? renderHubLoading('Carregando usuários...') : renderListaUsuariosAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual)}
-      ${renderModalUsuarioAdmin()}
-      ${renderPermissoesUsuarioAdmin()}
+      ${state.admin.loading ? '' : renderLegendaStatusUsuariosAdmin()}
     </section>
   `;
 }
 
-function renderFiltroUsuariosAdmin(filtro, label, total) {
+function renderFiltroUsuariosAdmin(filtro, label) {
   const ativo = state.admin.filtros.usuarios === filtro;
   const classes = [
     'filter-btn',
@@ -4233,7 +4593,7 @@ function renderFiltroUsuariosAdmin(filtro, label, total) {
 
   return `
     <button class="${classes}" type="button" onclick="selecionarFiltroUsuariosAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
-      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
+      ${escapeHtml(label)}
     </button>
   `;
 }
@@ -4268,7 +4628,6 @@ function renderListaUsuariosAdmin(records) {
   return `
     <div class="crud-list admin-users-list">
       <div class="crud-header">
-        <span>Ações</span>
         <span>Usuário</span>
         <span>Perfil</span>
         <span>Permissões adicionais</span>
@@ -4282,8 +4641,6 @@ function renderListaUsuariosAdmin(records) {
 
 function renderUsuarioAdmin(usuario) {
   const id = escapeAttr(usuario.id || '');
-  const podeEditar = pode('admin.usuarios', 'update');
-  const podeExcluir = pode('admin.usuarios', 'delete') && usuario.id !== state.usuario?.id;
   const status = usuario.status || 'pendente';
   const rotuloStatus = obterRotuloStatusUsuario(status);
   const perfil = (state.admin.perfis || []).find(item => item.id === usuario.perfil_id);
@@ -4292,14 +4649,10 @@ function renderUsuarioAdmin(usuario) {
 
   return `
     <article class="crud-row admin-user-row">
-      <div class="crud-actions admin-user-actions">
-        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
-        <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
-        ${podeExcluir ? `<button class="icon-btn danger" type="button" onclick="excluirUsuarioAdmin('${id}')" title="Excluir usuário" aria-label="Excluir usuário"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
-      </div>
       <div class="admin-user-main">
+        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
         <div class="admin-user-identity">
-          <strong>${escapeHtml(usuario.nome || 'Sem nome')}</strong>
+          <button class="admin-user-name-link" type="button" onclick="editarUsuarioAdmin('${id}')" aria-label="Visualizar cadastro de ${escapeAttr(usuario.nome || 'usuário')}">${escapeHtml(usuario.nome || 'Sem nome')}</button>
           ${usuario.nome_usuario ? `<small>@${escapeHtml(usuario.nome_usuario)}</small>` : ''}
           ${usuario.email ? `<small>${escapeHtml(usuario.email)}</small>` : ''}
         </div>
@@ -4409,6 +4762,26 @@ function renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual) {
         `;
       }).join('')}
     </nav>
+  `;
+}
+
+function renderLegendaStatusUsuariosAdmin() {
+  const status = [
+    ['ativo', 'Ativo'],
+    ['pendente', 'Pendente'],
+    ['bloqueado', 'Bloqueado'],
+    ['inativo', 'Inativo']
+  ];
+
+  return `
+    <footer class="admin-user-status-legend" aria-label="Legenda de status dos usuários">
+      ${status.map(([valor, rotulo]) => `
+        <span class="admin-user-status-legend-item">
+          <span class="admin-user-status-dot status-${valor}" aria-hidden="true"></span>
+          <span>${rotulo}</span>
+        </span>
+      `).join('')}
+    </footer>
   `;
 }
 
@@ -4552,6 +4925,31 @@ function obterAcoesTecnicasPermissaoPerfil(recursoChave, grupo) {
     || { view: ['view'], edit: [], delete: [] };
 
   return acoesPorGrupo[grupo] || [];
+}
+
+function obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, grupo) {
+  const acoesDisponiveis = obterAcoesDisponiveisRecurso(recurso);
+  const acoesMapeadas = new Set(OPCOES_PERMISSAO_PERFIL.flatMap(opcao =>
+    obterAcoesTecnicasPermissaoPerfil(recurso.chave, opcao.id)
+  ));
+  const acoesDeLeituraGenericas = new Set(['view_secret', 'view_sensitive', 'export', 'download']);
+  const acoesDoGrupo = obterAcoesTecnicasPermissaoPerfil(recurso.chave, grupo.id)
+    .filter(acao => acoesDisponiveis.includes(acao));
+
+  if (grupo.id === 'view') {
+    const acoesDeLeituraAdicionais = acoesDisponiveis.filter(acao =>
+      acoesDeLeituraGenericas.has(acao) && !acoesMapeadas.has(acao)
+    );
+    return Array.from(new Set([...acoesDoGrupo, ...acoesDeLeituraAdicionais]));
+  }
+
+  if (grupo.id !== 'edit') return acoesDoGrupo;
+
+  // Keep user-specific technical actions visible when no profile category maps them.
+  const acoesSemGrupo = acoesDisponiveis.filter(acao =>
+    !acoesMapeadas.has(acao) && !acoesDeLeituraGenericas.has(acao)
+  );
+  return Array.from(new Set([...acoesDoGrupo, ...acoesSemGrupo]));
 }
 
 function obterTodasAcoesTecnicasPermissaoPerfil(recursoChave) {
@@ -4705,39 +5103,48 @@ function construirEstruturaPermissoesUsuario(recursos) {
     return recurso?.tipo === 'modulo' ? recurso : null;
   }
 
-  function obterRotuloRecurso(recurso) {
-    const partes = [];
-    let atual = recurso;
-
-    while (atual) {
-      partes.unshift(atual.nome || atual.chave);
-      if (!atual.recurso_pai) break;
-      atual = porChave.get(atual.recurso_pai);
-    }
-
-    if (partes.length > 1) {
-      partes.shift();
-    }
-
-    return partes.join(' / ') || recurso.nome || recurso.chave;
-  }
-
   return modulos.map(modulo => {
     const itensRelacionados = (recursos || [])
       .filter(recurso => {
         if (!recurso?.chave) return false;
         if (recurso.chave === modulo.chave) return true;
         return obterModuloRaiz(recurso)?.chave === modulo.chave;
-      })
-      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+      });
+    const relacionadosPorChave = new Map(itensRelacionados.map(recurso => [recurso.chave, recurso]));
+    const filhosPorPai = new Map();
 
-    const recursosFuncionais = itensRelacionados.filter(recurso => recurso.chave !== modulo.chave);
-    const linhasBase = [modulo, ...recursosFuncionais];
-    const linhas = linhasBase.map(recurso => ({
+    itensRelacionados.forEach(recurso => {
+      if (!recurso.recurso_pai || !relacionadosPorChave.has(recurso.recurso_pai)) return;
+      const filhos = filhosPorPai.get(recurso.recurso_pai) || [];
+      filhos.push(recurso);
+      filhosPorPai.set(recurso.recurso_pai, filhos);
+    });
+
+    filhosPorPai.forEach(filhos => filhos.sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0)));
+
+    const linhasBase = [];
+    const visitados = new Set();
+    const visitar = (recurso, nivel) => {
+      if (!recurso?.chave || visitados.has(recurso.chave)) return;
+      visitados.add(recurso.chave);
+      const filhos = filhosPorPai.get(recurso.chave) || [];
+      linhasBase.push({ recurso, nivel, temFilhos: filhos.length > 0 });
+      filhos.forEach(filho => visitar(filho, nivel + 1));
+    };
+
+    visitar(modulo, 0);
+    itensRelacionados
+      .filter(recurso => !visitados.has(recurso.chave))
+      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0))
+      .forEach(recurso => visitar(recurso, 1));
+
+    const linhas = linhasBase.map(({ recurso, nivel, temFilhos }) => ({
       ...recurso,
       modulo_chave: modulo.chave,
       modulo_nome: modulo.nome || modulo.chave,
-      rotulo_recurso: obterRotuloRecurso(recurso)
+      nivel_hierarquia: nivel,
+      tem_filhos: temFilhos,
+      rotulo_recurso: recurso.nome || recurso.chave
     }));
 
     const acoes = Array.from(new Set(
@@ -4833,6 +5240,45 @@ function verificarAlteracoesPermissoesUsuario(originalEffects = {}, draftEffects
   return Array.from(chaves).some(chave => (originalEffects?.[chave] || '') !== (draftEffects?.[chave] || ''));
 }
 
+function obterQuantidadeAlteracoesPermissoesUsuario(originalEffects = {}, draftEffects = {}) {
+  const chaves = new Set([
+    ...Object.keys(originalEffects || {}),
+    ...Object.keys(draftEffects || {})
+  ]);
+
+  return Array.from(chaves).filter(chave => (originalEffects?.[chave] || '') !== (draftEffects?.[chave] || '')).length;
+}
+
+function filtrarRecursosPermissoesUsuarioAdmin(valor) {
+  const normalizar = texto => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+  const termo = normalizar(valor);
+  if (state.admin.permissionModal) state.admin.permissionModal.searchTerm = valor || '';
+
+  document.querySelectorAll('.admin-user-page.is-permissions-stage .permission-module-card').forEach(card => {
+    const titulo = normalizar(card.querySelector('.permission-module-toggle strong')?.textContent);
+    const indiceModulo = normalizar(card.dataset.search);
+    const linhas = [...card.querySelectorAll('.permission-table tbody tr')];
+    let encontrou = !termo || indiceModulo.includes(termo);
+
+    linhas.forEach(linha => {
+      const corresponde = !termo || titulo.includes(termo) || normalizar(linha.querySelector('td:first-child')?.textContent).includes(termo);
+      linha.hidden = !corresponde;
+    });
+
+    card.hidden = !encontrou;
+  });
+}
+
+function descartarAlteracoesPermissoesUsuarioAdmin() {
+  const modal = state.admin.permissionModal || {};
+  if (modal.applying || !modal.dirty) return;
+
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  state.admin.permissionModal.draftEffects = { ...(modal.originalEffects || {}) };
+  state.admin.permissionModal.dirty = false;
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
 function obterScrollPermissoesUsuarioAdmin() {
   return document.querySelector('.permission-modal-content')?.scrollTop || 0;
 }
@@ -4843,6 +5289,8 @@ function renderAdministracaoPreservandoScrollPermissoes(scrollTop) {
   if (container) {
     container.scrollTop = scrollTop;
   }
+  const termoBusca = state.admin.permissionModal?.searchTerm || '';
+  if (termoBusca) filtrarRecursosPermissoesUsuarioAdmin(termoBusca);
 }
 
 function obterUsuarioAdminEmEdicao() {
@@ -4873,6 +5321,10 @@ function renderModalUsuarioAdmin() {
   const emPermissoes = etapa === 'permissoes' && editando;
   const cpf = formatarMascaraParceiro(usuario.cpf || '', 'cpf');
   const telefone = formatarMascaraParceiro(usuario.telefone || '', 'telefone');
+  const somenteLeitura = editando && !pode('admin.usuarios', 'update');
+  const podeExcluirUsuario = editando
+    && pode('admin.usuarios', 'delete')
+    && usuarioId !== state.usuario?.id;
 
   if (state.admin.modalNovo !== 'usuarios' && !editando) {
     return '';
@@ -4888,14 +5340,37 @@ function renderModalUsuarioAdmin() {
   const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(perfilPermissoes);
   const modulos = construirEstruturaPermissoesUsuario(recursos);
   const textoBotaoSalvar = modal.applying && modal.submitMode !== 'close' ? 'Salvando...' : 'Salvar';
-  const textoBotaoSalvarFechar = modal.applying && modal.submitMode === 'close' ? 'Salvando...' : 'Salvar e fechar';
+  const quantidadeAlteracoesPendentes = obterQuantidadeAlteracoesPermissoesUsuario(modal.originalEffects, modal.draftEffects);
 
   return `
-    <div class="modal-backdrop ${emPermissoes ? 'admin-user-modal-backdrop' : ''}" role="dialog" aria-modal="true" aria-label="${editando ? 'Editar usuário' : 'Adicionar usuário'}">
-      <section class="small-modal admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}">
-        <div class="small-modal-header">
-          <h3>${emPermissoes ? 'Permissões Adicionais' : editando ? 'Editar usuário' : 'Adicionar usuário'}</h3>
-          <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
+      <section class="admin-user-page admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}" aria-label="${editando ? (somenteLeitura ? 'Visualizar usuário' : 'Editar usuário') : 'Adicionar usuário'}">
+        <div class="small-modal-header admin-user-modal-header">
+          ${emPermissoes ? `
+            <div>
+              <h3>Permissões Adicionais</h3>
+              <p class="admin-user-page-description">Gerencie as permissões específicas de ${escapeHtml(usuario.nome || usuario.email || 'este usuário')}.</p>
+            </div>
+          ` : `
+            <div class="admin-user-modal-heading">
+              <span class="admin-user-modal-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 8v6m-3-3h6"/></svg>
+              </span>
+              <div>
+                <h3>${editando ? (somenteLeitura ? 'Visualizar usuário' : 'Editar usuário') : 'Adicionar usuário'}</h3>
+                <p>${editando ? (somenteLeitura ? 'Dados de acesso deste usuário.' : 'Atualize os dados de acesso ao sistema.') : 'Preencha os dados do novo usuário para conceder acesso ao sistema.'}</p>
+              </div>
+            </div>
+          `}
+          <div class="admin-user-header-controls">
+            ${emPermissoes ? '<button class="secondary-btn admin-user-back-btn" type="button" onclick="voltarEtapaModalUsuarioAdmin()">Voltar para cadastro</button>' : ''}
+            ${emPermissoes ? '' : `
+              <label class="admin-user-header-status" for="${prefixo}_status">
+                <span>Status</span>
+                <select id="${prefixo}_status" class="config-input" form="${prefixo}_form" aria-label="Status do usuário" ${somenteLeitura ? 'disabled' : ''}>${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select>
+              </label>
+            `}
+            <button class="secondary-btn admin-user-back-btn" type="button" onclick="fecharModalNovoRegistro()">Voltar para usuários</button>
+          </div>
         </div>
         ${emPermissoes
           ? `
@@ -4905,21 +5380,25 @@ function renderModalUsuarioAdmin() {
               </div>
             </div>
             <div class="small-modal-actions admin-user-permissions-actions">
-              <button class="secondary-btn" type="button" onclick="voltarEtapaModalUsuarioAdmin()">Voltar para usuário</button>
+              <div class="permission-unsaved-status" aria-live="polite">
+                <span class="permission-unsaved-count"><i data-lucide="circle" aria-hidden="true"></i> ${quantidadeAlteracoesPendentes ? `${quantidadeAlteracoesPendentes} ${quantidadeAlteracoesPendentes === 1 ? 'alteração não salva' : 'alterações não salvas'}` : 'Nenhuma alteração pendente'}</span>
+                <span>Suas alterações serão aplicadas apenas após salvar.</span>
+              </div>
               <div class="admin-user-permissions-actions-right">
-                <button class="save-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvar}</button>
-                <button class="secondary-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}', true)" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvarFechar}</button>
+                <button class="secondary-btn" type="button" onclick="descartarAlteracoesPermissoesUsuarioAdmin()" ${modal.applying || !modal.dirty ? 'disabled' : ''}>Descartar</button>
+                <button class="save-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}><i data-lucide="save" aria-hidden="true"></i> ${textoBotaoSalvar === 'Salvando...' ? textoBotaoSalvar : 'Salvar alterações'}</button>
               </div>
             </div>
           `
           : `
-            <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
-            <label><span>Nome de usuário *</span><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="ex.: joao.silva"><small>Use de 3 a 32 letras sem acento, números, ponto, hífen ou sublinhado.</small></label>
-            <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
-            <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
-            <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
+            <form id="${prefixo}_form" class="admin-user-form ${somenteLeitura ? 'is-readonly' : ''}" onsubmit="${somenteLeitura ? 'event.preventDefault()' : `salvarUsuarioAdmin(event, '${escapeAttr(usuarioId)}')`}">
+              <fieldset class="admin-user-fields" ${somenteLeitura ? 'disabled' : ''}>
+              <label class="admin-user-field"><span>Nome <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><input id="${prefixo}_nome" class="config-input" type="text" autocomplete="name" required value="${escapeAttr(usuario.nome || '')}" placeholder="Digite o nome completo"></span></label>
+              <label class="admin-user-field"><span>Nome de usuário <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M16 8.5a4 4 0 1 0 0 7M16 8.5v4.25a2.25 2.25 0 0 0 4.5 0V12a8.5 8.5 0 1 0-2.5 6.5"/></svg><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="Ex.: joao.silva"></span></label>
+              <label class="admin-user-field"><span>E-mail <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><input id="${prefixo}_email" class="config-input" type="email" autocomplete="email" required value="${escapeAttr(usuario.email || '')}" placeholder="Digite o e-mail do usuário"></span></label>
+              <label class="admin-user-field"><span>CPF</span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M7 14h.01M11 14h.01M15 14h2"/></svg><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)" placeholder="Digite o CPF"></span></label>
+              <label class="admin-user-field"><span>Telefone</span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 18a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.09 3.18 2 2 0 0 1 4.08 1h3a2 2 0 0 1 2 1.72c.12.96.35 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.05 8.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.84.57 2.8.69A2 2 0 0 1 22 16.92Z"/></svg><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)" placeholder="Digite o telefone"></span></label>
+              <label class="admin-user-field"><span>Perfil <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M19 8v6m-3-3h6"/></svg><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></span></label>
             ${editando ? `
               <section class="admin-user-access-panel">
                 <div class="admin-user-access-actions">
@@ -4941,13 +5420,16 @@ function renderModalUsuarioAdmin() {
                 ` : ''}
               </section>
             ` : ''}
-            <div class="small-modal-actions">
-              <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
-              <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${escapeAttr(usuarioId)}')">Salvar</button>
-            </div>
+              </fieldset>
+              <p class="admin-message error" data-admin-user-form-error role="alert" hidden></p>
+              <div class="small-modal-actions">
+                ${podeExcluirUsuario ? `<button class="secondary-btn admin-user-delete-btn" type="button" data-admin-user-delete onclick="excluirUsuarioAdmin('${escapeAttr(usuarioId)}')"><i data-lucide="trash-2" aria-hidden="true"></i> Excluir usuário</button>` : ''}
+                <button class="secondary-btn" type="button" data-admin-user-cancel onclick="fecharModalNovoRegistro()">Cancelar</button>
+                ${somenteLeitura ? '' : '<button class="save-btn" type="submit" data-admin-user-submit>Salvar</button>'}
+              </div>
+            </form>
           `}
       </section>
-    </div>
   `;
 }
 
@@ -4959,15 +5441,23 @@ function renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfi
   return `
     <div class="permission-module-list">
       <div class="permission-global-toolbar">
-        <div class="permission-global-toolbar-group">
-          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(true)">Expandir todos</button>
-          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(false)">Recolher todos</button>
+        <label class="permission-search" aria-label="Buscar recurso">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+          <input type="search" value="${escapeAttr(modal.searchTerm || '')}" placeholder="Buscar recurso..." oninput="filtrarRecursosPermissoesUsuarioAdmin(this.value)">
+        </label>
+        <div class="permission-global-toolbar-group permission-view-actions">
+          <button class="secondary-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(true)"><i data-lucide="maximize-2" aria-hidden="true"></i> Expandir todos</button>
+          <button class="secondary-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(false)"><i data-lucide="minimize-2" aria-hidden="true"></i> Recolher todos</button>
+          <button class="secondary-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', '')" ${modal.applying ? 'disabled' : ''}><i data-lucide="rotate-ccw" aria-hidden="true"></i> Restaurar padrão</button>
         </div>
-        <div class="permission-global-toolbar-group">
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
-        </div>
+        <div class="permission-inheritance-hint"><i data-lucide="info" aria-hidden="true"></i> Permissões herdadas do perfil</div>
+        <details class="permission-global-more">
+          <summary aria-label="Mais ações"><i data-lucide="more-horizontal" aria-hidden="true"></i></summary>
+          <div class="permission-global-more-menu">
+            <button type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+            <button type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
+          </div>
+        </details>
       </div>
       ${modulos.map(modulo => renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal)).join('')}
     </div>
@@ -4977,19 +5467,31 @@ function renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfi
 function renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) {
   const expandido = modal.expandedModules?.[modulo.chave] !== false;
   const atualizando = modal.moduleUpdating === modulo.chave;
-  const controle = expandido ? '-' : '+';
+  const recursos = modulo.linhas.length;
+  const concedidas = modulo.linhas.reduce((total, recurso) => total + OPCOES_PERMISSAO_PERFIL.filter(opcao => {
+    const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+    return acoes.length > 0 && acoes.every(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao));
+  }).length, 0);
 
   return `
-    <article class="permission-module-card ${expandido ? 'is-open' : ''}">
+    <article class="permission-module-card ${expandido ? 'is-open' : ''}" data-module-key="${escapeAttr(modulo.chave)}" data-search="${escapeAttr([modulo.nome, ...modulo.linhas.map(recurso => recurso.rotulo_recurso || recurso.nome || recurso.chave)].join(' '))}">
       <div class="permission-module-header">
         <button class="permission-module-toggle" type="button" onclick="alternarModuloPermissoesUsuario('${escapeAttr(modulo.chave)}')" aria-expanded="${expandido ? 'true' : 'false'}">
-          <span class="permission-module-control" aria-hidden="true">${controle}</span>
+          <span class="permission-module-control" aria-hidden="true"><i data-lucide="chevron-${expandido ? 'down' : 'right'}"></i></span>
+          <span class="permission-module-icon" aria-hidden="true"><i data-lucide="folder"></i></span>
           <strong>${escapeHtml(modulo.nome)}</strong>
         </button>
-        <div class="permission-module-toolbar">
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
+        <div class="permission-module-summary">
+          <span>${recursos} ${recursos === 1 ? 'recurso' : 'recursos'}</span>
+          <span class="${concedidas ? 'has-grants' : ''}">${concedidas} ${concedidas === 1 ? 'concedida' : 'concedidas'}</span>
+          <details class="permission-module-more">
+            <summary aria-label="Ações de ${escapeAttr(modulo.nome)}"><i data-lucide="more-horizontal" aria-hidden="true"></i></summary>
+            <div class="permission-module-more-menu">
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
+            </div>
+          </details>
         </div>
       </div>
       ${atualizando ? '<p class="quick-link-empty">Aplicando alterações neste módulo...</p>' : ''}
@@ -5005,26 +5507,45 @@ function renderTabelaModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, pe
         <thead>
           <tr>
             <th>Recurso</th>
-            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+            ${OPCOES_PERMISSAO_PERFIL.map(opcao => `<th>${escapeHtml(opcao.label)}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
           ${modulo.linhas.map(recurso => `
-            <tr>
+            <tr data-resource-key="${escapeAttr(recurso.chave)}" data-tree-level="${Number(recurso.nivel_hierarquia) || 0}" class="${recurso.tem_filhos ? 'is-tree-parent' : 'is-tree-leaf'}">
               <td>
-                <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
+                <div class="permission-tree-resource" style="--permission-tree-indent: ${Math.max(0, (Number(recurso.nivel_hierarquia) || 0) - 1) * 24}px">
+                  ${recurso.nivel_hierarquia ? '<span class="permission-tree-branch" aria-hidden="true"></span>' : ''}
+                  <strong>${escapeHtml(recurso.nivel_hierarquia ? (recurso.rotulo_recurso || recurso.nome || recurso.chave) : 'Acesso ao módulo')}</strong>
+                </div>
               </td>
-              ${modulo.acoes.map(acao => {
-                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+              ${OPCOES_PERMISSAO_PERFIL.map(opcao => {
+                const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+                if (!acoes.length) {
                   return '<td class="permission-cell permission-cell-empty">-</td>';
                 }
 
-                const marcado = obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao);
+                const resultados = acoes.map(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao));
+                const efeitos = acoes.map(acao => permissoesUsuarioPorChave[`${recurso.chave}:${acao}`] || '');
+                const marcado = resultados.every(Boolean);
+                const parcial = resultados.some(Boolean) && !marcado;
+                const herdado = efeitos.every(efeito => !efeito);
+                const fontesMistas = efeitos.some(Boolean) && efeitos.some(efeito => !efeito);
+                const estado = herdado
+                  ? parcial ? 'herdada do perfil, com resultado misto' : 'herdada do perfil'
+                  : fontesMistas
+                    ? parcial ? 'mista entre herança do perfil e ajustes individuais' : 'combina herança do perfil e ajustes individuais'
+                    : parcial ? 'personalizada com resultado misto' : 'personalizada para este usuário';
+                const classeEstado = [
+                  parcial ? 'is-mixed' : '',
+                  herdado ? 'is-inherited' : '',
+                  fontesMistas && !parcial ? 'is-source-mixed' : ''
+                ].filter(Boolean).join(' ');
                 return `
                   <td class="permission-cell">
-                    <label class="permission-checkbox">
-                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
-                      <span aria-hidden="true"></span>
+                    <label class="permission-checkbox home-modules-visibility">
+                      <input type="checkbox" data-permission-group="${escapeAttr(opcao.id)}" ${marcado ? 'checked' : ''} ${classeEstado ? `class="${classeEstado}"` : ''} ${parcial ? 'aria-checked="mixed"' : ''} ${modal.applying ? 'disabled' : ''} aria-label="${escapeAttr(opcao.label)}: ${escapeAttr(recurso.rotulo_recurso || recurso.nome || recurso.chave)} — ${estado}" title="${estado}" onchange="alternarCheckboxPermissaoUsuarioGrupo('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(opcao.id)}', this.checked)">
+                      <span class="home-modules-switch permission-toggle-switch" aria-hidden="true"></span>
                     </label>
                   </td>
                 `;
@@ -5866,7 +6387,9 @@ function atualizarRotaCadastroAdmin(entidade, id = '', modo = 'novo', { replace 
   };
   if (!rotas[entidade]) return;
 
-  const sufixo = id ? `${encodeURIComponent(id)}/${modo === 'edit' ? 'editar' : 'visualizar'}` : 'novo';
+  const sufixo = id
+    ? `${encodeURIComponent(id)}/${modo === 'permissions' ? 'permissoes' : modo === 'edit' ? 'editar' : 'visualizar'}`
+    : 'novo';
   const url = new URL(window.location.href);
   url.pathname = `${montarCaminhoHub('administracao').replace(/\/+$/g, '')}/${rotas[entidade]}/${sufixo}`;
   url.hash = '';
@@ -6018,12 +6541,14 @@ function abrirModalNovoRegistro(entidade) {
 }
 
 function fecharModalNovoRegistro() {
-  restaurarRotaCadastroAdmin(state.admin.modalNovo);
+  const entidade = state.admin.modalNovo || (state.admin.editando.usuarios ? 'usuarios' : '');
+  restaurarRotaCadastroAdmin(entidade);
   resetarFluxoModalUsuarioAdmin(true);
 }
 
 function abrirModalUsuarioAdmin(id = '') {
-  atualizarRotaCadastroAdmin('usuarios', id, id ? 'edit' : 'novo');
+  const modo = id ? (pode('admin.usuarios', 'update') ? 'edit' : 'view') : 'novo';
+  atualizarRotaCadastroAdmin('usuarios', id, modo);
   state.admin.modalNovo = 'usuarios';
   state.admin.editando.usuarios = id || '';
   state.admin.usuarioModalEtapa = 'dados';
@@ -6048,6 +6573,10 @@ function abrirModalUsuarioAdmin(id = '') {
 
 function voltarEtapaModalUsuarioAdmin() {
   state.admin.usuarioModalEtapa = 'dados';
+  const id = state.admin.editando.usuarios || '';
+  if (id) {
+    atualizarRotaCadastroAdmin('usuarios', id, pode('admin.usuarios', 'update') ? 'edit' : 'view');
+  }
   renderAdministracao();
 }
 
@@ -6283,10 +6812,12 @@ async function carregarUsuariosAdmin() {
     state.admin.perfis = perfisResponse.data.records || [];
     state.admin.loading = false;
     renderAdministracao();
+    return true;
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar usuários.';
     renderAdministracao();
+    return false;
   }
 }
 
@@ -6304,8 +6835,51 @@ function editarUsuarioAdmin(id) {
   abrirModalUsuarioAdmin(id);
 }
 
-async function salvarUsuarioAdmin(id) {
+function definirFormularioUsuarioSalvando(form, salvando) {
+  if (!form) return;
+
+  form.setAttribute('aria-busy', salvando ? 'true' : 'false');
+  const controles = Array.from(form.querySelectorAll('input, select, button'));
+  const selectStatus = document.getElementById(form.id.replace(/_form$/, '_status'));
+  if (selectStatus && !form.contains(selectStatus)) controles.push(selectStatus);
+
+  controles.forEach(controle => {
+    if (salvando) {
+      controle.dataset.adminUserDisabledBeforeSave = String(controle.disabled);
+      controle.disabled = true;
+    } else if (controle.dataset.adminUserDisabledBeforeSave !== undefined) {
+      controle.disabled = controle.dataset.adminUserDisabledBeforeSave === 'true';
+      delete controle.dataset.adminUserDisabledBeforeSave;
+    }
+  });
+
+  const botaoSalvar = form.querySelector('[data-admin-user-submit]');
+  if (botaoSalvar) botaoSalvar.textContent = salvando ? 'Salvando...' : 'Salvar';
+
+  const botaoFechar = form.closest('.admin-user-page')?.querySelector('.admin-user-back-btn');
+  if (botaoFechar) {
+    if (salvando) {
+      botaoFechar.dataset.adminUserDisabledBeforeSave = String(botaoFechar.disabled);
+      botaoFechar.disabled = true;
+    } else if (botaoFechar.dataset.adminUserDisabledBeforeSave !== undefined) {
+      botaoFechar.disabled = botaoFechar.dataset.adminUserDisabledBeforeSave === 'true';
+      delete botaoFechar.dataset.adminUserDisabledBeforeSave;
+    }
+  }
+}
+
+async function salvarUsuarioAdmin(event, id) {
+  event?.preventDefault?.();
   const prefixo = id ? `usuario_${id}` : 'usuario_novo';
+  const form = document.getElementById(`${prefixo}_form`);
+  if (!form?.reportValidity()) return;
+
+  const mensagemErro = form.querySelector('[data-admin-user-form-error]');
+  if (mensagemErro) {
+    mensagemErro.textContent = '';
+    mensagemErro.hidden = true;
+  }
+
   const payload = {
     id,
     nome: document.getElementById(`${prefixo}_nome`)?.value || '',
@@ -6323,7 +6897,7 @@ async function salvarUsuarioAdmin(id) {
   try {
     state.admin.loading = true;
     state.admin.message = '';
-    renderAdministracao();
+    definirFormularioUsuarioSalvando(form, true);
 
     const response = await chamarApi('saveAdminUser', payload);
 
@@ -6331,6 +6905,7 @@ async function salvarUsuarioAdmin(id) {
       throw new Error(obterMensagemApi(response, 'Não foi possível salvar o usuário.'));
     }
 
+    restaurarRotaCadastroAdmin('usuarios');
     state.admin.editando.usuarios = '';
     state.admin.modalNovo = '';
     state.admin.usuarioModalEtapa = 'dados';
@@ -6341,15 +6916,24 @@ async function salvarUsuarioAdmin(id) {
       senhaCopiada: false
     };
     const senhaProvisoria = response.data?.temporary_password || '';
-    await carregarUsuariosAdmin();
+    const usuariosCarregados = await carregarUsuariosAdmin();
+    if (!usuariosCarregados) return;
+
     state.admin.message = senhaProvisoria
       ? `Usuário salvo. Senha provisória: ${senhaProvisoria}`
       : 'Usuário salvo e sincronizado com o Supabase Auth.';
     renderAdministracao();
   } catch (erro) {
     state.admin.loading = false;
-    state.admin.message = erro.message || 'Erro ao salvar usuário.';
-    renderAdministracao();
+    const mensagem = erro.message || 'Erro ao salvar usuário.';
+    if (mensagemErro && form.isConnected) {
+      mensagemErro.textContent = mensagem;
+      mensagemErro.hidden = false;
+      definirFormularioUsuarioSalvando(form, false);
+    } else {
+      state.admin.message = mensagem;
+      renderAdministracao();
+    }
   }
 }
 
@@ -6378,17 +6962,40 @@ async function excluirUsuarioAdmin(id) {
     return;
   }
 
+  const formularioUsuario = document.getElementById(`usuario_${id}_form`);
+  const botaoExcluir = formularioUsuario?.querySelector('[data-admin-user-delete]');
+  const selectStatus = formularioUsuario
+    ? document.getElementById(formularioUsuario.id.replace(/_form$/, '_status'))
+    : null;
+
   try {
     state.admin.loading = true;
     state.admin.message = '';
-    renderAdministracao();
+    if (formularioUsuario) {
+      formularioUsuario.setAttribute('aria-busy', 'true');
+      const controles = Array.from(formularioUsuario.querySelectorAll('input, select, button'));
+      if (selectStatus && !formularioUsuario.contains(selectStatus)) controles.push(selectStatus);
+      controles.forEach(controle => {
+        controle.dataset.adminUserDisabledBeforeDelete = String(controle.disabled);
+        controle.disabled = true;
+      });
+      if (botaoExcluir) botaoExcluir.textContent = 'Excluindo...';
+    } else {
+      renderAdministracao();
+    }
 
     const response = await chamarApi('deleteAdminUser', { id });
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível excluir o usuário.'));
     }
 
-    await carregarUsuariosAdmin();
+    if (formularioUsuario?.isConnected) {
+      fecharModalNovoRegistro();
+    }
+
+    const usuariosCarregados = await carregarUsuariosAdmin();
+    if (!usuariosCarregados) return;
+
     state.admin.message = response.data?.auth_deleted === false
       ? 'Cadastro removido do Hub, mas não foi possível excluir a conta do Supabase Auth. Verifique a conta no Supabase.'
       : response.data?.auth_deleted === true
@@ -6397,8 +7004,27 @@ async function excluirUsuarioAdmin(id) {
     renderAdministracao();
   } catch (erro) {
     state.admin.loading = false;
-    state.admin.message = erro.message || 'Erro ao excluir usuário.';
-    renderAdministracao();
+    const mensagem = erro.message || 'Erro ao excluir usuário.';
+    if (formularioUsuario?.isConnected) {
+      const mensagemErro = formularioUsuario.querySelector('[data-admin-user-form-error]');
+      if (mensagemErro) {
+        mensagemErro.textContent = mensagem;
+        mensagemErro.hidden = false;
+      }
+      formularioUsuario.removeAttribute('aria-busy');
+      formularioUsuario.querySelectorAll('[data-admin-user-disabled-before-delete]').forEach(controle => {
+        controle.disabled = controle.dataset.adminUserDisabledBeforeDelete === 'true';
+        delete controle.dataset.adminUserDisabledBeforeDelete;
+      });
+      if (selectStatus?.dataset.adminUserDisabledBeforeDelete !== undefined) {
+        selectStatus.disabled = selectStatus.dataset.adminUserDisabledBeforeDelete === 'true';
+        delete selectStatus.dataset.adminUserDisabledBeforeDelete;
+      }
+      if (botaoExcluir) botaoExcluir.textContent = 'Excluir usuário';
+    } else {
+      state.admin.message = mensagem;
+      renderAdministracao();
+    }
   }
 }
 
@@ -6407,6 +7033,13 @@ async function abrirPermissoesUsuarioAdmin(id, options = {}) {
     state.admin.message = 'Seu usuário não possui permissão para alterar permissões individuais.';
     renderAdministracao();
     return;
+  }
+
+  state.admin.modalNovo = 'usuarios';
+  state.admin.editando.usuarios = id;
+  state.admin.usuarioModalEtapa = 'permissoes';
+  if (!options.skipRouteUpdate) {
+    atualizarRotaCadastroAdmin('usuarios', id, 'permissions');
   }
 
   try {
@@ -6479,8 +7112,7 @@ async function abrirPermissoesUsuarioAdmin(id, options = {}) {
 }
 
 function fecharPermissoesUsuarioAdmin() {
-  state.admin.usuarioModalEtapa = 'dados';
-  renderAdministracao();
+  voltarEtapaModalUsuarioAdmin();
 }
 
 function alternarModuloPermissoesUsuario(moduloChave) {
@@ -6489,8 +7121,71 @@ function alternarModuloPermissoesUsuario(moduloChave) {
   renderAdministracaoPreservandoScrollPermissoes(scrollTop);
 }
 
+function atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave) {
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const recurso = (state.admin.recursos || []).find(item => item.chave === recursoChave);
+  const permissoesUsuarioPorChave = state.admin.permissionModal?.draftEffects || {};
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
+  const linha = [...document.querySelectorAll('.admin-user-page.is-permissions-stage .permission-table tr[data-resource-key]')]
+    .find(item => item.dataset.resourceKey === recursoChave);
+
+  if (recurso && linha) {
+    OPCOES_PERMISSAO_PERFIL.forEach(opcao => {
+      const input = linha.querySelector(`[data-permission-group="${opcao.id}"]`);
+      const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+      if (!input || !acoes.length) return;
+
+      const resultados = acoes.map(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recursoChave, acao));
+      const efeitos = acoes.map(acao => permissoesUsuarioPorChave[`${recursoChave}:${acao}`] || '');
+      const marcado = resultados.every(Boolean);
+      const parcial = resultados.some(Boolean) && !marcado;
+      const herdado = efeitos.every(efeito => !efeito);
+      const fontesMistas = efeitos.some(Boolean) && efeitos.some(efeito => !efeito);
+      const estado = herdado
+        ? parcial ? 'herdada do perfil, com resultado misto' : 'herdada do perfil'
+        : fontesMistas
+          ? parcial ? 'mista entre herança do perfil e ajustes individuais' : 'combina herança do perfil e ajustes individuais'
+          : parcial ? 'personalizada com resultado misto' : 'personalizada para este usuário';
+
+      input.checked = marcado;
+      input.classList.toggle('is-mixed', parcial);
+      input.classList.toggle('is-inherited', herdado);
+      input.classList.toggle('is-source-mixed', fontesMistas && !parcial);
+      if (parcial) input.setAttribute('aria-checked', 'mixed');
+      else input.removeAttribute('aria-checked');
+      input.title = estado;
+      input.setAttribute('aria-label', `${opcao.label}: ${recurso.rotulo_recurso || recurso.nome || recurso.chave} — ${estado}`);
+    });
+  }
+
+  const modulo = construirEstruturaPermissoesUsuario(state.admin.recursos || [])
+    .find(item => item.linhas.some(itemRecurso => itemRecurso.chave === recursoChave));
+  const card = modulo && [...document.querySelectorAll('.admin-user-page.is-permissions-stage [data-module-key]')]
+    .find(item => item.dataset.moduleKey === modulo.chave);
+  if (modulo && card) {
+    const concedidas = modulo.linhas.reduce((total, itemRecurso) => total + OPCOES_PERMISSAO_PERFIL.filter(opcao => {
+      const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(itemRecurso, opcao);
+      return acoes.length > 0 && acoes.every(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, itemRecurso.chave, acao));
+    }).length, 0);
+    const resumo = card.querySelector('.permission-module-summary > span:nth-child(2)');
+    if (resumo) {
+      resumo.classList.toggle('has-grants', concedidas > 0);
+      resumo.textContent = `${concedidas} ${concedidas === 1 ? 'concedida' : 'concedidas'}`;
+    }
+  }
+
+  const modal = state.admin.permissionModal || {};
+  const quantidade = obterQuantidadeAlteracoesPermissoesUsuario(modal.originalEffects, modal.draftEffects);
+  const contador = document.querySelector('.admin-user-page.is-permissions-stage .permission-unsaved-count');
+  if (contador?.lastChild) {
+    contador.lastChild.nodeValue = ` ${quantidade ? `${quantidade} ${quantidade === 1 ? 'alteração não salva' : 'alterações não salvas'}` : 'Nenhuma alteração pendente'}`;
+  }
+  document.querySelectorAll('.admin-user-page.is-permissions-stage .admin-user-permissions-actions-right button').forEach(botao => {
+    botao.disabled = Boolean(modal.applying || !modal.dirty);
+  });
+}
+
 function alternarCheckboxPermissaoUsuario(usuarioId, recursoChave, acao, marcado) {
-  const scrollTop = obterScrollPermissoesUsuarioAdmin();
   const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
   const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
   const modal = state.admin.permissionModal || {};
@@ -6511,7 +7206,39 @@ function alternarCheckboxPermissaoUsuario(usuarioId, recursoChave, acao, marcado
     state.admin.permissionModal.originalEffects,
     permissoesUsuarioPorChave
   );
-  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+  atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave);
+}
+
+function alternarCheckboxPermissaoUsuarioGrupo(usuarioId, recursoChave, grupoId, marcado) {
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const grupo = OPCOES_PERMISSAO_PERFIL.find(opcao => opcao.id === grupoId);
+  const recurso = (state.admin.recursos || []).find(item => item.chave === recursoChave);
+
+  if (!grupo || !recurso) return;
+
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
+  const modal = state.admin.permissionModal || {};
+  const permissoesUsuarioPorChave = { ...(modal.draftEffects || {}) };
+  const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, grupo);
+
+  acoes.forEach(acao => {
+    const efeito = obterEfeitoAoAlternarPermissaoUsuario(
+      usuario,
+      perfilPermissoesPorChave,
+      permissoesUsuarioPorChave,
+      recursoChave,
+      acao,
+      marcado
+    );
+    permissoesUsuarioPorChave[`${recursoChave}:${acao}`] = efeito;
+  });
+
+  state.admin.permissionModal.draftEffects = permissoesUsuarioPorChave;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesUsuario(
+    state.admin.permissionModal.originalEffects,
+    permissoesUsuarioPorChave
+  );
+  atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave);
 }
 
 function aplicarLoteModuloPermissoesUsuario(usuarioId, moduloChave, efeito) {
@@ -6617,6 +7344,7 @@ async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
     await atualizarResumoUsuariosAdmin();
     if (fecharAoSalvar) {
       state.admin.message = 'Permissões adicionais atualizadas.';
+      restaurarRotaCadastroAdmin('usuarios');
       resetarFluxoModalUsuarioAdmin(false);
       renderAdministracao();
       return;
@@ -6624,6 +7352,7 @@ async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
 
     await abrirPermissoesUsuarioAdmin(usuarioId, {
       manterMensagem: true,
+      skipRouteUpdate: true,
       messageSuccess: 'Permissões adicionais atualizadas.'
     });
   } catch (erro) {
@@ -14229,6 +14958,14 @@ function obterLabelBreadcrumbHub(chave = '') {
 }
 
 function obterBreadcrumbHub() {
+  if (['admin/modulos', 'configuracoes/modulos'].includes(obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, ''))) {
+    return [
+      { label: 'Hub', path: montarCaminhoHub() },
+      { label: 'Administração', path: montarCaminhoHub('admin') },
+      { label: 'Configurar módulos', path: `${montarCaminhoHub('admin')}/modulos` }
+    ];
+  }
+
   const contexto = obterContextoRotaHub();
   const itens = [
     {
@@ -14312,7 +15049,12 @@ function obterContextoRotaHub() {
   const modulo = normalizarIdModuloRota(partesRota[0] || '') || 'inicio';
   const hash = normalizarHashHub(obterHashHubAtual());
   const partes = hash ? hash.split('/') : partesRota.slice(1);
-  const principal = partes.length > 1 && ['cadastros', 'parametros', 'sistema'].includes(partes[0])
+  const rotaDetalheUsuario = modulo === 'administracao'
+    && partes[0] === 'cadastros'
+    && partes[1] === 'usuarios';
+  const principal = rotaDetalheUsuario
+    ? 'usuarios'
+    : partes.length > 1 && ['cadastros', 'parametros', 'sistema'].includes(partes[0])
     ? partes[partes.length - 1]
     : partes[0];
 
@@ -14320,7 +15062,7 @@ function obterContextoRotaHub() {
     modulo,
     hash,
     principal: principal || '',
-    secundaria: partes[1] || ''
+    secundaria: rotaDetalheUsuario ? '' : partes[1] || ''
   };
 }
 
@@ -15347,6 +16089,11 @@ const renderizarRotaAtualHubPhase2 = async function() {
   }
 
   const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+  if (['admin/modulos', 'configuracoes/modulos'].includes(rotaRelativa)) {
+    await abrirPaginaConfiguracaoModulosHome();
+    return;
+  }
+
   if (rotaRelativa === 'painel-ar' && !window.location.hash) {
     const abaAtual = obterSubmoduloArPorAba(state.ar.aba);
     const abasDisponiveis = ['gerar', 'inicio', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
@@ -16102,6 +16849,8 @@ Object.assign(window, {
   excluirSeguradoraUI,
   abrirModulo,
   abrirModalConfigurarModulosHome,
+  navegarParaConfiguracaoModulosHome,
+  voltarDaPaginaConfiguracaoModulosHome,
   abrirPermissoesPeloModalUsuario,
   abrirPermissoesUsuarioAdmin,
   abrirPermissoesPerfilAdmin,
@@ -16121,6 +16870,7 @@ Object.assign(window, {
   alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
   alterarVisibilidadeModuloHome,
+  alterarPermissaoPerfilModulo,
   alterarBuscaModuloHome,
   alterarAreaModuloHome,
   alternarGrupoModulosHome,
@@ -16134,6 +16884,7 @@ Object.assign(window, {
   selecionarFiltroPerfisAdmin,
   selecionarFiltroParceirosIndicacaoAdmin,
   selecionarFiltroModulosHome,
+  selecionarPerfilModulosHome,
   selecionarPaginaPerfisAdmin,
   selecionarPaginaParceirosIndicacaoAdmin,
   alternarTodosModulosPermissoesPerfil,
@@ -16183,6 +16934,8 @@ Object.assign(window, {
   abrirVisualizacaoProdutosClienteAr,
   alternarCheckboxPermissaoUsuario,
   alternarTodosModulosPermissoesUsuario,
+  filtrarRecursosPermissoesUsuarioAdmin,
+  descartarAlteracoesPermissoesUsuarioAdmin,
   arquivarParceiroIndicacaoAdmin,
   cancelarReciboValidacoesAr,
   carregarValidacoesAr,

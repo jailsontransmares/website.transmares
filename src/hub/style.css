@@ -2724,7 +2724,7 @@ body.dark .integration-log-status-success {
 
 .admin-users-list .crud-header,
 .admin-users-list .crud-row {
-  grid-template-columns: 88px minmax(240px, 1.6fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
+  grid-template-columns: minmax(240px, 1.6fr) minmax(120px, 0.8fr) minmax(180px, 1fr);
 }
 
 .admin-profiles-list .crud-header,
@@ -3041,13 +3041,28 @@ body.dark .admin-partners-actions-menu {
   width: 100%;
 }
 
-.home-modules-modal-grid {
-  align-items: center;
-  box-sizing: border-box;
-  column-gap: 12px;
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) 128px 132px;
-  width: 100%;
+.home-modules-profile-select-label {
+  display: grid !important;
+  gap: 3px;
+  margin: 0;
+  min-width: 0;
+}
+
+.home-modules-profile-select-label > span {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.home-modules-profile-action {
+  justify-content: center;
+}
+
+.home-modules-profile-unavailable {
+  color: var(--texto-suave);
+  font-size: 11px;
 }
 
 .home-modules-modal.admin-user-modal.is-permissions-stage {
@@ -3121,12 +3136,147 @@ body.dark .admin-partners-actions-menu {
   min-width: 0;
 }
 
+.home-modules-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: calc(100dvh - var(--hub-header-height) - 84px);
+}
+
+.home-modules-page .home-modules-page-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 0;
+}
+
+.home-modules-page-summary {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.home-modules-page-summary > span {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  color: var(--texto-suave);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.home-modules-page-summary strong {
+  color: var(--texto);
+  font-size: 13px;
+}
+
+.home-modules-page-body {
+  min-width: 0;
+}
+
+.home-modules-page .home-modules-modal-content {
+  gap: 14px;
+  overflow: visible;
+}
+
+.home-modules-page .home-modules-modal-table-wrap {
+  overflow: visible;
+}
+
+.home-modules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.home-modules-list-heading {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 2px 2px 0;
+}
+
+.home-modules-list-heading h3 {
+  color: var(--texto);
+  font-size: 14px;
+  margin: 0 0 3px;
+}
+
+.home-modules-list-heading p {
+  color: var(--texto-suave);
+  font-size: 12px;
+  margin: 0;
+}
+
+.home-modules-availability-legend {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  gap: 16px;
+}
+
+.home-modules-availability-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.home-modules-availability-legend i {
+  border-radius: 50%;
+  height: 7px;
+  width: 7px;
+}
+
+.home-modules-availability-legend .is-available {
+  background: #16804a;
+}
+
+.home-modules-availability-legend .is-unavailable {
+  background: #98a2b3;
+}
+
+.home-modules-page-actions {
+  align-items: stretch;
+  background: color-mix(in srgb, var(--surface-glass-strong) 94%, transparent);
+  border-top: 1px solid var(--borda);
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: auto;
+  padding: 12px 0 0;
+  position: sticky;
+  z-index: 4;
+}
+
+.home-modules-page-actions .home-modules-footer-actions button {
+  min-height: 44px;
+  min-width: 0;
+  width: min(100%, 220px);
+}
+
 .home-modules-toolbar {
   align-items: center;
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(170px, 210px);
+  gap: 10px;
+  grid-template-columns: minmax(190px, 1.2fr) minmax(200px, auto) minmax(150px, .75fr) minmax(155px, .75fr);
   min-width: 0;
+  padding: 12px;
 }
 
 .home-modules-search {
@@ -3137,9 +3287,9 @@ body.dark .admin-partners-actions-menu {
   color: var(--texto-suave);
   display: flex !important;
   gap: 10px !important;
-  height: 46px;
+  height: 42px;
   min-width: 0;
-  padding: 0 13px;
+  padding: 0 10px;
 }
 
 .home-modules-search svg {
@@ -3180,10 +3330,10 @@ body.dark .admin-partners-actions-menu {
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--texto-suave);
-  font-size: 12px;
+  font-size: 11px;
   justify-content: center;
-  min-height: 37px;
-  padding: 6px 12px;
+  min-height: 34px;
+  padding: 5px 8px;
   white-space: nowrap;
 }
 
@@ -3204,8 +3354,24 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-area-select-label {
-  display: block !important;
+  display: grid !important;
+  gap: 5px;
   margin: 0;
+}
+
+.home-modules-area-select-label > span,
+.home-modules-profile-select-label > span {
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  color: var(--texto-suave);
+  height: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .home-modules-area-select {
@@ -3216,9 +3382,13 @@ body.dark .admin-partners-actions-menu {
   color: var(--texto);
   font: inherit;
   font-size: 13px;
-  height: 46px;
-  padding: 0 12px;
+  height: 42px;
+  padding: 0 9px;
   width: 100%;
+}
+
+.home-modules-profile-select-label .home-modules-area-select {
+  font-size: 12px;
 }
 
 .home-modules-modal-table-wrap {
@@ -3234,7 +3404,7 @@ body.dark .admin-partners-actions-menu {
 .home-modules-area-grid {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -3250,16 +3420,21 @@ body.dark .admin-partners-actions-menu {
   align-items: center;
   background: color-mix(in srgb, var(--cor-principal) 4%, var(--surface-glass-strong));
   border-bottom: 1px solid color-mix(in srgb, var(--borda) 75%, transparent);
-  display: flex;
-  justify-content: space-between;
-  min-height: 54px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(120px, 1fr) 232px 272px 32px;
+  min-height: 52px;
   padding: 0 14px;
+}
+
+.home-modules-area-card-header.has-profile-column {
+  grid-template-columns: minmax(120px, 1fr) 232px 416px 32px;
 }
 
 .home-modules-area-title {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3315,16 +3490,43 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-area-card-body {
-  padding: 2px 14px 7px;
+  padding: 0 14px 7px;
+}
+
+.home-modules-list-header {
+  align-items: center;
+  color: var(--texto-suave);
+  display: grid;
+  font-size: 10px;
+  font-weight: 750;
+  column-gap: 12px;
+  grid-template-columns: 128px 132px 132px;
+  letter-spacing: .04em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.home-modules-list-header:not(.has-profile-column) {
+  grid-template-columns: 128px 132px;
+  width: 272px;
+}
+
+.home-modules-list-header.has-profile-column {
+  width: 416px;
+}
+
+.home-modules-area-card-header > .home-modules-list-header {
+  grid-column: 3;
+  transform: translateX(32px);
 }
 
 .home-modules-area-bulk-actions {
   align-items: center;
-  border-bottom: 1px solid color-mix(in srgb, var(--borda) 76%, transparent);
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 2px;
+  flex-wrap: nowrap;
+  gap: 4px;
+  grid-column: 2;
+  min-width: 0;
 }
 
 .home-modules-area-bulk-actions > span {
@@ -3335,22 +3537,70 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-area-bulk-actions button {
-  background: var(--surface-glass-strong);
+  align-items: center;
+  display: inline-flex;
+  background: var(--color-surface-muted);
   border: 1px solid var(--borda);
-  border-radius: 7px;
-  color: var(--texto);
+  border-radius: var(--radius-button-secondary);
+  color: var(--texto-suave);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
-  min-height: 28px;
-  padding: 4px 8px;
-  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  padding: 4px;
+  white-space: nowrap;
+  width: 32px;
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
+}
+
+.home-modules-area-bulk-actions button svg {
+  height: 17px;
+  width: 17px;
+}
+
+.home-modules-area-bulk-actions button.is-activate {
+  background: color-mix(in srgb, var(--color-success) 7%, var(--card));
+  border-color: color-mix(in srgb, var(--color-success) 17%, var(--borda));
+  color: var(--color-success);
+}
+
+.home-modules-area-bulk-actions button.is-deactivate {
+  background: color-mix(in srgb, var(--color-error) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--color-error) 16%, var(--borda));
+  color: var(--color-error);
+}
+
+.home-modules-area-bulk-actions button.is-show {
+  background: color-mix(in srgb, var(--cor-principal) 7%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-principal) 16%, var(--borda));
+  color: var(--cor-principal);
+}
+
+.home-modules-area-bulk-actions button.is-activate:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-success) 13%, var(--card));
+  border-color: color-mix(in srgb, var(--color-success) 34%, var(--borda));
+}
+
+.home-modules-area-bulk-actions button.is-deactivate:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 11%, var(--card));
+  border-color: color-mix(in srgb, var(--color-error) 32%, var(--borda));
+}
+
+.home-modules-area-bulk-actions button.is-show:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cor-principal) 12%, var(--card));
+  border-color: color-mix(in srgb, var(--cor-principal) 32%, var(--borda));
+}
+
+.home-modules-area-bulk-actions button.is-hide:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--texto-suave) 10%, var(--card));
+  border-color: color-mix(in srgb, var(--texto-suave) 30%, var(--borda));
+  color: var(--texto);
 }
 
 .home-modules-area-bulk-actions button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--cor-principal) 7%, var(--surface-glass-strong));
-  border-color: color-mix(in srgb, var(--cor-principal) 38%, var(--borda));
-  color: var(--cor-principal);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
 .home-modules-area-bulk-actions button:focus-visible {
@@ -3377,9 +3627,20 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-modal-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--borda) 72%, transparent);
-  min-height: 56px;
-  padding: 7px 2px;
+  min-height: 64px;
+  padding: 8px 0;
+}
+
+.home-modules-modal-grid {
+  grid-template-columns: minmax(160px, 1fr) 128px 132px;
+}
+
+.home-modules-modal-grid.has-profile-column {
+  grid-template-columns: minmax(160px, 1fr) 128px 132px 132px;
 }
 
 .home-modules-parent-group > .home-modules-modal-row:last-child {
@@ -3400,6 +3661,17 @@ body.dark .admin-partners-actions-menu {
   gap: 10px;
   justify-self: stretch;
   min-width: 0;
+}
+
+.home-modules-row-setting {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.home-modules-setting-label {
+  display: none;
 }
 
 .home-modules-item-name > strong {
@@ -3463,23 +3735,16 @@ body.dark .admin-partners-actions-menu {
   min-width: 0;
 }
 
-.home-modules-status-select {
-  background: var(--surface-glass-strong);
-  border: 1px solid var(--borda);
-  border-radius: 10px;
-  color: var(--texto);
-  font: inherit;
-  font-size: 12px;
-  height: 38px;
-  max-width: 100%;
-  padding: 0 9px;
-  width: 120px;
-}
-
-.home-modules-protected-status {
+.home-modules-status-protected {
+  background: var(--color-surface-muted);
+  border-radius: 999px;
   color: var(--texto-suave);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: .04em;
+  padding: 4px 6px;
+  position: absolute;
+  left: calc(100% + 6px);
+  text-transform: uppercase;
 }
 
 .home-modules-visibility {
@@ -3492,6 +3757,10 @@ body.dark .admin-partners-actions-menu {
   margin: 0;
   min-height: 38px;
   white-space: nowrap;
+}
+
+.home-modules-status-toggle {
+  position: relative;
 }
 
 .home-modules-visibility input {
@@ -3566,7 +3835,7 @@ body.dark .admin-partners-actions-menu {
   display: flex;
   font-size: 12px;
   gap: 9px;
-  margin-right: auto;
+  margin-right: 0;
   min-width: 0;
 }
 
@@ -3577,9 +3846,27 @@ body.dark .admin-partners-actions-menu {
 }
 
 .home-modules-footer-actions {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
+  flex-direction: column;
   gap: 10px;
+  width: 100%;
+}
+
+.home-modules-page .home-modules-visibility {
+  align-items: center !important;
+  flex-direction: row;
+  gap: 0 !important;
+  justify-content: center;
+  padding: 0;
+}
+
+.home-modules-page .home-modules-visibility-label {
+  display: none;
+}
+
+.home-modules-page .home-modules-status-toggle {
+  gap: 6px !important;
 }
 
 .home-modules-modal .small-modal-actions {
@@ -3608,19 +3895,156 @@ body.dark .admin-partners-actions-menu {
 
 @media (max-width: 1100px) {
   .home-modules-toolbar {
-    grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+    gap: 7px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
-  .home-modules-search {
-    grid-column: 1 / -1;
+  .home-modules-modal-grid {
+    grid-template-columns: minmax(140px, 1fr) 108px 112px;
   }
 
-  .home-modules-area-grid {
-    grid-template-columns: 1fr;
+  .home-modules-modal-grid.has-profile-column {
+    grid-template-columns: minmax(140px, 1fr) 108px 112px 112px;
+  }
+
+  .home-modules-area-card-header {
+    grid-template-columns: minmax(0, 1fr) 200px 232px 32px;
+  }
+
+  .home-modules-area-card-header.has-profile-column {
+    grid-template-columns: minmax(0, 1fr) 200px 356px 32px;
+  }
+
+  .home-modules-area-bulk-actions {
+    gap: 3px;
+    grid-column: 2;
+  }
+
+  .home-modules-area-bulk-actions button {
+    font-size: 9px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .home-modules-list-header {
+    grid-column: 3;
+    grid-template-columns: 108px 112px 112px;
+    width: 356px;
+  }
+
+  .home-modules-list-header:not(.has-profile-column) {
+    grid-template-columns: 108px 112px;
+    width: 232px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .home-modules-area-card-header,
+  .home-modules-area-card-header.has-profile-column {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 48px 12px 14px;
+    position: relative;
+  }
+
+  .home-modules-area-title {
+    flex-wrap: wrap;
+  }
+
+  .home-modules-area-card-header > .home-modules-list-header {
+    display: none;
+  }
+
+  .home-modules-collapse-button {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+  }
+
+  .home-modules-page .home-modules-modal-row,
+  .home-modules-page .home-modules-modal-grid,
+  .home-modules-page .home-modules-modal-grid.has-profile-column {
+    align-items: stretch;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px 0;
+  }
+
+  .home-modules-page .home-modules-row-setting {
+    align-items: stretch;
+  }
+
+  .home-modules-page .home-modules-setting-label {
+    color: var(--texto-suave);
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+  }
+
+  .home-modules-page .home-modules-modal-action {
+    justify-content: flex-start;
+  }
+
+  .home-modules-page .home-modules-visibility {
+    justify-content: flex-start;
+  }
+
+  .home-modules-page .home-modules-visibility-label {
+    display: inline;
   }
 }
 
 @media (max-width: 700px) {
+  .home-modules-page {
+    min-height: 0;
+    padding: 15px 12px;
+  }
+
+  .home-modules-page .home-modules-page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .home-modules-page-summary {
+    align-self: flex-start;
+  }
+
+  .home-modules-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .home-modules-area-select-label > span,
+  .home-modules-profile-select-label > span {
+    clip: auto;
+    clip-path: none;
+    height: auto;
+    overflow: visible;
+    position: static;
+    white-space: normal;
+    width: auto;
+  }
+
+  .home-modules-page-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .home-modules-page-actions .home-modules-footer-actions {
+    width: 100%;
+  }
+
+  .home-modules-page-actions .home-modules-footer-actions button {
+    flex: none;
+    min-width: 0;
+    width: 100%;
+  }
+
   .home-modules-modal .small-modal-header {
     min-height: 76px;
     padding: 16px;
@@ -3648,15 +4072,6 @@ body.dark .admin-partners-actions-menu {
     gap: 12px;
   }
 
-  .home-modules-toolbar {
-    grid-template-columns: 1fr;
-    gap: 9px;
-  }
-
-  .home-modules-search {
-    grid-column: auto;
-  }
-
   .home-modules-filters {
     width: 100%;
   }
@@ -3667,10 +4082,36 @@ body.dark .admin-partners-actions-menu {
     padding-right: 7px;
   }
 
-  .home-modules-area-card-header {
+  .home-modules-area-card-header,
+  .home-modules-area-card-header.has-profile-column {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
     min-height: 48px;
-    padding-left: 10px;
-    padding-right: 8px;
+    padding: 10px;
+  }
+
+  .home-modules-area-title {
+    flex-wrap: wrap;
+  }
+
+  .home-modules-area-card-header > .home-modules-area-bulk-actions {
+    grid-column: auto;
+  }
+
+  .home-modules-area-card-header > .home-modules-list-header {
+    display: none;
+  }
+
+  .home-modules-collapse-button {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+  }
+
+  .home-modules-list-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .home-modules-area-title {
@@ -3690,24 +4131,48 @@ body.dark .admin-partners-actions-menu {
     padding-right: 9px;
   }
 
+  .home-modules-page .home-modules-modal-row,
+  .home-modules-page .home-modules-modal-grid,
+  .home-modules-page .home-modules-modal-grid.has-profile-column {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .home-modules-page .home-modules-row-setting {
+    align-items: stretch;
+  }
+
+  .home-modules-page .home-modules-setting-label {
+    color: var(--texto-suave);
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+  }
+
+  .home-modules-page .home-modules-modal-action {
+    justify-content: flex-start;
+  }
+
+  .home-modules-page .home-modules-visibility {
+    justify-content: flex-start;
+  }
+
+  .home-modules-page .home-modules-visibility-label {
+    display: inline;
+  }
+
   .home-modules-area-bulk-actions {
     gap: 5px;
-    padding: 7px 0;
+    flex-wrap: nowrap;
+    padding: 0;
   }
 
-  .home-modules-area-bulk-actions > span {
-    flex: 1 0 100%;
-  }
-
-  .home-modules-area-bulk-actions button {
-    flex: 1 1 calc(50% - 5px);
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-
-  .home-modules-modal-grid {
-    column-gap: 7px;
-    grid-template-columns: minmax(0, 1fr) 94px 48px;
+  .home-modules-profile-select-label > span {
+    font-size: 9px;
   }
 
   .home-modules-modal-row {
@@ -3730,19 +4195,12 @@ body.dark .admin-partners-actions-menu {
     width: 30px;
   }
 
-  .home-modules-status-select {
-    font-size: 11px;
-    height: 35px;
-    padding: 0 5px;
-    width: 92px;
-  }
-
   .home-modules-visibility-action {
-    justify-content: center;
+    justify-content: flex-start;
   }
 
   .home-modules-visibility-label {
-    display: none;
+    display: inline;
   }
 
   .home-modules-switch {
@@ -3905,7 +4363,26 @@ body.dark .admin-partners-actions-menu {
 .admin-user-main {
   align-items: center;
   display: flex;
+  gap: 10px;
   min-width: 0;
+}
+
+.admin-user-status-legend {
+  align-items: center;
+  border-top: 1px solid var(--borda);
+  color: var(--texto-suave);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 14px;
+  padding: 12px 6px 2px;
+}
+
+.admin-user-status-legend-item {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 7px;
 }
 
 .admin-user-status-dot {
@@ -3948,6 +4425,33 @@ body.dark .admin-partners-actions-menu {
 .admin-user-identity strong {
   color: var(--texto);
   font-size: 14px;
+}
+
+.admin-user-name-link {
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-name-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-user-name-link:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 .admin-user-identity small {
@@ -4172,8 +4676,280 @@ body.dark .admin-partners-actions-menu {
   min-height: 0;
 }
 
+.admin-user-form {
+  display: grid;
+  gap: 20px 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.admin-user-field {
+  align-content: start;
+  gap: 4px !important;
+  min-width: 0;
+}
+
+.admin-user-field > span:first-child {
+  color: var(--color-navy) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+.admin-user-field > span:first-child b {
+  color: #dc2626;
+}
+
+.admin-user-input-wrap {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 14%, var(--borda));
+  border-radius: 14px;
+  box-sizing: border-box;
+  display: flex !important;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 13px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  width: 100%;
+}
+
+.admin-user-input-wrap:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--borda));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.admin-user-input-wrap > svg {
+  color: var(--texto-suave);
+  flex: 0 0 19px;
+  height: 19px;
+  width: 19px;
+}
+
+.admin-user-input-wrap > .config-input {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex: 1 1 auto;
+  font-size: 14px;
+  min-height: 42px;
+  outline: 0;
+  padding: 8px 0;
+}
+
+.admin-user-input-wrap > .config-input:focus {
+  box-shadow: none;
+}
+
+.admin-user-field > small {
+  color: var(--texto-suave);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.admin-user-form > .admin-user-access-panel,
+.admin-user-fields > .admin-user-access-panel,
+.admin-user-form > [data-admin-user-form-error],
+.admin-user-form > .small-modal-actions {
+  grid-column: 1 / -1;
+}
+
+.admin-user-fields {
+  border: 0;
+  display: contents;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.admin-user-form > .small-modal-actions {
+  border-top: 1px solid var(--borda);
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+.admin-user-form > .small-modal-actions .save-btn,
+.admin-user-form > .small-modal-actions .secondary-btn {
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 42px;
+  min-width: 100px;
+}
+
+.admin-user-form > .small-modal-actions .admin-user-delete-btn {
+  border-color: color-mix(in srgb, #b42318 34%, var(--borda));
+  color: #b42318;
+  margin-right: auto;
+}
+
+.admin-user-form > .small-modal-actions .admin-user-delete-btn:hover {
+  background: color-mix(in srgb, #b42318 8%, var(--color-surface-muted));
+  border-color: color-mix(in srgb, #b42318 55%, var(--borda));
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-header {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-user-header-controls {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-header-status {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-header-status > span {
+  color: var(--texto-suave);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-header-status > select {
+  box-sizing: border-box;
+  font-size: 12px;
+  min-height: 34px;
+  padding: 5px 8px;
+  width: 116px;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-header-controls > .icon-btn {
+  flex: 0 0 34px;
+  height: 34px;
+  width: 34px;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading {
+  align-items: center;
+  display: flex;
+  gap: 15px;
+  min-width: 0;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-muted));
+  border-radius: 50%;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: 0 0 58px;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading-icon svg {
+  height: 24px;
+  width: 24px;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading h3 {
+  color: var(--color-navy);
+  font-size: 24px !important;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading p {
+  color: var(--texto-suave);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
 .admin-user-modal:not(.is-permissions-stage) {
-  max-height: min(720px, calc(100vh - 48px));
+  border-radius: 16px;
+  max-height: min(575px, calc(100dvh - 48px));
+  max-width: min(805px, calc(100vw - 48px));
+  padding: 24px 31px 21px;
+  width: min(805px, calc(100vw - 48px));
+}
+
+.hub-layout .admin-user-modal:not(.is-permissions-stage) {
+  max-width: min(805px, calc(100vw - 48px));
+  width: min(805px, calc(100vw - 48px));
+}
+
+@media (max-width: 760px) {
+  .admin-user-form {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-user-modal:not(.is-permissions-stage),
+  .hub-layout .modal-backdrop > .small-modal.admin-user-modal:not(.is-permissions-stage) {
+    max-height: calc(100dvh - 28px);
+    max-width: calc(100vw - 28px);
+    padding: 17px 14px;
+    width: calc(100vw - 28px);
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading {
+    gap: 10px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading > div {
+    min-width: 0;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading h3,
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading p {
+    overflow-wrap: anywhere;
+  }
+
+  .admin-user-header-controls {
+    gap: 6px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-header-status {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-header-status > select {
+    min-height: 32px;
+    width: 112px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading-icon {
+    flex-basis: 42px;
+    height: 42px;
+    width: 42px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading-icon svg {
+    height: 19px;
+    width: 19px;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading h3 {
+    font-size: 19px !important;
+  }
+
+  .admin-user-modal:not(.is-permissions-stage) .admin-user-modal-heading p {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .admin-user-form > .small-modal-actions .save-btn,
+  .admin-user-form > .small-modal-actions .secondary-btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+.admin-user-modal:not(.is-permissions-stage) {
+  max-height: min(575px, calc(100vh - 48px));
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -8874,6 +9650,12 @@ body.is-resizing-ar-products-column * {
   gap: 6px;
 }
 
+.permission-inheritance-hint {
+  color: var(--texto-suave);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .permission-table-wrap {
   overflow: auto;
 }
@@ -8997,6 +9779,15 @@ body.is-resizing-ar-products-column * {
   position: absolute;
   top: 5px;
   width: 6px;
+}
+
+.permission-checkbox input.is-inherited + span {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--borda));
+  border-style: dashed;
+}
+
+.permission-checkbox input.is-source-mixed + span {
+  border-style: dotted;
 }
 
 .permission-checkbox input:focus-visible + span {
@@ -9292,6 +10083,7 @@ body.is-resizing-ar-products-column * {
   }
 
   .permission-module-toolbar {
+    flex-wrap: wrap;
     justify-content: flex-start;
   }
 
@@ -14272,7 +15064,7 @@ body.dark .hub-layout .modal-backdrop {
 
 .hub-layout .admin-user-modal:not(.is-permissions-stage),
 .hub-layout .partner-modal-backdrop .partner-modal {
-  max-height: calc(100dvh - 170px);
+  max-height: min(575px, calc(100dvh - 170px));
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -14573,6 +15365,109 @@ body.dark .hub-layout .fin-modal-backdrop {
 .hub-layout .admin-user-modal,
 .hub-layout .admin-profile-modal {
   width: min(960px, 100%);
+}
+
+/* Cadastro e permissões de usuário são páginas dentro da Administração, não diálogos. */
+.admin-user-page-shell {
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-user-page {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.90), var(--glass-blue-bg)),
+    var(--surface-glass-strong);
+  border: var(--glass-border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  box-sizing: border-box;
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  max-height: none;
+  max-width: none;
+  overflow: visible;
+  padding: 22px;
+  width: 100%;
+}
+
+.hub-layout .admin-user-page {
+  max-height: none;
+  max-width: none;
+  width: 100%;
+}
+
+.admin-user-page .admin-user-modal-header {
+  border-bottom: 1px solid var(--borda);
+  margin: 0;
+  min-height: 54px;
+  padding-bottom: 14px;
+}
+
+.admin-user-page .admin-user-back-btn {
+  flex: 0 0 auto;
+}
+
+.admin-user-page-description {
+  color: var(--texto-suave);
+  font-size: 13px;
+  margin: 5px 0 0;
+}
+
+.admin-user-page .admin-user-form {
+  gap: 20px 24px;
+}
+
+.admin-user-page .admin-user-form > .small-modal-actions {
+  margin-top: 4px;
+}
+
+.admin-user-page.is-permissions-stage {
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(820px, calc(100dvh - var(--hub-content-offset, 150px) - 28px));
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.admin-user-page.is-permissions-stage .permission-modal-layout,
+.admin-user-page.is-permissions-stage .permission-modal-content {
+  height: 100%;
+  min-height: 0;
+}
+
+.admin-user-page.is-permissions-stage .permission-modal-content {
+  overflow: auto;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions {
+  border-top: 1px solid var(--borda);
+  margin: 0;
+  padding-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .admin-user-page {
+    gap: 14px;
+    padding: 16px 14px;
+  }
+
+  .admin-user-page .admin-user-modal-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-user-page .admin-user-header-controls {
+    align-self: stretch;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .admin-user-page.is-permissions-stage {
+    height: calc(100dvh - var(--hub-content-offset, 150px) - 18px);
+    min-height: 380px;
+    padding: 14px;
+  }
 }
 
 .hub-layout .partner-modal-backdrop .partner-modal {
@@ -15875,6 +16770,723 @@ table[data-resizable-table] > thead > tr > th {
   .ar-products-filter-footer .ar-products-apply-filters {
     min-width: 0;
     font-size: 12px;
+    padding-inline: 8px;
+  }
+}
+
+/* Overrides de escopo para as páginas de usuário, que compartilham classes antigas do formulário. */
+.hub-layout .admin-user-page {
+  max-height: none;
+  max-width: none;
+  overflow: visible;
+  width: 100%;
+}
+
+.hub-layout .admin-user-page.admin-user-modal:not(.is-permissions-stage) {
+  height: auto;
+  max-height: none;
+  max-width: none;
+  overflow: visible;
+  width: 100%;
+}
+
+.hub-layout .admin-user-page.is-permissions-stage {
+  height: min(820px, calc(100dvh - var(--hub-content-offset, 150px) - 60px));
+  max-height: none;
+  max-width: none;
+  min-height: min(400px, calc(100dvh - var(--hub-content-offset, 150px) - 60px));
+  overflow: hidden;
+  padding: 22px;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .hub-layout .admin-user-page.is-permissions-stage {
+    height: calc(100dvh - var(--hub-content-offset, 150px) - 72px);
+    min-height: min(340px, calc(100dvh - var(--hub-content-offset, 150px) - 72px));
+    padding: 14px;
+  }
+}
+
+.hub-layout .admin-user-page-shell {
+  container-name: admin-user-page;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.hub-layout .admin-user-page-shell.is-form-stage {
+  min-height: calc(100dvh - var(--hub-content-offset, 88px) - 50px);
+}
+
+.hub-layout .admin-user-page-shell.is-form-stage > .admin-user-page {
+  flex: 1 0 auto;
+}
+
+.hub-layout .admin-user-page-shell.is-permissions-stage {
+  height: calc(100dvh - var(--hub-content-offset, 88px) - 50px);
+  min-height: min(400px, calc(100dvh - var(--hub-content-offset, 88px) - 50px));
+}
+
+.hub-layout .admin-user-page-shell.is-permissions-stage > .admin-user-page {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+
+@container admin-user-page (max-width: 700px) {
+  .admin-user-page {
+    gap: 14px;
+    padding: 16px 14px;
+  }
+
+  .admin-user-page .admin-user-modal-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-user-page .admin-user-modal-heading {
+    gap: 10px;
+  }
+
+  .admin-user-page .admin-user-header-controls {
+    align-self: stretch;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .admin-user-page .admin-user-header-status {
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+
+  .admin-user-page .admin-user-form {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-user-page .admin-user-form > .small-modal-actions {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-user-page .admin-user-form > .small-modal-actions .admin-user-delete-btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin-right: 0;
+  }
+
+  .admin-user-page .admin-user-form > .small-modal-actions .save-btn,
+  .admin-user-page .admin-user-form > .small-modal-actions .secondary-btn {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .admin-user-page.is-permissions-stage {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .admin-user-page .admin-user-permissions-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-user-page .admin-user-permissions-actions-right {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .hub-layout .admin-user-page-shell.is-form-stage {
+    min-height: calc(100dvh - var(--hub-content-offset, 88px) - 64px);
+  }
+
+  .hub-layout .admin-user-page-shell.is-permissions-stage {
+    height: calc(100dvh - var(--hub-content-offset, 88px) - 64px);
+    min-height: min(340px, calc(100dvh - var(--hub-content-offset, 88px) - 64px));
+  }
+}
+
+/* On the full-page permission editor, let each module table use its card width. */
+.admin-user-page.is-permissions-stage .permission-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.admin-user-page.is-permissions-stage .permission-table {
+  min-width: 480px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th:first-child,
+.admin-user-page.is-permissions-stage .permission-table td:first-child {
+  width: 64%;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th:not(:first-child),
+.admin-user-page.is-permissions-stage .permission-table .permission-cell {
+  max-width: none;
+  width: 12%;
+}
+
+.hub-layout .admin-user-page.is-permissions-stage {
+  background: var(--surface-glass-strong);
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  gap: 16px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: clamp(18px, 2.2vw, 32px);
+}
+
+.admin-user-page.is-permissions-stage .admin-user-modal-header {
+  align-items: flex-start;
+  border-bottom: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-modal-header h3 {
+  color: var(--color-navy);
+  font-size: clamp(23px, 2.2vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-page-description {
+  font-size: clamp(13px, 1.2vw, 17px);
+  margin-top: 5px;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-back-btn {
+  min-height: 42px;
+  padding-inline: 16px;
+}
+
+.admin-user-page.is-permissions-stage .permission-modal-layout,
+.admin-user-page.is-permissions-stage .permission-modal-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-user-page.is-permissions-stage .permission-modal-content {
+  padding: 0 1px 6px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-list {
+  gap: 14px;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.15fr) auto minmax(190px, .85fr) auto;
+  padding: 0 0 4px;
+}
+
+.admin-user-page.is-permissions-stage .permission-search {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--borda);
+  border-radius: 11px;
+  color: var(--texto-suave);
+  display: flex;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 13px;
+}
+
+.admin-user-page.is-permissions-stage .permission-search svg {
+  fill: none;
+  flex: none;
+  height: 19px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 19px;
+}
+
+.admin-user-page.is-permissions-stage .permission-search input {
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  font: inherit;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.admin-user-page.is-permissions-stage .permission-search:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--borda));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.admin-user-page.is-permissions-stage .permission-view-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-user-page.is-permissions-stage .permission-view-actions button {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.admin-user-page.is-permissions-stage .permission-view-actions svg,
+.admin-user-page.is-permissions-stage .permission-inheritance-hint svg,
+.admin-user-page.is-permissions-stage .permission-global-more svg,
+.admin-user-page.is-permissions-stage .permission-module-more svg,
+.admin-user-page.is-permissions-stage .permission-module-icon svg,
+.admin-user-page.is-permissions-stage .permission-module-control svg,
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions svg {
+  height: 17px;
+  width: 17px;
+}
+
+.admin-user-page.is-permissions-stage .permission-inheritance-hint {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-glass-strong));
+  border-radius: 10px;
+  color: var(--color-primary);
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more,
+.admin-user-page.is-permissions-stage .permission-module-more {
+  position: relative;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more > summary,
+.admin-user-page.is-permissions-stage .permission-module-more > summary {
+  align-items: center;
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  color: var(--color-navy);
+  cursor: pointer;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  list-style: none;
+  width: 40px;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more > summary::-webkit-details-marker,
+.admin-user-page.is-permissions-stage .permission-module-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more-menu,
+.admin-user-page.is-permissions-stage .permission-module-more-menu {
+  background: var(--surface-glass-strong);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .15);
+  display: grid;
+  min-width: 180px;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 8;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more-menu button,
+.admin-user-page.is-permissions-stage .permission-module-more-menu button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--texto);
+  cursor: pointer;
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.admin-user-page.is-permissions-stage .permission-global-more-menu button:hover,
+.admin-user-page.is-permissions-stage .permission-module-more-menu button:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-glass-strong));
+}
+
+.admin-user-page.is-permissions-stage .permission-module-card {
+  background: var(--surface-glass-strong);
+  border: 1px solid color-mix(in srgb, var(--borda) 86%, transparent);
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .035);
+  gap: 0;
+  padding: 0 12px 10px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-header {
+  min-height: 60px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-toggle {
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: 32px 34px minmax(0, 1fr);
+  min-height: 58px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-control,
+.admin-user-page.is-permissions-stage .permission-module-icon {
+  align-items: center;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-control {
+  background: color-mix(in srgb, var(--surface-glass-strong) 75%, var(--glass-blue-bg));
+}
+
+.admin-user-page.is-permissions-stage .permission-module-icon {
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--surface-glass-strong));
+  color: var(--color-primary);
+}
+
+.admin-user-page.is-permissions-stage .permission-module-toggle strong {
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-summary {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-summary > span {
+  background: color-mix(in srgb, var(--surface-glass-strong) 70%, var(--glass-blue-bg));
+  border: 1px solid color-mix(in srgb, var(--borda) 82%, transparent);
+  border-radius: 999px;
+  color: var(--texto-suave);
+  font-size: 12px;
+  line-height: 1;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-summary > span:nth-child(2) {
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+  min-width: 112px;
+  text-align: center;
+}
+
+.admin-user-page.is-permissions-stage .permission-module-summary > .has-grants {
+  background: color-mix(in srgb, #10b981 10%, var(--surface-glass-strong));
+  border-color: transparent;
+  color: #047857;
+}
+
+.admin-user-page.is-permissions-stage .permission-table-wrap {
+  border: 1px solid color-mix(in srgb, var(--borda) 88%, transparent);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.admin-user-page.is-permissions-stage .permission-table {
+  min-width: 600px;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th {
+  background: color-mix(in srgb, var(--glass-blue-bg) 50%, var(--surface-glass-strong));
+  font-size: 13px;
+  font-weight: 500;
+  padding: 11px 16px;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th:first-child,
+.admin-user-page.is-permissions-stage .permission-table td:first-child {
+  padding-left: 18px;
+  width: 52%;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th:not(:first-child),
+.admin-user-page.is-permissions-stage .permission-table .permission-cell {
+  width: 16%;
+}
+
+.admin-user-page.is-permissions-stage .permission-table td {
+  padding: 10px 16px;
+  vertical-align: middle;
+}
+
+.admin-user-page.is-permissions-stage .permission-table td:first-child strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.admin-user-page.is-permissions-stage .permission-tree-resource {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 24px;
+  padding-left: var(--permission-tree-indent, 0px);
+}
+
+.admin-user-page.is-permissions-stage .permission-tree-resource > strong {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-user-page.is-permissions-stage .permission-tree-branch {
+  align-self: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--borda));
+  border-bottom-left-radius: 4px;
+  border-left: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--borda));
+  flex: 0 0 14px;
+  height: 16px;
+  margin-top: -8px;
+}
+
+.admin-user-page.is-permissions-stage .permission-table tr.is-tree-parent > td:first-child {
+  background: color-mix(in srgb, var(--color-primary) 3%, transparent);
+}
+
+.admin-user-page.is-permissions-stage .permission-table tr.is-tree-parent > td:first-child strong {
+  font-weight: 700;
+}
+
+.admin-user-page.is-permissions-stage .permission-table tr[data-tree-level="0"] > td:first-child strong {
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admin-user-page.is-permissions-stage .permission-table th:not(:first-child),
+.admin-user-page.is-permissions-stage .permission-table td.permission-cell {
+  text-align: center;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox {
+  align-items: center;
+  display: inline-flex;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  justify-content: center;
+  margin: 0 auto;
+  vertical-align: middle;
+  width: 100%;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input {
+  height: 1px;
+  left: 50%;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  z-index: 1;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > .permission-toggle-switch {
+  background: color-mix(in srgb, var(--texto-suave) 25%, var(--borda));
+  border: 0;
+  border-radius: 999px;
+  display: inline-block;
+  flex: 0 0 48px;
+  height: 27px;
+  pointer-events: none;
+  position: relative;
+  width: 48px;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > .permission-toggle-switch::after {
+  background: #fff;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .2);
+  content: '';
+  height: 21px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transform: none;
+  transition: transform var(--transition-fast);
+  width: 21px;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input:checked + .permission-toggle-switch {
+  background: var(--cor-principal);
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input:checked + .permission-toggle-switch::after {
+  transform: translateX(21px);
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input.is-mixed + .permission-toggle-switch {
+  background: var(--cor-principal);
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input.is-mixed + .permission-toggle-switch::after {
+  transform: translateX(10px);
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input:focus-visible + .permission-toggle-switch {
+  outline: 2px solid var(--cor-principal);
+  outline-offset: 3px;
+}
+
+.admin-user-page.is-permissions-stage .permission-checkbox > input:disabled + .permission-toggle-switch {
+  opacity: .55;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--surface-glass-strong));
+  border-top: 1px solid color-mix(in srgb, var(--color-primary) 12%, var(--borda));
+  bottom: calc(-1 * clamp(18px, 2.2vw, 32px));
+  margin: 0 calc(-1 * clamp(18px, 2.2vw, 32px));
+  padding: 12px clamp(18px, 2.2vw, 32px);
+  position: sticky;
+  z-index: 5;
+}
+
+.admin-user-page.is-permissions-stage .permission-unsaved-status {
+  align-items: center;
+  color: var(--texto-suave);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+  min-height: 44px;
+}
+
+.admin-user-page.is-permissions-stage .permission-unsaved-count {
+  align-items: center;
+  color: var(--color-primary);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 8px;
+  min-width: 222px;
+  white-space: nowrap;
+}
+
+.admin-user-page.is-permissions-stage .permission-unsaved-count svg {
+  fill: currentColor;
+  height: 12px;
+  width: 12px;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions-right button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions-right .save-btn {
+  min-width: 190px;
+}
+
+.admin-user-page.is-permissions-stage .admin-user-permissions-actions-right .save-btn {
+  background: var(--color-primary);
+}
+
+.admin-user-page.is-permissions-stage .permission-module-card[hidden],
+.admin-user-page.is-permissions-stage .permission-table tbody tr[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  .admin-user-page.is-permissions-stage .permission-global-toolbar {
+    grid-template-columns: minmax(190px, 1fr) auto;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-inheritance-hint {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-user-page.is-permissions-stage .permission-global-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-search {
+    grid-column: 1 / -1;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-view-actions {
+    grid-column: 1 / -1;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-view-actions button {
+    flex: 1 1 130px;
+    justify-content: center;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-global-more {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-module-header {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+    padding-block: 8px;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-module-summary {
+    justify-content: flex-end;
+  }
+
+  .admin-user-page.is-permissions-stage .admin-user-permissions-actions {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-unsaved-status {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .admin-user-page.is-permissions-stage .permission-unsaved-count {
+    min-width: 0;
+  }
+
+  .admin-user-page.is-permissions-stage .admin-user-permissions-actions-right {
+    display: grid;
+    grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
+  }
+
+  .admin-user-page.is-permissions-stage .admin-user-permissions-actions-right button {
+    justify-content: center;
     padding-inline: 8px;
   }
 }

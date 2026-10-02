@@ -57,7 +57,7 @@ function field(label, name, value, type = 'text', required = false) { return `<l
 
 function renderHeader() {
   const canSave = quote.id
-    ? Boolean(context.pode?.('simulador_saude', 'update'))
+    ? Boolean(context.pode?.('simulador_saude', 'view'))
     : Boolean(context.pode?.('simulador_saude', 'create'));
   return `<div class="saude-quote-header"><div class="saude-quote-title"><span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><span class="hub-page-kicker">Operações · Corretora</span><h2>Cotação de Plano de Saúde</h2><p>Cadastre as vidas e compare os valores dos planos por faixa etária.${quote.code ? ` · Cotação #${quote.code} · versão ${quote.version}` : ''}</p></div></div><div class="saude-quote-header-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteBackToList()"><i data-lucide="chevron-left" aria-hidden="true"></i> Voltar às cotações</button><button class="secondary-btn" type="button" onclick="saudeQuoteClear()"><i data-lucide="eraser" aria-hidden="true"></i> Limpar</button><button class="secondary-btn" type="button" onclick="saudeQuoteSave()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> ${quote.saving ? 'Salvando…' : 'Salvar'}</button><button class="primary-btn" type="button" onclick="saudeQuoteProposal()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> Gerar Proposta</button></div></div>`;
 }

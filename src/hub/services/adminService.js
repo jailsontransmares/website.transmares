@@ -1,5 +1,6 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
 import { HOME_SUBMODULES, obterSubmodulosHomeConfigurados } from '../homeSubmodules.js';
+import { obterRecursoModulo } from './permissionService.js';
 
 const DEFAULT_COLORS = {
   cor_principal: '#294895',
@@ -395,23 +396,59 @@ export async function listarModulosAdmin() {
 
 export async function listarConfiguracaoModulosHomeAdmin() {
   const supabase = exigirSupabaseConfigurado();
-  const [modulesResponse, submodulesResponse] = await Promise.all([
+  const [modulesResponse, resourcesResponse, profilesResponse, profilePermissionsResponse] = await Promise.all([
     listarModulosAdmin(),
     supabase
       .from('recursos_acesso')
       .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
-      .in('chave', HOME_SUBMODULES.map(item => item.key))
+      .order('ordem', { ascending: true }),
+    supabase
+      .from('perfis')
+      .select('id, nome, slug, status, nivel')
+      .order('nivel', { ascending: false })
+      .order('nome', { ascending: true }),
+    supabase
+      .from('perfil_permissoes')
+      .select('perfil_id, recurso_chave, acao, permitido')
+      .eq('acao', 'view')
   ]);
 
-  if (submodulesResponse.error) {
-    throw new Error(submodulesResponse.error.message || 'Não foi possível carregar os submódulos.');
+  if (resourcesResponse.error) {
+    throw new Error(resourcesResponse.error.message || 'Não foi possível carregar os recursos dos módulos.');
   }
 
-  const recursosPorChave = new Map((submodulesResponse.data || []).map(item => [item.chave, item]));
-  const submodules = obterSubmodulosHomeConfigurados(submodulesResponse.data || [])
-    .filter(item => recursosPorChave.has(item.key));
+  if (profilesResponse.error) {
+    throw new Error(profilesResponse.error.message || 'Não foi possível carregar os perfis.');
+  }
 
-  return { modules: modulesResponse.modules, submodules };
+  if (profilePermissionsResponse.error) {
+    throw new Error(profilePermissionsResponse.error.message || 'Não foi possível carregar as permissões dos perfis.');
+  }
+
+  const recursosPorChave = new Map((resourcesResponse.data || [])
+    .filter(item => HOME_SUBMODULES.some(submodule => submodule.key === item.chave))
+    .map(item => [item.chave, item]));
+  const chavesRecursos = new Set((resourcesResponse.data || []).map(item => item.chave));
+  const modules = modulesResponse.modules.map(item => {
+    const permissionKey = obterRecursoModulo(item.slug);
+    return {
+      ...item,
+      permissionKey: chavesRecursos.has(permissionKey) ? permissionKey : ''
+    };
+  });
+  const submodules = obterSubmodulosHomeConfigurados([...recursosPorChave.values()])
+    .filter(item => recursosPorChave.has(item.key))
+    .map(item => ({
+      ...item,
+      permissionKey: item.permission && chavesRecursos.has(item.permission) ? item.permission : ''
+    }));
+
+  return {
+    modules,
+    submodules,
+    profiles: (profilesResponse.data || []).filter(item => item.status !== 'inativo'),
+    profilePermissions: profilePermissionsResponse.data || []
+  };
 }
 
 export async function salvarConfiguracaoSubmodulosHomeAdmin({ submodulos = [] } = {}) {
@@ -640,7 +677,10 @@ export async function salvarUsuarioAdmin({ id, nome, nome_usuario, email, cpf, t
   });
 
   if (error) {
-    throw new Error(error.message || 'Não foi possível salvar o usuário.');
+    const resposta = error.context && typeof error.context.clone === 'function'
+      ? await error.context.clone().json().catch(() => null)
+      : null;
+    throw new Error(resposta?.message || error.message || 'Não foi possível salvar o usuário.');
   }
 
   if (data?.ok === false) {

@@ -108,61 +108,40 @@ export async function setSimuladorSaudeTableStatus(id, status) {
   return unwrap(await supabase.from(TABLES.prices).update({ status }).eq('id', id).select('*').single(), 'Não foi possível alterar o status da tabela.');
 }
 
-async function getCurrentSimuladorSaudeUserId(supabase) {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData?.user?.id) throw new Error('Sessão inválida. Entre novamente.');
-
-  let profile = unwrap(await supabase
-    .from('usuarios')
-    .select('id')
-    .eq('auth_user_id', authData.user.id)
-    .maybeSingle(), 'Não foi possível identificar o usuário da cotação.');
-  if (!profile && authData.user.email) {
-    profile = unwrap(await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('email', authData.user.email)
-      .maybeSingle(), 'Não foi possível identificar o usuário da cotação.');
-  }
-  if (!profile?.id) throw new Error('Seu usuário não está cadastrado no Hub.');
-  return profile.id;
-}
-
 const QUOTE_LIST_COLUMNS = 'id,codigo,cliente_nome,cliente_cnpj,cliente_cidade,status,snapshot_version,snapshot,created_at,updated_at';
 
 export async function getLatestSimuladorSaudeQuote() {
   const supabase = exigirSupabaseConfigurado();
-  const userId = await getCurrentSimuladorSaudeUserId(supabase);
 
   return unwrap(await supabase
     .from('simulador_saude_cotacoes')
     .select(`${QUOTE_LIST_COLUMNS},tipo_contratacao,vigencia`)
-    .eq('created_by', userId)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle(), 'Não foi possível carregar a última cotação salva.');
 }
 
-export async function getRecentSimuladorSaudeQuotes(limit = 10) {
+export async function getRecentSimuladorSaudeQuotes() {
   const supabase = exigirSupabaseConfigurado();
-  const userId = await getCurrentSimuladorSaudeUserId(supabase);
-  const safeLimit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 10)));
-  return unwrap(await supabase
-    .from('simulador_saude_cotacoes')
-    .select(QUOTE_LIST_COLUMNS)
-    .eq('created_by', userId)
-    .order('updated_at', { ascending: false })
-    .limit(safeLimit), 'Não foi possível carregar as cotações recentes.');
+  const pageSize = 500;
+  const quotes = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = unwrap(await supabase
+      .from('simulador_saude_cotacoes')
+      .select(QUOTE_LIST_COLUMNS)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + pageSize - 1), 'Não foi possível carregar as cotações.');
+    quotes.push(...page);
+    if (page.length < pageSize) return quotes;
+  }
 }
 
 export async function getSimuladorSaudeQuoteById(id) {
   if (!id) return null;
   const supabase = exigirSupabaseConfigurado();
-  const userId = await getCurrentSimuladorSaudeUserId(supabase);
   return unwrap(await supabase
     .from('simulador_saude_cotacoes')
     .select(`${QUOTE_LIST_COLUMNS},tipo_contratacao,vigencia`)
-    .eq('created_by', userId)
     .eq('id', id)
     .maybeSingle(), 'Não foi possível carregar esta cotação.');
 }
