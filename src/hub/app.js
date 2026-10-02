@@ -117,6 +117,7 @@ const state = {
   },
   auth: {
     email: '',
+    identificador: '',
     loading: false,
     message: ''
   },
@@ -607,12 +608,13 @@ function renderLogin() {
       </div>
 
     <h1>Hub Transmares</h1>
-      <p>Entre com seu e-mail e senha para acessar o Hub.</p>
+      <p>Entre com seu nome de usuário e senha para acessar o Hub.</p>
 
       <form class="login-form" onsubmit="entrarNoHub(event)">
         <label>
-          <span>E-mail</span>
-          <input id="login_email" class="config-input" type="email" value="${escapeAttr(state.auth.email)}" autocomplete="email" required>
+          <span>Nome de usuário</span>
+          <input id="login_username" class="config-input" type="text" value="${escapeAttr(state.auth.identificador)}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+          <small>Se você ainda não tem nome de usuário, entre temporariamente com seu e-mail.</small>
         </label>
 
         <label>
@@ -642,21 +644,24 @@ function renderLoginLoading() {
 async function entrarNoHub(event) {
   event.preventDefault();
 
-  const email = document.getElementById('login_email')?.value || '';
+  const identificador = document.getElementById('login_username')?.value || '';
   const password = document.getElementById('login_password')?.value || '';
 
   try {
-    state.auth.email = email;
+    state.auth.identificador = identificador;
+    state.auth.email = identificador.includes('@') ? identificador : '';
+
     state.auth.loading = true;
     state.auth.message = '';
     renderLoginLoading();
 
-    const sessao = await entrarComSenha(email, password);
+    const sessao = await entrarComSenha(identificador, password);
 
     if (!sessao?.user?.email) {
       throw new Error('Não foi possível iniciar a sessão. Tente novamente.');
     }
 
+    state.auth.email = sessao.user.email;
     const carregou = await iniciarApp(false);
 
     if (!carregou) {
@@ -664,7 +669,7 @@ async function entrarNoHub(event) {
     }
   } catch (erro) {
     state.auth.loading = false;
-    state.auth.message = erro.message || 'Não foi possível entrar. Confira e-mail e senha.';
+    state.auth.message = erro.message || 'Não foi possível entrar. Confira nome de usuário e senha.';
     renderLogin();
   }
 }
