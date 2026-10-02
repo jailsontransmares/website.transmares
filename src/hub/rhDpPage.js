@@ -25,7 +25,8 @@ import {
   salvarFeriasRhDp,
   salvarAfastamentoRhDp,
   salvarOcorrenciaRhDp,
-  salvarCadastroPessoalRhDp
+  salvarCadastroPessoalRhDp,
+  sincronizarPlanilhaRhDp
 } from './services/rhDpService.js';
 import {
   abrirMenuAcaoGlobal,
@@ -308,6 +309,7 @@ export function criarRhDpController({
     },
     busca: '',
     filtroStatus: 'todos',
+    syncingSpreadsheet: false,
     pagina: 1,
     modal: criarEstadoModal()
   };
@@ -362,6 +364,10 @@ export function criarRhDpController({
 
   function podeVerSensiveis() {
     return pode('rh_dp.colaboradores', 'view_sensitive');
+  }
+
+  function podeSincronizarPlanilha() {
+    return podeEditar() && podeVerSensiveis();
   }
 
   function podeCriar() {
@@ -1109,6 +1115,7 @@ export function criarRhDpController({
           `).join('')}
         </div>
         <div class="rh-collaborators-actions">
+          ${podeSincronizarPlanilha() ? `<button class="secondary-btn rh-collaborators-sync" type="button" data-rh-action="sync-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Processa até 20 alterações pendentes da fila de sincronização">${state.syncingSpreadsheet ? 'Sincronizando…' : 'Sincronizar planilha'}</button>` : ''}
           ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create">+ Incluir</button>' : ''}
           <label class="rh-search">
             <span>Buscar colaboradores</span>
@@ -1149,7 +1156,7 @@ export function criarRhDpController({
           </div>
 
           <div class="rh-collaborators-overview">${renderToolbar()}</div>
-          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}" role="${state.messageType === 'error' ? 'alert' : 'status'}">${escapeHtml(state.message)}</p>` : ''}
           ${state.loading ? (window.hubRenderLoading?.('Carregando colaboradores...') || '<p class="quick-link-empty" role="status">Carregando colaboradores...</p>') : renderTabela()}
         </section>`}
       `;
@@ -1171,6 +1178,7 @@ export function criarRhDpController({
     document.querySelectorAll('[data-rh-action="open-create"]').forEach(botao => botao.addEventListener('click', () => {
       abrirCadastro('', 'create');
     }));
+    document.querySelector('[data-rh-action="sync-spreadsheet"]')?.addEventListener('click', sincronizarPlanilha);
     document.querySelector('[data-rh-action="go-home"]')?.addEventListener('click', () => {
       navegarParaRota(montarCaminhoModulo(''));
     });
@@ -1276,6 +1284,31 @@ export function criarRhDpController({
     document.querySelector('[data-rh-action="save-desligamento-modal"]')?.addEventListener('click', () => {
       salvarDesligamento();
     });
+  }
+
+  async function sincronizarPlanilha() {
+    if (state.syncingSpreadsheet || !podeSincronizarPlanilha()) return;
+    state.syncingSpreadsheet = true;
+    state.message = '';
+    render();
+
+    try {
+      const result = await sincronizarPlanilhaRhDp();
+      const processed = Number(result.processed) || 0;
+      const failed = (result.results || []).filter(item => item.status !== 'success').length;
+      state.message = processed === 0
+        ? 'Não há alterações pendentes para enviar à planilha.'
+        : failed
+          ? `${processed} alteração(ões) processada(s); ${failed} apresentou(aram) erro e será(ão) tentada(s) novamente.`
+          : `${processed} alteração(ões) sincronizada(s) com a planilha.`;
+      state.messageType = failed ? 'error' : 'success';
+    } catch (error) {
+      state.message = error.message || 'Não foi possível sincronizar com a planilha.';
+      state.messageType = 'error';
+    } finally {
+      state.syncingSpreadsheet = false;
+      render();
+    }
   }
 
   function campo(id, label, valor, {

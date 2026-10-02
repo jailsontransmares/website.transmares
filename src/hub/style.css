@@ -11378,6 +11378,12 @@ body.is-resizing-ar-products-column * {
   white-space: nowrap;
 }
 
+.rh-collaborators-sync {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .rh-search {
   display: block;
   flex: 1 1 260px;
@@ -12065,6 +12071,11 @@ body.dark .rh-modal-backdrop {
   }
 
   .rh-collaborators-add {
+    min-height: 36px;
+    padding: 6px 9px;
+  }
+
+  .rh-collaborators-sync {
     min-height: 36px;
     padding: 6px 9px;
   }

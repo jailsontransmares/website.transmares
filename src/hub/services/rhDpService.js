@@ -422,6 +422,23 @@ export async function listarColaboradoresRhDp() {
   return data || [];
 }
 
+export async function sincronizarPlanilhaRhDp() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('rh-google-sheets-sync', {
+    body: {},
+    headers: { 'X-Manual-Sync': 'true' }
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível iniciar a sincronização com a planilha.');
+  }
+  if (!data?.ok) {
+    throw new Error(data?.message || 'A sincronização com a planilha não foi concluída.');
+  }
+
+  return data;
+}
+
 export async function listarArquivosColaboradorRhDp({ colaboradorId } = {}) {
   const supabase = exigirSupabaseConfigurado();
 
