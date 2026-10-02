@@ -37,5 +37,6 @@ Não coloque tokens nem a chave JSON no repositório ou em mensagens. Nunca reut
 
 - A migration enfileira os registros existentes para a carga inicial.
 - Na tela Colaboradores do Hub, usuários com permissões de edição e visualização de dados sensíveis podem usar **Sincronizar planilha** para processar até 20 alterações pendentes imediatamente. O endpoint valida a sessão e as permissões no Supabase; nenhum token de worker é enviado ao navegador.
+- Usuários com permissões de criação, edição e visualização de dados sensíveis também podem usar **Importar da planilha** para criar no Hub até 100 cadastros por execução a partir de `CAD_COLABORADOR`. A importação exige CPF válido e único, ignora CPFs que já existem no Hub e informa linhas inválidas; não sobrescreve cadastros existentes. A lista do Hub é atualizada após a importação.
 - O worker reprocessa falhas com espera crescente; não grava colunas sem mapeamento nem as colunas de fórmula.
 - Falhas de saída são registradas em `integracao_logs` e na fila. Edições recusadas pelo mapeamento ou validação retornam erro ao Apps Script e são registradas sem incluir CPF ou valor editado no log.

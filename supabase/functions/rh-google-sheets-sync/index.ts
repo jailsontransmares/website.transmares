@@ -36,6 +36,11 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function optionalText(value: unknown) {
+  const result = text(value);
+  return result || null;
+}
+
 function json(body: Data, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -43,7 +48,7 @@ function json(body: Data, status = 200) {
   });
 }
 
-async function authorizeManualSync(request: Request, supabaseUrl: string) {
+async function authorizeManualSync(request: Request, supabaseUrl: string, importMode = false) {
   const authorization = text(request.headers.get("Authorization"));
   const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   if (!token) return json({ ok: false, message: "Entre no Hub para iniciar a sincronização." }, 401);
@@ -58,17 +63,18 @@ async function authorizeManualSync(request: Request, supabaseUrl: string) {
   const { data: userData, error: userError } = await userClient.auth.getUser(token);
   if (userError || !userData.user) return json({ ok: false, message: "Sua sessão do Hub expirou. Entre novamente." }, 401);
 
-  const [canUpdate, canReadSensitive] = await Promise.all([
+  const [canCreate, canUpdate, canReadSensitive] = await Promise.all([
+    userClient.rpc("app_tem_permissao", { p_recurso: "rh_dp.colaboradores", p_acao: "create" }),
     userClient.rpc("app_tem_permissao", { p_recurso: "rh_dp.colaboradores", p_acao: "update" }),
     userClient.rpc("app_tem_permissao", { p_recurso: "rh_dp.colaboradores", p_acao: "view_sensitive" })
   ]);
-  if (canUpdate.error || canReadSensitive.error) {
+  if (canCreate.error || canUpdate.error || canReadSensitive.error) {
     return json({ ok: false, message: "Não foi possível verificar sua permissão para sincronizar." }, 500);
   }
-  if (canUpdate.data !== true || canReadSensitive.data !== true) {
+  if (canUpdate.data !== true || canReadSensitive.data !== true || (importMode && canCreate.data !== true)) {
     return json({ ok: false, message: "Seu perfil não tem permissão para sincronizar os dados sensíveis do RH." }, 403);
   }
-  return null;
+  return { client: userClient, userId: userData.user.id };
 }
 
 function sameSecret(left: string, right: string) {
@@ -328,8 +334,8 @@ async function spreadsheetMetadata(token: string) {
   return await googleRequest(`spreadsheets/${SHEET_ID}?fields=sheets.properties`, token) as { sheets: Sheet[] };
 }
 
-async function readTab(tab: string, token: string) {
-  const result = await googleRequest(`spreadsheets/${SHEET_ID}/values/${sheetRange(tab, "A:ZZ")}?valueRenderOption=UNFORMATTED_VALUE&majorDimension=ROWS`, token) as { values?: unknown[][] };
+async function readTab(tab: string, token: string, valueRenderOption = "UNFORMATTED_VALUE") {
+  const result = await googleRequest(`spreadsheets/${SHEET_ID}/values/${sheetRange(tab, "A:ZZ")}?valueRenderOption=${valueRenderOption}&majorDimension=ROWS`, token) as { values?: unknown[][] };
   return rowsFrom(result.values);
 }
 
@@ -480,6 +486,245 @@ async function processRow(client: ReturnType<typeof createClient>, row: QueueRow
   }
 }
 
+function inputValue(headers: unknown[], row: unknown[], labels: string[]) {
+  const index = headerAliases(headers, labels);
+  return index < 0 ? "" : row[index];
+}
+
+function importedDate(value: unknown) {
+  if (value === null || value === undefined || text(value) === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = Date.UTC(1899, 11, 30) + Math.floor(value) * 86_400_000;
+    return new Date(milliseconds).toISOString().slice(0, 10);
+  }
+  const raw = text(value);
+  let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  match = raw.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+  if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+  throw new Error("Data inválida; confira se está no formato dd/mm/aaaa.");
+}
+
+function importedNumber(value: unknown) {
+  if (value === null || value === undefined || text(value) === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  let raw = text(value).replace(/R\$|\s/g, "");
+  if (raw.includes(",") && raw.includes(".")) raw = raw.replace(/\./g, "").replace(",", ".");
+  else if (raw.includes(",")) raw = raw.replace(",", ".");
+  const result = Number(raw);
+  if (!Number.isFinite(result)) throw new Error("Valor numérico inválido.");
+  return result;
+}
+
+function validCpf(value: unknown) {
+  const cpf = digits(value);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const sumDigit = (length: number) => {
+    let sum = 0;
+    for (let index = 0; index < length; index += 1) sum += Number(cpf[index]) * (length + 1 - index);
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+  return sumDigit(9) === Number(cpf[9]) && sumDigit(10) === Number(cpf[10]);
+}
+
+function importedTimeRange(value: unknown) {
+  const raw = text(value);
+  if (!raw) return { start: null, end: null };
+  const match = raw.match(/(\d{1,2}:\d{2})\s*(?:às|as|a|-)\s*(\d{1,2}:\d{2})/i);
+  if (!match) throw new Error("Horário inválido; use HH:MM às HH:MM.");
+  return { start: `${match[1].padStart(5, "0")}:00`, end: `${match[2].padStart(5, "0")}:00` };
+}
+
+function importedLink(headers: unknown[], row: unknown[]): Data {
+  const rawType = normalize(inputValue(headers, row, ["TIPO DE VINCULO"]));
+  const typeAliases: Record<string, string> = {
+    clt: "clt", estagio: "estagio", socio: "socio", prestador: "prestador", pj: "prestador",
+    temporario: "temporario", temporarioa: "temporario", outro: "outro"
+  };
+  const type = rawType ? (typeAliases[rawType] || "outro") : null;
+  const schedule = text(inputValue(headers, row, ["JORNADA DE TRABALHO"]));
+  const scheduleParts = schedule.split(/\s*\|\s*/, 2);
+  const rangeText = scheduleParts.length > 1 ? scheduleParts[1] : schedule;
+  const range = /\d{1,2}:\d{2}/.test(rangeText) ? importedTimeRange(rangeText) : { start: null, end: null };
+  const interval = importedTimeRange(inputValue(headers, row, ["INTERVALO"]));
+  const cboRaw = text(inputValue(headers, row, ["CBO"])).replace(/\D/g, "");
+  const cbo = /^\d{6}$/.test(cboRaw) ? `${cboRaw.slice(0, 4)}-${cboRaw.slice(4)}` : optionalText(inputValue(headers, row, ["CBO"]));
+  return {
+    tipo_vinculo: type,
+    data_admissao: importedDate(inputValue(headers, row, ["DATA DE ADMISSÃO"])),
+    data_desligamento: importedDate(inputValue(headers, row, ["DATA DE SAÍDA"])),
+    cargo: optionalText(inputValue(headers, row, ["CARGO"])),
+    funcao: optionalText(inputValue(headers, row, ["FUNÇÃO", "FUNCAO"])),
+    cbo,
+    situacao: normalize(inputValue(headers, row, ["STATUS HUB"])) === "inativo" ? "desligado" : "ativo",
+    remuneracao_valor: importedNumber(inputValue(headers, row, ["SALARIO/BOLSA"])),
+    horario_entrada: range.start,
+    horario_saida: range.end,
+    intervalo_inicio: interval.start,
+    intervalo_fim: interval.end,
+    dias_trabalho: scheduleParts.length > 1 ? optionalText(scheduleParts[0]) : (range.start ? null : optionalText(schedule)),
+    carga_horaria_mensal: importedNumber(inputValue(headers, row, ["CARGA HORARIA / MÊS", "CARGA HORARIA / MES"]))
+  };
+}
+
+function importedDocuments(headers: unknown[], row: unknown[], cpf: string): Data {
+  const identityRaw = text(inputValue(headers, row, ["RG/CNH"]));
+  const identityMatch = identityRaw.match(/^\s*(RG|CNH)\s*(?:\||\/|:|-)\s*(.*)$/i);
+  const identityType = identityMatch?.[1]?.toLowerCase() || (text(inputValue(headers, row, ["SE CNH, QUAL CATEGORIA?"])) ? "cnh" : identityRaw ? "rg" : null);
+  const identityNumber = optionalText(identityMatch ? identityMatch[2] : identityRaw);
+  const issuerParts = text(inputValue(headers, row, ["ÓRGÃO/UF EMISSOR", "ORGAO/UF EMISSOR"]))
+    .split(/\s*\|\s*/).map((part) => part.trim()).filter(Boolean);
+  const issuerHasUf = issuerParts.length > 1 && /^[A-Za-z]{2}$/.test(issuerParts.at(-1) || "");
+  return {
+    cpf,
+    identidade_tipo: identityType,
+    identidade_numero: identityNumber,
+    identidade_data_emissao: importedDate(inputValue(headers, row, ["DATA DE EMISSAO/EXPEDIÇÃO", "DATA DE EMISSAO/EXPEDICAO"])),
+    identidade_orgao_emissor: issuerHasUf ? issuerParts.slice(0, -1).join(" | ") : optionalText(issuerParts.join(" | ")),
+    identidade_uf_emissor: issuerHasUf ? issuerParts.at(-1)?.toUpperCase() : null,
+    cnh_categoria: optionalText(inputValue(headers, row, ["SE CNH, QUAL CATEGORIA?"])),
+    titulo_eleitor: digits(inputValue(headers, row, ["TITULO DE ELEITOR(A)"])) || null,
+    zona_eleitoral: optionalText(inputValue(headers, row, ["ZONA"])),
+    secao_eleitoral: optionalText(inputValue(headers, row, ["SEÇÃO DE VOTAÇÃO", "SECAO DE VOTACAO"])),
+    ctps_numero: optionalText(inputValue(headers, row, ["NÚMERO DA SUA CTPS", "NUMERO DA SUA CTPS"])),
+    ctps_serie: optionalText(inputValue(headers, row, ["SERIE"])),
+    ctps_data_expedicao: importedDate(inputValue(headers, row, ["DATA DE EXPEDIÇÃO CTPS", "DATA DE EXPEDICAO CTPS"])),
+    ctps_uf: optionalText(inputValue(headers, row, ["UF CTPS"]))?.toUpperCase() || null,
+    reservista_numero: optionalText(inputValue(headers, row, ["RESERVISTA/DOC MILITAR"])),
+    reservista_categoria: optionalText(inputValue(headers, row, ["CATEGORIA DE RESERVISTA"])),
+    pis_numero: digits(inputValue(headers, row, ["PIS - NUMERO", "PIS NUMERO"])) || null,
+    pis_data_cadastro: importedDate(inputValue(headers, row, ["PIS - DATA CADASTRO", "PIS DATA CADASTRO"]))
+  };
+}
+
+function importedDependents(headers: unknown[], row: unknown[]) {
+  const dependents = [];
+  for (let index = 1; index <= 3; index += 1) {
+    const sequence = String(index).padStart(2, "0");
+    const name = optionalText(inputValue(headers, row, [`Dependente legal ${sequence} - NOME COMPLETO`, `Dependente legal ${index} - NOME COMPLETO`]));
+    const birth = importedDate(inputValue(headers, row, [`Dependente legal ${sequence} - DATA DE NASCIMENTO`, `Dependente legal ${index} - DATA DE NASCIMENTO`]));
+    if (!name && !birth) continue;
+    if (!name || !birth) throw new Error(`Preencha nome e nascimento do dependente ${index}.`);
+    dependents.push({ nome_completo: name, data_nascimento: birth });
+  }
+  return dependents;
+}
+
+function safeImportFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (/^Data inválida|^Valor numérico inválido|^Horário inválido|^Preencha nome e nascimento|^Nome completo ausente|^Data de nascimento ausente/.test(message)) return message;
+  const code = text((error as { code?: unknown } | null)?.code);
+  if (code === "23505") return "Já existe um registro com um dos documentos informados.";
+  if (code === "23514" || code === "22P02" || code === "22007" || code === "22008") return "Um dos valores da linha não atende às regras do Hub.";
+  if (code === "42501") return "Seu perfil não tem permissão para criar este cadastro.";
+  return "O Hub recusou esta linha. Confira os campos obrigatórios e os formatos dos dados.";
+}
+
+async function importFromSheet(userClient: ReturnType<typeof createClient>, adminClient: ReturnType<typeof createClient>, token: string) {
+  const data = await readTab(TAB_COLABORADOR, token, "FORMATTED_VALUE");
+  const cpfIndex = headerAliases(data.headers, ["SEU CPF"]);
+  const nameIndex = headerAliases(data.headers, ["NOME COMPLETO"]);
+  const birthIndex = headerAliases(data.headers, ["Data de Nascimento"]);
+  if (cpfIndex < 0 || nameIndex < 0 || birthIndex < 0) {
+    throw new Error("A aba CAD_COLABORADOR precisa ter as colunas SEU CPF, Nome Completo e Data de Nascimento.");
+  }
+  const monthlyHoursIndex = headerAliases(data.headers, ["CARGA HORARIA / MÊS", "CARGA HORARIA / MES"]);
+  if (monthlyHoursIndex >= 0 && data.rows.some((row) => text(row[monthlyHoursIndex]))) {
+    const { error } = await adminClient.from("rh_vinculos_profissionais").select("carga_horaria_mensal").limit(1);
+    if (error) throw new Error("A migration da coluna CARGA HORARIA / MÊS ainda não está aplicada no Supabase.");
+  }
+
+  const failures: Array<{ row: number; message: string }> = [];
+  const candidates: Array<{ rowNumber: number; row: unknown[]; cpf: string }> = [];
+  const occurrences = new Map<string, number>();
+  data.rows.forEach((row, index) => {
+    if (!row.some((value) => text(value))) return;
+    const cpf = digits(row[cpfIndex]);
+    if (cpf) occurrences.set(cpf, (occurrences.get(cpf) || 0) + 1);
+    if (!cpf && !text(row[nameIndex]) && !text(row[birthIndex])) return;
+    if (!validCpf(cpf)) {
+      failures.push({ row: index + 2, message: "CPF ausente ou inválido." });
+      return;
+    }
+    candidates.push({ rowNumber: index + 2, row, cpf });
+  });
+  for (const item of candidates) {
+    if ((occurrences.get(item.cpf) || 0) > 1) failures.push({ row: item.rowNumber, message: "CPF duplicado na planilha; nenhuma linha com esse CPF foi importada." });
+  }
+  const uniqueCandidates = candidates.filter((item) => occurrences.get(item.cpf) === 1);
+  const existingCpfs = new Set<string>();
+  for (let offset = 0; offset < uniqueCandidates.length; offset += 100) {
+    const cpfs = uniqueCandidates.slice(offset, offset + 100).map((item) => item.cpf);
+    const { data: existing, error } = await adminClient.from("rh_documentos_cadastrais").select("cpf").in("cpf", cpfs);
+    if (error) throw error;
+    for (const item of existing || []) existingCpfs.add(digits(item.cpf));
+  }
+  const missing = uniqueCandidates.filter((item) => !existingCpfs.has(item.cpf));
+  const batch = missing.slice(0, 100);
+  let imported = 0;
+  for (const item of batch) {
+    try {
+      const { row, cpf } = item;
+      const name = text(row[nameIndex]);
+      if (name.length < 3) throw new Error("Nome completo ausente ou inválido.");
+      const birthDate = importedDate(row[birthIndex]);
+      if (!birthDate) throw new Error("Data de nascimento ausente.");
+      const dependents = importedDependents(data.headers, row);
+      const scheduleLink = importedLink(data.headers, row);
+      const collaborator: Data = {
+        nome_completo: name,
+        data_nascimento: birthDate,
+        estado_civil: optionalText(inputValue(data.headers, row, ["Estado Civil"])),
+        nacionalidade: optionalText(inputValue(data.headers, row, ["Nacionalidade"])),
+        naturalidade: optionalText(inputValue(data.headers, row, ["Naturalidade"])),
+        nome_pai: optionalText(inputValue(data.headers, row, ["NOME COMPLETO DO SEU PAI"])),
+        nome_mae: optionalText(inputValue(data.headers, row, ["NOME COMPLETO DA SUA MÃE", "NOME COMPLETO DA SUA MAE"])),
+        sexo: optionalText(inputValue(data.headers, row, ["Sexo"])),
+        escolaridade: optionalText(inputValue(data.headers, row, ["Escolaridade"])),
+        cor_raca: optionalText(inputValue(data.headers, row, ["Cor"])),
+        telefone_celular: optionalText(inputValue(data.headers, row, ["Telefone Celular"])),
+        contato_emergencia_telefone: optionalText(inputValue(data.headers, row, ["Contato de Emergência em caso de acidente"])),
+        contato_emergencia_nome: optionalText(inputValue(data.headers, row, ["Nome do contato de Emergência"])),
+        email_contato: optionalText(inputValue(data.headers, row, ["E-mail de contato"]))?.toLowerCase() || null,
+        endereco_logradouro: optionalText(inputValue(data.headers, row, ["RUA"])),
+        endereco_numero: optionalText(inputValue(data.headers, row, ["NUMERO"])),
+        endereco_complemento: optionalText(inputValue(data.headers, row, ["COMPLEMENTO"])),
+        endereco_bairro: optionalText(inputValue(data.headers, row, ["BAIRRO"])),
+        endereco_cidade: optionalText(inputValue(data.headers, row, ["CIDADE"])),
+        endereco_uf: optionalText(inputValue(data.headers, row, ["UF"]))?.toUpperCase() || null,
+        endereco_cep: digits(inputValue(data.headers, row, ["CEP"])) || null,
+        status: normalize(inputValue(data.headers, row, ["STATUS HUB"])) === "inativo" ? "inativo" : "ativo"
+      };
+      const documents = importedDocuments(data.headers, row, cpf);
+      const { data: collaboratorId, error } = await userClient.rpc("rh_salvar_cadastro_pessoal", {
+        p_colaborador_id: null,
+        p_colaborador: collaborator,
+        p_documentos: documents,
+        p_vinculo: scheduleLink,
+        p_dependentes: dependents
+      });
+      if (error) throw error;
+      if (scheduleLink.carga_horaria_mensal !== null && collaboratorId) {
+        const { error: hoursError } = await userClient.from("rh_vinculos_profissionais")
+          .update({ carga_horaria_mensal: scheduleLink.carga_horaria_mensal })
+          .eq("colaborador_id", collaboratorId);
+        if (hoursError) throw hoursError;
+      }
+      imported += 1;
+    } catch (error) {
+      failures.push({ row: item.rowNumber, message: safeImportFailure(error) });
+    }
+  }
+  return {
+    ok: true,
+    imported,
+    existing: existingCpfs.size,
+    failures: failures.slice(0, 20),
+    remaining: Math.max(0, missing.length - batch.length)
+  };
+}
+
 async function claimRows(client: ReturnType<typeof createClient>) {
   const now = new Date().toISOString();
   await client.from("rh_google_sheets_sync_queue")
@@ -518,9 +763,32 @@ Deno.serve(async (request) => {
   const serviceKey = text(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SB_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY"));
   if (!supabaseUrl || !serviceKey) return json({ ok: false, message: "Worker sem configuração do Supabase." }, 500);
 
+  let manualBody: Data = {};
+  if (manualSync) manualBody = await request.json().catch(() => ({})) as Data;
   if (manualSync) {
-    const authorizationError = await authorizeManualSync(request, supabaseUrl);
-    if (authorizationError) return authorizationError;
+    const importMode = manualBody.action === "import_from_sheet";
+    const authorization = await authorizeManualSync(request, supabaseUrl, importMode);
+    if (authorization instanceof Response) return authorization;
+    if (importMode) {
+      const correlationId = novoCorrelationId();
+      try {
+        const account = serviceAccount();
+        const token = await googleAccessToken(account);
+        const metadata = await spreadsheetMetadata(token);
+        const sheetTabs = new Set(metadata.sheets?.map((sheet) => sheet.properties.title) || []);
+        if (!sheetTabs.has(TAB_COLABORADOR)) throw new Error("A planilha não possui a aba CAD_COLABORADOR.");
+        const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+        const result = await importFromSheet(authorization.client, adminClient, token);
+        await registrarLogIntegracao(adminClient, {
+          sistema: "google_sheets", tipo: "sincronizacao", evento: "sheet_import", status: "success", correlation_id: correlationId,
+          detalhes: { imported: result.imported, existing: result.existing, failures: result.failures.length, remaining: result.remaining }
+        });
+        return json({ ...result, correlationId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Não foi possível importar os dados da planilha.";
+        return json({ ok: false, message, correlationId }, 502);
+      }
+    }
   } else if (request.headers.has("X-Sheets-Sync-Token")) {
     const expected = text(Deno.env.get("RH_GOOGLE_SHEETS_INBOUND_TOKEN"));
     const provided = text(request.headers.get("X-Sheets-Sync-Token"));

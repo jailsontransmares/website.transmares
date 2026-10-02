@@ -370,6 +370,10 @@ export function criarRhDpController({
     return podeEditar() && podeVerSensiveis();
   }
 
+  function podeImportarPlanilha() {
+    return pode('rh_dp.colaboradores', 'create') && podeEditar() && podeVerSensiveis();
+  }
+
   function podeCriar() {
     return pode('rh_dp.colaboradores', 'create') && podeVerSensiveis();
   }
@@ -1115,7 +1119,8 @@ export function criarRhDpController({
           `).join('')}
         </div>
         <div class="rh-collaborators-actions">
-          ${podeSincronizarPlanilha() ? `<button class="secondary-btn rh-collaborators-sync" type="button" data-rh-action="sync-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Processa até 20 alterações pendentes da fila de sincronização">${state.syncingSpreadsheet ? 'Sincronizando…' : 'Sincronizar planilha'}</button>` : ''}
+          ${podeSincronizarPlanilha() ? `<button class="secondary-btn rh-collaborators-sync" type="button" data-rh-action="sync-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Envia até 20 alterações pendentes do Hub para a planilha">Enviar ao Sheets</button>` : ''}
+          ${podeImportarPlanilha() ? `<button class="secondary-btn rh-collaborators-import" type="button" data-rh-action="import-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Cria no Hub colaboradores com CPF que ainda não existe no cadastro; CPFs já cadastrados não são alterados">${state.syncingSpreadsheet ? 'Importando…' : 'Importar da planilha'}</button>` : ''}
           ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create">+ Incluir</button>' : ''}
           <label class="rh-search">
             <span>Buscar colaboradores</span>
@@ -1179,6 +1184,7 @@ export function criarRhDpController({
       abrirCadastro('', 'create');
     }));
     document.querySelector('[data-rh-action="sync-spreadsheet"]')?.addEventListener('click', sincronizarPlanilha);
+    document.querySelector('[data-rh-action="import-spreadsheet"]')?.addEventListener('click', importarDaPlanilha);
     document.querySelector('[data-rh-action="go-home"]')?.addEventListener('click', () => {
       navegarParaRota(montarCaminhoModulo(''));
     });
@@ -1304,6 +1310,33 @@ export function criarRhDpController({
       state.messageType = failed ? 'error' : 'success';
     } catch (error) {
       state.message = error.message || 'Não foi possível sincronizar com a planilha.';
+      state.messageType = 'error';
+    } finally {
+      state.syncingSpreadsheet = false;
+      render();
+    }
+  }
+
+  async function importarDaPlanilha() {
+    if (state.syncingSpreadsheet || !podeImportarPlanilha()) return;
+    state.syncingSpreadsheet = true;
+    state.message = '';
+    render();
+
+    try {
+      const result = await sincronizarPlanilhaRhDp({ importar: true });
+      state.colaboradores = await listarColaboradoresRhDp();
+      const imported = Number(result.imported) || 0;
+      const existing = Number(result.existing) || 0;
+      const failures = Array.isArray(result.failures) ? result.failures : [];
+      const remaining = Number(result.remaining) || 0;
+      const parts = [`${imported} colaborador(es) novo(s) importado(s)`, `${existing} CPF(s) já existente(s) ignorado(s)`];
+      if (remaining) parts.push(`${remaining} cadastro(s) novo(s) aguardando outra execução`);
+      if (failures.length) parts.push(`${failures.length} linha(s) com problema${failures.slice(0, 3).map(item => ` — linha ${item.row}: ${item.message}`).join('')}`);
+      state.message = parts.join('; ') + '.';
+      state.messageType = failures.length ? 'error' : 'success';
+    } catch (error) {
+      state.message = error.message || 'Não foi possível importar os dados da planilha.';
       state.messageType = 'error';
     } finally {
       state.syncingSpreadsheet = false;

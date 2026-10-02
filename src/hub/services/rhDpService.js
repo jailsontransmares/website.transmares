@@ -422,10 +422,10 @@ export async function listarColaboradoresRhDp() {
   return data || [];
 }
 
-export async function sincronizarPlanilhaRhDp() {
+export async function sincronizarPlanilhaRhDp({ importar = false } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase.functions.invoke('rh-google-sheets-sync', {
-    body: {},
+    body: importar ? { action: 'import_from_sheet' } : {},
     headers: { 'X-Manual-Sync': 'true' }
   });
 

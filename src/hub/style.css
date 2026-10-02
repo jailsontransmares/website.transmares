@@ -11378,7 +11378,8 @@ body.is-resizing-ar-products-column * {
   white-space: nowrap;
 }
 
-.rh-collaborators-sync {
+.rh-collaborators-sync,
+.rh-collaborators-import {
   flex: 0 0 auto;
   min-height: 40px;
   white-space: nowrap;
@@ -12075,7 +12076,8 @@ body.dark .rh-modal-backdrop {
     padding: 6px 9px;
   }
 
-  .rh-collaborators-sync {
+  .rh-collaborators-sync,
+  .rh-collaborators-import {
     min-height: 36px;
     padding: 6px 9px;
   }
