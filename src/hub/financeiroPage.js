@@ -205,6 +205,11 @@ const LIMITES_SUBNAVEGACAO_FINANCEIRO = {
   tablet: 4
 };
 
+function submoduloFinanceiroAtivo(state, secao, aba) {
+  const chave = `home.financeiro.${secao}.${aba}`;
+  return state.submoduleEnabled ? state.submoduleEnabled(chave) : true;
+}
+
 function distribuirNavegacaoFinanceiro(itens, limites = {}) {
   const faixa = obterFaixaNavegacaoFinanceiro();
   const limite = limites[faixa] || itens.length;
@@ -404,9 +409,10 @@ function renderCadastrosTabs({ state }) {
       ${aba.nome}
     </button>
   `;
-  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_CADASTRO_ABAS, {
+  const abasAtivas = FINANCEIRO_CADASTRO_ABAS.filter(aba => submoduloFinanceiroAtivo(state, 'cadastros', aba.id));
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(abasAtivas, {
     ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
-    desktop: FINANCEIRO_CADASTRO_ABAS.length
+    desktop: abasAtivas.length
   });
 
   return `
@@ -442,9 +448,10 @@ function renderLancamentosTabs({ state }) {
       <span class="fin-lancamento-tab-short" aria-hidden="true">${abreviacoes[aba.id] || aba.nome}</span>
     </button>
   `;
-  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_LANCAMENTO_ABAS, {
+  const abasAtivas = FINANCEIRO_LANCAMENTO_ABAS.filter(aba => submoduloFinanceiroAtivo(state, 'lancamentos', aba.id));
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(abasAtivas, {
     ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
-    desktop: FINANCEIRO_LANCAMENTO_ABAS.length
+    desktop: abasAtivas.length
   });
 
   return `
@@ -467,9 +474,10 @@ function renderConfiguracoesTabs({ state }) {
       ${aba.nome}
     </button>
   `;
-  const { principais, secundarias } = distribuirNavegacaoFinanceiro(FINANCEIRO_CONFIG_ABAS, {
+  const abasAtivas = FINANCEIRO_CONFIG_ABAS.filter(aba => submoduloFinanceiroAtivo(state, 'configuracoes', aba.id));
+  const { principais, secundarias } = distribuirNavegacaoFinanceiro(abasAtivas, {
     ...LIMITES_SUBNAVEGACAO_FINANCEIRO,
-    desktop: FINANCEIRO_CONFIG_ABAS.length
+    desktop: abasAtivas.length
   });
 
   return `
@@ -2307,7 +2315,19 @@ export function renderFinanceiroPagina({
   escapeAttr
 }) {
   const secao = FINANCEIRO_SECOES.find(item => item.id === state.secao) || FINANCEIRO_SECOES[0];
-  const secoesPermitidas = FINANCEIRO_SECOES.filter(item => podeAcessarSecaoFinanceiro(item, state.pode));
+  const secoesPermitidas = FINANCEIRO_SECOES.filter(item => {
+    if (!podeAcessarSecaoFinanceiro(item, state.pode)) return false;
+    if (state.submoduleEnabled && !state.submoduleEnabled(`financeiro.${item.id}`)) return false;
+    if (['cadastros', 'lancamentos', 'configuracoes'].includes(item.id)) {
+      const abas = item.id === 'cadastros'
+        ? FINANCEIRO_CADASTRO_ABAS
+        : item.id === 'lancamentos'
+          ? FINANCEIRO_LANCAMENTO_ABAS
+          : FINANCEIRO_CONFIG_ABAS;
+      return abas.some(aba => submoduloFinanceiroAtivo(state, item.id, aba.id));
+    }
+    return true;
+  });
 
   let conteudoPrincipal = '';
   if (!secoesPermitidas.length) {

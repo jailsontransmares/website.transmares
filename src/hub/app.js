@@ -30,7 +30,8 @@ import {
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
-import { HUB_ADMIN_ROUTE_TABS, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
+import { HOME_SUBMODULE_GROUPS, HOME_SUBMODULES } from './homeSubmodules.js';
+import { HUB_ADMIN_ROUTE_TABS, HUB_ROUTE_ALIASES, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
 import { resolveCrm2CadastroTab } from './crm2CadastroRoute.js';
 import { renderCrm2CadastroPagination } from './crm2CadastroUi.js';
 import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
@@ -227,6 +228,7 @@ const state = {
   usuario: null,
   config: null,
   cards: [],
+  homeModuleSettings: { modules: [], submodules: [] },
   avisos: [],
   aniversariantes: [],
   favoritos: [],
@@ -247,7 +249,11 @@ const state = {
   modulosHome: {
     aberto: false,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
     original: {},
     draft: {},
     loading: false,
@@ -721,6 +727,7 @@ async function iniciarApp(exibirLoadingInicial = true) {
     state.usuario = response.data.usuario;
     state.config = response.data.config;
     state.cards = response.data.cards || [];
+    state.homeModuleSettings = response.data.homeModuleSettings || { modules: [], submodules: [] };
     state.avisos = response.data.avisos || [];
     state.aniversariantes = response.data.aniversariantes || [];
     state.favoritos = response.data.favoritos || [];
@@ -747,6 +754,7 @@ function limparDadosSessao() {
   state.usuario = null;
   state.config = null;
   state.cards = [];
+  state.homeModuleSettings = { modules: [], submodules: [] };
   state.avisos = [];
   state.aniversariantes = [];
   state.favoritos = [];
@@ -1042,11 +1050,94 @@ function renderDashboard() {
         `).join('')}
       </section>
 
+      ${renderSubmodulosVisiveisHome()}
+
       ${renderModalConfigurarModulosHome()}
     </main>
   `;
 }
 
+function renderSubmodulosVisiveisHome() {
+  const visiveis = HOME_SUBMODULES.filter(item => submoduloHomeEstaVisivel(item))
+    .filter(item => moduloEstaAtivo(item.parent))
+    .filter(podeVisualizarSubmoduloHome);
+  if (!visiveis.length) return '';
+
+  const porPai = new Map();
+  for (const item of visiveis) {
+    const lista = porPai.get(item.parent) || [];
+    lista.push(item);
+    porPai.set(item.parent, lista);
+  }
+
+  const nomesModulos = new Map([
+    ...(state.homeModuleSettings?.modules || []).map(item => [item.slug, item.nome]),
+    ['operacoes-corretora', 'Operações > Corretora']
+  ]);
+  const grupos = [...porPai.entries()].map(([parent, itens]) => {
+    const porChave = new Map(itens.map(item => [item.key, item]));
+    const elementos = [];
+    const gruposUsados = new Set();
+
+    for (const item of itens) {
+      if (item.group) {
+        if (gruposUsados.has(item.group)) continue;
+        gruposUsados.add(item.group);
+        const paiGrupo = porChave.get(item.group);
+        const definicao = HOME_SUBMODULE_GROUPS[item.group];
+        const filhos = itens.filter(filho => filho.group === item.group);
+        elementos.push(`
+          <div class="home-submodule-group">
+            ${paiGrupo ? `<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(paiGrupo.key)}')">${escapeHtml(paiGrupo.label)} <span aria-hidden="true">›</span></button>` : `<strong class="home-submodule-group-title">${escapeHtml(definicao?.label || item.group)}</strong>`}
+            ${filhos.length ? `<div class="home-submodule-children">${filhos.map(filho => `<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(filho.key)}')">${escapeHtml(filho.label)} <span aria-hidden="true">›</span></button>`).join('')}</div>` : ''}
+          </div>
+        `);
+        continue;
+      }
+
+      if (itens.some(filho => filho.group === item.key)) continue;
+      elementos.push(`<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(item.key)}')">${escapeHtml(item.label)} <span aria-hidden="true">›</span></button>`);
+    }
+
+    return `
+      <section class="home-submodule-parent-group" aria-label="Atalhos de ${escapeAttr(nomesModulos.get(parent) || parent)}">
+        <h3>${escapeHtml(nomesModulos.get(parent) || parent)}</h3>
+        <div class="home-submodule-links">${elementos.join('')}</div>
+      </section>
+    `;
+  }).join('');
+
+  return `
+    <section class="home-submodules-section" aria-labelledby="home-submodules-title">
+      <div class="section-title"><h2 id="home-submodules-title">Atalhos visíveis</h2><p>Submódulos disponíveis, organizados pelo módulo principal.</p></div>
+      <div class="home-submodule-parent-grid">${grupos}</div>
+    </section>
+  `;
+}
+
+function podeVisualizarSubmoduloHome(item) {
+  if (!item?.permission) return true;
+  if (item.key === 'central_senhas.links') {
+    return pode(item.permission, 'view') || podeAcessarGerenciamentoLinks();
+  }
+  return pode(item.permission, 'view');
+}
+
+function navegarParaSubmoduloHome(key) {
+  const item = HOME_SUBMODULES.find(submodule => submodule.key === key);
+  if (!item || !submoduloHomeEstaVisivel(item) || !moduloEstaAtivo(item.parent)
+    || !podeVisualizarSubmoduloHome(item)) {
+    return renderModuloIndisponivel(item?.parent || '');
+  }
+
+  const [pathname = '/', hash = ''] = item.route.split('#');
+  const base = obterBaseHub();
+  const url = new URL(window.location.href);
+  url.pathname = `${base}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+  url.hash = hash ? `#${hash}` : '';
+  window.history.pushState({}, '', url);
+  return renderizarRotaAtual();
+}
 
 function podeConfigurarModulosHome() {
   return pode('admin.modulos', 'update') || pode('admin', 'update') || pode('admin', 'view');
@@ -1081,8 +1172,12 @@ function renderModalConfigurarModulosHome() {
     <div class="modal-backdrop admin-user-modal-backdrop" role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
       <section class="small-modal admin-user-modal is-permissions-stage home-modules-modal">
         <div class="small-modal-header">
-          <div>
+          <div class="home-modules-modal-title">
+            <span class="home-modules-modal-title-icon"><i data-lucide="layout-grid" aria-hidden="true"></i></span>
+            <div>
             <h3>Configurar módulos</h3>
+              <p>Defina o status e a exibição dos módulos e submódulos.</p>
+            </div>
           </div>
           <button class="icon-btn" type="button" onclick="fecharModalConfigurarModulosHome()" title="Fechar" aria-label="Fechar" ${modal.saving ? 'disabled' : ''}>×</button>
         </div>
@@ -1095,8 +1190,9 @@ function renderModalConfigurarModulosHome() {
         </div>
 
         <div class="small-modal-actions admin-user-permissions-actions">
-          <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
-          <div class="admin-user-permissions-actions-right">
+          <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
+          <div class="home-modules-footer-actions">
+            <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
             <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${modal.saving || !alterado ? 'disabled' : ''}>
               ${modal.saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
@@ -1108,12 +1204,45 @@ function renderModalConfigurarModulosHome() {
 }
 
 function renderConteudoModalConfigurarModulosHome() {
+  const resumo = obterResumoVisibilidadeModulosHome();
   return `
-    <div class="home-modules-modal-table-wrap">
-      ${renderListaModulosHomeModal()}
+    <div class="home-modules-modal-content">
+      <div class="home-modules-toolbar">
+        <label class="home-modules-search">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input type="search" data-home-modules-search value="${escapeAttr(state.modulosHome.busca || '')}" placeholder="Buscar módulo..." aria-label="Buscar módulo ou submódulo" oninput="alterarBuscaModuloHome(this.value)">
+        </label>
+        <div class="home-modules-filters" role="group" aria-label="Filtrar por visibilidade">
+          ${renderFiltroModulosHome('todos', 'Todos', resumo.total)}
+          ${renderFiltroModulosHome('visiveis', 'Visíveis', resumo.visiveis)}
+          ${renderFiltroModulosHome('ocultos', 'Ocultos', resumo.ocultos)}
+        </div>
+        <label class="home-modules-area-select-label">
+          <span class="sr-only">Filtrar por área</span>
+          <select class="home-modules-area-select" aria-label="Filtrar por área" onchange="alterarAreaModuloHome(this.value)">
+            <option value="todas" ${state.modulosHome.area === 'todas' ? 'selected' : ''}>Todas as áreas</option>
+            ${AREAS_MODULOS_HOME.map(area => `<option value="${area.id}" ${state.modulosHome.area === area.id ? 'selected' : ''}>${escapeHtml(area.label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div class="home-modules-modal-table-wrap">
+        ${renderListaModulosHomeModal()}
+      </div>
     </div>
   `;
 }
+
+const AREAS_MODULOS_HOME = [
+  { id: 'corretora', label: 'Corretora', slugs: ['links-corretora'] },
+  { id: 'ar', label: 'AR', slugs: ['links-ar', 'painel-ar'] },
+  { id: 'gestao', label: 'Gestão', slugs: ['links-gestao', 'central-senhas', 'rh-dp', 'administracao'] },
+  { id: 'operacoes-corretora', label: 'Operações > Corretora', slugs: [], virtualParents: ['operacoes-corretora'] },
+  { id: 'financeiro', label: 'Financeiro', slugs: ['financeiro'] }
+];
+
+const HOME_SUBMODULE_PARENT_LABELS = {
+  'operacoes-corretora': 'Operações > Corretora'
+};
 
 function renderFiltroModulosHome(filtro, label, total) {
   const ativo = state.modulosHome.filtro === filtro;
@@ -1132,8 +1261,13 @@ function renderFiltroModulosHome(filtro, label, total) {
 }
 
 function obterResumoVisibilidadeModulosHome() {
-  return (state.modulosHome.modules || []).reduce((acc, modulo) => {
-    const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
+  const itens = [
+    ...(state.modulosHome.modules || []),
+    ...(state.modulosHome.submodules || []).map(item => ({ id: item.key }))
+  ];
+
+  return itens.reduce((acc, item) => {
+    const visivel = obterVisibilidadeModuloHomeDraft(item.id);
     acc.total += 1;
 
     if (visivel) {
@@ -1164,89 +1298,275 @@ function obterModuloHomeDraft(id) {
 }
 
 function obterVisibilidadeModuloHomeDraft(id) {
-  return obterModuloHomeDraft(id).exibir_home !== false;
+  const item = obterModuloHomeDraft(id);
+  if (item.status === 'inativo' || item.exibir_home === false) return false;
+
+  const submodulo = (state.modulosHome.submodules || []).find(registro => registro.key === id);
+  if (!submodulo) return true;
+
+  const moduloPai = (state.modulosHome.modules || []).find(modulo => modulo.slug === submodulo.parent);
+  if (moduloPai && (obterStatusModuloHomeDraft(moduloPai.id) === 'inativo'
+    || obterModuloHomeDraft(moduloPai.id).exibir_home === false)) return false;
+
+  if (submodulo.group) {
+    const grupo = (state.modulosHome.submodules || []).find(registro => registro.key === submodulo.group);
+    if (grupo && (obterStatusModuloHomeDraft(grupo.key) === 'inativo'
+      || obterModuloHomeDraft(grupo.key).exibir_home === false)) return false;
+  }
+
+  return true;
 }
 
 function obterStatusModuloHomeDraft(id) {
   return obterModuloHomeDraft(id).status === 'inativo' ? 'inativo' : 'ativo';
 }
 
-function obterModulosHomeFiltrados() {
-  const filtro = state.modulosHome.filtro || 'todos';
-  const modules = state.modulosHome.modules || [];
+function aplicarSnapshotConfiguracaoModulosHome(data = {}) {
+  const modules = data.modules || [];
+  const submodules = data.submodules || [];
+  const original = [...modules, ...submodules.map(item => ({
+    id: item.key,
+    status: item.status,
+    exibir_home: item.exibir_home
+  }))].reduce((acc, modulo) => {
+    acc[modulo.id] = {
+      exibir_home: modulo.status !== 'inativo' && modulo.exibir_home !== false,
+      status: modulo.status === 'inativo' ? 'inativo' : 'ativo'
+    };
+    return acc;
+  }, {});
 
-  if (filtro === 'visiveis') {
-    return modules.filter(modulo => obterVisibilidadeModuloHomeDraft(modulo.id));
-  }
-
-  if (filtro === 'ocultos') {
-    return modules.filter(modulo => !obterVisibilidadeModuloHomeDraft(modulo.id));
-  }
-
-  return modules;
+  state.modulosHome.modules = modules;
+  state.modulosHome.submodules = submodules;
+  state.modulosHome.original = original;
+  state.modulosHome.draft = { ...original };
+  state.homeModuleSettings = { modules, submodules };
 }
 
 function renderListaModulosHomeModal() {
-  const modules = state.modulosHome.modules || [];
+  const query = normalizarTextoBuscaModuloHome(state.modulosHome.busca || '');
+  const areaSelecionada = state.modulosHome.area || 'todas';
+  const grupos = AREAS_MODULOS_HOME
+    .filter(area => areaSelecionada === 'todas' || area.id === areaSelecionada)
+    .map(area => ({
+      ...area,
+      modulos: (state.modulosHome.modules || []).filter(modulo => area.slugs.includes(modulo.slug))
+    }))
+    .map(area => ({
+      ...area,
+      linhas: area.modulos.map(modulo => {
+        const correspondeModulo = correspondeBuscaModuloHome(modulo.nome || modulo.slug, query);
+        const submodulos = (state.modulosHome.submodules || [])
+          .filter(item => item.parent === modulo.slug)
+          .filter(item => passaFiltroVisibilidadeModuloHome(item.key))
+          .filter(item => !query || correspondeModulo || correspondeBuscaModuloHome(item.label, query));
+        const moduloVisivelNoFiltro = passaFiltroVisibilidadeModuloHome(modulo.id);
+        const moduloCorresponde = !query || correspondeModulo || submodulos.length > 0;
 
-  if (!modules.length) {
-    return '<p class="quick-link-empty">Nenhum módulo encontrado.</p>';
+        if (!moduloCorresponde || (!moduloVisivelNoFiltro && !submodulos.length)) return null;
+
+        return {
+          modulo,
+          submodulos,
+          moduloContextual: !moduloVisivelNoFiltro || (query && !correspondeModulo)
+        };
+      }).filter(Boolean).concat((area.virtualParents || []).map(parent => {
+        const label = HOME_SUBMODULE_PARENT_LABELS[parent] || parent;
+        const correspondePai = correspondeBuscaModuloHome(label, query);
+        const submodulos = (state.modulosHome.submodules || [])
+          .filter(item => item.parent === parent)
+          .filter(item => passaFiltroVisibilidadeModuloHome(item.key))
+          .filter(item => !query || correspondePai || correspondeBuscaModuloHome(item.label, query));
+
+        if (!submodulos.length) return null;
+        return {
+          modulo: { id: null, slug: parent, nome: label, virtual: true },
+          submodulos,
+          moduloContextual: false
+        };
+      }).filter(Boolean))
+    }))
+    .filter(area => area.linhas.length);
+
+  if (!grupos.length) {
+    return `<p class="home-modules-empty">${query ? 'Nenhum item encontrado.' : 'Nenhum módulo encontrado para este filtro.'}</p>`;
   }
 
   return `
-    <div class="crud-list admin-modules-list home-modules-modal-list">
-      <div class="home-modules-modal-header home-modules-modal-grid">
-        <span>Módulo</span>
-        <span>Status</span>
-        <span>Exibição</span>
-      </div>
-      ${modules.map(modulo => renderLinhaModuloHomeModal(modulo)).join('')}
+    <div class="home-modules-area-grid">
+      ${grupos.map(area => {
+        const quantidade = area.linhas.reduce((total, linha) => total + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0);
+        const unidadeQuantidade = area.virtualParents?.length
+          ? (quantidade === 1 ? 'item' : 'itens')
+          : (quantidade === 1 ? 'módulo' : 'módulos');
+        const recolhido = state.modulosHome.gruposRecolhidos?.[area.id] === true;
+        const idConteudo = `home-modules-area-${area.id}`;
+        return `
+          <section class="home-modules-area-card${recolhido ? ' is-collapsed' : ''}">
+            <header class="home-modules-area-card-header">
+              <div class="home-modules-area-title">
+                <span class="home-modules-area-icon"><i data-lucide="folder" aria-hidden="true"></i></span>
+                <strong>${escapeHtml(area.label)}</strong>
+                <span class="home-modules-area-count">${quantidade} ${unidadeQuantidade}</span>
+              </div>
+              <button class="home-modules-collapse-button" type="button" onclick="alternarGrupoModulosHome('${area.id}')" aria-expanded="${!recolhido}" aria-controls="${idConteudo}" aria-label="${recolhido ? 'Expandir' : 'Recolher'} área ${escapeAttr(area.label)}">
+                <i data-lucide="chevron-${recolhido ? 'down' : 'up'}" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div class="home-modules-area-card-body" id="${idConteudo}" ${recolhido ? 'hidden' : ''}>
+              ${renderAcoesLoteAreaModulosHome(area)}
+              ${area.linhas.map(({ modulo, submodulos, moduloContextual }) => `
+                <div class="home-modules-parent-group">
+                  ${modulo.virtual ? '' : renderLinhaModuloHomeModal({ ...modulo, contexto: Boolean(moduloContextual) })}
+                  ${renderSubmodulosModal(modulo, submodulos)}
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        `;
+      }).join('')}
     </div>
   `;
+}
+
+function renderAcoesLoteAreaModulosHome(area) {
+  const title = `Aplica ao grupo inteiro ${area.label}, inclusive itens ocultos pelos filtros atuais.`;
+  const possuiModuloProtegido = (state.modulosHome.modules || []).some(modulo =>
+    area.slugs.includes(modulo.slug) && modulo.bloqueavel === false
+  );
+  const titleInativar = possuiModuloProtegido
+    ? `${title} O módulo protegido permanece ativo; os demais itens podem ser inativados.`
+    : title;
+  return `
+    <div class="home-modules-area-bulk-actions" role="group" aria-label="Ações em lote para ${escapeAttr(area.label)}">
+      <span>Aplicar ao grupo:</span>
+      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ativar todos</button>
+      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" ${state.modulosHome.saving ? 'disabled' : ''}>Inativar todos</button>
+      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Exibir todos</button>
+      <button type="button" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="${escapeAttr(title)}" ${state.modulosHome.saving ? 'disabled' : ''}>Ocultar todos</button>
+    </div>
+  `;
+}
+
+function aplicarAcaoLoteAreaModulosHome(areaId, acao) {
+  if (state.modulosHome.saving) return;
+  const area = AREAS_MODULOS_HOME.find(item => item.id === areaId);
+  if (!area) return;
+
+  const modulos = (state.modulosHome.modules || []).filter(modulo => area.slugs.includes(modulo.slug));
+  const modulosPorSlug = new Map(modulos.map(modulo => [modulo.slug, modulo]));
+  const submodulos = (state.modulosHome.submodules || []).filter(item =>
+    area.slugs.includes(item.parent) || area.virtualParents?.includes(item.parent)
+  );
+  const draft = { ...(state.modulosHome.draft || {}) };
+
+  for (const modulo of modulos) {
+    const atual = obterModuloHomeDraft(modulo.id);
+    if (acao === 'ativar') {
+      draft[modulo.id] = { ...atual, status: 'ativo' };
+    } else if (acao === 'inativar' && modulo.bloqueavel !== false) {
+      draft[modulo.id] = { ...atual, status: 'inativo', exibir_home: false };
+    } else if (acao === 'exibir' && obterStatusModuloHomeDraft(modulo.id) === 'ativo') {
+      draft[modulo.id] = { ...atual, exibir_home: true };
+    } else if (acao === 'ocultar') {
+      draft[modulo.id] = { ...atual, exibir_home: false };
+    }
+  }
+
+  for (const submodulo of submodulos) {
+    const atual = obterModuloHomeDraft(submodulo.key);
+    const pai = modulosPorSlug.get(submodulo.parent);
+    const paiAtivo = !pai || obterStatusModuloHomeDraft(pai.id) === 'ativo';
+    const grupo = submodulo.group
+      ? submodulos.find(item => item.key === submodulo.group)
+      : null;
+    const grupoAtivo = !grupo || obterStatusModuloHomeDraft(grupo.key) === 'ativo';
+
+    if (acao === 'ativar') {
+      draft[submodulo.key] = { ...atual, status: 'ativo' };
+    } else if (acao === 'inativar') {
+      draft[submodulo.key] = { ...atual, status: 'inativo', exibir_home: false };
+    } else if (acao === 'exibir'
+      && obterStatusModuloHomeDraft(submodulo.key) === 'ativo'
+      && paiAtivo && grupoAtivo) {
+      draft[submodulo.key] = { ...atual, exibir_home: true };
+    } else if (acao === 'ocultar') {
+      draft[submodulo.key] = { ...atual, exibir_home: false };
+    }
+  }
+
+  state.modulosHome.draft = draft;
+  renderDashboard();
+}
+
+function normalizarTextoBuscaModuloHome(valor = '') {
+  return String(valor || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function correspondeBuscaModuloHome(valor, query) {
+  return !query || normalizarTextoBuscaModuloHome(valor).includes(query);
+}
+
+function passaFiltroVisibilidadeModuloHome(id) {
+  const filtro = state.modulosHome.filtro || 'todos';
+  const visivel = obterVisibilidadeModuloHomeDraft(id);
+  return filtro === 'todos' || (filtro === 'visiveis' ? visivel : !visivel);
+}
+
+function renderSubmodulosModal(modulo, submodules = []) {
+  if (!submodules.length) return '';
+
+  const existingKeys = new Set(submodules.map(item => item.key));
+  let previousGroup = '';
+  return submodules.map(item => {
+    const syntheticGroup = item.group && !existingKeys.has(item.group) ? HOME_SUBMODULE_GROUPS[item.group] : null;
+    const heading = syntheticGroup && previousGroup !== item.group
+      ? `<div class="home-modules-modal-group-heading">${escapeHtml(syntheticGroup.label)}</div>`
+      : '';
+    previousGroup = syntheticGroup ? item.group : '';
+    return `${heading}${renderLinhaModuloHomeModal({
+      id: item.key,
+      nome: item.label,
+      status: item.status,
+      exibir_home: item.exibir_home,
+      isSubmodule: true,
+      nested: Boolean(item.group && existingKeys.has(item.group)),
+      parentInactive: obterStatusModuloHomeDraft(modulo.id) === 'inativo',
+      groupInactive: Boolean(item.group && (state.modulosHome.submodules || []).some(grupo => grupo.key === item.group && obterStatusModuloHomeDraft(grupo.key) === 'inativo'))
+    })}`;
+  }).join('');
 }
 
 function renderLinhaModuloHomeModal(modulo) {
   const id = escapeAttr(modulo.id || '');
   const status = obterStatusModuloHomeDraft(modulo.id);
   const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
-  const toggleDisabled = status === 'inativo' || state.modulosHome.saving;
-  const botaoStatusDesabilitado = state.modulosHome.saving || (!modulo.bloqueavel && status === 'ativo');
-  const proximoStatus = status === 'ativo' ? 'inativo' : 'ativo';
-  const acaoStatus = status === 'ativo' ? 'Ativo' : 'Inativo';
-  const acaoVisibilidade = visivel ? 'Visível' : 'Oculto';
-  const tituloStatus = !modulo.bloqueavel && status === 'ativo'
-    ? 'Este módulo é protegido e não pode ser inativado.'
-    : 'Alterar status do módulo.';
-  const tituloVisibilidade = toggleDisabled
-    ? 'Módulos inativos não aparecem na Home.'
-    : 'Alterar visibilidade na Home.';
+  const toggleDisabled = status === 'inativo' || state.modulosHome.saving || Boolean(modulo.parentInactive || modulo.groupInactive);
+  const statusDisabled = state.modulosHome.saving || Boolean(modulo.parentInactive);
+  const protegido = !modulo.isSubmodule && !modulo.bloqueavel && status === 'ativo';
+  const nome = modulo.nome || modulo.label || modulo.slug || 'Módulo';
 
   return `
-    <article class="home-modules-modal-row home-modules-modal-grid">
-      <div class="admin-user-identity">
-        <strong>${escapeHtml(modulo.nome || modulo.slug || 'Módulo')}</strong>
+    <article class="home-modules-modal-row home-modules-modal-grid${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}">
+      <div class="home-modules-item-name${modulo.isSubmodule ? ' home-submodule-identity' : ''}">
+        <span class="home-modules-item-icon"><i data-lucide="${modulo.isSubmodule ? 'link-2' : 'layout-grid'}" aria-hidden="true"></i></span>
+        <strong>${escapeHtml(nome)}</strong>
       </div>
-      <div class="crud-actions home-modules-modal-action">
-        <button
-          class="${status === 'ativo' ? 'secondary-btn' : 'save-btn'}"
-          type="button"
-          onclick="alterarStatusModuloHome('${id}', '${proximoStatus}')"
-          title="${escapeAttr(tituloStatus)}"
-          ${botaoStatusDesabilitado ? 'disabled' : ''}
-        >
-          ${escapeHtml(!modulo.bloqueavel && status === 'ativo' ? 'Protegido' : acaoStatus)}
-        </button>
+      <div class="home-modules-modal-action home-modules-status-action">
+        ${protegido
+          ? '<span class="home-modules-protected-status">Protegido</span>'
+          : `<label class="sr-only" for="home-module-status-${id}">Status de ${escapeAttr(nome)}</label>
+            <select id="home-module-status-${id}" class="home-modules-status-select" onchange="alterarStatusModuloHome('${id}', this.value)" ${statusDisabled ? 'disabled' : ''}>
+              <option value="ativo" ${status === 'ativo' ? 'selected' : ''}>Ativo</option>
+              <option value="inativo" ${status === 'inativo' ? 'selected' : ''}>Inativo</option>
+            </select>`}
       </div>
-      <div class="crud-actions home-modules-modal-action">
-        <button
-          class="${visivel ? 'secondary-btn' : 'save-btn'}"
-          type="button"
-          onclick="alterarVisibilidadeModuloHome('${id}', ${visivel ? 'false' : 'true'})"
-          title="${escapeAttr(tituloVisibilidade)}"
-          ${toggleDisabled ? 'disabled' : ''}
-        >
-          ${escapeHtml(acaoVisibilidade)}
-        </button>
+      <div class="home-modules-modal-action home-modules-visibility-action">
+        <label class="home-modules-visibility${toggleDisabled ? ' is-disabled' : ''}">
+          <input type="checkbox" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
+          <span class="home-modules-switch" aria-hidden="true"></span>
+          <span class="home-modules-visibility-label">${visivel ? 'Visível' : 'Oculto'}</span>
+        </label>
       </div>
     </article>
   `;
@@ -1261,7 +1581,11 @@ async function abrirModalConfigurarModulosHome() {
   state.modulosHome = {
     aberto: true,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
     original: {},
     draft: {},
     loading: true,
@@ -1271,24 +1595,13 @@ async function abrirModalConfigurarModulosHome() {
   renderDashboard();
 
   try {
-    const response = await chamarApi('listAdminModules');
+    const response = await chamarApi('listHomeModuleSettings');
 
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível carregar módulos.'));
     }
 
-    const modules = response.data.modules || [];
-    const original = modules.reduce((acc, modulo) => {
-      acc[modulo.id] = {
-        exibir_home: modulo.exibir_home !== false,
-        status: modulo.status === 'inativo' ? 'inativo' : 'ativo'
-      };
-      return acc;
-    }, {});
-
-    state.modulosHome.modules = modules;
-    state.modulosHome.original = original;
-    state.modulosHome.draft = { ...original };
+    aplicarSnapshotConfiguracaoModulosHome(response.data);
     state.modulosHome.loading = false;
     renderDashboard();
   } catch (erro) {
@@ -1302,7 +1615,11 @@ function fecharModalConfigurarModulosHome() {
   state.modulosHome = {
     aberto: false,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
     original: {},
     draft: {},
     loading: false,
@@ -1314,6 +1631,30 @@ function fecharModalConfigurarModulosHome() {
 
 function selecionarFiltroModulosHome(filtro) {
   state.modulosHome.filtro = filtro;
+  renderDashboard();
+}
+
+function alterarBuscaModuloHome(valor = '') {
+  const inputAtual = document.querySelector('[data-home-modules-search]');
+  const posicaoCursor = inputAtual?.selectionStart ?? String(valor).length;
+  state.modulosHome.busca = valor;
+  renderDashboard();
+  const novoInput = document.querySelector('[data-home-modules-search]');
+  novoInput?.focus();
+  novoInput?.setSelectionRange?.(posicaoCursor, posicaoCursor);
+}
+
+function alterarAreaModuloHome(area) {
+  state.modulosHome.area = area;
+  renderDashboard();
+}
+
+function alternarGrupoModulosHome(area) {
+  const gruposRecolhidos = state.modulosHome.gruposRecolhidos || {};
+  state.modulosHome.gruposRecolhidos = {
+    ...gruposRecolhidos,
+    [area]: !gruposRecolhidos[area]
+  };
   renderDashboard();
 }
 
@@ -1402,6 +1743,7 @@ async function salvarConfigModulosHome() {
     return;
   }
 
+  const atualizacoesAplicadas = [];
   try {
     state.modulosHome.saving = true;
     state.modulosHome.message = '';
@@ -1409,12 +1751,17 @@ async function salvarConfigModulosHome() {
 
     const alteracoesStatus = alteracoes.filter(item => {
       const original = state.modulosHome.original?.[item.id] || {};
-      return String(original.status || 'ativo') !== item.status;
+      return !state.modulosHome.submodules.some(submodule => submodule.key === item.id)
+        && String(original.status || 'ativo') !== item.status;
     });
     const alteracoesVisibilidade = alteracoes.filter(item => {
       const original = state.modulosHome.original?.[item.id] || {};
-      return Boolean(original.exibir_home) !== Boolean(item.exibir_home);
+      return !state.modulosHome.submodules.some(submodule => submodule.key === item.id)
+        && Boolean(original.exibir_home) !== Boolean(item.exibir_home);
     });
+    const alteracoesSubmodulos = alteracoes
+      .filter(item => state.modulosHome.submodules.some(submodule => submodule.key === item.id))
+      .map(item => ({ key: item.id, status: item.status, exibir_home: item.exibir_home }));
 
     for (const alteracao of alteracoesStatus) {
       const responseStatus = await chamarApi('updateAdminModuleStatus', {
@@ -1425,6 +1772,7 @@ async function salvarConfigModulosHome() {
       if (!responseStatus.ok) {
         throw new Error(obterMensagemApi(responseStatus, 'Não foi possível salvar o status dos módulos.'));
       }
+      atualizacoesAplicadas.push(`status de ${alteracao.id}`);
     }
 
     if (alteracoesVisibilidade.length) {
@@ -1435,13 +1783,37 @@ async function salvarConfigModulosHome() {
       if (!response.ok) {
         throw new Error(obterMensagemApi(response, 'Não foi possível salvar a visibilidade dos módulos.'));
       }
+      atualizacoesAplicadas.push(...alteracoesVisibilidade.map(item => `visibilidade de ${item.id}`));
     }
 
-    await carregarDadosIniciaisSilencioso();
+    if (alteracoesSubmodulos.length) {
+      const response = await chamarApi('saveHomeSubmodulesBatch', { submodulos: alteracoesSubmodulos });
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, 'Não foi possível salvar os submódulos.'));
+      }
+      atualizacoesAplicadas.push(...alteracoesSubmodulos.map(item => `submódulo ${item.key}`));
+    }
+
+    const recarga = await carregarDadosIniciaisSilencioso();
+    if (!recarga.ok) {
+      throw new Error(recarga.message || 'As alterações foram salvas, mas não foi possível atualizar os dados da Home.');
+    }
     fecharModalConfigurarModulosHome();
   } catch (erro) {
     state.modulosHome.saving = false;
-    state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
+    if (atualizacoesAplicadas.length) {
+      let mensagem = `Salvamento parcial: ${atualizacoesAplicadas.length} atualização(ões) aplicada(s) (${atualizacoesAplicadas.join(', ')}).`;
+      try {
+        const respostaAtual = await chamarApi('listHomeModuleSettings');
+        if (respostaAtual.ok) aplicarSnapshotConfiguracaoModulosHome(respostaAtual.data);
+      } catch {
+        // Mantém o rascunho local quando não for possível atualizar o estado confirmado.
+      }
+      state.modulosHome.message = `${mensagem} ${erro.message || 'Uma das alterações não foi salva.'}`;
+    } else {
+      state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
+    }
     renderDashboard();
   }
 }
@@ -1559,16 +1931,17 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
+  if (idNormalizado === 'operacoes-corretora') return true;
+  const configuracao = (state.homeModuleSettings?.modules || []).find(item => item.slug === idNormalizado);
+  if (configuracao && configuracao.status === 'inativo') return false;
+
   if (idNormalizado === 'central-senhas') {
     return canAccessModule(state.permissions, idNormalizado) || podeAcessarGerenciamentoLinks();
   }
 
-  if (idNormalizado === 'financeiro' || idNormalizado === 'rh-dp') {
-    return canAccessModule(state.permissions, idNormalizado);
-  }
-
-  return (state.cards || []).some(card => card.id === idNormalizado)
-    && canAccessModule(state.permissions, idNormalizado);
+  const cadastrado = Boolean(configuracao)
+    || (state.cards || []).some(card => card.id === idNormalizado);
+  return cadastrado && canAccessModule(state.permissions, idNormalizado);
 }
 
 function pode(recurso, acao = 'view') {
@@ -1580,6 +1953,18 @@ function podeAcessarGerenciamentoLinks() {
 }
 
 function podeAcessarAbaAdmin(aba) {
+  const submoduloPorAba = {
+    limites: 'admin.limites',
+    categorias: 'admin.categorias',
+    grupos: 'admin.grupos',
+    usuarios: 'admin.usuarios',
+    perfis: 'admin.perfis',
+    'parceiros-indicacao': 'admin.parceiros_indicacao',
+    'logs-integracoes': 'admin.logs_integracoes'
+  };
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloPorAba[aba]);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return false;
+
   const permissoesPorAba = {
     usuarios: ['admin.usuarios', 'view'],
     perfis: ['admin.perfis', 'view'],
@@ -1658,6 +2043,8 @@ async function obterRhDpController() {
     rhDpController = criarRhDpController({
       renderShell: renderHubShell,
       pode,
+      submoduleEnabled: chave => submoduloHomeEstaAtivoPorChave(chave),
+      renderUnavailable: renderModuloIndisponivel,
       escapeHtml,
       escapeAttr,
       obterPartesRota: obterPartesDaRotaAtual,
@@ -1675,6 +2062,8 @@ async function obterFinanceiroController() {
     financeiroController = criarFinanceiroController({
       renderShell: renderHubShell,
       pode,
+      submoduleEnabled: chave => submoduloHomeEstaAtivoPorChave(chave),
+      renderUnavailable: renderModuloIndisponivel,
       escapeHtml,
       escapeAttr,
       obterPartesRota: obterPartesDaRotaAtual,
@@ -1862,6 +2251,18 @@ function renderAdministracao() {
 }
 
 function renderAdminTab(aba, label) {
+  const submoduloPorAba = {
+    limites: 'admin.limites',
+    categorias: 'admin.categorias',
+    grupos: 'admin.grupos',
+    usuarios: 'admin.usuarios',
+    perfis: 'admin.perfis',
+    'parceiros-indicacao': 'admin.parceiros_indicacao',
+    'logs-integracoes': 'admin.logs_integracoes'
+  };
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloPorAba[aba]);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return '';
+
   return `
     <button class="admin-tab ${state.admin.aba === aba ? 'active' : ''}" type="button" onclick="selecionarAbaAdmin('${escapeAttr(aba)}')">
       ${escapeHtml(label)}
@@ -6602,13 +7003,23 @@ function renderLinksUteis() {
 }
 
 function renderListaLinksUteis(gestor, podeEditar = gestor) {
-  if (!state.links.items.length) {
+  const chavePorEscopo = {
+    corretora: 'central_senhas.links_corretora',
+    ar: 'central_senhas.links_ar',
+    gestao: 'central_senhas.links_gestao'
+  };
+  const items = state.links.items.filter(item => {
+    if (state.links.escopo !== 'todos' && item.escopo !== state.links.escopo) return false;
+    const recurso = HOME_SUBMODULES.find(submodule => submodule.key === chavePorEscopo[item.escopo]);
+    return !recurso || submoduloHomeEstaAtivo(recurso);
+  });
+  if (!items.length) {
     return '<p class="quick-link-empty">Nenhum link cadastrado.</p>';
   }
 
   return `
     <div class="links-list">
-      ${state.links.items.map(item => renderLinkItem(item, podeEditar)).join('')}
+      ${items.map(item => renderLinkItem(item, podeEditar)).join('')}
     </div>
   `;
 }
@@ -6687,6 +7098,18 @@ function renderErroCampo(mensagem) {
 }
 
 function alterarFiltroLinks(chave, valor) {
+  const chavePorEscopo = {
+    corretora: 'central_senhas.links_corretora',
+    ar: 'central_senhas.links_ar',
+    gestao: 'central_senhas.links_gestao'
+  };
+  const item = HOME_SUBMODULES.find(submodule => submodule.key === chavePorEscopo[valor]);
+  if (chave === 'escopo' && item && !submoduloHomeEstaAtivo(item)) {
+    state.links.message = 'Este escopo de links está inativo.';
+    renderCentralSenhas();
+    return;
+  }
+
   if (chave === 'escopo') state.links.escopo = valor;
   state.links.filtros[chave] = valor;
   carregarLinksUteis();
@@ -6868,6 +7291,7 @@ async function carregarDadosIniciaisSilencioso({ usuarioEsperadoId = '' } = {}) 
   state.usuario = response.data.usuario;
   state.config = response.data.config;
   state.cards = response.data.cards || [];
+  state.homeModuleSettings = response.data.homeModuleSettings || { modules: [], submodules: [] };
   state.avisos = response.data.avisos || [];
   state.aniversariantes = response.data.aniversariantes || [];
   state.favoritos = response.data.favoritos || [];
@@ -7946,16 +8370,19 @@ function renderMenuPrincipalAr({ podeHistorico, incluirCrm = false, incluirCrm2 
     ['validacoes', 'Validações', podeAcessarAbaAr('validacoes')],
     ['historico', 'Histórico', podeHistorico],
     ['crm', 'CRM', incluirCrm && podeAcessarAbaAr('crm')],
-  ].filter(([, , permitido]) => permitido);
+  ].filter(([id, , permitido]) => {
+    const item = obterSubmoduloArPorAba(id);
+    return permitido && (!item || submoduloHomeEstaAtivo(item));
+  });
   const faixa = obterFaixaMenuAr();
   const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
   const principais = itens.slice(0, limite);
   const secundarias = itens.slice(limite);
-  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
+  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
 
   return `<div class="module-tabs hub-module-nav" role="group" aria-label="Visualização do Painel AR">${principais.map(renderItem).join('')}${secundarias.length ? `
     <div class="hub-responsive-more">
-      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
+      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
       <div id="ar-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('<button ', '<button role="menuitem" ')).join('')}</div>
     </div>` : ''}</div>`;
 }
@@ -8097,13 +8524,16 @@ function renderCrm2PessoasFisicasPhase2() {
 }
 
 function renderToolbarLinks(gestor, podeCriar = gestor) {
+  const areas = [
+    ['corretora', 'Corretora', 'central_senhas.links_corretora'],
+    ['ar', 'AR / Certificação', 'central_senhas.links_ar'],
+    ['gestao', 'Gestão', 'central_senhas.links_gestao']
+  ].filter(([, , key]) => submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === key)));
   return `
     <div class="links-toolbar">
       <select class="config-input" onchange="alterarFiltroLinks('escopo', this.value)" aria-label="Área dos links">
         <option value="todos" ${state.links.escopo === 'todos' ? 'selected' : ''}>Todas as áreas</option>
-        <option value="corretora" ${state.links.escopo === 'corretora' ? 'selected' : ''}>Corretora</option>
-        <option value="ar" ${state.links.escopo === 'ar' ? 'selected' : ''}>AR / Certificação</option>
-        <option value="gestao" ${state.links.escopo === 'gestao' ? 'selected' : ''}>Gestão</option>
+        ${areas.map(([id, label]) => `<option value="${id}" ${state.links.escopo === id ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
       <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
         <option value="">Todas as categorias</option>
@@ -13799,11 +14229,7 @@ function sincronizarContextoSenhasPelaRota() {
   if (modulo !== 'central-senhas') return;
 
   if (!principal) {
-    if (!pode('central_senhas', 'view') && podeAcessarGerenciamentoLinks()) {
-      state.passwords.aba = 'links';
-      state.links.escopo = 'todos';
-      state.links.titulo = 'Gerenciamento de Links';
-    }
+    normalizarAbaCentralSenhasPorStatus();
     return;
   }
 
@@ -13823,6 +14249,28 @@ function sincronizarContextoSenhasPelaRota() {
       state.links.titulo = 'Gerenciamento de Links';
     }
   }
+}
+
+function normalizarAbaCentralSenhasPorStatus() {
+  const podeAcessos = (pode('central_senhas', 'view') || pode('central_senhas', 'create')
+    || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))
+    && submoduloHomeEstaAtivoPorChave('central_senhas.acessos');
+  const podeLinks = (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks())
+    && submoduloHomeEstaAtivoPorChave('central_senhas.links');
+  const atualEstaAtiva = state.passwords.aba === 'links' ? podeLinks : podeAcessos;
+
+  if (atualEstaAtiva) return true;
+  if (podeAcessos) {
+    state.passwords.aba = 'acessos';
+    return true;
+  }
+  if (podeLinks) {
+    state.passwords.aba = 'links';
+    state.links.escopo = 'todos';
+    state.links.titulo = 'Gerenciamento de Links';
+    return true;
+  }
+  return false;
 }
 
 function sincronizarContextoArPelaRota() {
@@ -13868,7 +14316,7 @@ function sincronizarContextoArPelaRota() {
     return;
   }
   if (principal === '207') {
-    state.ar.aba = 'crm2-comunicacao';
+    state.ar.aba = 'crm2-automacoes';
     return;
   }
   if (principal && abasValidas.includes(principal)) {
@@ -13975,6 +14423,118 @@ function normalizarRotaComparacaoHub(rota = '') {
   return `${normalizada}${hash ? `#${hash}` : ''}`;
 }
 
+function normalizarRotaSubmoduloHome(rota = '') {
+  const [pathname = '/', hash = ''] = String(rota || '/').split('#');
+  let caminho = pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  const aliasesFinanceiro = {
+    'financeiro/lancamentos/contas-pagar': 'financeiro/lancamentos/pagar',
+    'financeiro/lancamentos/contas-receber': 'financeiro/lancamentos/receber',
+    'financeiro/lancamentos/recorrencias': 'financeiro/lancamentos/recorrentes'
+  };
+  caminho = aliasesFinanceiro[caminho] || caminho;
+  const hashInformado = normalizarHashHub(hash);
+  if (caminho === 'central-senhas' && ['acessos', 'links', 'links/corretora', 'links/ar', 'links/gestao'].includes(hashInformado)) {
+    return `/central-senhas/${hashInformado}`;
+  }
+  const alias = HUB_ROUTE_ALIASES[caminho];
+  const alvo = alias || caminho;
+  const [caminhoFinal = '', hashFinal = ''] = String(alvo).split('#');
+  const hashNormalizado = normalizarHashHub(hash || hashFinal);
+  return `/${caminhoFinal.replace(/^\/+|\/+$/g, '')}${hashNormalizado ? `#${hashNormalizado}` : ''}`;
+}
+
+function obterAliasCanonicoRotaHub() {
+  const base = obterBaseHub();
+  const pathname = window.location.pathname || '/';
+  const caminhoRelativo = (base ? pathname.slice(base.length) : pathname)
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase();
+  const alias = HUB_ROUTE_ALIASES[caminhoRelativo];
+  if (!alias || alias === caminhoRelativo) return '';
+
+  const [caminhoDestino = '', hashDestino = ''] = String(alias).split('#');
+  const hash = normalizarHashHub(window.location.hash || hashDestino);
+  const destino = `${base}${caminhoDestino ? `/${caminhoDestino.replace(/^\/+|\/+$/g, '')}` : '/'}${hash ? `#${hash}` : ''}`;
+  const atual = `${window.location.pathname}${window.location.hash || ''}`;
+  return destino === atual ? '' : destino;
+}
+
+function rotaSubmoduloCorresponde(item, rota = obterRotaRelativaAtualHub()) {
+  const rotaAtual = normalizarRotaSubmoduloHome(rota);
+  const rotaConfigurada = normalizarRotaSubmoduloHome(item.route);
+  const [caminhoAtual = '/', hashAtual = ''] = rotaAtual.split('#');
+  const [caminhoConfigurado = '/', hashConfigurado = ''] = rotaConfigurada.split('#');
+
+  if (item.matchHash) {
+    const hashBase = normalizarHashHub(item.matchHash);
+    return caminhoAtual === caminhoConfigurado
+      && (hashAtual === hashBase || hashAtual.startsWith(`${hashBase}/`));
+  }
+
+  if (caminhoAtual !== caminhoConfigurado
+    && !caminhoAtual.startsWith(`${caminhoConfigurado.replace(/\/$/, '')}/`)) {
+    return false;
+  }
+
+  if (!hashConfigurado) return true;
+  return hashAtual === hashConfigurado || hashAtual.startsWith(`${hashConfigurado}/`);
+}
+
+function obterSubmoduloHomePelaRota(rota = obterRotaRelativaAtualHub()) {
+  return [...HOME_SUBMODULES]
+    .sort((a, b) => normalizarRotaSubmoduloHome(b.route).length - normalizarRotaSubmoduloHome(a.route).length)
+    .find(item => rotaSubmoduloCorresponde(item, rota)) || null;
+}
+
+function submoduloHomeEstaAtivo(item) {
+  if (!item) return true;
+  const configuracao = state.homeModuleSettings || {};
+  const submodules = new Map((configuracao.submodules || []).map(submodule => [submodule.key, submodule]));
+  const module = (configuracao.modules || []).find(candidate => candidate.slug === item.parent);
+  const recurso = submodules.get(item.key);
+  const grupo = item.group ? submodules.get(item.group) : null;
+  return module?.status !== 'inativo'
+    && recurso?.status !== 'inativo'
+    && grupo?.status !== 'inativo';
+}
+
+function submoduloHomeEstaAtivoPorChave(chave) {
+  return submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === chave));
+}
+
+function obterSubmoduloArPorAba(aba) {
+  const chavePorAba = {
+    inicio: 'painel_ar.inicio',
+    gerar: 'painel_ar.gerar_links',
+    produtos: 'painel_ar.produtos',
+    validacoes: 'painel_ar.validacoes',
+    historico: 'painel_ar.historico',
+    crm: 'painel_ar.crm',
+    crm2: 'painel_ar.crm_2',
+    'crm2-cadastro': 'painel_ar.crm2.cadastro_pf',
+    'crm2-pf': 'painel_ar.crm2.cadastro_pf',
+    'crm2-pj': 'painel_ar.crm2.cadastro_pj',
+    'crm2-vinculos': 'painel_ar.crm2.vinculos',
+    'crm2-pedidos': 'painel_ar.crm2.pedidos',
+    'crm2-oportunidades': 'painel_ar.crm2.oportunidades',
+    'crm2-comunicacao': 'painel_ar.crm2.comunicacao',
+    'crm2-automacoes': 'painel_ar.crm2.automacoes'
+  };
+  return HOME_SUBMODULES.find(item => item.key === chavePorAba[aba]) || null;
+}
+
+function submoduloHomeEstaVisivel(item) {
+  if (!item || !submoduloHomeEstaAtivo(item)) return false;
+  const recurso = (state.homeModuleSettings?.submodules || []).find(submodule => submodule.key === item.key);
+  const modulo = (state.homeModuleSettings?.modules || []).find(candidate => candidate.slug === item.parent);
+  const grupo = item.group
+    ? (state.homeModuleSettings?.submodules || []).find(submodule => submodule.key === item.group)
+    : null;
+  return recurso?.exibir_home !== false
+    && modulo?.exibir_home !== false
+    && grupo?.exibir_home !== false;
+}
+
 function itemMenuEstaAtivoHub(item = {}) {
   const atual = obterRotaRelativaAtualHub();
   return [item.route, item.legacyRoute]
@@ -13994,6 +14554,9 @@ function itemMenuPodeAparecerHub(item = {}) {
   if (item.moduleId && !canAccessModule(state.permissions, item.moduleId)) {
     if (!acessoCentralSenhas) return false;
   }
+
+  const submodulo = obterSubmoduloHomePelaRota(item.route || '');
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return false;
 
   return true;
 }
@@ -14666,7 +15229,38 @@ const renderizarRotaAtualHubPhase2 = async function() {
   limparMenusAcoesGlobais();
   hubLimparDropdowns({ remover: true });
   window.hubRemoveFormFooterPortals?.();
+
+  const aliasCanonico = obterAliasCanonicoRotaHub();
+  if (aliasCanonico) {
+    window.history.replaceState({}, '', aliasCanonico);
+    return renderizarRotaAtualHubPhase2();
+  }
+
   const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+  if (rotaRelativa === 'painel-ar' && !window.location.hash) {
+    const abaAtual = obterSubmoduloArPorAba(state.ar.aba);
+    const abasDisponiveis = ['gerar', 'inicio', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
+    if (!abaAtual || !submoduloHomeEstaAtivo(abaAtual) || !podeAcessarAbaAr(state.ar.aba)) {
+      const primeiraAbaDisponivel = abasDisponiveis.find(aba => {
+        const item = obterSubmoduloArPorAba(aba);
+        return item && submoduloHomeEstaAtivo(item) && podeAcessarAbaAr(aba);
+      });
+      if (primeiraAbaDisponivel) state.ar.aba = primeiraAbaDisponivel;
+    }
+  }
+  if (rotaRelativa === 'central-senhas' && !normalizarAbaCentralSenhasPorStatus()) {
+    renderModuloIndisponivel('central-senhas');
+    return;
+  }
+  const submoduloSolicitado = obterSubmoduloHomePelaRota(`${rotaRelativa}${window.location.hash || ''}`)
+    || (rotaRelativa === 'painel-ar' && !window.location.hash
+      ? obterSubmoduloArPorAba(state.ar.aba)
+      : null);
+
+  if (submoduloSolicitado && !submoduloHomeEstaAtivo(submoduloSolicitado)) {
+    renderModuloIndisponivel(submoduloSolicitado.parent);
+    return;
+  }
 
   if (rotaRelativa === CONSULTORIA360_ROUTE) {
     await mountConsultoria360Page({
@@ -14853,8 +15447,10 @@ const renderCentralSenhasHubPhase1 = function() {
   const podeCriarLink = pode('central_senhas', 'create');
   const podeEditarLink = pode('central_senhas', 'update');
   const podeVerSenha = pode('central_senhas', 'view_secret');
-  const podeAcessos = pode('central_senhas', 'view') || podeGerenciar;
-  const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
+  const podeAcessos = (pode('central_senhas', 'view') || podeGerenciar)
+    && submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === 'central_senhas.acessos'));
+  const podeLinks = (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks())
+    && submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === 'central_senhas.links'));
   const titulo = state.passwords.aba === 'links'
     ? (state.links.titulo || 'Central de Links')
     : 'Central de Senhas';
@@ -14974,6 +15570,14 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
 const selecionarAbaSenhasHubPhase2 = function(aba) {
   if (aba === 'historico') aba = 'acessos';
 
+  const submoduloKey = aba === 'links' ? 'central_senhas.links' : 'central_senhas.acessos';
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloKey);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) {
+    state.passwords.message = 'Esta área da Central de Senhas está inativa.';
+    renderCentralSenhas();
+    return;
+  }
+
   const podeAcessos = pode('central_senhas', 'view')
     || pode('central_senhas', 'create')
     || pode('central_senhas', 'update')
@@ -14983,7 +15587,11 @@ const selecionarAbaSenhasHubPhase2 = function(aba) {
     return;
   }
 
-  atualizarHashHub(aba, { replace: true });
+  const caminho = `${montarCaminhoHub('central-senhas').replace(/\/+$/g, '')}/${aba}`;
+  const url = new URL(window.location.href);
+  url.pathname = caminho;
+  url.hash = '';
+  window.history.replaceState({}, '', url);
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
   renderCentralSenhas();
@@ -14996,7 +15604,8 @@ const selecionarAbaSenhasHubPhase2 = function(aba) {
 };
 
 const selecionarAbaArHubPhase2 = function(aba) {
-  if (!podeAcessarAbaAr(aba)) {
+  const submodulo = obterSubmoduloArPorAba(aba);
+  if (!podeAcessarAbaAr(aba) || (submodulo && !submoduloHomeEstaAtivo(submodulo))) {
     state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
     renderPainelAr();
     return;
@@ -15375,6 +15984,11 @@ Object.assign(window, {
   alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
   alterarVisibilidadeModuloHome,
+  alterarBuscaModuloHome,
+  alterarAreaModuloHome,
+  alternarGrupoModulosHome,
+  aplicarAcaoLoteAreaModulosHome,
+  navegarParaSubmoduloHome,
   alternarColunaParceirosIndicacaoAdmin,
   alternarSeletorColunasParceirosIndicacaoAdmin,
   alternarTodosParceirosIndicacaoAdmin,

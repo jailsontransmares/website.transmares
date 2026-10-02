@@ -57,6 +57,8 @@ import {
 export function criarFinanceiroController({
   renderShell,
   pode,
+  submoduleEnabled = () => true,
+  renderUnavailable = () => {},
   escapeHtml,
   escapeAttr,
   obterPartesRota,
@@ -163,6 +165,7 @@ export function criarFinanceiroController({
     },
     lancamentoAba: 'titulos',
     configuracaoAba: 'parametros',
+    submoduleEnabled,
     lancamentosOperacional: {
       carregadoEmpresaId: '',
       loading: false,
@@ -331,7 +334,8 @@ export function criarFinanceiroController({
     const abaInformada = String(partes[2] || 'pessoas').trim().toLowerCase();
     const aba = aliases[abaInformada] || abaInformada;
 
-    return FINANCEIRO_CADASTRO_ABAS.some(item => item.id === aba) ? aba : 'pessoas';
+    const solicitada = FINANCEIRO_CADASTRO_ABAS.some(item => item.id === aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('cadastros', solicitada);
   }
 
   function obterRotaCadastros() {
@@ -353,20 +357,49 @@ export function criarFinanceiroController({
     const abaInformada = String(partes[2] || 'titulos').trim().toLowerCase();
     const aba = aliases[abaInformada] || abaInformada;
 
-    return FINANCEIRO_LANCAMENTO_ABAS.some(item => item.id === aba) ? aba : 'titulos';
+    const solicitada = FINANCEIRO_LANCAMENTO_ABAS.some(item => item.id === aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('lancamentos', solicitada);
   }
 
   function obterConfiguracaoAbaRota() {
     const partes = obterPartesRota();
     const aba = String(partes[2] || 'parametros').trim().toLowerCase();
-    return ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'].includes(aba) ? aba : 'parametros';
+    const solicitada = ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'].includes(aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('configuracoes', solicitada);
+  }
+
+  function obterChaveAbaFinanceira(secao, aba) {
+    const segmento = aba === 'centros_custo' ? 'centros_custo' : aba;
+    return `home.financeiro.${secao}.${segmento}`;
+  }
+
+  function submoduloFinanceiroAtivo(secao, aba) {
+    return submoduleEnabled(obterChaveAbaFinanceira(secao, aba));
+  }
+
+  function obterPrimeiraAbaFinanceiraAtiva(secao, solicitada = '') {
+    const abas = secao === 'cadastros'
+      ? FINANCEIRO_CADASTRO_ABAS.map(item => item.id)
+      : secao === 'lancamentos'
+        ? FINANCEIRO_LANCAMENTO_ABAS.map(item => item.id)
+        : ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'];
+    if (solicitada && submoduloFinanceiroAtivo(secao, solicitada)) return solicitada;
+    return abas.find(aba => submoduloFinanceiroAtivo(secao, aba)) || '';
+  }
+
+  function secaoFinanceiraDisponivel(secao) {
+    if (!submoduleEnabled(`financeiro.${secao.id}`)) return false;
+    if (['cadastros', 'lancamentos', 'configuracoes'].includes(secao.id)) {
+      return Boolean(obterPrimeiraAbaFinanceiraAtiva(secao.id));
+    }
+    return true;
   }
 
   function obterSecaoPermitida(secao) {
     const candidata = FINANCEIRO_SECOES.find(item => item.id === secao);
-    if (candidata && podeAcessarSecaoFinanceiro(candidata, pode)) return candidata.id;
+    if (candidata && podeAcessarSecaoFinanceiro(candidata, pode) && secaoFinanceiraDisponivel(candidata)) return candidata.id;
 
-    return FINANCEIRO_SECOES.find(item => podeAcessarSecaoFinanceiro(item, pode))?.id || '';
+    return FINANCEIRO_SECOES.find(item => podeAcessarSecaoFinanceiro(item, pode) && secaoFinanceiraDisponivel(item))?.id || '';
   }
 
   function render() {
@@ -1215,6 +1248,10 @@ export function criarFinanceiroController({
     configurarResizeNavegacaoFinanceiro();
     const secaoRota = obterSecaoRota();
     const secaoPermitida = obterSecaoPermitida(secaoRota);
+    if (!secaoPermitida) {
+      renderUnavailable('financeiro');
+      return;
+    }
     const rotaAtual = obterPartesRota();
     const secaoInformada = String(rotaAtual[1] || '').trim().toLowerCase();
 

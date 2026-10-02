@@ -248,6 +248,8 @@ function normalizarBusca(valor = '') {
 export function criarRhDpController({
   renderShell,
   pode,
+  submoduleEnabled = () => true,
+  renderUnavailable = () => {},
   escapeHtml,
   escapeAttr,
   obterPartesRota,
@@ -423,8 +425,8 @@ export function criarRhDpController({
 
   function obterSecaoPermitida(secao) {
     const candidata = RH_SECOES.find(item => item.id === secao);
-    if (candidata?.pode()) return candidata.id;
-    return RH_SECOES.find(item => item.pode())?.id || '';
+    if (candidata?.pode() && submoduleEnabled(`rh_dp.${candidata.id === 'demandas' ? 'demandas_contabilidade' : candidata.id}`)) return candidata.id;
+    return RH_SECOES.find(item => item.pode() && submoduleEnabled(`rh_dp.${item.id === 'demandas' ? 'demandas_contabilidade' : item.id}`))?.id || '';
   }
 
   function obterCadastroRota() {
@@ -532,11 +534,11 @@ export function criarRhDpController({
 
   function renderMenuRhDp() {
     const itens = [
-      ['dashboard', 'Dashboard', podeVerDashboard()],
-      ['colaboradores', 'Colaboradores', podeVer()],
-      ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
-      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
-    ].filter(([, , permitido]) => permitido);
+      ['dashboard', 'Dashboard', podeVerDashboard(), 'rh_dp.dashboard'],
+      ['colaboradores', 'Colaboradores', podeVer(), 'rh_dp.colaboradores'],
+      ['demandas', 'Demandas à contabilidade', podeVerDemandas(), 'rh_dp.demandas_contabilidade'],
+      ['fechamentos', 'Fechamento mensal', podeVerFechamentos(), 'rh_dp.fechamentos']
+    ].filter(([, , permitido, submodulo]) => permitido && submoduleEnabled(submodulo));
     const faixa = obterFaixaNavegacaoRhDp();
     const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
     const principais = itens.slice(0, limite);
@@ -1943,6 +1945,10 @@ export function criarRhDpController({
   async function abrir() {
     const secaoRota = obterSecaoRota();
     const secaoPermitida = obterSecaoPermitida(secaoRota);
+    if (!secaoPermitida) {
+      renderUnavailable('rh-dp');
+      return;
+    }
     const partesRota = obterPartesRota?.() || [];
     const secaoInformada = String(partesRota[1] || '').trim().toLowerCase();
 

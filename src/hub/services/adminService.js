@@ -1,4 +1,5 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import { HOME_SUBMODULES, obterSubmodulosHomeConfigurados } from '../homeSubmodules.js';
 
 const DEFAULT_COLORS = {
   cor_principal: '#294895',
@@ -390,6 +391,65 @@ export async function listarModulosAdmin() {
     });
 
   return { modules };
+}
+
+export async function listarConfiguracaoModulosHomeAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const [modulesResponse, submodulesResponse] = await Promise.all([
+    listarModulosAdmin(),
+    supabase
+      .from('recursos_acesso')
+      .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
+      .in('chave', HOME_SUBMODULES.map(item => item.key))
+  ]);
+
+  if (submodulesResponse.error) {
+    throw new Error(submodulesResponse.error.message || 'Não foi possível carregar os submódulos.');
+  }
+
+  const recursosPorChave = new Map((submodulesResponse.data || []).map(item => [item.chave, item]));
+  const submodules = obterSubmodulosHomeConfigurados(submodulesResponse.data || [])
+    .filter(item => recursosPorChave.has(item.key));
+
+  return { modules: modulesResponse.modules, submodules };
+}
+
+export async function salvarConfiguracaoSubmodulosHomeAdmin({ submodulos = [] } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const permitidas = new Map(HOME_SUBMODULES.map(item => [item.key, item]));
+  const alteracoes = Array.isArray(submodulos)
+    ? submodulos
+      .filter(item => permitidas.has(item?.key))
+      .map(item => ({
+        key: item.key,
+        status: item.status === 'inativo' ? 'inativo' : 'ativo',
+        exibir_home: item.status !== 'inativo' && item.exibir_home !== false
+      }))
+    : [];
+
+  if (!alteracoes.length) {
+    throw new Error('Nenhum submódulo informado para atualização.');
+  }
+
+  for (const alteracao of alteracoes) {
+    const { data, error } = await supabase
+      .from('recursos_acesso')
+      .update({ status: alteracao.status, exibir_home: alteracao.exibir_home })
+      .eq('chave', alteracao.key)
+      .eq('tipo', 'aba')
+      .select('chave, status, exibir_home')
+      .single();
+
+    if (error) {
+      throw new Error(error.message || `Não foi possível atualizar o submódulo ${alteracao.key}.`);
+    }
+
+    if (data.status !== alteracao.status || data.exibir_home !== alteracao.exibir_home) {
+      throw new Error(`O Supabase não confirmou a configuração do submódulo ${alteracao.key}.`);
+    }
+  }
+
+  return listarConfiguracaoModulosHomeAdmin();
 }
 
 export async function listarUsuariosAdmin() {
@@ -1003,9 +1063,11 @@ export async function salvarVisibilidadeModulosHomeAdmin({ modulos = [] }) {
     }
 
     const dadosAtuais = getDadosItem(atual);
+    const statusAtual = normalizarModuloAdmin(atual).status;
+    const exibirHome = statusAtual !== 'inativo' && Boolean(alteracao.exibir_home);
     const dadosAtualizados = {
       ...dadosAtuais,
-      exibir_home: Boolean(alteracao.exibir_home)
+      exibir_home: exibirHome
     };
 
     const { error } = await supabase
@@ -1029,7 +1091,7 @@ export async function salvarVisibilidadeModulosHomeAdmin({ modulos = [] }) {
 
     const moduloAtualizado = normalizarModuloAdmin(confirmado);
 
-    if (moduloAtualizado.exibir_home !== Boolean(alteracao.exibir_home)) {
+    if (moduloAtualizado.exibir_home !== exibirHome) {
       throw new Error('O Supabase não confirmou a alteração da visibilidade do módulo.');
     }
   }
@@ -1065,9 +1127,15 @@ export async function salvarStatusModuloAdmin({ id, status }) {
     throw new Error('O módulo Administração não pode ser inativado.');
   }
 
+  const dadosAtualizados = statusNormalizado === 'inativo'
+    ? { ...getDadosItem(atual), exibir_home: false }
+    : getDadosItem(atual);
   const { error } = await supabase
     .from('itens')
-    .update({ status: statusNormalizado })
+    .update({
+      status: statusNormalizado,
+      ...(statusNormalizado === 'inativo' ? { dados: dadosAtualizados } : {})
+    })
     .eq('id', id);
 
   if (error) {
@@ -1086,7 +1154,8 @@ export async function salvarStatusModuloAdmin({ id, status }) {
 
   const moduloAtualizado = normalizarModuloAdmin(atualizado);
 
-  if (moduloAtualizado.status !== statusNormalizado) {
+  if (moduloAtualizado.status !== statusNormalizado
+    || (statusNormalizado === 'inativo' && moduloAtualizado.exibir_home !== false)) {
     throw new Error('O Supabase não confirmou a alteração. Verifique as permissões de update da tabela itens.');
   }
 

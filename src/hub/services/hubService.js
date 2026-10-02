@@ -1,4 +1,5 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import { HOME_SUBMODULES, obterSubmodulosHomeConfigurados } from '../homeSubmodules.js';
 import {
   canAccessModule,
   montarPermissoesLegadas,
@@ -214,6 +215,31 @@ function normalizarCards(registros, usuario, permissoes) {
     .map(({ ordem, ...card }) => card);
 }
 
+function normalizarConfiguracaoModulosHome(registros = []) {
+  const modulos = registros
+    .filter(item => obterTipoItem(item) === 'modulo')
+    .map(item => {
+      const dados = obterDadosItem(item);
+      const slugFonte = dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.titulo || item.nome || item.label || item.id;
+      const slug = normalizarSlugModulo(slugFonte);
+      const visibilidade = dados.exibir_home;
+
+      return {
+        id: item.id,
+        slug,
+        status: normalizarStatus(item.status || 'ativo') === 'inativo' ? 'inativo' : 'ativo',
+        exibir_home: !(visibilidade === false || String(visibilidade).toLowerCase() === 'false')
+      };
+    })
+    .filter(item => item.slug);
+
+  if (!modulos.length) {
+    return DEFAULT_CARDS.map(item => ({ id: item.id, slug: item.id, status: 'ativo', exibir_home: true }));
+  }
+
+  return modulos;
+}
+
 function normalizarAvisos(registros, limite) {
   return ordenarPorCampo(registros, 'titulo')
     .filter(item => normalizarStatus(item.status || 'ativo') !== 'inativo')
@@ -318,7 +344,7 @@ export async function carregarDadosIniciaisSupabase() {
     };
   }
 
-  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
+  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, recursosSubmodulos] = await Promise.all([
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
@@ -326,7 +352,10 @@ export async function carregarDadosIniciaisSupabase() {
     selecionarTabelaOpcional('avisos_internos'),
     selecionarTabelaOpcional('aniversarios'),
     selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
-    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status'))
+    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status')),
+    selecionarTabelaOpcional('recursos_acesso', query => query
+      .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
+      .in('chave', HOME_SUBMODULES.map(item => item.key)))
   ]);
 
   const config = normalizarConfiguracoes(configuracoes);
@@ -351,6 +380,11 @@ export async function carregarDadosIniciaisSupabase() {
     config,
     permissions,
     cards: normalizarCards(moduloItens, usuario, permissions),
+    homeModuleSettings: {
+      modules: normalizarConfiguracaoModulosHome(itens),
+      submodules: obterSubmodulosHomeConfigurados(recursosSubmodulos)
+        .filter(item => recursosSubmodulos.some(recurso => recurso.chave === item.key))
+    },
     avisos: normalizarAvisos(avisosInternos, config.limite_avisos),
     aniversariantes: normalizarAniversariantes(
       aniversariantesCadastros.length ? aniversariantesCadastros : aniversarios,

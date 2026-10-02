@@ -9,13 +9,14 @@ export const HUB_ROUTE_ALIASES = Object.freeze({
   'admin/permissoes': 'admin/permissoes',
   'central-de-senhas': 'central-senhas',
   senhas: 'central-senhas',
-  'links-corretora': 'central-senhas#links/corretora',
-  'links-ar': 'central-senhas#links/ar',
-  'links-gestao': 'central-senhas#links/gestao',
+  'links-corretora': 'central-senhas/links/corretora',
+  'links-ar': 'central-senhas/links/ar',
+  'links-gestao': 'central-senhas/links/gestao',
   configuracoes: 'admin#identidade',
   'operacoes/ar-transmares': 'painel-ar',
   'operacoes/ar-transmares/200': 'painel-ar/200',
   'operacoes/ar-transmares/201': 'painel-ar/201',
+  'painel-ar/207': 'painel-ar/206/automacoes',
   'admin/sistema/corretora': 'configuracoes/corretora'
 });
 

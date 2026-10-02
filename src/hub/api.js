@@ -13,6 +13,7 @@ import {
   carregarAdminData,
   listarPerfisAdmin,
   listarModulosAdmin,
+  listarConfiguracaoModulosHomeAdmin,
   obterParceiroIndicacaoAdmin,
   listarPermissoesAdmin,
   listarPermissoesUsuarioAdmin,
@@ -38,7 +39,8 @@ import {
   salvarUsuarioAdmin,
   salvarStatusModuloAdmin,
   salvarTemaUsuario,
-  salvarVisibilidadeModulosHomeAdmin
+  salvarVisibilidadeModulosHomeAdmin,
+  salvarConfiguracaoSubmodulosHomeAdmin
 } from './services/adminService.js';
 import { carregarDadosIniciaisSupabase } from './services/hubService.js';
 import {
@@ -237,6 +239,7 @@ export async function chamarApi(action, payload = {}) {
     const acoes = {
       getAdminData: () => carregarAdminData(),
       listAdminModules: () => listarModulosAdmin(),
+      listHomeModuleSettings: () => listarConfiguracaoModulosHomeAdmin(),
       listAdminUsers: () => listarUsuariosAdmin(),
       listAdminProfiles: () => listarPerfisAdmin(),
       listAdminPartners: () => listarParceirosIndicacaoAdmin(),
@@ -261,6 +264,7 @@ export async function chamarApi(action, payload = {}) {
       saveAdminRecord: () => salvarRegistroAdmin(payload),
       updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
       saveAdminModuleHomeVisibilityBatch: () => salvarVisibilidadeModulosHomeAdmin(payload),
+      saveHomeSubmodulesBatch: () => salvarConfiguracaoSubmodulosHomeAdmin(payload),
       saveConfig: () => salvarConfig(payload),
       restoreDefaultColors: () => restaurarCoresPadrao(),
       saveUserTheme: () => salvarTemaUsuario(payload),
