@@ -6,7 +6,7 @@
 - **Hub → Supabase → Sheets:** os triggers do Postgres enfileiram mudanças; o cron chama o worker a cada minuto. As linhas de colaboradores são localizadas pelo CPF e as alterações pelo UUID em `REGISTRO DA ALTERAÇÃO`.
 - **Sheets → Supabase → Hub:** o Apps Script envia edições individuais feitas por uma pessoa nas duas abas para esta Edge Function. Ela só grava colunas com mapeamento explícito; o trigger do Postgres atualiza a fila e o worker devolve a versão canônica do Hub à planilha. Escritas feitas pela API do Sheets não disparam o gatilho `onEdit`, evitando eco.
 
-As colunas de identificação, cálculo/fórmula e sem correspondência direta permanecem somente para leitura. `CARGA HORARIA / MÊS` é um valor próprio, sem conversão da carga semanal.
+As colunas de identificação, cálculo/fórmula e sem correspondência direta permanecem somente para leitura. Na coluna `CARGA HORARIA / MÊS`, valores numéricos ou com unidade mensal são gravados como carga mensal; valores como `44h / semana` são gravados como carga semanal.
 
 ## Configuração de credenciais e acesso
 
@@ -38,6 +38,6 @@ Não coloque tokens nem a chave JSON no repositório ou em mensagens. Nunca reut
 
 - A migration enfileira os registros existentes para a carga inicial.
 - Na tela Colaboradores do Hub, usuários com permissões de edição e visualização de dados sensíveis podem usar **Sincronizar planilha** para processar até 20 alterações pendentes imediatamente. O endpoint valida a sessão e as permissões no Supabase; nenhum token de worker é enviado ao navegador.
-- Usuários com permissões de criação, edição e visualização de dados sensíveis também podem usar **Importar da planilha** para criar no Hub até 100 cadastros por execução a partir de `CAD_COLABORADOR`. A importação exige CPF válido e único, ignora CPFs que já existem no Hub e informa linhas inválidas; não sobrescreve cadastros existentes. A lista do Hub é atualizada após a importação.
+- Usuários com permissões de criação, edição e visualização de dados sensíveis também podem usar **Importar da planilha** para criar no Hub até 100 cadastros por execução a partir de `CAD_COLABORADOR`. A importação exige CPF válido e único, ignora CPFs que já existem no Hub e informa linhas inválidas; valores inválidos em campos opcionais são ignorados por coluna e apresentados como aviso. A importação não sobrescreve cadastros existentes, e a lista do Hub é atualizada após a operação.
 - O worker reprocessa falhas com espera crescente; não grava colunas sem mapeamento nem as colunas de fórmula.
 - Falhas de saída são registradas em `integracao_logs` e na fila. Edições recusadas pelo mapeamento ou validação retornam erro ao Apps Script e são registradas sem incluir CPF ou valor editado no log.

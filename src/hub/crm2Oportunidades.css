@@ -1968,22 +1968,9 @@ body > .hub-filter-dropdown-menu[data-dropdown-input-id="crm2-opp-filter-product
   padding: 24px;
 }
 
-.crm2-opp-detail-heading {
-  align-items: center;
-  display: flex;
-  gap: 18px;
-  min-width: 0;
-}
-.crm2-opp-detail-heading-content { min-width: 0; }
 .crm2-opp-detail-heading h3 { color: var(--texto, #17233d); font-size: clamp(24px, 3vw, 34px); letter-spacing: -.025em; line-height: 1.1; margin: 5px 0 4px; }
 .crm2-opp-detail-number { color: var(--texto-suave, #64748b); display: block; font-size: 12px; font-weight: 700; }
-.crm2-opp-screen-heading {
-  align-items: center;
-  display: flex;
-  gap: 18px;
-  margin: 0 0 18px;
-  min-width: 0;
-}
+.crm2-opp-screen-heading { margin: 0 0 18px; }
 .crm2-opp-screen-heading h3 {
   color: var(--texto, #17233d);
   font-size: clamp(24px, 2.2vw, 30px);

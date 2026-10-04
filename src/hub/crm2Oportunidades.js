@@ -14,6 +14,8 @@ import { carregarParceirosAtivos } from './services/arService.js';
 import { listarResponsaveisAtivosCrm2 } from './services/crm2UsersService.js';
 import { resolveCrm2OpportunityRoute } from './crm2OpportunityRoute.js';
 import { CRM2_ORIGIN_OPTIONS, normalizarOrigemCrm2 } from './crm2OriginOptions.js';
+import { renderHubRecordHeader, renderHubRecordEditButton, renderHubRecordFormFooter, removeHubRecordWorkflowFooter } from './recordWorkflow.js';
+import './formFooterPortal.js';
 
 const OPPORTUNITY_STAGES = ['Novo', 'Em qualificação', 'Em Negociação', 'Aguardando pagamento', 'Aguardando validação', 'Pedido validado'];
 const OPPORTUNITY_STATUSES = ['Aberta', 'Ganha', 'Perdido', 'Arquivado'];
@@ -364,7 +366,10 @@ function closeOppFloatingMenus() {
   closeOppFilterDropdowns();
 }
 function closeOppEditActionPortal() {
-  const removePortal = () => document.querySelectorAll('body > [data-crm2-opp-inline-footer]').forEach((footer) => footer.remove());
+  const removePortal = () => {
+    document.querySelectorAll('body > [data-crm2-opp-inline-footer]').forEach((footer) => footer.remove());
+    removeHubRecordWorkflowFooter('crm2-opportunity');
+  };
   removePortal();
   window.requestAnimationFrame(removePortal);
 }
@@ -390,11 +395,14 @@ function renderOppScreenHeading() {
   const identifier = editingOpp?.numero ? `Oportunidade ${editingOpp.numero}` : 'ROTA 205 · OPORTUNIDADE';
   const showKicker = !inlineOpp && route.view !== 'opp-edit';
 
-  return '<div class="crm2-opp-screen-heading">'
-    + '<button class="icon-btn crm2-opp-screen-back" type="button" onclick="crm2OportunidadesBack()" aria-label="Voltar à lista de oportunidades" title="Voltar à lista de oportunidades"><i data-lucide="chevron-left" aria-hidden="true"></i></button>'
-    + '<div>' + (showKicker ? '<span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span>' : '')
-    + '<h3 id="crm2-opp-form-title">' + escapeOpp(title) + '</h3>'
-    + '<p>' + escapeOpp(identifier) + '</p></div></div>';
+  return renderHubRecordHeader({
+    onBack: 'crm2OportunidadesBack()',
+    backAriaLabel: 'Voltar à lista de oportunidades',
+    className: 'crm2-opp-screen-heading hub-record-header',
+    backClassName: 'icon-btn crm2-opp-screen-back hub-record-back-button',
+    contentClassName: 'hub-record-header-content crm2-opp-screen-heading-content',
+    content: `${showKicker ? '<span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span>' : ''}<h3 id="crm2-opp-form-title">${escapeOpp(title)}</h3><p>${escapeOpp(identifier)}</p>`
+  });
 }
 function renderOppItemForm(draft) {
   const attachmentContext = orderGenerationOpportunityOpp() || { ...draft, id: draft.id || 'opp-draft', numero: draft.numero || 'Nova oportunidade', anexos: draft.anexos || [] };
@@ -622,7 +630,19 @@ function organizeOppFormMarkup(markup, draft = {}, formId = '') {
   output = output.replace('<div class="crm2-opp-form-grid">', '<div class="crm2-opp-linked-section crm2-opp-form-content-container">' + linkedTitle + '<div class="crm2-opp-form-grid">');
   output = output.replace('</div><div class="crm2-opp-items-form crm2-opp-form-content-container">', '</div></div><div class="crm2-opp-items-form crm2-opp-form-content-container">');
   output = output.replace('</form><aside class="crm2-opp-form-sidebar">', '</form></div><aside class="crm2-opp-form-sidebar">');
-  if (formId === 'crm2-opp-inline-form') output = output.replace('data-hub-form-footer>', 'data-hub-form-footer data-crm2-opp-inline-footer>');
+  output = output.replace(/<div class="crm2-opp-form-footer">[\s\S]*?<\/div><\/section>$/, '</section>');
+  output = output.replace(/<div class="hub-form-screen-actions" data-hub-form-footer>[\s\S]*?<\/div><\/section>$/, '</section>');
+  const inline = formId === 'crm2-opp-inline-form';
+  const footer = renderHubRecordFormFooter({
+    flow: 'crm2-opportunity',
+    cancelLabel: 'Cancelar',
+    cancelOnClick: inline ? 'crm2OportunidadesCancelEdit()' : 'crm2OportunidadesBack()',
+    saveLabel: inline ? 'Salvar alterações' : (currentOppRoute().view === 'opp-edit' ? 'Salvar alterações' : 'Salvar oportunidade'),
+    saveForm: formId,
+    saving: crm2OportunidadesState.saving,
+    className: inline ? 'crm2-opp-inline-footer' : 'crm2-opp-form-footer'
+  });
+  output = output.replace(/<\/section>$/, `${footer}</section>`);
   return output;
 }
 
@@ -654,21 +674,26 @@ function renderOppDetail(opp) {
   const observations = '<section class="crm2-opp-sidebar-observations" aria-labelledby="crm2-opp-observations-title"><label class="crm2-opp-form-observations"><span id="crm2-opp-observations-title">Observações</span><textarea class="config-input" data-opportunity-observations="' + attrOpp(opp.id) + '" maxlength="500" ' + (crm2OportunidadesState.canEdit ? 'oninput="crm2OportunidadesToggleDetailObservations(this)"' : 'readonly aria-readonly="true"') + ' rows="5" placeholder="Nenhuma observação registrada.">' + escapeOpp(opp.observacoes || '') + '</textarea></label>' + (crm2OportunidadesState.canEdit ? '<button class="secondary-btn crm2-opp-save-observations" type="button" onclick="crm2OportunidadesSaveDetailObservations(this)" hidden>Salvar</button>' : '') + '</section>';
   const itemsContent = renderOppItemsColumn(opp);
   const status = opp.etapa || '—';
-  return '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-detail-title">'
-    + '<div class="crm2-opp-detail-header">'
-    + '<div class="crm2-opp-detail-heading">'
-    + '<button class="icon-btn crm2-opp-screen-back" type="button" onclick="crm2OportunidadesBack()" aria-label="Voltar à lista de oportunidades" title="Voltar à lista de oportunidades"><i data-lucide="chevron-left" aria-hidden="true"></i></button>'
-    + '<div class="crm2-opp-detail-heading-content"><h3 id="crm2-opp-detail-title">' + escapeOpp(opportunityLabel(opp)) + '</h3>'
+  const headingContent = '<h3 id="crm2-opp-detail-title">' + escapeOpp(opportunityLabel(opp)) + '</h3>'
     + '<span class="crm2-opp-detail-number">Oportunidade ' + escapeOpp(opp.numero) + '</span>'
     + '<div class="crm2-opp-detail-badges" aria-label="Situação da oportunidade">'
     + '<span class="crm2-opp-detail-status-label">Status do lead:</span>' + (crm2OportunidadesState.canEdit ? '<select class="crm2-opp-detail-badge is-status crm2-opp-detail-stage-select" aria-label="Status do lead (etapa)" onchange="crm2OportunidadesSetStageFromDetail(this)" data-opportunity-id="' + attrOpp(opp.id) + '">' + OPPORTUNITY_STAGES.map((stage) => '<option value="' + attrOpp(stage) + '" ' + (stage === opp.etapa ? 'selected' : '') + '>' + escapeOpp(stage) + '</option>').join('') + '</select>' : '<span class="crm2-opp-detail-badge is-status">' + escapeOpp(status) + '</span>')
     + '<span class="crm2-opp-detail-badge-separator" aria-hidden="true">|</span><span class="crm2-opp-detail-status-label">Origem</span><span class="crm2-opp-detail-badge is-origin">' + escapeOpp(opp.origemOportunidade || '—') + '</span>'
     + (partner !== '—' ? '<span class="crm2-opp-detail-badge">Parceiro: ' + escapeOpp(partner) + '</span>' : '')
-    + '</div>'
-    + '</div></div>'
+    + '</div>';
+  return '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-detail-title">'
+    + '<div class="crm2-opp-detail-header">'
+    + renderHubRecordHeader({
+      onBack: 'crm2OportunidadesBack()',
+      backAriaLabel: 'Voltar à lista de oportunidades',
+      className: 'crm2-opp-detail-heading hub-record-header',
+      backClassName: 'icon-btn crm2-opp-screen-back hub-record-back-button',
+      contentClassName: 'hub-record-header-content crm2-opp-detail-heading-content',
+      content: headingContent
+    })
     + '<div class="crm2-opp-detail-actions">'
     + '<button class="secondary-btn" type="button" disabled title="Mais ações em breve">Mais ações</button>'
-    + (crm2OportunidadesState.canEdit ? '<button class="secondary-btn" type="button" onclick="crm2OportunidadesOpenEdit(\'' + attrOpp(opp.id) + '\')">Editar</button>' : '')
+    + (crm2OportunidadesState.canEdit ? renderHubRecordEditButton({ onClick: `crm2OportunidadesOpenEdit('${attrOpp(opp.id)}')`, className: 'secondary-btn hub-record-edit-button' }) : '')
     + '<button class="save-btn crm2-opp-detail-primary-action" type="button" onclick="crm2OportunidadesOpenConversion(\'' + attrOpp(opp.id) + '\')">Gerar pedido(s)</button>'
     + '</div>'
     + '<div class="crm2-opp-detail-summary" aria-label="Resumo operacional">'
@@ -684,7 +709,7 @@ function renderOppDetail(opp) {
     + '</section>';
 }
 
-function renderOpp() { permissionsOpp(); const route = currentOppRoute(); if (route.view !== 'list') { crm2OportunidadesState.filterModalOpen = false; crm2OportunidadesState.filterDraft = {}; } if (!crm2OportunidadesState.canView) return renderOppState(); if (route.view === 'opp-new' || route.view === 'opp-edit') { if (route.view === 'opp-new' && !crm2OportunidadesState.canCreate) return renderOppState(); if (route.view === 'opp-edit' && !crm2OportunidadesState.canEdit) return renderOppState(); const opp = opportunityById(route.id); if (route.view === 'opp-edit' && !opp) return renderOppState(); if (crm2OportunidadesState.formMode !== 'opportunity' || crm2OportunidadesState.detailId !== (opp?.id || '')) { crm2OportunidadesState.formMode = 'opportunity'; crm2OportunidadesState.detailId = opp?.id || ''; crm2OportunidadesState.draft = formDefaultsOpp(opp || {}); crm2OportunidadesState.pjTemporarios = []; crm2OportunidadesState.tempLoadedForId = ''; } if (opp?.id) void loadCnpjTemporariosOpp(opp.id); return renderOppForm(); } if (route.view === 'opp-detail') { const opp = opportunityById(route.id); return opp ? renderOppDetail(opp) : renderOppState(); } resetOppForm(); return renderOppList(); }
+function renderOpp() { permissionsOpp(); const route = currentOppRoute(); if (!['opp-new', 'opp-edit'].includes(route.view) && !crm2OportunidadesState.inlineEditingId) closeOppEditActionPortal(); if (route.view !== 'list') { crm2OportunidadesState.filterModalOpen = false; crm2OportunidadesState.filterDraft = {}; } if (!crm2OportunidadesState.canView) return renderOppState(); if (route.view === 'opp-new' || route.view === 'opp-edit') { if (route.view === 'opp-new' && !crm2OportunidadesState.canCreate) return renderOppState(); if (route.view === 'opp-edit' && !crm2OportunidadesState.canEdit) return renderOppState(); const opp = opportunityById(route.id); if (route.view === 'opp-edit' && !opp) return renderOppState(); if (crm2OportunidadesState.formMode !== 'opportunity' || crm2OportunidadesState.detailId !== (opp?.id || '')) { crm2OportunidadesState.formMode = 'opportunity'; crm2OportunidadesState.detailId = opp?.id || ''; crm2OportunidadesState.draft = formDefaultsOpp(opp || {}); crm2OportunidadesState.pjTemporarios = []; crm2OportunidadesState.tempLoadedForId = ''; } if (opp?.id) void loadCnpjTemporariosOpp(opp.id); return renderOppForm(); } if (route.view === 'opp-detail') { const opp = opportunityById(route.id); return opp ? renderOppDetail(opp) : renderOppState(); } resetOppForm(); return renderOppList(); }
 function decorateOppMarkup(markup) { let output = markup; if (currentOppRoute().view !== 'list') return output; const actionsMarker = '<div class="crm2-opp-filter-actions">'; if (crm2OportunidadesState.viewMode === 'table') { const trigger = '<button class="icon-btn crm2-opp-table-settings-trigger" type="button" title="Configurar colunas da tabela" aria-label="Configurar colunas da tabela" aria-haspopup="dialog" aria-expanded="' + (crm2OportunidadesState.tableColumnSettingsOpen ? 'true' : 'false') + '" onclick="crm2OportunidadesOpenTableColumnSettings()"><i data-lucide="settings-2" aria-hidden="true"></i></button>'; output = output.replace(actionsMarker, actionsMarker + trigger); const modal = renderOppTableSettingsModal(); if (modal) { const end = output.lastIndexOf('</section>'); if (end >= 0) output = output.slice(0, end) + modal + output.slice(end); } return output; } if (crm2OportunidadesState.viewMode !== 'kanban') return output; const trigger = '<button class="icon-btn crm2-opp-kanban-settings-trigger" type="button" title="Configurar cards do Kanban" aria-label="Configurar cards do Kanban" aria-haspopup="dialog" aria-expanded="' + (crm2OportunidadesState.kanbanCardSettingsOpen ? 'true' : 'false') + '" onclick="crm2OportunidadesOpenKanbanCardSettings()"><i data-lucide="settings-2" aria-hidden="true"></i></button>'; output = output.replace(actionsMarker, actionsMarker + trigger); const modal = renderOppKanbanSettingsModal(); if (modal) { const end = output.lastIndexOf('</section>'); if (end >= 0) output = output.slice(0, end) + modal + output.slice(end); } return output; }
 function closeOppFilterDropdowns() { document.querySelectorAll('.crm2-opp-filter-select-control .hub-filter-dropdown-menu:not([hidden]), body > .hub-filter-dropdown-menu[data-dropdown-input-id^="crm2-opp-filter-"]:not([hidden])').forEach((menu) => { menu.hidden = true; const trigger = document.getElementById(menu.dataset.dropdownInputId || ''); trigger?.setAttribute('aria-expanded', 'false'); const combo = trigger?.closest('.crm2-pf-select'); if (combo && menu.parentElement === document.body) combo.appendChild(menu); }); }
 function positionOpportunityProductFilterDropdownOpp(input, menu) { if (!input || !menu || menu.hidden) return; const rect = input.getBoundingClientRect(); const padding = 8; const gap = 6; const viewportWidth = window.innerWidth; const viewportHeight = window.innerHeight; const width = Math.min(Number(menu.dataset.dropdownWidth) || 320, viewportWidth - padding * 2); const naturalHeight = menu.scrollHeight; const maxDesiredHeight = Math.min(280, naturalHeight); const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - padding); const spaceAbove = Math.max(0, rect.top - gap - padding); const openAbove = maxDesiredHeight > spaceBelow && spaceAbove > spaceBelow; const availableSpace = openAbove ? spaceAbove : spaceBelow; const maxHeight = Math.min(280, availableSpace); const visibleHeight = Math.min(naturalHeight, maxHeight); const preferredLeft = rect.left; const left = Math.min(Math.max(padding, preferredLeft), Math.max(padding, viewportWidth - width - padding)); const preferredTop = openAbove ? rect.top - gap - visibleHeight : rect.bottom + gap; const top = Math.min(Math.max(padding, preferredTop), Math.max(padding, viewportHeight - visibleHeight - padding)); menu.style.position = 'fixed'; menu.style.width = `${width}px`; menu.style.maxHeight = `${maxHeight}px`; menu.style.overflowY = 'auto'; menu.style.left = `${left}px`; menu.style.top = `${top}px`; }

@@ -74,6 +74,21 @@ function decimal(value: unknown) {
   return parsed;
 }
 
+function workHours(value: unknown) {
+  const raw = text(value);
+  if (!raw) return { carga_horaria_semanal: null, carga_horaria_mensal: null };
+  const amount = raw.match(/[+-]?\d+(?:[.,]\d+)?/)?.[0];
+  if (!amount) throw new Error("Carga horária inválida.");
+  const hours = decimal(amount);
+  if (hours === null || hours < 0) throw new Error("Carga horária inválida.");
+  if (/semana|semanal/i.test(normalize(raw))) {
+    if (hours > 80) throw new Error("Carga semanal acima do limite.");
+    return { carga_horaria_semanal: hours, carga_horaria_mensal: null };
+  }
+  if (/dia|diaria|diario/i.test(normalize(raw))) throw new Error("Carga diária deve ficar na coluna Jornada de trabalho.");
+  return { carga_horaria_semanal: null, carga_horaria_mensal: hours };
+}
+
 function booleanValue(value: unknown) {
   const raw = normalize(value);
   if (["true", "1", "sim", "yes", "abono"].includes(raw)) return true;
@@ -87,10 +102,20 @@ function normalizedEnum(value: unknown, choices: Record<string, string>) {
   return found;
 }
 
+function normalizedTimeRange(value: unknown) {
+  return text(value).replace(/[\u00a0\u202f]/g, " ").replace(/[：∶]/g, ":")
+    .replace(/\b(\d{1,2})\s*h(?:oras?)?\b/gi, "$1:00").replace(/\s+/g, " ").trim();
+}
+
+function hasTimeRange(value: unknown) {
+  return /(?:^|\D)\d{1,2}:\d{2}\s*(?:às|as|até|ate|a|to|e|[/–—-])\s*\d{1,2}:\d{2}(?!\d)/i.test(normalizedTimeRange(value));
+}
+
 function parseTimeRange(value: unknown) {
-  const raw = text(value);
+  const raw = normalizedTimeRange(value);
   if (!raw) return { start: null, end: null };
-  const match = raw.match(/(\d{1,2}:\d{2})\s*(?:às|as|a|-)\s*(\d{1,2}:\d{2})/i);
+  if (["naodefinido", "naoseaplica", "naoaplicavel", "n/a", "-"].includes(normalize(raw))) return { start: null, end: null };
+  const match = raw.match(/(\d{1,2}:\d{2})\s*(?:às|as|até|ate|a|to|e|[/–—-])\s*(\d{1,2}:\d{2})/i);
   if (!match) throw new Error("Informe o intervalo como HH:MM às HH:MM.");
   const valid = (time: string) => {
     const [hour, minute] = time.split(":").map(Number);
@@ -270,6 +295,10 @@ async function collaboratorEdit(client: ReturnType<typeof createClient>, body: E
     await updateRow(client, "rh_documentos_cadastrais", text(document.id), parseIdentity(value, document.identidade_tipo));
     return;
   }
+  if (field === "cargahorariames") {
+    await updateLink(client, text(document.colaborador_id), workHours(value));
+    return;
+  }
   if (field === "orgaoufemissor") {
     const issuer = parseIssuer(value, document.identidade_uf_emissor);
     await updateRow(client, "rh_documentos_cadastrais", text(document.id), issuer);
@@ -313,7 +342,7 @@ async function collaboratorEdit(client: ReturnType<typeof createClient>, body: E
     const rangeText = parts.length > 1 ? parts[1] : raw;
     const days = parts.length > 1 ? optionalText(parts[0]) : null;
     if (parts.length > 1) patch.dias_trabalho = days;
-    if (rangeText && /\d{1,2}:\d{2}/.test(rangeText)) Object.assign(patch, { horario_entrada: parseTimeRange(rangeText).start, horario_saida: parseTimeRange(rangeText).end });
+    if (hasTimeRange(rangeText)) Object.assign(patch, { horario_entrada: parseTimeRange(rangeText).start, horario_saida: parseTimeRange(rangeText).end });
     else if (!raw) Object.assign(patch, { horario_entrada: null, horario_saida: null, dias_trabalho: null });
     else if (parts.length === 1) patch.dias_trabalho = raw;
     await updateLink(client, text(document.colaborador_id), patch);

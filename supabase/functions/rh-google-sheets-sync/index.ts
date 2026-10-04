@@ -224,7 +224,11 @@ function collaboratorValues(record: Data, docs: Data, link: Data, dependents: Da
   });
   data.set("dependentes", dependents.map((item) => text(item.nome_completo)).filter(Boolean).join(", "));
   data.set("depnascimento", dependents.map((item) => date(item.data_nascimento)).filter(Boolean).join(", "));
-  if (Object.hasOwn(link, "carga_horaria_mensal")) data.set("cargahorariames", link.carga_horaria_mensal);
+  if (link.carga_horaria_mensal !== null && link.carga_horaria_mensal !== undefined) {
+    data.set("cargahorariames", link.carga_horaria_mensal);
+  } else if (link.carga_horaria_semanal !== null && link.carga_horaria_semanal !== undefined) {
+    data.set("cargahorariames", `${text(link.carga_horaria_semanal)}h / semana`);
+  }
   return data;
 }
 
@@ -516,6 +520,30 @@ function importedNumber(value: unknown) {
   return result;
 }
 
+function importedWorkHours(value: unknown) {
+  const raw = text(value);
+  if (!raw) return { weekly: null, monthly: null };
+  const amount = raw.match(/[+-]?\d+(?:[.,]\d+)?/)?.[0];
+  if (!amount) throw new Error("Carga horária inválida.");
+  const hours = importedNumber(amount);
+  if (hours === null || hours < 0) throw new Error("Carga horária inválida.");
+  if (/semana|semanal/i.test(normalize(raw))) {
+    if (hours > 80) throw new Error("Carga semanal acima do limite.");
+    return { weekly: hours, monthly: null };
+  }
+  if (/dia|diaria|diario/i.test(normalize(raw))) throw new Error("Carga diária deve ficar na coluna Jornada de trabalho.");
+  return { weekly: null, monthly: hours };
+}
+
+function optionalImportValue<T>(value: unknown, column: string, warnings: string[], parser: (input: unknown) => T): T | null {
+  try {
+    return parser(value);
+  } catch {
+    warnings.push(column);
+    return null;
+  }
+}
+
 function validCpf(value: unknown) {
   const cpf = digits(value);
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -528,17 +556,43 @@ function validCpf(value: unknown) {
   return sumDigit(9) === Number(cpf[9]) && sumDigit(10) === Number(cpf[10]);
 }
 
-function importedTimeRange(value: unknown) {
-  const raw = text(value).replace(/\u00a0/g, " ");
+function normalizeImportedTimeText(value: unknown) {
+  return text(value)
+    .replace(/[\u00a0\u202f]/g, " ")
+    .replace(/[：∶]/g, ":")
+    .replace(/\b(\d{1,2})\s*h(?:oras?)?\b/gi, "$1:00")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const IMPORTED_TIME_RANGE_PATTERN = /(?:^|\D)(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*(?:h(?:oras?)?|min(?:utos?)?)?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?\s*(?:às|as|até|ate|a|to|e|[/–—-])\s*(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*(?:h(?:oras?)?|min(?:utos?)?)?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?(?!\d)/i;
+
+function hasImportedTimeRange(value: unknown) {
+  return IMPORTED_TIME_RANGE_PATTERN.test(normalizeImportedTimeText(value));
+}
+
+function importedTimeRange(value: unknown, fieldLabel = "campo de horário") {
+  const raw = normalizeImportedTimeText(value);
   if (!raw) return { start: null, end: null };
-  const match = raw.match(/(?:^|\D)(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*h?\s*(?:às|as|até|ate|a|[-–—])\s*(\d{1,2})\s*[:h.]\s*(\d{2})(?:\s*:\s*\d{2})?\s*h?(?!\d)/i);
-  if (!match) throw new Error("Horário inválido; use HH:MM às HH:MM.");
-  const startHour = Number(match[1]);
+  const invalidMessage = `Horário inválido em ${fieldLabel}: “${raw.slice(0, 80)}”. Use HH:MM às HH:MM.`;
+  if (["naodefinido", "naoseaplica", "naoaplicavel", "n/a", "-"].includes(normalize(raw))) {
+    return { start: null, end: null };
+  }
+  const match = raw.match(IMPORTED_TIME_RANGE_PATTERN);
+  if (!match) throw new Error(invalidMessage);
+  const to24Hour = (hourText: string, meridiem?: string) => {
+    const hour = Number(hourText);
+    if (!meridiem) return hour;
+    if (hour < 1 || hour > 12) return Number.NaN;
+    const isPm = /^p/i.test(meridiem);
+    return hour === 12 ? (isPm ? 12 : 0) : hour + (isPm ? 12 : 0);
+  };
+  const startHour = to24Hour(match[1], match[3]);
   const startMinute = Number(match[2]);
-  const endHour = Number(match[3]);
-  const endMinute = Number(match[4]);
-  if (startHour > 23 || endHour > 23 || startMinute > 59 || endMinute > 59) {
-    throw new Error("Horário inválido; use HH:MM às HH:MM.");
+  const endHour = to24Hour(match[4], match[6]);
+  const endMinute = Number(match[5]);
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || startHour > 23 || endHour > 23 || startHour < 0 || endHour < 0 || startMinute > 59 || endMinute > 59) {
+    throw new Error(invalidMessage);
   }
   return {
     start: `${String(startHour).padStart(2, "0")}:${String(startMinute).padStart(2, "0")}:00`,
@@ -546,7 +600,7 @@ function importedTimeRange(value: unknown) {
   };
 }
 
-function importedLink(headers: unknown[], row: unknown[]): Data {
+function importedLink(headers: unknown[], row: unknown[], warnings: string[]): Data {
   const rawType = normalize(inputValue(headers, row, ["TIPO DE VINCULO"]));
   const typeAliases: Record<string, string> = {
     clt: "clt", estagio: "estagio", socio: "socio", prestador: "prestador", pj: "prestador",
@@ -556,29 +610,37 @@ function importedLink(headers: unknown[], row: unknown[]): Data {
   const schedule = text(inputValue(headers, row, ["JORNADA DE TRABALHO"]));
   const scheduleParts = schedule.split(/\s*\|\s*/, 2);
   const rangeText = scheduleParts.length > 1 ? scheduleParts[1] : schedule;
-  const range = /\d{1,2}:\d{2}/.test(rangeText) ? importedTimeRange(rangeText) : { start: null, end: null };
-  const interval = importedTimeRange(inputValue(headers, row, ["INTERVALO"]));
+  // Values such as “8h / dia” describe daily workload; they are not clock ranges.
+  const range = hasImportedTimeRange(rangeText)
+    ? optionalImportValue(rangeText, "Jornada de trabalho", warnings, (value) => importedTimeRange(value, "Jornada de trabalho")) || { start: null, end: null }
+    : { start: null, end: null };
+  const interval = optionalImportValue(inputValue(headers, row, ["INTERVALO"]), "Intervalo", warnings, (value) => importedTimeRange(value, "Intervalo")) || { start: null, end: null };
+  const workHours = optionalImportValue(inputValue(headers, row, ["CARGA HORARIA / MÊS", "CARGA HORARIA / MES"]), "Carga horária", warnings, importedWorkHours)
+    || { weekly: null, monthly: null };
   const cboRaw = text(inputValue(headers, row, ["CBO"])).replace(/\D/g, "");
-  const cbo = /^\d{6}$/.test(cboRaw) ? `${cboRaw.slice(0, 4)}-${cboRaw.slice(4)}` : optionalText(inputValue(headers, row, ["CBO"]));
+  const cboValid = /^\d{6}$/.test(cboRaw);
+  if (text(inputValue(headers, row, ["CBO"])) && !cboValid) warnings.push("CBO");
+  const cbo = cboValid ? `${cboRaw.slice(0, 4)}-${cboRaw.slice(4)}` : null;
   return {
     tipo_vinculo: type,
-    data_admissao: importedDate(inputValue(headers, row, ["DATA DE ADMISSÃO"])),
-    data_desligamento: importedDate(inputValue(headers, row, ["DATA DE SAÍDA"])),
+    data_admissao: optionalImportValue(inputValue(headers, row, ["DATA DE ADMISSÃO"]), "Data de admissão", warnings, importedDate),
+    data_desligamento: optionalImportValue(inputValue(headers, row, ["DATA DE SAÍDA"]), "Data de saída", warnings, importedDate),
     cargo: optionalText(inputValue(headers, row, ["CARGO"])),
     funcao: optionalText(inputValue(headers, row, ["FUNÇÃO", "FUNCAO"])),
     cbo,
     situacao: normalize(inputValue(headers, row, ["STATUS HUB"])) === "inativo" ? "desligado" : "ativo",
-    remuneracao_valor: importedNumber(inputValue(headers, row, ["SALARIO/BOLSA"])),
+    remuneracao_valor: optionalImportValue(inputValue(headers, row, ["SALARIO/BOLSA"]), "Salário/bolsa", warnings, importedNumber),
+    carga_horaria_semanal: workHours.weekly,
     horario_entrada: range.start,
     horario_saida: range.end,
     intervalo_inicio: interval.start,
     intervalo_fim: interval.end,
-    dias_trabalho: scheduleParts.length > 1 ? optionalText(scheduleParts[0]) : (range.start ? null : optionalText(schedule)),
-    carga_horaria_mensal: importedNumber(inputValue(headers, row, ["CARGA HORARIA / MÊS", "CARGA HORARIA / MES"]))
+    dias_trabalho: scheduleParts.length > 1 && range.start ? optionalText(scheduleParts[0]) : (range.start ? null : optionalText(schedule)),
+    carga_horaria_mensal: workHours.monthly
   };
 }
 
-function importedDocuments(headers: unknown[], row: unknown[], cpf: string): Data {
+function importedDocuments(headers: unknown[], row: unknown[], cpf: string, warnings: string[]): Data {
   const identityRaw = text(inputValue(headers, row, ["RG/CNH"]));
   const identityMatch = identityRaw.match(/^\s*(RG|CNH)\s*(?:\||\/|:|-)\s*(.*)$/i);
   const identityType = identityMatch?.[1]?.toLowerCase() || (text(inputValue(headers, row, ["SE CNH, QUAL CATEGORIA?"])) ? "cnh" : identityRaw ? "rg" : null);
@@ -590,7 +652,7 @@ function importedDocuments(headers: unknown[], row: unknown[], cpf: string): Dat
     cpf,
     identidade_tipo: identityType,
     identidade_numero: identityNumber,
-    identidade_data_emissao: importedDate(inputValue(headers, row, ["DATA DE EMISSAO/EXPEDIÇÃO", "DATA DE EMISSAO/EXPEDICAO"])),
+    identidade_data_emissao: optionalImportValue(inputValue(headers, row, ["DATA DE EMISSAO/EXPEDIÇÃO", "DATA DE EMISSAO/EXPEDICAO"]), "Data de emissão do documento", warnings, importedDate),
     identidade_orgao_emissor: issuerHasUf ? issuerParts.slice(0, -1).join(" | ") : optionalText(issuerParts.join(" | ")),
     identidade_uf_emissor: issuerHasUf ? issuerParts.at(-1)?.toUpperCase() : null,
     cnh_categoria: optionalText(inputValue(headers, row, ["SE CNH, QUAL CATEGORIA?"])),
@@ -599,23 +661,27 @@ function importedDocuments(headers: unknown[], row: unknown[], cpf: string): Dat
     secao_eleitoral: optionalText(inputValue(headers, row, ["SEÇÃO DE VOTAÇÃO", "SECAO DE VOTACAO"])),
     ctps_numero: optionalText(inputValue(headers, row, ["NÚMERO DA SUA CTPS", "NUMERO DA SUA CTPS"])),
     ctps_serie: optionalText(inputValue(headers, row, ["SERIE"])),
-    ctps_data_expedicao: importedDate(inputValue(headers, row, ["DATA DE EXPEDIÇÃO CTPS", "DATA DE EXPEDICAO CTPS"])),
+    ctps_data_expedicao: optionalImportValue(inputValue(headers, row, ["DATA DE EXPEDIÇÃO CTPS", "DATA DE EXPEDICAO CTPS"]), "Data de expedição da CTPS", warnings, importedDate),
     ctps_uf: optionalText(inputValue(headers, row, ["UF CTPS"]))?.toUpperCase() || null,
     reservista_numero: optionalText(inputValue(headers, row, ["RESERVISTA/DOC MILITAR"])),
     reservista_categoria: optionalText(inputValue(headers, row, ["CATEGORIA DE RESERVISTA"])),
     pis_numero: digits(inputValue(headers, row, ["PIS - NUMERO", "PIS NUMERO"])) || null,
-    pis_data_cadastro: importedDate(inputValue(headers, row, ["PIS - DATA CADASTRO", "PIS DATA CADASTRO"]))
+    pis_data_cadastro: optionalImportValue(inputValue(headers, row, ["PIS - DATA CADASTRO", "PIS DATA CADASTRO"]), "Data de cadastro do PIS", warnings, importedDate)
   };
 }
 
-function importedDependents(headers: unknown[], row: unknown[]) {
+function importedDependents(headers: unknown[], row: unknown[], warnings: string[]) {
   const dependents = [];
   for (let index = 1; index <= 3; index += 1) {
     const sequence = String(index).padStart(2, "0");
     const name = optionalText(inputValue(headers, row, [`Dependente legal ${sequence} - NOME COMPLETO`, `Dependente legal ${index} - NOME COMPLETO`]));
-    const birth = importedDate(inputValue(headers, row, [`Dependente legal ${sequence} - DATA DE NASCIMENTO`, `Dependente legal ${index} - DATA DE NASCIMENTO`]));
-    if (!name && !birth) continue;
-    if (!name || !birth) throw new Error(`Preencha nome e nascimento do dependente ${index}.`);
+    const birthValue = inputValue(headers, row, [`Dependente legal ${sequence} - DATA DE NASCIMENTO`, `Dependente legal ${index} - DATA DE NASCIMENTO`]);
+    if (!name && !text(birthValue)) continue;
+    const birth = optionalImportValue(birthValue, `Nascimento do dependente ${index}`, warnings, importedDate);
+    if (!name || !birth) {
+      if ((!name && birth) || (name && !text(birthValue))) warnings.push(`Dados incompletos do dependente ${index}`);
+      continue;
+    }
     dependents.push({ nome_completo: name, data_nascimento: birth });
   }
   return dependents;
@@ -641,12 +707,17 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
     throw new Error("A aba CAD_COLABORADOR precisa ter as colunas SEU CPF, Nome Completo e Data de Nascimento.");
   }
   const monthlyHoursIndex = headerAliases(data.headers, ["CARGA HORARIA / MÊS", "CARGA HORARIA / MES"]);
-  if (monthlyHoursIndex >= 0 && data.rows.some((row) => text(row[monthlyHoursIndex]))) {
+  let monthlyHoursAvailable = true;
+  if (monthlyHoursIndex >= 0 && data.rows.some((row) => {
+    const value = text(row[monthlyHoursIndex]);
+    return value && !/semana|semanal/i.test(normalize(value));
+  })) {
     const { error } = await adminClient.from("rh_vinculos_profissionais").select("carga_horaria_mensal").limit(1);
-    if (error) throw new Error("A migration da coluna CARGA HORARIA / MÊS ainda não está aplicada no Supabase.");
+    monthlyHoursAvailable = !error;
   }
 
   const failures: Array<{ row: number; message: string }> = [];
+  const warnings: Array<{ row: number; column: string }> = [];
   const candidates: Array<{ rowNumber: number; row: unknown[]; cpf: string }> = [];
   const occurrences = new Map<string, number>();
   data.rows.forEach((row, index) => {
@@ -677,12 +748,17 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
   for (const item of batch) {
     try {
       const { row, cpf } = item;
+      const rowWarnings: string[] = [];
       const name = text(row[nameIndex]);
       if (name.length < 3) throw new Error("Nome completo ausente ou inválido.");
       const birthDate = importedDate(row[birthIndex]);
       if (!birthDate) throw new Error("Data de nascimento ausente.");
-      const dependents = importedDependents(data.headers, row);
-      const scheduleLink = importedLink(data.headers, row);
+      const dependents = importedDependents(data.headers, row, rowWarnings);
+      const scheduleLink = importedLink(data.headers, row, rowWarnings);
+      if (!monthlyHoursAvailable && scheduleLink.carga_horaria_mensal !== null) {
+        scheduleLink.carga_horaria_mensal = null;
+        rowWarnings.push("Carga horária mensal");
+      }
       const collaborator: Data = {
         nome_completo: name,
         data_nascimento: birthDate,
@@ -707,7 +783,7 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
         endereco_cep: digits(inputValue(data.headers, row, ["CEP"])) || null,
         status: normalize(inputValue(data.headers, row, ["STATUS HUB"])) === "inativo" ? "inativo" : "ativo"
       };
-      const documents = importedDocuments(data.headers, row, cpf);
+      const documents = importedDocuments(data.headers, row, cpf, rowWarnings);
       const { data: collaboratorId, error } = await userClient.rpc("rh_salvar_cadastro_pessoal", {
         p_colaborador_id: null,
         p_colaborador: collaborator,
@@ -720,8 +796,12 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
         const { error: hoursError } = await userClient.from("rh_vinculos_profissionais")
           .update({ carga_horaria_mensal: scheduleLink.carga_horaria_mensal })
           .eq("colaborador_id", collaboratorId);
-        if (hoursError) throw hoursError;
+        if (hoursError) {
+          scheduleLink.carga_horaria_mensal = null;
+          rowWarnings.push("Carga horária mensal");
+        }
       }
+      warnings.push(...rowWarnings.map((column) => ({ row: item.rowNumber, column })));
       imported += 1;
     } catch (error) {
       failures.push({ row: item.rowNumber, message: safeImportFailure(error) });
@@ -732,6 +812,8 @@ async function importFromSheet(userClient: ReturnType<typeof createClient>, admi
     imported,
     existing: existingCpfs.size,
     failures: failures.slice(0, 20),
+    skippedColumns: warnings.length,
+    warnings: warnings.slice(0, 20),
     remaining: Math.max(0, missing.length - batch.length)
   };
 }

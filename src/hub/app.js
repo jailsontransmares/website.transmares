@@ -30,6 +30,7 @@ import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
 import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
+import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub, trocarSenhaProvisoria } from './services/authService.js';
 import { canAccessModule, hasPermission, normalizarPermissoes, LINK_RESOURCES } from './services/permissionService.js';
 import {
@@ -785,6 +786,7 @@ window.addEventListener('hubAdminUsuariosAtualizados', () => {
 window.addEventListener('popstate', () => {
   limparMenusAcoesGlobais();
   hubLimparDropdowns({ remover: true });
+  if (window.simsaudeCatalogoTratarPopstate?.() === false) return;
   if (state.usuario) {
     renderizarRotaAtual();
   }
@@ -2424,6 +2426,7 @@ function montarCaminhoHub(idModulo = '') {
 }
 
 function navegarParaRota(caminho) {
+  if (window.location.pathname !== caminho && window.simsaudeCatalogoConfirmarSaida?.(caminho) === false) return false;
   if (window.location.pathname !== caminho && window.crm2PfHasUnsavedChanges?.()) {
     if (!protegerNavegacaoFormularioPfHub(() => navegarParaRota(caminho))) return;
   }
@@ -4774,7 +4777,6 @@ function renderListaUsuariosAdmin(records) {
 function renderUsuarioAdmin(usuario) {
   const id = escapeAttr(usuario.id || '');
   const status = usuario.status || 'pendente';
-  const rotuloStatus = obterRotuloStatusUsuario(status);
   const perfil = (state.admin.perfis || []).find(item => item.id === usuario.perfil_id);
   const perfilNome = perfil?.nome || perfil?.slug || usuario.perfil_nome || 'Sem perfil';
   const resumoPermissoes = obterResumoPermissoesEspecificasUsuario(usuario);
@@ -4782,7 +4784,7 @@ function renderUsuarioAdmin(usuario) {
   return `
     <article class="crud-row admin-user-row">
       <div class="admin-user-main">
-        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
+        ${renderHubStatusDot(status, 'do usuário')}
         <div class="admin-user-identity">
           <button class="admin-user-name-link" type="button" onclick="editarUsuarioAdmin('${id}')" aria-label="Visualizar cadastro de ${escapeAttr(usuario.nome || 'usuário')}">${escapeHtml(usuario.nome || 'Sem nome')}</button>
           ${usuario.nome_usuario ? `<small>@${escapeHtml(usuario.nome_usuario)}</small>` : ''}
@@ -4898,23 +4900,12 @@ function renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual) {
 }
 
 function renderLegendaStatusUsuariosAdmin() {
-  const status = [
-    ['ativo', 'Ativo'],
-    ['pendente', 'Pendente'],
-    ['bloqueado', 'Bloqueado'],
-    ['inativo', 'Inativo']
-  ];
-
-  return `
-    <footer class="admin-user-status-legend" aria-label="Legenda de status dos usuários">
-      ${status.map(([valor, rotulo]) => `
-        <span class="admin-user-status-legend-item">
-          <span class="admin-user-status-dot status-${valor}" aria-hidden="true"></span>
-          <span>${rotulo}</span>
-        </span>
-      `).join('')}
-    </footer>
-  `;
+  return renderHubStatusLegend([
+    { status: 'ativo', rotulo: 'Ativo' },
+    { status: 'pendente', rotulo: 'Pendente' },
+    { status: 'bloqueado', rotulo: 'Bloqueado' },
+    { status: 'inativo', rotulo: 'Inativo' }
+  ], 'Legenda de status dos usuários');
 }
 
 function resetarFluxoModalUsuarioAdmin(render = true) {
@@ -5867,7 +5858,7 @@ function renderPerfilAdmin(perfil) {
   return `
     <article class="crud-row admin-profile-row">
       <div class="crud-actions admin-profile-actions">
-        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do perfil: ${escapeAttr(rotuloStatus)}"></span>
+        ${renderHubStatusDot(status, 'do perfil')}
         <button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar perfil" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
       </div>
 
@@ -16278,7 +16269,7 @@ const renderizarRotaAtualHubPhase2 = async function() {
     return;
   }
 
-  if (rotaRelativa === SIMULADOR_SAUDE_CATALOGO_ROUTE) {
+  if (rotaRelativa === SIMULADOR_SAUDE_CATALOGO_ROUTE || rotaRelativa.startsWith(`${SIMULADOR_SAUDE_CATALOGO_ROUTE}/`)) {
     await mountSimuladorSaudeCatalogPage({
       renderShell: renderHubShell,
       pode,

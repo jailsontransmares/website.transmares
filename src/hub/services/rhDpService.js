@@ -408,7 +408,7 @@ function mensagemErroRh(error, fallback) {
   return texto || fallback;
 }
 
-export async function listarColaboradoresRhDp() {
+export async function listarColaboradoresRhDp({ incluirSensiveis = false } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('rh_colaboradores')
@@ -419,7 +419,42 @@ export async function listarColaboradoresRhDp() {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar os colaboradores.'));
   }
 
-  return data || [];
+  const colaboradores = data || [];
+  if (!incluirSensiveis || !colaboradores.length) return colaboradores;
+
+  const ids = colaboradores.map(item => item.id).filter(Boolean);
+  const [documentosResponse, dependentesResponse] = await Promise.all([
+    supabase
+      .from('rh_documentos_cadastrais')
+      .select('colaborador_id, cpf')
+      .in('colaborador_id', ids),
+    supabase
+      .from('rh_dependentes')
+      .select('colaborador_id, nome_completo')
+      .in('colaborador_id', ids)
+      .eq('ativo', true)
+  ]);
+
+  if (documentosResponse.error) {
+    throw new Error(mensagemErroRh(documentosResponse.error, 'Não foi possível carregar os CPFs para a busca.'));
+  }
+  if (dependentesResponse.error) {
+    throw new Error(mensagemErroRh(dependentesResponse.error, 'Não foi possível carregar os nomes dos dependentes para a busca.'));
+  }
+
+  const cpfsPorColaborador = new Map((documentosResponse.data || []).map(item => [item.colaborador_id, item.cpf || '']));
+  const dependentesPorColaborador = new Map();
+  for (const dependente of dependentesResponse.data || []) {
+    const nomes = dependentesPorColaborador.get(dependente.colaborador_id) || [];
+    nomes.push(dependente.nome_completo);
+    dependentesPorColaborador.set(dependente.colaborador_id, nomes);
+  }
+
+  return colaboradores.map(item => ({
+    ...item,
+    cpf_busca: cpfsPorColaborador.get(item.id) || '',
+    dependentes_busca: dependentesPorColaborador.get(item.id) || []
+  }));
 }
 
 export async function sincronizarPlanilhaRhDp({ importar = false } = {}) {

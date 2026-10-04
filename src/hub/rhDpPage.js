@@ -34,7 +34,9 @@ import {
   limparMenusAcoesGlobais
 } from './actionMenuPortal.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
-import './formFooterPortal.js';
+import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
+import { registerHubRecordShortcutHandler, renderHubRecordHeader, renderHubRecordEditButton, renderHubRecordFormFooter, removeHubRecordWorkflowFooter } from './recordWorkflow.js';
+import { removeHubFormFooterPortals } from './formFooterPortal.js';
 
 const LIMITE_POR_PAGINA = 10;
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
@@ -243,7 +245,8 @@ function normalizarBusca(valor = '') {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 export function criarRhDpController({
@@ -308,7 +311,7 @@ export function criarRhDpController({
       colaboradorId: ''
     },
     busca: '',
-    filtroStatus: 'todos',
+    filtroStatus: 'ativo',
     syncingSpreadsheet: false,
     pagina: 1,
     modal: criarEstadoModal()
@@ -318,6 +321,7 @@ export function criarRhDpController({
   let faixaNavegacaoRhDp = '';
   let listenersMenuRhDpConfigurados = false;
   let resizeNavegacaoRhDpConfigurado = false;
+  let mensagemCadastroPendente = '';
 
   function criarEstadoModal({
     aberto = false,
@@ -333,6 +337,7 @@ export function criarRhDpController({
       id,
       loading,
       saving: false,
+      snapshotEdicao: null,
       etapa: 0,
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
@@ -536,8 +541,23 @@ export function criarRhDpController({
       const novaFaixa = obterFaixaNavegacaoRhDp();
       if (novaFaixa === faixaNavegacaoRhDp) return;
       faixaNavegacaoRhDp = novaFaixa;
+
+      const partesRota = obterPartesRota?.() || [];
+      if (partesRota[0] !== 'rh-dp') return;
+
+      const navegacaoAtual = document
+        .getElementById('app')
+        ?.querySelector('.rh-module-tabs[aria-label="Menu do RH e DP"]');
+      if (!navegacaoAtual) return;
+
       fecharMenuMaisRhDp();
-      render();
+      const template = document.createElement('template');
+      template.innerHTML = renderMenuRhDp().trim();
+      const novaNavegacao = template.content.firstElementChild;
+      if (!novaNavegacao) return;
+
+      navegacaoAtual.replaceWith(novaNavegacao);
+      conectarMenuMaisRhDp();
     });
     resizeNavegacaoRhDpConfigurado = true;
   }
@@ -558,13 +578,6 @@ export function criarRhDpController({
 
   function renderMetricasRhDp(itens, acoes = '') {
     return `<div class="rh-metrics-bar"><div class="rh-metric-pills" role="group" aria-label="Indicadores da área">${itens.map(({ id, label, shortLabel, value, tone = '' }) => `<span class="rh-metric-pill ${tone ? `is-${tone}` : ''}"><span class="rh-metric-label">${label}</span><span class="rh-metric-short" aria-hidden="true">${shortLabel || label.slice(0, 1)}</span><strong>${value}</strong></span>`).join('')}</div>${acoes ? `<div class="rh-metrics-actions">${acoes}</div>` : ''}</div>`;
-  }
-
-  function renderFooterRhDp() {
-    const incluir = state.secao === 'colaboradores' && podeCriar()
-      ? '<button class="save-btn" type="button" data-rh-action="open-create">Incluir</button>'
-      : '';
-    return `<div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" data-rh-action="go-home">Voltar</button>${incluir}</div>`;
   }
 
   function nomeColaborador(id) {
@@ -984,7 +997,8 @@ export function criarRhDpController({
         item.nome_completo,
         item.telefone_celular,
         item.email_contato,
-        item.endereco_cidade
+        item.cpf_busca,
+        ...(item.dependentes_busca || [])
       ].some(valor => normalizarBusca(valor).includes(busca));
     });
   }
@@ -1031,6 +1045,10 @@ export function criarRhDpController({
           <strong>Nenhum colaborador encontrado</strong>
           <p>${state.colaboradores.length ? 'Revise os filtros aplicados.' : 'Inclua o primeiro cadastro pessoal do módulo.'}</p>
         </div>
+        ${renderHubStatusLegend([
+          { status: 'ativo', rotulo: 'Ativo' },
+          { status: 'inativo', rotulo: 'Inativo' }
+        ], 'Legenda de status dos colaboradores')}
       `;
     }
 
@@ -1040,100 +1058,94 @@ export function criarRhDpController({
           <span>Colaborador</span>
           <span>Contato</span>
           <span>Nascimento</span>
-          <span>Status</span>
-          <span>Atualização</span>
-          <span>Ações</span>
+          <span>Última atualização</span>
         </div>
         ${pagina.map(item => renderLinha(item)).join('')}
       </div>
-      ${totalPaginas > 1 ? `
-        <div class="rh-pagination">
-          <span>${filtrados.length} registros</span>
-          <div>
-            <button class="secondary-btn" type="button" onclick="hubRhDpSelecionarPagina(${state.pagina - 1})" ${state.pagina <= 1 ? 'disabled' : ''}>Anterior</button>
-            <span>Página ${state.pagina} de ${totalPaginas}</span>
-            <button class="secondary-btn" type="button" onclick="hubRhDpSelecionarPagina(${state.pagina + 1})" ${state.pagina >= totalPaginas ? 'disabled' : ''}>Próxima</button>
-          </div>
+      <div class="rh-pagination">
+        <span>Mostrando ${inicio + 1}–${Math.min(inicio + pagina.length, filtrados.length)} de ${filtrados.length} colaboradores</span>
+        <div>
+          <button class="secondary-btn" type="button" aria-label="Página anterior" onclick="hubRhDpSelecionarPagina(${state.pagina - 1})" ${state.pagina <= 1 ? 'disabled' : ''}>‹</button>
+          <span>Página ${state.pagina} de ${totalPaginas}</span>
+          <button class="secondary-btn" type="button" aria-label="Próxima página" onclick="hubRhDpSelecionarPagina(${state.pagina + 1})" ${state.pagina >= totalPaginas ? 'disabled' : ''}>›</button>
         </div>
-      ` : ''}
+      </div>
+      ${renderHubStatusLegend([
+        { status: 'ativo', rotulo: 'Ativo' },
+        { status: 'inativo', rotulo: 'Inativo' }
+      ], 'Legenda de status dos colaboradores')}
     `;
+  }
+
+  function iniciaisColaborador(nome) {
+    const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    const primeira = partes[0][0];
+    const ultima = partes.length > 1 ? partes[partes.length - 1][0] : partes[0][1] || '';
+    return `${primeira}${ultima}`.toLocaleUpperCase('pt-BR');
   }
 
   function renderLinha(item) {
     const idade = calcularIdade(item.data_nascimento);
     const contato = item.telefone_celular || item.email_contato || '-';
     const status = item.status === 'inativo' ? 'inativo' : 'ativo';
-    const colaboradorId = escapeAttr(item.id);
     const colaboradorCodigo = escapeAttr(item.codigo || item.id);
 
     return `
       <article class="rh-table rh-table-row" role="row">
         <div class="rh-person-cell">
-          <strong>${escapeHtml(item.nome_completo || '-')}</strong>
-          <span>${escapeHtml(item.endereco_cidade || 'Cidade não informada')}</span>
+          <span class="rh-person-avatar" aria-hidden="true">${escapeHtml(iniciaisColaborador(item.nome_completo))}</span>
+          <div class="rh-person-name-row">
+            ${renderHubStatusDot(status, 'do colaborador')}
+            <button class="rh-person-name" type="button" aria-label="Visualizar cadastro de ${escapeAttr(item.nome_completo || 'colaborador')}" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">${escapeHtml(item.nome_completo || '-')}</button>
+          </div>
         </div>
         <span>${escapeHtml(contato)}</span>
         <span>${escapeHtml(formatarData(item.data_nascimento))}${idade == null ? '' : `<small>${idade} anos</small>`}</span>
-        <span><span class="status-badge ${status}">${status}</span></span>
         <span>${escapeHtml(formatarDataHora(item.updated_at))}</span>
-        <div class="hub-row-actions">
-          <details class="hub-row-actions-menu" data-hub-action-menu data-hub-action-min-width="120" data-hub-action-max-width="190" data-hub-action-gap="6">
-            <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome_completo)}" title="Ações rápidas">⋮</summary>
-            <div class="hub-row-actions-popover" data-hub-action-popover role="menu">
-              <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">Visualizar</button>
-              ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'edit')">Editar</button>` : ''}
-              ${status === 'ativo' && podeCriarFerias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-ferias" data-colaborador-id="${colaboradorId}">Incluir férias</button>` : ''}
-              ${status === 'ativo' && podeCriarOcorrencias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-afastamento" data-colaborador-id="${colaboradorId}">Lançar afastamento</button>` : ''}
-              ${status === 'ativo' && podeCriarDesligamentos() ? `<button type="button" role="menuitem" data-rh-action="quick-open-desligamento" data-colaborador-id="${colaboradorId}">Lançar desligamento</button>` : ''}
-              ${podeInativar() ? `<button class="${status === 'ativo' ? 'danger-text' : ''}" type="button" role="menuitem" onclick="hubRhDpAlterarStatus('${colaboradorId}', '${status === 'ativo' ? 'inativo' : 'ativo'}')">${status === 'ativo' ? 'Inativar' : 'Reativar'}</button>` : ''}
-            </div>
-          </details>
-        </div>
       </article>
     `;
   }
 
   function renderToolbar() {
-    const dados = resumo();
     const filtros = [
-      ['todos', 'Todos', 'T', dados.total],
-      ['ativo', 'Ativos', 'A', dados.ativos],
-      ['inativo', 'Inativos', 'I', dados.inativos]
+      ['todos', 'Todos'],
+      ['ativo', 'Ativos'],
+      ['inativo', 'Inativos']
     ];
+    const filtroSelecionado = filtros.find(([id]) => id === state.filtroStatus) || filtros[0];
 
     return `
       <div class="rh-toolbar">
-        <div class="rh-status-filters" role="group" aria-label="Filtrar colaboradores por status">
-          ${filtros.map(([id, nome, abreviacao, quantidade]) => `
-            <button
-              class="rh-status-filter ${id === 'ativo' ? 'is-ativo' : id === 'inativo' ? 'is-inativo' : ''} ${state.filtroStatus === id ? 'is-active' : ''}"
-              type="button"
-              aria-label="${nome}: ${quantidade} colaboradores"
-              aria-pressed="${state.filtroStatus === id ? 'true' : 'false'}"
-              onclick="hubRhDpFiltrarStatus('${id}')"
-            >
-              <span class="rh-status-filter-label">${nome}</span>
-              <span class="rh-status-filter-short" aria-hidden="true">${abreviacao}</span>
-              <span class="rh-status-filter-count">${quantidade}</span>
-            </button>
-          `).join('')}
-        </div>
+        <label class="rh-search">
+          <span>Buscar colaboradores</span>
+          <input
+            id="rh_dp_busca"
+            class="config-input"
+            type="search"
+            value="${escapeAttr(state.busca)}"
+            placeholder="Buscar colaborador(a)"
+            aria-label="Buscar colaborador(a)"
+            oninput="hubRhDpFiltrarBusca(this.value)"
+          >
+        </label>
         <div class="rh-collaborators-actions">
           ${podeSincronizarPlanilha() ? `<button class="secondary-btn rh-collaborators-sync" type="button" data-rh-action="sync-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Envia até 20 alterações pendentes do Hub para a planilha">Enviar ao Sheets</button>` : ''}
           ${podeImportarPlanilha() ? `<button class="secondary-btn rh-collaborators-import" type="button" data-rh-action="import-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Cria no Hub colaboradores com CPF que ainda não existe no cadastro; CPFs já cadastrados não são alterados">${state.syncingSpreadsheet ? 'Importando…' : 'Importar da planilha'}</button>` : ''}
-          ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create">+ Incluir</button>' : ''}
-          <label class="rh-search">
-            <span>Buscar colaboradores</span>
-            <input
-              id="rh_dp_busca"
-              class="config-input"
-              type="search"
-              value="${escapeAttr(state.busca)}"
-              placeholder="Filtrar colaboradores"
-              aria-label="Filtrar colaboradores"
-              oninput="hubRhDpFiltrarBusca(this.value)"
-            >
-          </label>
+          <details class="hub-row-actions-menu rh-filter-menu" data-hub-action-menu data-hub-action-min-width="210" data-hub-action-max-width="260" data-hub-action-gap="8" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="selected">
+            <summary class="secondary-btn rh-filter-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="Filtrar colaboradores por status${state.filtroStatus !== 'todos' ? `: ${filtroSelecionado[1]}` : ''}" title="Filtrar colaboradores">
+              <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
+            </summary>
+            <div class="hub-row-actions-popover rh-filter-popover" data-hub-action-popover role="menu" aria-label="Filtros de colaboradores">
+              <div class="rh-filter-heading" role="presentation"><strong>Status</strong></div>
+              ${filtros.map(([id, nome]) => `
+                <button type="button" role="menuitemradio" aria-checked="${state.filtroStatus === id ? 'true' : 'false'}" class="rh-filter-option ${state.filtroStatus === id ? 'is-selected' : ''}" onclick="hubRhDpFiltrarStatus('${id}')">
+                  <span class="rh-filter-check" aria-hidden="true"></span>
+                  <span>${nome}</span>
+                </button>
+              `).join('')}
+            </div>
+          </details>
         </div>
       </div>
     `;
@@ -1152,16 +1164,19 @@ export function criarRhDpController({
       : `
         ${state.secao === 'dashboard' ? renderDashboard() : state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : state.modal.aberto ? `${renderModal()}${renderModalFerias()}${renderModalAfastamento()}${renderModalDesligamento()}` : `
         <section class="admin-panel rh-panel">
-          <div class="admin-panel-header rh-panel-header">
-            ${renderMenuRhDp()}
-            <div>
-              <h2>Colaboradores</h2>
-              <p>Cadastro pessoal para controle interno da Transmares.</p>
+          <div class="admin-panel-header rh-panel-header rh-collaborators-header">
+            <div class="rh-collaborators-title-row">
+              <div>
+                <h2>Colaboradores</h2>
+                <p>Cadastro pessoal para controle interno da Transmares.</p>
+              </div>
+              ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create"><i data-lucide="plus" aria-hidden="true"></i> Incluir colaborador</button>' : ''}
             </div>
+            ${renderMenuRhDp()}
           </div>
 
           <div class="rh-collaborators-overview">${renderToolbar()}</div>
-          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}" role="${state.messageType === 'error' ? 'alert' : 'status'}">${escapeHtml(state.message)}</p>` : ''}
+          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : state.messageType === 'warning' ? 'warning' : 'success'}" role="${state.messageType === 'error' ? 'alert' : 'status'}">${escapeHtml(state.message)}</p>` : ''}
           ${state.loading ? (window.hubRenderLoading?.('Carregando colaboradores...') || '<p class="quick-link-empty" role="status">Carregando colaboradores...</p>') : renderTabela()}
         </section>`}
       `;
@@ -1172,7 +1187,7 @@ export function criarRhDpController({
       tituloPagina: 'RH & DP',
       descricaoPagina: 'Cadastro e gestão interna de colaboradores.',
       classeConteudo: 'rh-dp-page',
-      conteudo: `${conteudo}${state.modal.aberto ? '' : renderFooterRhDp()}`
+      conteudo
     });
     conectarEventos();
     conectarMenuMaisRhDp();
@@ -1185,32 +1200,9 @@ export function criarRhDpController({
     }));
     document.querySelector('[data-rh-action="sync-spreadsheet"]')?.addEventListener('click', sincronizarPlanilha);
     document.querySelector('[data-rh-action="import-spreadsheet"]')?.addEventListener('click', importarDaPlanilha);
-    document.querySelector('[data-rh-action="go-home"]')?.addEventListener('click', () => {
-      navegarParaRota(montarCaminhoModulo(''));
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-ferias"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'ferias'));
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-afastamento"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'afastamento'));
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-desligamento"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'desligamento'));
-    });
     document.querySelector('[data-rh-action="quick-open-modal-ferias"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('ferias'));
     document.querySelector('[data-rh-action="quick-open-modal-afastamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('afastamento'));
     document.querySelector('[data-rh-action="quick-open-modal-desligamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('desligamento'));
-    document.querySelectorAll('[data-rh-action="close-modal"]').forEach(botao => {
-      botao.addEventListener('click', () => {
-        fecharCadastro();
-      });
-    });
-    document.querySelector('[data-rh-action="save-modal"]')?.addEventListener('click', () => {
-      salvarCadastro();
-    });
-    document.querySelector('[data-rh-action="save-modal-close"]')?.addEventListener('click', () => {
-      salvarCadastro(true);
-    });
     document.querySelector('[data-rh-action="open-ferias-modal"]')?.addEventListener('click', () => {
       abrirModalFerias();
     });
@@ -1325,16 +1317,19 @@ export function criarRhDpController({
 
     try {
       const result = await sincronizarPlanilhaRhDp({ importar: true });
-      state.colaboradores = await listarColaboradoresRhDp();
+      state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       const imported = Number(result.imported) || 0;
       const existing = Number(result.existing) || 0;
       const failures = Array.isArray(result.failures) ? result.failures : [];
+      const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      const skippedColumns = Number(result.skippedColumns) || warnings.length;
       const remaining = Number(result.remaining) || 0;
       const parts = [`${imported} colaborador(es) novo(s) importado(s)`, `${existing} CPF(s) já existente(s) ignorado(s)`];
       if (remaining) parts.push(`${remaining} cadastro(s) novo(s) aguardando outra execução`);
+      if (skippedColumns) parts.push(`${skippedColumns} coluna(s) ignorada(s) por formato${warnings.slice(0, 3).map(item => ` — linha ${item.row}: ${item.column}`).join('')}`);
       if (failures.length) parts.push(`${failures.length} linha(s) com problema${failures.slice(0, 3).map(item => ` — linha ${item.row}: ${item.message}`).join('')}`);
       state.message = parts.join('; ') + '.';
-      state.messageType = failures.length ? 'error' : 'success';
+      state.messageType = failures.length ? 'error' : skippedColumns ? 'warning' : 'success';
     } catch (error) {
       state.message = error.message || 'Não foi possível importar os dados da planilha.';
       state.messageType = 'error';
@@ -1370,6 +1365,34 @@ export function criarRhDpController({
     `;
   }
 
+  const rotulosOpcoesSelect = {
+    ativo: 'Ativo', inativo: 'Inativo',
+    rg: 'RG', cnh: 'CNH', clt: 'CLT',
+    estagio: 'Estágio', socio: 'Sócio', temporario: 'Temporário',
+    experiencia: 'Em experiência', afastado: 'Afastado', desligado: 'Desligado',
+    salario: 'Salário', pro_labore: 'Pró-labore', honorario: 'Honorário',
+    flexivel: 'Flexível', hibrido: 'Híbrido',
+    vale_transporte: 'Vale-transporte', vale_refeicao: 'Vale-refeição',
+    vale_alimentacao: 'Vale-alimentação', plano_saude: 'Plano de saúde',
+    seguro_vida: 'Seguro de vida',
+    corrente: 'Conta corrente', poupanca: 'Poupança', pagamento: 'Conta de pagamento',
+    cpf: 'CPF', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Aleatória',
+    nao_definido: 'Não definido', nao_aplicavel: 'Não aplicável',
+    cargo_funcao: 'Cargo/função', remuneracao: 'Remuneração',
+    jornada: 'Jornada', beneficio: 'Benefício', dados_bancarios: 'Dados bancários',
+    situacao: 'Situação', outro: 'Outro', outros: 'Outros'
+  };
+
+  function formatarRotuloOpcaoSelect(opcao) {
+    const texto = String(opcao ?? '').trim();
+    if (!texto) return texto;
+    const rotuloConhecido = rotulosOpcoesSelect[texto.toLocaleLowerCase('pt-BR')];
+    if (rotuloConhecido) return rotuloConhecido;
+
+    const legivel = texto.replaceAll('_', ' ');
+    return legivel.charAt(0).toLocaleUpperCase('pt-BR') + legivel.slice(1);
+  }
+
   function campoSelect(id, label, valor, opcoes, { required = false, readonly = false } = {}) {
     return `
       <label>
@@ -1377,7 +1400,7 @@ export function criarRhDpController({
         <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
           <option value="">Selecione</option>
           ${opcoes.map(opcao => `
-            <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(opcao)}</option>
+            <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(formatarRotuloOpcaoSelect(opcao))}</option>
           `).join('')}
         </select>
       </label>
@@ -1391,7 +1414,7 @@ export function criarRhDpController({
         <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
           <option value="">Selecione</option>
           ${opcoes.map(([chave, nome]) => `
-            <option value="${escapeAttr(chave)}" ${String(valor || '') === chave ? 'selected' : ''}>${escapeHtml(nome)}</option>
+            <option value="${escapeAttr(chave)}" ${String(valor || '') === chave ? 'selected' : ''}>${escapeHtml(formatarRotuloOpcaoSelect(nome))}</option>
           `).join('')}
         </select>
       </label>
@@ -1838,22 +1861,42 @@ export function criarRhDpController({
 
   function renderEtapasCadastro(etapas) {
     return `
-      <nav class="rh-modal-steps hub-subnav hub-responsive-subnav" aria-label="Etapas do cadastro" role="tablist">
+      <nav class="rh-record-stepper" aria-label="Etapas do cadastro" role="tablist">
         ${etapas.map((etapa, indice) => `
+          ${indice > 0 ? '<span class="rh-record-step-separator" aria-hidden="true"><i data-lucide="chevron-right"></i></span>' : ''}
           <button
-            class="rh-modal-step hub-subnav-item ${indice === state.modal.etapa ? 'is-active' : ''}"
+            class="rh-record-step ${indice === state.modal.etapa ? 'is-active' : ''}"
             type="button"
             role="tab"
             aria-selected="${indice === state.modal.etapa}"
-            aria-controls="rh-modal-step-content"
+            aria-controls="rh-record-step-content"
             onclick="hubRhDpMudarEtapaCadastro(${indice})"
           >
-            <span class="rh-modal-step-number">${indice + 1}</span>
             <span>${escapeHtml(etapa.label)}</span>
           </button>
         `).join('')}
       </nav>
     `;
+  }
+
+  function renderAcoesCadastro() {
+    if (!['view', 'edit'].includes(state.modal.modo) || !state.modal.id) return '';
+    const colaborador = state.modal.colaborador;
+    const colaboradorId = escapeAttr(state.modal.id);
+    const ativo = colaborador.status !== 'inativo';
+    const acoes = [];
+
+    if (ativo && podeCriarFerias()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-ferias">Incluir férias</button>');
+    if (ativo && podeCriarOcorrencias()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-afastamento">Lançar afastamento</button>');
+    if (ativo && podeCriarDesligamentos()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-desligamento">Lançar desligamento</button>');
+    if (podeInativar()) acoes.push(`<button type="button" role="menuitem" class="${ativo ? 'danger-text' : ''}" onclick="hubRhDpAlterarStatus('${colaboradorId}', '${ativo ? 'inativo' : 'ativo'}')">${ativo ? 'Inativar' : 'Reativar'}</button>`);
+
+    return acoes.length
+      ? `<details class="hub-row-actions-menu rh-record-actions-menu" data-hub-action-menu data-hub-action-min-width="220" data-hub-action-max-width="280" data-hub-action-gap="8" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="first">
+          <summary class="hub-quick-actions-trigger rh-record-actions-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-collaborator-record-actions" aria-label="Abrir ações do cadastro" title="Ações do cadastro"><span aria-hidden="true">+</span></summary>
+          <div id="rh-collaborator-record-actions" class="hub-row-actions-popover rh-record-actions-popover" data-hub-action-popover role="menu" aria-label="Ações do cadastro">${acoes.join('')}</div>
+        </details>`
+      : '';
   }
 
   function renderModal() {
@@ -1862,9 +1905,7 @@ export function criarRhDpController({
     const readonly = state.modal.modo === 'view';
     const titulo = state.modal.modo === 'create'
       ? 'Incluir colaborador'
-      : state.modal.modo === 'edit'
-        ? 'Editar colaborador'
-        : 'Visualizar colaborador';
+      : state.modal.colaborador.nome_completo || (state.modal.loading ? 'Carregando cadastro...' : state.modal.modo === 'edit' ? 'Editar colaborador' : 'Visualizar colaborador');
     const etapas = obterEtapasCadastro(readonly);
     const etapaAtual = Math.max(0, Math.min(state.modal.etapa, etapas.length - 1));
     state.modal.etapa = etapaAtual;
@@ -1872,18 +1913,24 @@ export function criarRhDpController({
     const ultimaEtapa = etapaAtual === etapas.length - 1;
 
     return `
-      <section class="rh-collaborator-screen" role="region" aria-label="${escapeAttr(titulo)}">
-          <div class="small-modal-header">
-            <div>
-              <h3>${escapeHtml(titulo)}</h3>
-              <p>Cadastro pessoal e documentos para controle interno.</p>
-            </div>
-            <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>Fechar</button>
-          </div>
+      <section class="rh-collaborator-screen ${readonly ? '' : 'is-editing'}" role="region" aria-label="${escapeAttr(titulo)}">
+          ${renderHubRecordHeader({
+            onBack: 'hubRhDpFecharCadastro()',
+            backAriaLabel: 'Voltar à lista de colaboradores',
+            className: 'rh-record-header hub-record-header',
+            backClassName: 'icon-btn hub-record-back-button rh-collaborator-back-button',
+            contentClassName: 'hub-record-header-content rh-collaborator-header-content',
+            content: `<h3>${escapeHtml(titulo)}</h3><p>Cadastro de colaborador</p>`,
+            actions: readonly && podeEditar()
+              ? renderHubRecordEditButton({ onClick: 'hubRhDpEditarCadastroAtual()', label: 'Editar', className: 'save-btn hub-record-edit-button' })
+              : '',
+            disabled: state.modal.saving
+          })}
 
           ${state.modal.loading ? '' : renderEtapasCadastro(etapas)}
+          ${state.modal.loading ? '' : renderAcoesCadastro()}
 
-          <div id="rh-modal-step-content" class="rh-modal-content rh-modal-phase-content" role="tabpanel">
+          <div id="rh-record-step-content" class="rh-record-content rh-record-step-content" role="tabpanel">
             ${state.modal.loading ? (window.hubRenderLoading?.('Carregando cadastro...') || '<p class="quick-link-empty" role="status">Carregando cadastro...</p>') : state.modal.erros.carregamento ? `
               <p class="admin-message error">${escapeHtml(state.modal.erros.carregamento)}</p>
             ` : `
@@ -1895,16 +1942,25 @@ export function criarRhDpController({
 
           ${state.modal.loading ? '' : renderSecaoObservacoes(readonly)}
 
-          ${state.modal.loading ? '' : `
-            <div class="small-modal-actions rh-modal-actions" data-hub-form-footer>
-              <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
-              <div class="rh-modal-step-actions">
-                ${etapaAtual > 0 ? '<button class="secondary-btn" type="button" onclick="hubRhDpVoltarEtapaCadastro()">Anterior</button>' : ''}
-                ${!ultimaEtapa ? '<button class="save-btn" type="button" onclick="hubRhDpAvancarEtapaCadastro()">Próxima</button>' : ''}
-                ${readonly ? '' : `<button class="secondary-btn" type="button" data-rh-action="save-modal" ${state.modal.saving ? 'disabled' : ''}>${state.modal.saving ? 'Salvando...' : 'Salvar'}</button><button class="save-btn" type="button" data-rh-action="save-modal-close" ${state.modal.saving ? 'disabled' : ''}>Salvar e Fechar</button>`}
-              </div>
-            </div>
-          `}
+          ${state.modal.loading || readonly ? '' : renderHubRecordFormFooter({
+            flow: 'rh-collaborator',
+            cancelLabel: '×',
+            cancelOnClick: 'hubRhDpCancelarEdicaoCadastro()',
+            cancelClassName: 'icon-btn rh-collaborator-cancel-button',
+            cancelAriaLabel: 'Cancelar edição',
+            previousLabel: 'Anterior',
+            previousOnClick: 'hubRhDpVoltarEtapaCadastro()',
+            nextLabel: 'Próxima',
+            nextOnClick: 'hubRhDpAvancarEtapaCadastro()',
+            showPrevious: etapaAtual > 0,
+            showNext: !ultimaEtapa,
+            showSave: true,
+            saveBeforeNext: true,
+            saveLabel: 'Salvar',
+            saveOnClick: 'hubRhDpSalvarCadastro()',
+            saving: state.modal.saving,
+            className: 'rh-collaborator-workflow-footer'
+          })}
       </section>
     `;
   }
@@ -1939,13 +1995,36 @@ export function criarRhDpController({
         return acc;
       }, { ...state.modal.vinculo });
 
+      if (document.getElementById('rh_banco_codigo')) {
+        const camposBancarios = {
+          banco_codigo: 'banco_codigo',
+          banco_nome: 'banco_nome',
+          tipo_conta: 'banco_tipo_conta',
+          agencia: 'banco_agencia',
+          conta: 'banco_conta',
+          conta_digito: 'banco_conta_digito',
+          pix_tipo: 'banco_pix_tipo',
+          pix_chave: 'banco_pix_chave',
+          titular_nome: 'banco_titular_nome',
+          titular_cpf: 'banco_titular_cpf'
+        };
+        state.modal.bancarios = Object.entries(camposBancarios).reduce((acc, [campoNome, idCampo]) => {
+          const campoAtual = document.getElementById(`rh_${idCampo}`);
+          if (campoAtual) acc[campoNome] = campoAtual.value;
+          return acc;
+        }, { ...state.modal.bancarios });
+      }
+
       if (document.querySelector('[id^="rh_dep_nome_"]')) {
-        state.modal.dependentes = state.modal.dependentes.map((item, indice) => ({
-          id: document.getElementById(`rh_dep_id_${indice}`)?.value || item.id || '',
-          nome_completo: document.getElementById(`rh_dep_nome_${indice}`)?.value || item.nome_completo || '',
-          data_nascimento: document.getElementById(`rh_dep_nascimento_${indice}`)?.value || item.data_nascimento || '',
-          parentesco: document.getElementById(`rh_dep_parentesco_${indice}`)?.value || item.parentesco || ''
-        }));
+        state.modal.dependentes = state.modal.dependentes.map((item, indice) => {
+          const lerCampo = (id) => document.getElementById(id)?.value ?? null;
+          return {
+            id: lerCampo(`rh_dep_id_${indice}`) ?? item.id ?? '',
+            nome_completo: lerCampo(`rh_dep_nome_${indice}`) ?? item.nome_completo ?? '',
+            data_nascimento: lerCampo(`rh_dep_nascimento_${indice}`) ?? item.data_nascimento ?? '',
+            parentesco: lerCampo(`rh_dep_parentesco_${indice}`) ?? item.parentesco ?? ''
+          };
+        });
       }
     }
   }
@@ -1955,31 +2034,31 @@ export function criarRhDpController({
     const documentos = state.modal.documentos;
 
     if (String(colaborador.nome_completo || '').trim().length < 3) {
-      return 'Informe o nome completo do colaborador.';
+      return { mensagem: 'Informe o nome completo do colaborador.', etapaId: 'pessoais' };
     }
 
     if (!colaborador.data_nascimento) {
-      return 'Informe a data de nascimento.';
+      return { mensagem: 'Informe a data de nascimento.', etapaId: 'pessoais' };
     }
 
     if (!colaborador.telefone_celular && !colaborador.email_contato) {
-      return 'Informe ao menos um telefone ou e-mail de contato.';
+      return { mensagem: 'Informe ao menos um telefone ou e-mail de contato.', etapaId: 'pessoais' };
     }
 
     if (colaborador.email_contato && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(colaborador.email_contato)) {
-      return 'Informe um e-mail de contato válido.';
+      return { mensagem: 'Informe um e-mail de contato válido.', etapaId: 'pessoais' };
     }
 
     if (colaborador.endereco_uf && String(colaborador.endereco_uf).trim().length !== 2) {
-      return 'Informe a UF do endereço com duas letras.';
+      return { mensagem: 'Informe a UF do endereço com duas letras.', etapaId: 'endereco' };
     }
 
     if (colaborador.endereco_cep && digitos(colaborador.endereco_cep).length !== 8) {
-      return 'Informe um CEP válido.';
+      return { mensagem: 'Informe um CEP válido.', etapaId: 'endereco' };
     }
 
     if (podeVerSensiveis() && !cpfValido(documentos.cpf)) {
-      return 'Informe um CPF válido.';
+      return { mensagem: 'Informe um CPF válido.', etapaId: 'documentos' };
     }
 
     if (podeVerSensiveis()) {
@@ -1989,11 +2068,11 @@ export function criarRhDpController({
         return String(valor || '').trim();
       });
       if (possuiVinculo && !vinculo.data_admissao) {
-        return 'Informe a data de admissão do vínculo profissional.';
+        return { mensagem: 'Informe a data de admissão do vínculo profissional.', etapaId: 'vinculo' };
       }
 
       if (vinculo.data_desligamento && vinculo.data_admissao && vinculo.data_desligamento < vinculo.data_admissao) {
-        return 'A data de desligamento não pode ser anterior à admissão.';
+        return { mensagem: 'A data de desligamento não pode ser anterior à admissão.', etapaId: 'vinculo' };
       }
 
       const dependenteIncompleto = state.modal.dependentes.some(item => {
@@ -2001,11 +2080,11 @@ export function criarRhDpController({
         return possuiAlgumDado && (!item.nome_completo || !item.data_nascimento);
       });
       if (dependenteIncompleto) {
-        return 'Informe nome e data de nascimento de cada dependente.';
+        return { mensagem: 'Informe nome e data de nascimento de cada dependente.', etapaId: 'complementos' };
       }
     }
 
-    return '';
+    return null;
   }
 
   async function abrir() {
@@ -2038,7 +2117,7 @@ export function criarRhDpController({
     }
 
     try {
-      state.colaboradores = await listarColaboradoresRhDp();
+      state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       if (state.secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
       if (state.secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
       if (state.secao === 'dashboard') {
@@ -2485,6 +2564,7 @@ export function criarRhDpController({
   async function abrirCadastro(id = '', modo = 'view', acaoOperacionalPendente = '', { atualizarRota = true } = {}) {
     if (modo === 'create' && !podeCriar()) return;
     if (modo === 'edit' && !podeEditar()) return;
+    removeHubFormFooterPortals();
 
     if (atualizarRota && navegarParaRota && montarCaminhoModulo) {
       const cadastro = state.colaboradores.find(item => item.id === id || item.codigo === id);
@@ -2499,6 +2579,12 @@ export function criarRhDpController({
       arquivosLoading: Boolean(id) && podeVerArquivos(),
       acaoOperacionalPendente
     });
+    const colaboradorResumo = state.colaboradores.find(item => item.id === id || item.codigo === id);
+    if (colaboradorResumo) state.modal.colaborador.nome_completo = colaboradorResumo.nome_completo || '';
+    if (modo === 'view' && mensagemCadastroPendente) {
+      state.modal.mensagem = mensagemCadastroPendente;
+      mensagemCadastroPendente = '';
+    }
     render();
 
     if (!id) return;
@@ -2547,6 +2633,7 @@ export function criarRhDpController({
   function fecharCadastro() {
     if (state.modal.saving) return;
     state.modal.aberto = false;
+    removeHubRecordWorkflowFooter('rh-collaborator');
     if (obterCadastroRota() && navegarParaRota) {
       navegarParaRota(obterRotaColaboradores());
       return;
@@ -2554,8 +2641,46 @@ export function criarRhDpController({
     render();
   }
 
+  async function cancelarEdicaoCadastro() {
+    if (state.modal.saving) return;
+    if (state.modal.modo === 'create' || !state.modal.id) {
+      fecharCadastro();
+      return;
+    }
+    if (state.modal.snapshotEdicao) {
+      removeHubRecordWorkflowFooter('rh-collaborator');
+      Object.assign(state.modal, state.modal.snapshotEdicao, {
+        modo: 'view',
+        saving: false,
+        snapshotEdicao: null,
+        mensagem: '',
+        erros: {}
+      });
+      render();
+      return;
+    }
+    const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
+    const codigo = atualizarRota ? (state.modal.colaborador.codigo || state.modal.id) : state.modal.id;
+    await abrirCadastro(codigo, 'view', '', { atualizarRota });
+  }
+
+  function editarCadastroAtual() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo !== 'view' || !state.modal.id || !podeEditar()) return;
+    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'bancarios', 'movimentacoes', 'checklist', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'etapa'];
+    state.modal.snapshotEdicao = JSON.parse(JSON.stringify(Object.fromEntries(
+      camposEditaveis.map(campo => [campo, state.modal[campo]])
+    )));
+    state.modal.modo = 'edit';
+    state.modal.mensagem = '';
+    state.modal.erros = {};
+    const etapas = obterEtapasCadastro(false);
+    state.modal.etapa = Math.max(0, Math.min(state.modal.etapa, etapas.length - 1));
+    render();
+  }
+
   function abrirAcaoOperacionalColaborador(tipo) {
     if (!state.modal.id) return;
+    capturarFormulario();
     const colaboradorId = state.modal.id;
     if (tipo === 'ferias') abrirModalFerias(colaboradorId);
     if (tipo === 'afastamento') abrirModalAfastamento(colaboradorId);
@@ -2711,11 +2836,15 @@ export function criarRhDpController({
     }
   }
 
-  async function salvarCadastro(fecharAoSalvar = false) {
+  async function salvarCadastro() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo === 'view') return;
     capturarFormulario();
     const erro = validarFormulario();
     if (erro) {
-      state.modal.erros.geral = erro;
+      const etapas = obterEtapasCadastro(false);
+      const etapaComErro = etapas.findIndex(etapa => etapa.id === erro.etapaId);
+      if (etapaComErro >= 0) state.modal.etapa = etapaComErro;
+      state.modal.erros.geral = erro.mensagem;
       render();
       return;
     }
@@ -2726,40 +2855,42 @@ export function criarRhDpController({
 
     try {
       const editando = Boolean(state.modal.id);
-      await salvarCadastroPessoalRhDp({
+      const resultado = await salvarCadastroPessoalRhDp({
         id: state.modal.id || null,
         colaborador: state.modal.colaborador,
         documentos: podeVerSensiveis() ? state.modal.documentos : null,
         vinculo: podeVerSensiveis() ? state.modal.vinculo : null,
         dependentes: podeVerSensiveis() ? state.modal.dependentes : null
       });
+      const idSalvo = resultado?.id || state.modal.id;
       state.modal.saving = false;
       state.modal.mensagem = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
-      if (fecharAoSalvar) {
-        state.modal.aberto = false;
-        state.message = state.modal.mensagem;
-      }
       state.message = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
       state.messageType = 'success';
 
       try {
-        state.colaboradores = await listarColaboradoresRhDp();
+        state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       } catch {
         state.message = editando
           ? 'Cadastro atualizado, mas a lista não pôde ser recarregada agora.'
           : 'Colaborador incluído, mas a lista não pôde ser recarregada agora.';
       }
 
-      if (fecharAoSalvar && obterCadastroRota() && navegarParaRota) {
-        await navegarParaRota(obterRotaColaboradores());
-      } else {
-        render();
-      }
+      if (!idSalvo) throw new Error('O cadastro foi salvo, mas não foi possível identificar o colaborador para abrir a visualização.');
+      const colaboradorSalvo = state.colaboradores.find(item => item.id === idSalvo || item.codigo === idSalvo);
+      const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
+      mensagemCadastroPendente = state.message;
+      await abrirCadastro(colaboradorSalvo?.codigo || idSalvo, 'view', '', { atualizarRota });
     } catch (error) {
       state.modal.saving = false;
       state.modal.erros.geral = error.message || 'Não foi possível salvar o cadastro.';
       render();
     }
+  }
+
+  function salvarCadastroPorAtalho() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo === 'view') return;
+    void salvarCadastro();
   }
 
   async function alterarStatus(id, status) {
@@ -2768,8 +2899,13 @@ export function criarRhDpController({
     if (!item || !window.confirm(`Deseja ${verbo} o cadastro de ${item.nome_completo}?`)) return;
 
     try {
+      if (state.modal.id === id) capturarFormulario();
       await alterarStatusColaboradorRhDp({ id, status });
-      state.colaboradores = await listarColaboradoresRhDp();
+        state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
+      if (state.modal.id === id) state.modal.colaborador = { ...state.modal.colaborador, status };
+      if (state.modal.snapshotEdicao?.colaborador && state.modal.id === id) {
+        state.modal.snapshotEdicao.colaborador.status = status;
+      }
       state.message = status === 'inativo' ? 'Cadastro inativado com sucesso.' : 'Cadastro reativado com sucesso.';
       state.messageType = 'success';
       render();
@@ -2780,40 +2916,52 @@ export function criarRhDpController({
     }
   }
 
-  async function recarregarFase5() {
+  async function recarregarDadosComplementaresCadastro({ preservarRascunhoBancario = false } = {}) {
     const dados = await obterCadastroPessoalRhDp({ id: state.modal.id, incluirSensiveis: true });
     state.modal.beneficios = dados.beneficios || [];
-    state.modal.bancarios = dados.bancarios || {};
+    const bancariosSalvos = dados.bancarios || {};
+    if (!preservarRascunhoBancario) state.modal.bancarios = bancariosSalvos;
     state.modal.movimentacoes = dados.movimentacoes || [];
     state.modal.checklist = dados.checklist || [];
+    if (state.modal.snapshotEdicao) {
+      // Ações auxiliares já persistidas passam a fazer parte da base restaurada por Cancelar.
+      ['beneficios', 'bancarios', 'movimentacoes', 'checklist'].forEach(campoNome => {
+        const valorSalvo = campoNome === 'bancarios' ? bancariosSalvos : state.modal[campoNome];
+        state.modal.snapshotEdicao[campoNome] = JSON.parse(JSON.stringify(valorSalvo));
+      });
+    }
   }
 
   async function salvarBeneficio() {
+    capturarFormulario();
     try {
       await salvarBeneficioRhDp({ beneficio: { colaborador_id: state.modal.id, tipo: obterValor('beneficio_tipo'), nome: obterValor('beneficio_nome'), operadora_fornecedor: obterValor('beneficio_operadora'), valor_empresa: obterValor('beneficio_valor_empresa'), valor_colaborador: obterValor('beneficio_valor_colaborador'), inicio_em: obterValor('beneficio_inicio') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
+      await recarregarDadosComplementaresCadastro(); state.modal.erros = {}; render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar o benefício.'; render(); }
   }
 
   async function salvarBancarios() {
+    capturarFormulario();
     try {
-      await salvarDadosBancariosRhDp({ id: state.modal.bancarios.id || null, dados: { colaborador_id: state.modal.id, banco_codigo: obterValor('banco_codigo'), banco_nome: obterValor('banco_nome'), tipo_conta: obterValor('banco_tipo_conta'), agencia: obterValor('banco_agencia'), conta: obterValor('banco_conta'), conta_digito: obterValor('banco_conta_digito'), pix_tipo: obterValor('banco_pix_tipo'), pix_chave: obterValor('banco_pix_chave'), titular_nome: obterValor('banco_titular_nome'), titular_cpf: obterValor('banco_titular_cpf') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
+      await salvarDadosBancariosRhDp({ id: state.modal.bancarios.id || null, dados: { colaborador_id: state.modal.id, banco_codigo: state.modal.bancarios.banco_codigo, banco_nome: state.modal.bancarios.banco_nome, tipo_conta: state.modal.bancarios.tipo_conta, agencia: state.modal.bancarios.agencia, conta: state.modal.bancarios.conta, conta_digito: state.modal.bancarios.conta_digito, pix_tipo: state.modal.bancarios.pix_tipo, pix_chave: state.modal.bancarios.pix_chave, titular_nome: state.modal.bancarios.titular_nome, titular_cpf: state.modal.bancarios.titular_cpf } });
+      await recarregarDadosComplementaresCadastro(); state.modal.erros = {}; render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar os dados bancários.'; render(); }
   }
 
   async function atualizarChecklist(itemChave, concluido) {
+    capturarFormulario();
     try {
       const atual = state.modal.checklist.find(item => item.item_chave === itemChave);
       await salvarChecklistAdmissionalRhDp({ id: atual?.id || null, item: { colaborador_id: state.modal.id, item_chave: itemChave, status: concluido ? 'concluido' : 'pendente' } });
-      await recarregarFase5(); render();
+      await recarregarDadosComplementaresCadastro({ preservarRascunhoBancario: true }); render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível atualizar o checklist.'; render(); }
   }
 
   async function salvarMovimentacao() {
+    capturarFormulario();
     try {
       await salvarMovimentacaoRhDp({ movimentacao: { colaborador_id: state.modal.id, tipo: obterValor('mov_tipo'), data_efetivacao: obterValor('mov_data'), titulo: obterValor('mov_titulo'), descricao: obterValor('mov_descricao') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
+      await recarregarDadosComplementaresCadastro({ preservarRascunhoBancario: true }); state.modal.erros = {}; render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível registrar a alteração.'; render(); }
   }
 
@@ -2902,7 +3050,9 @@ export function criarRhDpController({
 
   Object.assign(window, {
     hubRhDpAbrirCadastro: abrirCadastro,
+    hubRhDpEditarCadastroAtual: editarCadastroAtual,
     hubRhDpFecharCadastro: fecharCadastro,
+    hubRhDpCancelarEdicaoCadastro: cancelarEdicaoCadastro,
     hubRhDpMudarEtapaCadastro: mudarEtapaCadastro,
     hubRhDpAvancarEtapaCadastro: avancarEtapaCadastro,
     hubRhDpVoltarEtapaCadastro: voltarEtapaCadastro,
@@ -2936,6 +3086,8 @@ export function criarRhDpController({
     ,hubRhDpSalvarAfastamento: salvarAfastamento
     ,hubRhDpSalvarOcorrencia: salvarOcorrencia
   });
+
+  registerHubRecordShortcutHandler('rh-collaborator', 'save', salvarCadastroPorAtalho);
 
   return {
     abrir,

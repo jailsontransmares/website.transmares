@@ -17,6 +17,7 @@
 .simsaude-card > header h3 { font-size: 15px; margin: 0; }
 .simsaude-card > header > span { color: var(--texto-suave); font-size: 12px; }
 .simsaude-table-wrap { overflow-x: auto; }
+.simsaude-table-card .simsaude-catalog-table { min-width: 980px; }
 .simsaude-table-card table { border-collapse: collapse; min-width: 1120px; width: 100%; }
 .simsaude-table-card th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 10px; font-weight: 650; padding: 9px 8px; text-align: left; white-space: nowrap; }
 .simsaude-table-card td { border-top: 1px solid var(--borda); font-size: 11px; padding: 8px; vertical-align: middle; }
@@ -28,19 +29,16 @@
 .simsaude-select-row { accent-color: var(--cor-principal); cursor: pointer; height: 15px; width: 15px; }
 .simsaude-select-row:disabled { cursor: not-allowed; }
 .simsaude-row:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
-.simsaude-row.is-expanded { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); }
-.simsaude-expand { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); cursor: pointer; height: 27px; width: 27px; }
+.simsaude-table-name-link { background: transparent; border: 0; color: var(--cor-principal); cursor: pointer; font: inherit; font-weight: 700; padding: 2px 0; text-align: left; }
+.simsaude-table-name-link:hover { text-decoration: underline; }
+.simsaude-table-name-link:focus-visible { border-radius: 3px; outline: 2px solid color-mix(in srgb, var(--cor-principal) 45%, transparent); outline-offset: 3px; }
+.simsaude-table-name-link:disabled { cursor: wait; opacity: .6; }
 .simsaude-link { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font-size: 11px; font-weight: 650; padding: 3px; }
 .simsaude-delete-link { color: #b42318; }
 .simsaude-delete-link:disabled { cursor: wait; opacity: .6; }
 .simsaude-plan-actions { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--cor-principal); cursor: pointer; font: inherit; font-size: 11px; min-height: 30px; padding: 0 7px; }
 .simsaude-plan-actions:focus-visible { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
 .simsaude-plan-inactive { background: #ffebed; border-radius: 99px; color: #b52c39; display: inline-block; font-size: 9px; font-weight: 700; margin-left: 6px; padding: 3px 7px; vertical-align: middle; }
-.simsaude-status { border-radius: 99px; display: inline-flex; font-size: 10px; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
-.simsaude-status-vigente { background: #e9f7ee; color: #087c38; }
-.simsaude-status-em-revisão { background: #fff4dd; color: #9a6200; }
-.simsaude-status-inativo { background: #ffebed; color: #b52c39; }
-.simsaude-status-vencido { background: #edf0f4; color: #596779; }
 .simsaude-empty { color: var(--texto-suave); height: 110px; text-align: center; }
 .simsaude-pagination { align-items: center; border-top: 1px solid var(--borda); color: var(--texto-suave); display: flex; gap: 12px; min-height: 48px; padding: 8px 12px; }
 .simsaude-pagination label { align-items: center; display: flex; gap: 6px; margin-left: auto; }
@@ -60,13 +58,13 @@
 .simsaude-band-reference li { align-items: center; border-top: 1px solid var(--borda); color: var(--texto-suave); display: grid; font-size: 10px; gap: 6px; grid-template-columns: 18px 42px 1fr; padding: 5px 0; }
 .simsaude-band-reference li span { color: var(--texto-suave); }
 .simsaude-band-reference li strong { color: var(--texto); }
-.simsaude-expanded td { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); padding: 0; }
 .simsaude-editor { padding: 13px; }
 .simsaude-editor > header { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 14px; }
 .simsaude-editor header h3 { font-size: 15px; margin: 2px 0; }
 .simsaude-editor header p { font-size: 11px; }
 .simsaude-form-grid { display: grid; gap: 10px; grid-template-columns: repeat(4,minmax(140px,1fr)); }
 .simsaude-field { font-size: 12px; }
+.simsaude-plan-select-note { color: var(--texto-suave); font-size: 10px; line-height: 1.4; }
 .simsaude-field.is-wide { grid-column: span 2; }
 .simsaude-catalog-tabs { border-bottom: 1px solid var(--borda); display: flex; gap: 6px; margin: 0 0 14px; }
 .simsaude-catalog-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--texto-suave); cursor: pointer; font: inherit; font-size: 13px; padding: 10px 14px; }
@@ -78,11 +76,22 @@
 .simsaude-band-editor > div:first-child p { color: var(--texto-suave); font-size: 11px; margin: 0 0 12px; }
 .simsaude-band-grid { display: grid; gap: 9px; grid-template-columns: repeat(5,minmax(100px,1fr)); }
 .simsaude-band-table-wrap { overflow-x: auto; }
-.simsaude-band-table { border-collapse: collapse; min-width: 580px; width: 100%; }
+.simsaude-band-table { border-collapse: separate; border-spacing: 0; min-width: 760px; table-layout: fixed; width: 100%; }
 .simsaude-band-table th, .simsaude-band-table td { border-bottom: 1px solid var(--borda); padding: 7px 9px; text-align: left; vertical-align: top; }
-.simsaude-band-table thead th { color: var(--texto-suave); font-size: 11px; }
-.simsaude-band-table tbody th { color: var(--texto); font-size: 11px; white-space: nowrap; }
+.simsaude-band-table thead th { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); color: var(--texto-suave); font-size: 11px; white-space: nowrap; }
+.simsaude-band-table thead tr:first-child th:not(.simsaude-band-age-heading) { border-bottom: 0; color: var(--cor-principal); font-size: 12px; text-align: center; }
+.simsaude-band-table thead tr:last-child th { border-top: 1px solid var(--borda); text-align: center; }
+.simsaude-band-table .simsaude-band-age-heading, .simsaude-band-table tbody th { background: var(--card); border-right: 1px solid var(--borda); color: var(--texto); font-size: 11px; left: 0; position: sticky; white-space: nowrap; z-index: 1; }
+.simsaude-band-table .simsaude-band-age-heading { text-align: left; vertical-align: middle; z-index: 2; }
+.simsaude-band-table tbody th { font-weight: 650; }
+.simsaude-band-table tbody tr:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
 .simsaude-band-table td .simsaude-field { min-width: 120px; }
+.simsaude-band-table td .simsaude-field > span:empty { display: none; }
+.simsaude-accommodation-options { align-content: start; border: 1px solid var(--borda); border-radius: 7px; display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; min-width: 0; padding: 8px 10px; }
+.simsaude-accommodation-options legend { color: var(--texto-suave); font-size: 11px; padding: 0 4px; }
+.simsaude-accommodation-options > label { align-items: center; display: inline-flex; flex-direction: row; gap: 6px; }
+.simsaude-accommodation-options input { height: auto; width: auto; }
+.simsaude-accommodation-primary { align-self: center; color: var(--texto); font-size: 11px; }
 .simsaude-band-note { color: var(--texto-suave); display: block; font-size: 10px; margin-top: 4px; }
 .simsaude-message { align-items: center; background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--cor-destaque) 30%, var(--borda)); border-radius: 7px; display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 12px; }
 .simsaude-message.is-error { background: #fff1f1; border-color: #f1c2c5; color: #8e2932; }
@@ -103,6 +112,28 @@
 @media (max-width: 1150px) { .simsaude-layout { grid-template-columns: 1fr; } .simsaude-sidebar { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width: 850px) { .simsaude-page-head { align-items: start; flex-direction: column; } .simsaude-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } .simsaude-form-grid { grid-template-columns: repeat(2,minmax(130px,1fr)); } .simsaude-band-grid { grid-template-columns: repeat(2,minmax(100px,1fr)); } .simsaude-sidebar { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .simsaude-filters { grid-template-columns: 1fr; } .simsaude-field.is-wide { grid-column: auto; } .simsaude-editor-actions { width: 100%; } .simsaude-pagination { flex-wrap: wrap; } .simsaude-pagination label { margin-left: 0; } }
+
+.simsaude-copart-editor { grid-column: 1 / -1; min-width: 0; }
+.simsaude-copart-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-bottom: 9px; }
+.simsaude-copart-heading strong { color: var(--texto); display: block; font-size: 12px; }
+.simsaude-copart-heading p, .simsaude-copart-legacy { color: var(--texto-suave); font-size: 11px; margin: 4px 0 0; }
+.simsaude-copart-legacy { background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border-left: 3px solid var(--cor-destaque); margin: 0 0 9px; padding: 8px 10px; }
+.simsaude-copart-table-wrap { border: 1px solid var(--borda); border-radius: 7px; max-width: 100%; overflow-x: auto; }
+.simsaude-copart-table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+.simsaude-copart-table th, .simsaude-copart-table td { border-bottom: 1px solid var(--borda); padding: 7px; text-align: left; vertical-align: middle; }
+.simsaude-copart-table thead th { background: color-mix(in srgb, var(--cor-principal) 5%, var(--card)); color: var(--texto-suave); font-size: 11px; font-weight: 600; }
+.simsaude-copart-table tbody tr:last-child td { border-bottom: 0; }
+.simsaude-copart-column-head { align-items: center; display: flex; gap: 5px; min-width: 0; }
+.simsaude-copart-table input { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); font: inherit; font-size: 12px; min-width: 130px; padding: 7px 8px; width: 100%; }
+.simsaude-copart-table input:focus { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-copart-remove { background: transparent; border: 0; border-radius: 5px; color: var(--texto-suave); cursor: pointer; font: inherit; font-size: 11px; padding: 6px; white-space: nowrap; }
+.simsaude-copart-remove:hover:not(:disabled) { background: color-mix(in srgb, var(--cor-perigo, #b93838) 8%, var(--card)); color: var(--cor-perigo, #b93838); }
+.simsaude-copart-remove:disabled { cursor: not-allowed; opacity: .45; }
+.simsaude-copart-actions-head { width: 90px; }
+.simsaude-copart-row-actions { text-align: center !important; }
+.simsaude-copart-add-row { background: transparent; border: 0; color: var(--cor-principal); cursor: pointer; font: inherit; font-size: 12px; margin-top: 7px; padding: 6px 2px; }
+.simsaude-copart-add-row:hover { text-decoration: underline; }
+@media (max-width: 520px) { .simsaude-copart-heading { align-items: flex-start; flex-direction: column; } .simsaude-copart-heading > button { width: 100%; } }
 
 /* Ajustes visuais restritos ao Catálogo de Planos e Preços. */
 .simulador-saude-page { container-type: inline-size; min-width: 0; }

@@ -5,6 +5,7 @@ const TABLES = {
   plans: 'simulador_saude_planos',
   prices: 'simulador_saude_tabelas_precos',
   bands: 'simulador_saude_precos_faixa',
+  accommodationBands: 'simulador_saude_precos_faixa_acomodacao',
   history: 'simulador_saude_catalogo_historico'
 };
 
@@ -13,13 +14,29 @@ function unwrap(response, message) {
   return response.data;
 }
 
+function literalIlike(value) {
+  return String(value || '').replace(/[\\%_]/g, '\\$&');
+}
+
+async function findMatchingPlan(supabase, plan) {
+  const matches = unwrap(await supabase.from(TABLES.plans)
+    .select('id')
+    .eq('operadora_id', plan.operadora_id)
+    .ilike('nome', literalIlike(plan.nome))
+    .ilike('modalidade', literalIlike(plan.modalidade))
+    .ilike('abrangencia', literalIlike(plan.abrangencia))
+    .limit(1), 'Não foi possível consultar o plano.');
+  return matches[0] || null;
+}
+
 export async function getSimuladorSaudeCatalog() {
   const supabase = exigirSupabaseConfigurado();
-  const [operators, plans, tables, bands, history] = await Promise.all([
+  const [operators, plans, tables, bands, accommodationBands, history] = await Promise.all([
     supabase.from(TABLES.operators).select('*').order('nome'),
     supabase.from(TABLES.plans).select('*').order('nome'),
     supabase.from(TABLES.prices).select('*').order('vigencia_inicio', { ascending: false }),
     supabase.from(TABLES.bands).select('*'),
+    supabase.from(TABLES.accommodationBands).select('*'),
     supabase.from(TABLES.history).select('*').order('created_at', { ascending: false }).limit(20)
   ]);
   return {
@@ -27,6 +44,7 @@ export async function getSimuladorSaudeCatalog() {
     plans: unwrap(plans, 'Não foi possível carregar os planos.'),
     tables: unwrap(tables, 'Não foi possível carregar as tabelas de preços.'),
     bands: unwrap(bands, 'Não foi possível carregar os preços por faixa.'),
+    accommodationBands: unwrap(accommodationBands, 'Não foi possível carregar os preços por acomodação.'),
     history: unwrap(history, 'Não foi possível carregar o histórico.')
   };
 }
@@ -38,18 +56,19 @@ export async function saveSimuladorSaudePlan(draft) {
     operadora_id: operatorId,
     nome: String(draft.plano_nome || '').trim(),
     modalidade: String(draft.modalidade || '').trim(),
-    acomodacao: draft.acomodacao,
-    coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
     abrangencia: String(draft.abrangencia || '').trim(),
-    codigo_interno: String(draft.codigo_interno || '').trim() || null,
     detalhes: draft.detalhes && typeof draft.detalhes === 'object' ? draft.detalhes : {},
     status: draft.status || 'ativo'
   };
   if (!plan.nome || !plan.modalidade || !plan.abrangencia) throw new Error('Preencha plano, modalidade e abrangência.');
-  if (!['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(plan.acomodacao)) throw new Error('Selecione a acomodação do plano.');
   if (draft.plano_id) {
     unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', draft.plano_id), 'Não foi possível atualizar o plano.');
     return draft.plano_id;
+  }
+  const matching = await findMatchingPlan(supabase, plan);
+  if (matching) {
+    unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', matching.id), 'Não foi possível atualizar os dados do plano.');
+    return matching.id;
   }
   return unwrap(await supabase.from(TABLES.plans).insert(plan).select('id').single(), 'Não foi possível cadastrar o plano.').id;
 }
@@ -92,52 +111,58 @@ async function ensureOperator(supabase, operatorName) {
 
 async function ensurePlan(supabase, draft, operatorId) {
   if (draft.plano_id) {
-    const existing = unwrap(await supabase.from(TABLES.plans).select('id').eq('id', draft.plano_id).single(), 'Não foi possível localizar o plano selecionado.');
+    const existing = unwrap(await supabase.from(TABLES.plans).select('id,operadora_id').eq('id', draft.plano_id).single(), 'Não foi possível localizar o plano selecionado.');
+    if (operatorId && existing.operadora_id !== operatorId) throw new Error('O plano selecionado não pertence à operadora escolhida.');
     return existing.id;
   }
   const plan = {
     operadora_id: operatorId,
     nome: String(draft.plano_nome || '').trim(),
     modalidade: String(draft.modalidade || '').trim(),
-    acomodacao: draft.acomodacao,
-    coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
     abrangencia: String(draft.abrangencia || '').trim(),
-    codigo_interno: String(draft.codigo_interno || '').trim() || null,
     ...(draft.condicoes && Object.keys(draft.condicoes).length ? { detalhes: draft.condicoes } : {}),
     status: 'ativo'
   };
   if (!plan.nome || !plan.modalidade || !plan.abrangencia) throw new Error('Preencha plano, modalidade e abrangência.');
-  if (draft.plano_id) {
-    unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', draft.plano_id), 'Não foi possível atualizar os dados do plano.');
-    return draft.plano_id;
-  }
-  const matching = unwrap(await supabase.from(TABLES.plans).select('id').eq('operadora_id', operatorId).ilike('nome', plan.nome).ilike('modalidade', plan.modalidade).eq('acomodacao', plan.acomodacao).eq('coparticipacao', plan.coparticipacao).ilike('abrangencia', plan.abrangencia).limit(1), 'Não foi possível consultar o plano.');
-  if (matching[0]) {
-    unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', matching[0].id), 'Não foi possível atualizar os dados do plano.');
-    return matching[0].id;
+  const matching = await findMatchingPlan(supabase, plan);
+  if (matching) {
+    unwrap(await supabase.from(TABLES.plans).update(plan).eq('id', matching.id), 'Não foi possível atualizar os dados do plano.');
+    return matching.id;
   }
   return unwrap(await supabase.from(TABLES.plans).insert(plan).select('id').single(), 'Não foi possível cadastrar o plano.').id;
 }
 
-function normalizePrices(prices = {}, tipoContratacao = 'Empresarial (PJ)') {
-  const variants = Object.values(prices).some(value => value && typeof value === 'object' && !Array.isArray(value))
-    ? prices
-    : { [tipoContratacao === 'Individual' ? 'uma_vida' : 'geral']: prices };
-  return Object.entries(variants).flatMap(([regra_vidas, bands]) => Object.entries(bands || {}).map(([faixa_etaria, raw]) => ({
-    faixa_etaria,
-    regra_vidas,
-    valor: String(raw ?? '').trim() === '' ? null : Number(String(raw).replace(',', '.'))
-  }))).filter(row => row.valor !== null && Number.isFinite(row.valor) && row.valor >= 0);
+function normalizePrices(draft, tipoContratacao, accommodations) {
+  const primaryAccommodation = draft.acomodacao || accommodations[0];
+  const pricesByAccommodation = draft.precos_por_acomodacao || { [primaryAccommodation]: draft.precos || {} };
+  return accommodations.flatMap(acomodacao => {
+    const prices = pricesByAccommodation[acomodacao] || {};
+    const variants = Object.values(prices).some(value => value && typeof value === 'object' && !Array.isArray(value))
+      ? prices
+      : { [tipoContratacao === 'Individual' ? 'uma_vida' : 'geral']: prices };
+    return Object.entries(variants).flatMap(([regra_vidas, bands]) => Object.entries(bands || {}).map(([faixa_etaria, raw]) => ({
+      acomodacao,
+      faixa_etaria,
+      regra_vidas,
+      valor: String(raw ?? '').trim() === '' ? null : Number(String(raw).replace(',', '.'))
+    })));
+  }).filter(row => row.valor !== null && Number.isFinite(row.valor) && row.valor >= 0);
 }
 
 export async function saveSimuladorSaudeTable(draft) {
   const supabase = exigirSupabaseConfigurado();
-  const operatorId = draft.plano_id ? null : await ensureOperator(supabase, draft.operadora_nome);
+  const operatorId = draft.operadora_id || (draft.plano_id ? null : await ensureOperator(supabase, draft.operadora_nome));
   const planId = await ensurePlan(supabase, draft, operatorId);
   const requestedStatus = draft.status || 'em_revisao';
+  const accommodations = [...new Set((Array.isArray(draft.acomodacoes) ? draft.acomodacoes : [draft.acomodacao]).filter(item => ['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(item)))];
+  const primaryAccommodation = draft.acomodacao || accommodations[0];
   const table = {
     plano_id: planId,
     nome: String(draft.nome || '').trim(),
+    acomodacao: String(primaryAccommodation || '').trim(),
+    acomodacoes: accommodations,
+    coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
+    codigo_interno: String(draft.codigo_interno || '').trim() || null,
     vigencia_inicio: draft.vigencia_inicio || null,
     vigencia_fim: draft.vigencia_fim || null,
     tipo_contratacao: draft.tipo_contratacao || 'Empresarial (PJ)',
@@ -147,6 +172,8 @@ export async function saveSimuladorSaudeTable(draft) {
     observacoes: String(draft.observacoes || '').trim() || null
   };
   if (!table.nome) throw new Error('Informe o nome da tabela.');
+  if (!['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(table.acomodacao) || !accommodations.length || !accommodations.includes(table.acomodacao)) throw new Error('Selecione ao menos uma acomodação para a tabela.');
+  if (draft.coparticipacao !== true && draft.coparticipacao !== false && draft.coparticipacao !== 'true' && draft.coparticipacao !== 'false') throw new Error('Informe se a tabela possui coparticipação.');
   if (!table.vigencia_inicio && requestedStatus === 'vigente') throw new Error('Informe o início da vigência antes de ativar a tabela.');
   if (!['Individual', 'Empresarial (PJ)'].includes(table.tipo_contratacao)) throw new Error('Selecione Individual ou Empresarial (PJ).');
   table.min_vidas = 1;
@@ -158,10 +185,23 @@ export async function saveSimuladorSaudeTable(draft) {
     tableId = unwrap(await supabase.from(TABLES.prices).insert(table).select('id').single(), 'Não foi possível criar a tabela.').id;
   }
 
-  const prices = normalizePrices(draft.precos, table.tipo_contratacao);
-  if (prices.length) {
-    const payload = prices.map(row => ({ tabela_preco_id: tableId, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
-    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por faixa.');
+  const prices = normalizePrices({ ...draft, acomodacao: table.acomodacao }, table.tipo_contratacao, accommodations);
+  const extraAccommodations = accommodations.filter(accommodation => accommodation !== table.acomodacao);
+  const existingExtraBands = unwrap(await supabase.from(TABLES.accommodationBands).select('acomodacao').eq('tabela_preco_id', tableId), 'Não foi possível consultar os preços por acomodação.');
+  for (const accommodation of new Set(existingExtraBands.map(row => row.acomodacao))) {
+    if (!extraAccommodations.includes(accommodation)) {
+      unwrap(await supabase.from(TABLES.accommodationBands).delete().eq('tabela_preco_id', tableId).eq('acomodacao', accommodation), 'Não foi possível remover a acomodação desmarcada.');
+    }
+  }
+  const primaryPrices = prices.filter(row => row.acomodacao === table.acomodacao);
+  const extraPrices = prices.filter(row => row.acomodacao !== table.acomodacao);
+  if (primaryPrices.length) {
+    const payload = primaryPrices.map(row => ({ tabela_preco_id: tableId, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
+    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços da acomodação principal.');
+  }
+  if (extraPrices.length) {
+    const payload = extraPrices.map(row => ({ tabela_preco_id: tableId, acomodacao: row.acomodacao, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
+    unwrap(await supabase.from(TABLES.accommodationBands).upsert(payload, { onConflict: 'tabela_preco_id,acomodacao,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por acomodação.');
   }
   if (requestedStatus !== 'em_revisao') {
     unwrap(await supabase.from(TABLES.prices).update({ status: requestedStatus }).eq('id', tableId), 'Não foi possível atualizar o status da tabela.');

@@ -3152,7 +3152,7 @@
 }
 
 .crm2-pf-form-footer,
-[data-hub-form-footer] {
+[data-hub-form-footer]:not(.hub-record-workflow-footer) {
   background: var(--surface-glass-strong);
   border-top: var(--glass-border-subtle);
   border-radius: 999px;
@@ -3315,7 +3315,7 @@ body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop
   }
 
   .crm2-pf-form-footer,
-  [data-hub-form-footer] {
+  [data-hub-form-footer]:not(.hub-record-workflow-footer) {
     align-items: stretch;
     flex-direction: column-reverse;
     border-radius: var(--radius-card);
@@ -3324,7 +3324,7 @@ body:has(.modal-backdrop, .cnpj-lookup-backdrop, .crm2-opp-filter-modal-backdrop
   }
 
   .crm2-pf-form-footer > button,
-  [data-hub-form-footer] > button {
+  [data-hub-form-footer]:not(.hub-record-workflow-footer) > button {
     width: 100%;
   }
 
