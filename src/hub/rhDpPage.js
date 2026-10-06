@@ -2010,9 +2010,34 @@ export function criarRhDpController({
     const dataEmissao = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date());
     const conteudo = grupos.map(([nome, registros]) => renderGrupoFichaPdf(nome, registros)).join('');
 
-    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(titulo)} - ${escapeHtml(colaborador.nome_completo || 'Colaborador')}</title><style>
-      @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#172b3d;font:10px/1.4 Arial,Helvetica,sans-serif}.heading{border-bottom:2px solid #153a5b;padding:0 0 9px;margin-bottom:10px}.heading h1{font-size:16px;margin:0 0 5px;color:#153a5b}.heading p{margin:0;color:#526273;font-size:9px}.heading .issued{float:right;font-size:8px;text-align:right}section{margin:0 0 11px;break-inside:auto}h2{font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#153a5b;background:#e6edf3;border:1px solid #b8c6d3;padding:5px 7px;margin:0 0 5px;break-after:avoid}.record{border:1px solid #d2dbe3;margin:0 0 5px;padding:5px;break-inside:avoid}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px}.field{min-width:0;overflow-wrap:anywhere}.field b{display:block;font-size:7px;text-transform:uppercase;letter-spacing:.15px;color:#5d6b78}.field span{display:block;white-space:pre-wrap}.empty{margin:5px 2px;color:#667085;font-style:italic}.foot{border-top:1px solid #cbd5e1;padding-top:5px;margin-top:12px;color:#667085;font-size:8px}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}section{orphans:2;widows:2}}
-      </style></head><body><header class="heading"><span class="issued">Emitida em<br>${escapeHtml(dataEmissao)}</span><h1>${escapeHtml(titulo)}</h1><p>${escapeHtml(colaborador.nome_completo || 'Colaborador')}</p></header>${conteudo}<footer class="foot">Transmares · RH &amp; DP · Documento gerado pelo cadastro de colaboradores</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),500));</script></body></html>`;
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(titulo)} - ${escapeHtml(colaborador.nome_completo || 'Colaborador')}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>
+      @page{size:A4 portrait;margin:8mm}
+      *{box-sizing:border-box}
+      body{margin:0;background:#F5F7FA;color:#0B172A;font:10px/1.4 "Inter",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      .sheet{width:210mm;min-height:297mm;margin:18px auto;background:#fff;border:1px solid rgba(15,23,42,.08);box-shadow:0 10px 30px rgba(15,23,42,.12)}
+      .topbar{display:grid;grid-template-columns:minmax(0,1fr) 30mm 38mm;align-items:stretch;border-bottom:1px solid #64748b}
+      .title{background:#294895;color:#fff;padding:9px 12px;display:flex;flex-direction:column;justify-content:center}
+      .title h1{font-size:12px;line-height:1.25;letter-spacing:.35px;margin:0 0 4px}
+      .title p{font-size:8.5px;margin:0;overflow-wrap:anywhere}
+      .meta{padding:5px 7px;border-left:1px solid #64748b;display:flex;flex-direction:column;justify-content:center;overflow-wrap:anywhere}
+      .meta b,.label{display:block;color:#475569;font-size:6.5px;font-weight:700;letter-spacing:.15px;text-transform:uppercase;margin-bottom:3px}
+      .meta span{font-size:8px;font-weight:700}
+      .meta small{font-size:7px;color:#526273;margin-top:3px}
+      section{margin:0;break-inside:auto}
+      h2{font-size:8px;text-transform:uppercase;letter-spacing:.35px;color:#1F3676;background:#E8EEF9;border-top:1px solid rgba(41,72,149,.2);border-bottom:1px solid rgba(41,72,149,.2);padding:4px 7px;margin:0;break-after:avoid}
+      .record{break-inside:auto}
+      .record+.record{border-top:1px solid rgba(15,23,42,.12)}
+      .fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:1px solid rgba(15,23,42,.12)}
+      .field{min-width:0;min-height:8mm;padding:3px 6px;border-right:1px solid rgba(15,23,42,.12);border-bottom:1px solid rgba(15,23,42,.12);overflow-wrap:anywhere;break-inside:avoid}
+      .field b{display:block;color:#64748B;font-size:6.5px;letter-spacing:.15px;text-transform:uppercase;margin-bottom:3px}
+      .field span{display:block;font-size:8.5px;min-height:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+      .empty{margin:5px 7px;padding:4px 0;color:#64748B;font-size:8px;font-style:italic}
+      .footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:1px solid rgba(15,23,42,.12)}
+      .footer .field{min-height:25px}
+      .footer .field .label{font-size:6.5px;min-height:0;white-space:normal}
+      .signature{height:12px;border-bottom:1px solid rgba(15,23,42,.32)}
+      @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}section{orphans:2;widows:2}}
+      </style></head><body><main class="sheet"><header class="topbar"><div class="title"><h1>${escapeHtml(titulo)}</h1><p>${escapeHtml(colaborador.nome_completo || 'Colaborador')} · Transmares · RH &amp; DP</p></div><div class="meta"><b>Matrícula / eSocial</b><span>${escapeHtml(valorFichaPdf(colaborador.codigo) || '—')}</span></div><div class="meta"><b>Status</b><span>${escapeHtml(valorFichaPdf(colaborador.status) || '—')}</span><small>Emitida em ${escapeHtml(dataEmissao)}</small></div></header>${conteudo}<footer class="footer"><div class="field"><span class="label">Última atualização</span><span>${escapeHtml(valorFichaPdf(colaborador.updated_at) || '—')}</span></div><div class="field"><span class="label">Responsável pelo cadastro</span><span> </span></div><div class="field"><span class="label">Assinatura do colaborador</span><div class="signature"></div></div></footer></main><script>window.addEventListener('load',()=>document.fonts.ready.then(()=>setTimeout(()=>window.print(),150)));</script></body></html>`;
   }
 
   async function gerarFichaPdf(versao) {
