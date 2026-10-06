@@ -74,7 +74,7 @@ Deno.serve(async (request) => {
     ]);
     if (collaborator.error || employment.error) return fail("Não foi possível carregar os dados da ficha simplificada.");
     if (!collaborator.data) return json({ ok: false, message: "Colaborador não encontrado." }, 404);
-    return json({ ok: true, ficha: { versao, colaborador: collaborator.data, vinculo: employment.data || {} } });
+    return json({ ok: true, ficha: { versao: version, colaborador: collaborator.data, vinculo: employment.data || {} } });
   }
 
   const [collaborator, documents, employment, dependents, benefits, bank, movements, checklist, vacations, leaves, occurrences, dismissals, files] = await Promise.all([
@@ -100,7 +100,7 @@ Deno.serve(async (request) => {
   return json({
     ok: true,
     ficha: {
-      versao,
+      versao: version,
       colaborador: collaborator.data,
       documentos: documents.data || {},
       vinculo: employment.data || {},
