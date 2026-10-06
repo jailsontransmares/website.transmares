@@ -573,6 +573,26 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
   };
 }
 
+export async function obterFichaPdfRhDp({ id, versao = 'simplificada' } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('rh-export', {
+    body: { action: 'ficha_pdf', colaborador_id: id, versao }
+  });
+
+  if (error) {
+    let detalhe = '';
+    if (error.context instanceof Response) {
+      const resposta = await error.context.clone().json().catch(() => null);
+      detalhe = resposta?.message || resposta?.error || '';
+    }
+    throw new Error(detalhe || error.message || 'Não foi possível carregar os dados para a ficha.');
+  }
+  if (!data?.ok || !data.ficha) {
+    throw new Error(data?.message || 'Não foi possível carregar os dados para a ficha.');
+  }
+  return data.ficha;
+}
+
 export async function salvarBeneficioRhDp({ id = null, beneficio = {} } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const payload = normalizarBeneficio(beneficio);

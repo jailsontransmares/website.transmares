@@ -277,6 +277,24 @@ export async function saveSimuladorSaudeQuote(payload) {
   return unwrap(response, 'Não foi possível salvar a cotação.');
 }
 
+export async function setSimuladorSaudeQuoteStatus(id, status) {
+  if (!id) throw new Error('Informe a cotação que deseja atualizar.');
+  if (!['rascunho', 'proposta', 'arquivada'].includes(status)) throw new Error('Status de cotação inválido.');
+  const supabase = exigirSupabaseConfigurado();
+  return unwrap(await supabase
+    .from('simulador_saude_cotacoes')
+    .update({ status })
+    .eq('id', id)
+    .select('id,status,updated_at')
+    .single(), 'Não foi possível atualizar o status da cotação.');
+}
+
+export async function deleteSimuladorSaudeQuote(id) {
+  if (!id) throw new Error('Informe a cotação que deseja excluir.');
+  const supabase = exigirSupabaseConfigurado();
+  return unwrap(await supabase.rpc('simulador_saude_excluir_cotacao', { p_cotacao_id: id }), 'Não foi possível excluir a cotação.');
+}
+
 export async function getSimuladorSaudeBrokerBranding() {
   const supabase = exigirSupabaseConfigurado();
   return unwrap(await supabase.rpc('simulador_saude_dados_corretora'), 'Não foi possível carregar os dados da corretora.');

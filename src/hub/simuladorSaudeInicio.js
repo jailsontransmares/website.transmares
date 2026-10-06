@@ -3,7 +3,7 @@ import { chamarApi } from './api.js';
 import { SIMULADOR_SAUDE_CATALOGO_ROUTE, SIMULADOR_SAUDE_COTACAO_ROUTE, SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
 
-const state = { quotes: [], loading: false, error: '', requestId: 0 };
+const state = { quotes: [], loading: false, error: '', notice: '', busyId: '', requestId: 0 };
 let context = {};
 
 function esc(value = '') {
@@ -33,13 +33,24 @@ function renderTable() {
 
   const rows = state.quotes.map(quote => {
     const livesCount = Array.isArray(quote.snapshot?.vidas) ? quote.snapshot.vidas.length : 0;
+    const podeEditar = Boolean(context.pode?.('simulador_saude', 'update'));
+    const podeExcluir = Boolean(context.pode?.('simulador_saude', 'delete'));
+    const busy = state.busyId === quote.id;
+    const statusAction = quote.status === 'arquivada'
+      ? `<button class="saude-home-action" type="button" onclick="saudeHomeSetQuoteStatus('${esc(quote.id)}','rascunho')" ${busy ? 'disabled' : ''}>Restaurar</button>`
+      : `<button class="saude-home-action" type="button" onclick="saudeHomeSetQuoteStatus('${esc(quote.id)}','arquivada')" ${busy ? 'disabled' : ''}>Arquivar</button>`;
+    const actions = [
+      `<button class="saude-home-open" type="button" onclick="saudeHomeOpenQuote('${esc(quote.id)}')">Abrir</button>`,
+      podeEditar ? statusAction : '',
+      podeExcluir ? `<button class="saude-home-action is-danger" type="button" onclick="saudeHomeDeleteQuote('${esc(quote.id)}','${esc(quote.codigo ?? '')}')" ${busy ? 'disabled' : ''}>Excluir</button>` : ''
+    ].filter(Boolean).join('');
     return `<tr>
       <td class="saude-home-code">#${esc(quote.codigo ?? '—')}</td>
       <td><strong>${esc(quote.cliente_nome || 'Cliente não informado')}</strong>${quote.cliente_cidade ? `<small>${esc(quote.cliente_cidade)}</small>` : ''}</td>
       <td>${livesCount}</td>
       <td><span class="saude-home-status is-${esc(quote.status || 'rascunho')}">${statusLabel(quote.status)}</span></td>
       <td><time datetime="${esc(quote.updated_at || '')}">${dateLabel(quote.updated_at)}</time></td>
-      <td><button class="saude-home-open" type="button" onclick="saudeHomeOpenQuote('${esc(quote.id)}')">Abrir</button></td>
+      <td><div class="saude-home-row-actions">${actions}</div></td>
     </tr>`;
   }).join('');
 
@@ -61,7 +72,7 @@ function renderPage() {
     </header>
     <section class="saude-home-card" aria-labelledby="saude-home-list-title">
       <header><div><h3 id="saude-home-list-title">Todas as cotações</h3><p>Cotações salvas por toda a equipe, atualizadas recentemente primeiro.</p></div><button class="secondary-btn" type="button" onclick="saudeHomeReload()" ${state.loading ? 'disabled' : ''}>${state.loading ? 'Atualizando…' : 'Atualizar'}</button></header>
-      ${renderTable()}
+      ${state.notice ? `<p class="saude-home-notice" role="status">${esc(state.notice)}</p>` : ''}${renderTable()}
     </section>
   </section>`;
   return context.renderShell({ tituloPagina: 'Simulador - Saúde', descricaoPagina: 'Consulte e crie cotações de planos de saúde.', classeConteudo: 'simulador-saude-page', conteudo: content });
@@ -111,3 +122,35 @@ window.saudeHomeOpenQuote = id => {
 };
 window.saudeHomeGoCatalog = () => context.navegarParaRota?.(hubRoute(SIMULADOR_SAUDE_CATALOGO_ROUTE));
 window.saudeHomeReload = () => loadQuotes();
+
+async function executarAcaoCotacao(id, action, payload, fallback) {
+  if (!id || state.busyId) return;
+  state.busyId = id;
+  state.notice = '';
+  state.error = '';
+  rerender();
+  try {
+    const response = await chamarApi(action, { id, ...payload });
+    if (!response.ok) throw new Error(response.message || fallback);
+    state.notice = action === 'deleteSimuladorSaudeQuote'
+      ? 'Cotação excluída.'
+      : payload.status === 'arquivada' ? 'Cotação arquivada.' : 'Cotação restaurada.';
+    await loadQuotes();
+  } catch (error) {
+    state.error = error.message || fallback;
+  } finally {
+    state.busyId = '';
+    rerender();
+  }
+}
+
+window.saudeHomeSetQuoteStatus = (id, status) => {
+  if (!context.pode?.('simulador_saude', 'update')) return;
+  executarAcaoCotacao(id, 'setSimuladorSaudeQuoteStatus', { status }, 'Não foi possível atualizar a cotação.');
+};
+
+window.saudeHomeDeleteQuote = (id, codigo) => {
+  if (!context.pode?.('simulador_saude', 'delete')) return;
+  if (!window.confirm(`Excluir definitivamente a cotação #${codigo || '—'}? O histórico de versões também será removido.`)) return;
+  executarAcaoCotacao(id, 'deleteSimuladorSaudeQuote', {}, 'Não foi possível excluir a cotação.');
+};

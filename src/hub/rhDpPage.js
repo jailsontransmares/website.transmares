@@ -12,6 +12,7 @@ import {
   listarOcorrenciasRhDp,
   listarColaboradoresRhDp,
   obterCadastroPessoalRhDp,
+  obterFichaPdfRhDp,
   salvarBeneficioRhDp,
   salvarDadosBancariosRhDp,
   salvarChecklistAdmissionalRhDp,
@@ -1899,6 +1900,146 @@ export function criarRhDpController({
       : '';
   }
 
+  const ROTULOS_FICHA_PDF = {
+    id: 'Identificador do registro', colaborador_id: 'Identificador do colaborador', codigo: 'Matrícula',
+    nome_completo: 'Nome completo', data_nascimento: 'Data de nascimento', estado_civil: 'Estado civil',
+    nacionalidade: 'Nacionalidade', naturalidade: 'Naturalidade', nome_pai: 'Nome do pai', nome_mae: 'Nome da mãe',
+    sexo: 'Sexo', escolaridade: 'Escolaridade', cor_raca: 'Cor/raça', telefone_celular: 'Telefone celular',
+    email_contato: 'E-mail', contato_emergencia_nome: 'Contato de emergência', contato_emergencia_telefone: 'Telefone de emergência',
+    endereco_logradouro: 'Logradouro', endereco_numero: 'Número', endereco_complemento: 'Complemento', endereco_bairro: 'Bairro',
+    endereco_cidade: 'Cidade', endereco_uf: 'UF', endereco_cep: 'CEP', status: 'Status', observacoes: 'Observações',
+    cpf: 'CPF', identidade_tipo: 'Tipo de identidade', identidade_numero: 'Número da identidade',
+    identidade_data_emissao: 'Data de emissão', identidade_orgao_emissor: 'Órgão emissor', identidade_uf_emissor: 'UF emissora',
+    cnh_categoria: 'Categoria CNH', titulo_eleitor: 'Título de eleitor', zona_eleitoral: 'Zona eleitoral', secao_eleitoral: 'Seção eleitoral',
+    ctps_numero: 'Número CTPS', ctps_serie: 'Série CTPS', ctps_data_expedicao: 'Expedição CTPS', ctps_uf: 'UF CTPS',
+    pis_numero: 'PIS/NIT', pis_data_cadastro: 'Data de cadastro do PIS', reservista_numero: 'Documento militar',
+    reservista_categoria: 'Categoria de reservista', tipo_vinculo: 'Tipo de vínculo', data_admissao: 'Data de admissão',
+    data_desligamento: 'Data de desligamento', cargo: 'Cargo', funcao: 'Função', cbo: 'CBO', departamento: 'Setor/Departamento',
+    gestor_responsavel: 'Gestor responsável', situacao: 'Situação profissional', tipo_remuneracao: 'Tipo de remuneração',
+    remuneracao_valor: 'Remuneração', modelo_jornada: 'Modelo de jornada', carga_horaria_semanal: 'Carga horária semanal',
+    horario_entrada: 'Entrada', horario_saida: 'Saída', intervalo_inicio: 'Início do intervalo', intervalo_fim: 'Fim do intervalo',
+    dias_trabalho: 'Dias de trabalho', tipo_conta: 'Tipo de conta', banco_codigo: 'Código do banco', banco_nome: 'Banco',
+    agencia: 'Agência', conta: 'Conta', conta_digito: 'Dígito da conta', operacao: 'Operação', pix_tipo: 'Tipo de chave PIX',
+    pix_chave: 'Chave PIX', titular_nome: 'Titular da conta', titular_cpf: 'CPF do titular', nome: 'Nome',
+    data_nascimento: 'Data de nascimento', parentesco: 'Parentesco', ativo: 'Ativo', tipo: 'Tipo', operadora_fornecedor: 'Operadora/Fornecedor',
+    valor_empresa: 'Valor empresa', valor_colaborador: 'Valor colaborador', inicio_em: 'Início', fim_em: 'Fim',
+    data_efetivacao: 'Data de efetivação', titulo: 'Título', descricao: 'Descrição', dados_anteriores: 'Dados anteriores',
+    dados_novos: 'Dados novos', referencia_externa: 'Referência externa', item_chave: 'Item', concluido_em: 'Concluído em',
+    periodo_aquisitivo_inicio: 'Início do período aquisitivo', periodo_aquisitivo_fim: 'Fim do período aquisitivo',
+    inicio_gozo: 'Início das férias', fim_gozo: 'Fim das férias', dias_gozo: 'Dias de gozo', abono_pecuniario: 'Abono pecuniário',
+    retorno_em: 'Retorno em', retorno_resumo: 'Resumo do retorno', divergencia_descricao: 'Descrição da divergência',
+    previsao_retorno_em: 'Previsão de retorno', cid_referencia: 'Referência CID', comunicacao_emitida: 'Comunicação emitida',
+    data_ocorrencia: 'Data da ocorrência', categoria: 'Categoria', providencias: 'Providências',
+    requer_acompanhamento: 'Requer acompanhamento', encerrada_em: 'Encerrada em', motivo_resumo: 'Resumo do motivo',
+    comunicado_em: 'Comunicado em', ultimo_dia_trabalho: 'Último dia de trabalho', competencia: 'Competência', aviso_previo: 'Aviso prévio',
+    enviado_em: 'Enviado em', retorno_contabilidade: 'Retorno da contabilidade', criado_em: 'Criado em',
+    created_at: 'Criado em', updated_at: 'Atualizado em', created_by: 'Criado por (ID)', updated_by: 'Atualizado por (ID)',
+    nome_arquivo: 'Arquivo', tipo_documento: 'Tipo de documento', mime_type: 'Tipo do arquivo', tamanho_bytes: 'Tamanho (bytes)',
+    data_referencia: 'Data de referência', data_validade: 'Data de validade', retencao_ate: 'Retenção até',
+    versao_atual: 'Versão', origem: 'Origem', status: 'Status', descartado_motivo: 'Motivo do descarte',
+    descartado_drive_at: 'Descarte no Drive em', rh_checklist_desligamento: 'Checklist de desligamento',
+    rh_arquivos_colaboradores_versoes: 'Histórico de versões'
+  };
+
+  function valorFichaPdf(valor) {
+    if (valor === null || valor === undefined || valor === '') return '';
+    if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não';
+    if (typeof valor === 'object') return JSON.stringify(valor, null, 2);
+    const texto = String(valor);
+    const data = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+    if (data) return `${data[3]}/${data[2]}/${data[1]}${data[4] ? ` ${data[4]}` : ''}`;
+    return texto;
+  }
+
+  function rotuloFichaPdf(chave) {
+    if (ROTULOS_FICHA_PDF[chave]) return ROTULOS_FICHA_PDF[chave];
+    return String(chave).replaceAll('_', ' ').replace(/\b\p{L}/gu, letra => letra.toLocaleUpperCase('pt-BR'));
+  }
+
+  function renderCamposFichaPdf(registro) {
+    if (!registro || typeof registro !== 'object') return '';
+    return Object.entries(registro)
+      .filter(([chave, valor]) => chave !== 'rh_colaboradores' && valor !== null && valor !== undefined && valor !== '')
+      .map(([chave, valor]) => `<div class="field"><b>${escapeHtml(rotuloFichaPdf(chave))}</b><span>${escapeHtml(valorFichaPdf(valor))}</span></div>`)
+      .join('');
+  }
+
+  function renderGrupoFichaPdf(titulo, registros) {
+    const itens = (Array.isArray(registros) ? registros : registros ? [registros] : [])
+      .map(registro => renderCamposFichaPdf(registro)).filter(Boolean);
+    return `<section><h2>${escapeHtml(titulo)}</h2>${itens.length ? itens.map(campos => `<div class="record"><div class="fields">${campos}</div></div>`).join('') : '<p class="empty">Nenhum registro informado.</p>'}</section>`;
+  }
+
+  function criarDocumentoFichaPdf(ficha, versao) {
+    const completa = versao === 'completa';
+    const colaborador = ficha.colaborador || {};
+    const vinculo = ficha.vinculo || {};
+    const grupos = completa ? [
+      ['Identificação e dados pessoais', colaborador],
+      ['Documentos cadastrais', ficha.documentos],
+      ['Vínculo profissional', vinculo],
+      ['Dependentes', ficha.dependentes],
+      ['Benefícios', ficha.beneficios],
+      ['Dados bancários', ficha.bancarios],
+      ['Checklist admissional', ficha.checklist],
+      ['Movimentações e alterações', ficha.movimentacoes],
+      ['Férias', ficha.ferias],
+      ['Afastamentos', ficha.afastamentos],
+      ['Ocorrências', ficha.ocorrencias],
+      ['Desligamentos', ficha.desligamentos],
+      ['Arquivos vinculados (metadados)', ficha.arquivos]
+    ] : [
+      ['Identificação funcional', {
+        codigo: colaborador.codigo,
+        nome_completo: colaborador.nome_completo,
+        status: colaborador.status
+      }],
+      ['Vínculo profissional', {
+        cargo: vinculo.cargo,
+        funcao: vinculo.funcao,
+        departamento: vinculo.departamento,
+        gestor_responsavel: vinculo.gestor_responsavel,
+        tipo_vinculo: vinculo.tipo_vinculo,
+        situacao: vinculo.situacao,
+        modelo_jornada: vinculo.modelo_jornada,
+        data_admissao: vinculo.data_admissao,
+        data_desligamento: vinculo.data_desligamento
+      }]
+    ];
+    const titulo = completa ? 'FICHA CADASTRAL COMPLETA DO COLABORADOR' : 'FICHA FUNCIONAL SIMPLIFICADA';
+    const dataEmissao = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date());
+    const conteudo = grupos.map(([nome, registros]) => renderGrupoFichaPdf(nome, registros)).join('');
+
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(titulo)} - ${escapeHtml(colaborador.nome_completo || 'Colaborador')}</title><style>
+      @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;color:#172b3d;font:10px/1.4 Arial,Helvetica,sans-serif}.heading{border-bottom:2px solid #153a5b;padding:0 0 9px;margin-bottom:10px}.heading h1{font-size:16px;margin:0 0 5px;color:#153a5b}.heading p{margin:0;color:#526273;font-size:9px}.heading .issued{float:right;font-size:8px;text-align:right}section{margin:0 0 11px;break-inside:auto}h2{font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#153a5b;background:#e6edf3;border:1px solid #b8c6d3;padding:5px 7px;margin:0 0 5px;break-after:avoid}.record{border:1px solid #d2dbe3;margin:0 0 5px;padding:5px;break-inside:avoid}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px}.field{min-width:0;overflow-wrap:anywhere}.field b{display:block;font-size:7px;text-transform:uppercase;letter-spacing:.15px;color:#5d6b78}.field span{display:block;white-space:pre-wrap}.empty{margin:5px 2px;color:#667085;font-style:italic}.foot{border-top:1px solid #cbd5e1;padding-top:5px;margin-top:12px;color:#667085;font-size:8px}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}section{orphans:2;widows:2}}
+      </style></head><body><header class="heading"><span class="issued">Emitida em<br>${escapeHtml(dataEmissao)}</span><h1>${escapeHtml(titulo)}</h1><p>${escapeHtml(colaborador.nome_completo || 'Colaborador')}</p></header>${conteudo}<footer class="foot">Transmares · RH &amp; DP · Documento gerado pelo cadastro de colaboradores</footer><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),500));</script></body></html>`;
+  }
+
+  async function gerarFichaPdf(versao) {
+    if (!podeVer() || !state.modal.id || !['simplificada', 'completa'].includes(versao)) return;
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      state.modal.erros.geral = 'O navegador bloqueou a janela de impressão. Permita pop-ups para gerar a ficha.';
+      render();
+      return;
+    }
+    janela.document.open();
+    janela.document.write('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Gerando ficha</title><body style="font:16px Arial;padding:24px">Carregando dados para a ficha…</body></html>');
+    janela.document.close();
+
+    try {
+      const ficha = await obterFichaPdfRhDp({ id: state.modal.id, versao });
+      janela.document.open();
+      janela.document.write(criarDocumentoFichaPdf(ficha, versao));
+      janela.document.close();
+      janela.focus();
+    } catch (error) {
+      janela.close();
+      state.modal.erros.geral = error.message || 'Não foi possível gerar a ficha PDF.';
+      render();
+    }
+  }
+
   function renderModal() {
     if (!state.modal.aberto) return '';
 
@@ -1921,8 +2062,8 @@ export function criarRhDpController({
             backClassName: 'icon-btn hub-record-back-button rh-collaborator-back-button',
             contentClassName: 'hub-record-header-content rh-collaborator-header-content',
             content: `<h3>${escapeHtml(titulo)}</h3><p>Cadastro de colaborador</p>`,
-            actions: readonly && podeEditar()
-              ? renderHubRecordEditButton({ onClick: 'hubRhDpEditarCadastroAtual()', label: 'Editar', className: 'save-btn hub-record-edit-button' })
+            actions: readonly
+              ? `<div class="rh-pdf-actions"><button type="button" class="secondary-btn" onclick="hubRhDpGerarFichaPdf('simplificada')" aria-label="Gerar ficha simplificada em PDF" title="Dados funcionais para compartilhamento">PDF simplificada</button><button type="button" class="secondary-btn" onclick="hubRhDpGerarFichaPdf('completa')" aria-label="Gerar ficha completa em PDF" title="Inclui todos os dados e históricos do cadastro">PDF completa</button>${podeEditar() ? renderHubRecordEditButton({ onClick: 'hubRhDpEditarCadastroAtual()', label: 'Editar', className: 'save-btn hub-record-edit-button' }) : ''}</div>`
               : '',
             disabled: state.modal.saving
           })}
@@ -3085,6 +3226,7 @@ export function criarRhDpController({
     ,hubRhDpSalvarFerias: salvarFerias
     ,hubRhDpSalvarAfastamento: salvarAfastamento
     ,hubRhDpSalvarOcorrencia: salvarOcorrencia
+    ,hubRhDpGerarFichaPdf: gerarFichaPdf
   });
 
   registerHubRecordShortcutHandler('rh-collaborator', 'save', salvarCadastroPorAtalho);

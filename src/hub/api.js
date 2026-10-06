@@ -79,6 +79,8 @@ import {
   getSimuladorSaudeQuoteById,
   getSimuladorSaudeBrokerBranding,
   saveSimuladorSaudeQuote,
+  setSimuladorSaudeQuoteStatus,
+  deleteSimuladorSaudeQuote,
   saveSimuladorSaudeOperator,
   saveSimuladorSaudePlan,
   deleteSimuladorSaudePlan,
@@ -162,6 +164,8 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'getRecentSimuladorSaudeQuotes') return { ok: true, data: await getRecentSimuladorSaudeQuotes(payload.limit) };
     if (action === 'getSimuladorSaudeQuoteById') return { ok: true, data: await getSimuladorSaudeQuoteById(payload.id) };
     if (action === 'saveSimuladorSaudeQuote') return { ok: true, data: await saveSimuladorSaudeQuote(payload) };
+    if (action === 'setSimuladorSaudeQuoteStatus') return { ok: true, data: await setSimuladorSaudeQuoteStatus(payload.id, payload.status) };
+    if (action === 'deleteSimuladorSaudeQuote') return { ok: true, data: await deleteSimuladorSaudeQuote(payload.id) };
     if (action === 'saveSimuladorSaudeOperator') return { ok: true, data: await saveSimuladorSaudeOperator(payload) };
     if (action === 'saveSimuladorSaudePlan') return { ok: true, data: await saveSimuladorSaudePlan(payload) };
     if (action === 'deleteSimuladorSaudePlan') return { ok: true, data: await deleteSimuladorSaudePlan(payload.id) };

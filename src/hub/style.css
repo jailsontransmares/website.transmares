@@ -15339,6 +15339,14 @@ body.dark .hub-layout .fin-modal-backdrop {
   padding-bottom: 14px;
 }
 
+.rh-pdf-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .rh-collaborator-header-content {
   flex: 1;
   min-width: 0;
@@ -15347,6 +15355,13 @@ body.dark .hub-layout .fin-modal-backdrop {
 .rh-collaborator-screen .rh-record-header h3,
 .rh-collaborator-screen .rh-record-header p {
   margin: 0;
+}
+
+@media (max-width: 760px) {
+  .rh-pdf-actions {
+    justify-content: flex-start;
+    margin-left: auto;
+  }
 }
 
 .rh-collaborator-screen .rh-record-header h3 {

@@ -5009,6 +5009,7 @@ const ACOES_TECNICAS_PERMISSAO_PERFIL = Object.freeze({
   'painel_ar.validacoes.importacao': { view: ['view'], edit: ['importar'], delete: ['excluir_importacao'] },
   'painel_ar.validacoes.recibos': { view: ['view'], edit: ['emitir_recibo'], delete: ['cancelar_recibo'] },
   central_senhas: { view: ['view', 'view_secret'], edit: ['create', 'update'], delete: ['delete'] },
+  simulador_saude: { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
   admin: { view: ['view'] },
   'admin.usuarios': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
   'admin.perfis': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
