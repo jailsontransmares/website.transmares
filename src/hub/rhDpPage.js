@@ -15,7 +15,6 @@ import {
   obterFichaPdfRhDp,
   salvarBeneficioRhDp,
   salvarDadosBancariosRhDp,
-  salvarChecklistAdmissionalRhDp,
   salvarMovimentacaoRhDp,
   salvarArquivoColaboradorRhDp,
   salvarCompetenciaRhDp,
@@ -339,7 +338,8 @@ export function criarRhDpController({
       loading,
       saving: false,
       snapshotEdicao: null,
-      etapa: 0,
+      blocosAbertos: { 'dados-pessoais': true },
+      aba: 'cadastro',
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
       vinculo: novoVinculo(),
@@ -347,7 +347,6 @@ export function criarRhDpController({
       beneficios: [],
       bancarios: {},
       movimentacoes: [],
-      checklist: [],
       ferias: [],
       afastamentos: [],
       desligamentos: [],
@@ -1626,7 +1625,6 @@ export function criarRhDpController({
           ${campo('intervalo_fim', 'Fim do intervalo', item.intervalo_fim, { type: 'time', readonly })}
           ${campo('dias_trabalho', 'Dias de trabalho', item.dias_trabalho, { readonly, placeholder: 'Segunda a sexta' })}
           ${campo('data_desligamento', 'Data de desligamento', item.data_desligamento, { type: 'date', readonly })}
-          ${campoTextarea('vinculo_observacoes', 'Observações do vínculo', item.observacoes, { readonly })}
         </div>
       </section>
     `;
@@ -1643,14 +1641,12 @@ export function criarRhDpController({
   function renderSecaoBancarios(readonly) {
     if (!podeVerSensiveis()) return '';
     const item = state.modal.bancarios;
-    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid">${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campo('banco_conta_digito','Dígito',item.conta_digito,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}${campo('banco_titular_nome','Titular',item.titular_nome,{readonly})}${campo('banco_titular_cpf','CPF do titular',formatarCpf(item.titular_cpf),{readonly,mask:'cpf'})}</div>${readonly || !state.modal.id ? '' : '<button type="button" class="save-btn" onclick="hubRhDpSalvarBancarios()">Salvar dados bancários</button>'}</section>`;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid">${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campo('banco_conta_digito','Dígito',item.conta_digito,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}${campo('banco_titular_nome','Titular',item.titular_nome,{readonly})}${campo('banco_titular_cpf','CPF do titular',formatarCpf(item.titular_cpf),{readonly,mask:'cpf'})}</div></section>`;
   }
 
-  const CHECKLIST_ADMISSIONAL = [['dados_pessoais','Dados pessoais'],['documentos','Documentos'],['vinculo','Vínculo profissional'],['beneficios','Benefícios'],['dados_bancarios','Dados bancários'],['anexos','Anexos'],['conferencia_contabilidade','Conferência da contabilidade']];
-  function renderSecaoChecklistHistorico(readonly) {
+  function renderSecaoHistoricoAlteracoes(readonly) {
     if (!podeVerSensiveis()) return '';
-    const registros = Object.fromEntries(state.modal.checklist.map(item => [item.item_chave, item]));
-    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Checklist admissional e histórico</strong><span>Registros de acompanhamento; não gera eventos oficiais.</span></div><div class="rh-checklist">${CHECKLIST_ADMISSIONAL.map(([chave,nome]) => { const item=registros[chave]; const concluido=item?.status==='concluido'; return `<label class="rh-checklist-row"><input type="checkbox" ${concluido?'checked':''} ${readonly||!state.modal.id?'disabled':''} onchange="hubRhDpAtualizarChecklist('${chave}', this.checked)"><span>${escapeHtml(nome)}</span><small>${concluido ? `Concluído em ${formatarData(item.concluido_em)}` : 'Pendente'}</small></label>`; }).join('')}</div><div class="rh-history-list">${state.modal.movimentacoes.length ? state.modal.movimentacoes.map(item=>`<article><strong>${escapeHtml(item.titulo)}</strong><span>${formatarData(item.data_efetivacao)} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</span>${item.descricao?`<small>${escapeHtml(item.descricao)}</small>`:''}</article>`).join(''):'<p class="quick-link-empty">Nenhuma movimentação registrada.</p>'}</div>${readonly||!state.modal.id?'':`<details class="rh-control-form"><summary>Registrar alteração</summary><div class="rh-form-grid">${campoSelect('mov_tipo','Tipo','',['cargo_funcao','remuneracao','jornada','beneficio','dados_bancarios','situacao','outro'])}${campo('mov_data','Data de efetivação','',{type:'date'})}${campo('mov_titulo','Título','')}${campoTextarea('mov_descricao','Descrição','',{rows:2})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarMovimentacao()">Registrar alteração</button></details>`}</section>`;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Histórico de alterações</strong><span>Alterações profissionais registradas no cadastro.</span></div><div class="rh-history-list">${state.modal.movimentacoes.length ? state.modal.movimentacoes.map(item=>`<article><strong>${escapeHtml(item.titulo)}</strong><span>${formatarData(item.data_efetivacao)} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</span>${item.descricao?`<small>${escapeHtml(item.descricao)}</small>`:''}</article>`).join(''):'<p class="quick-link-empty">Nenhuma alteração registrada.</p>'}</div>${readonly||!state.modal.id?'':`<details class="rh-control-form"><summary>Registrar alteração</summary><div class="rh-form-grid">${campoSelect('mov_tipo','Tipo','',['cargo_funcao','remuneracao','jornada','beneficio','dados_bancarios','situacao','outro'])}${campo('mov_data','Data de efetivação','',{type:'date'})}${campo('mov_titulo','Título','')}${campoTextarea('mov_descricao','Descrição','',{rows:2})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarMovimentacao()">Registrar alteração</button></details>`}</section>`;
   }
 
   function renderSecaoArquivos(readonly) {
@@ -1739,7 +1735,6 @@ export function criarRhDpController({
           ${campo('arquivo_data_validade', 'Validade', item.data_validade, { type: 'date' })}
           ${campo('arquivo_google_drive_folder_id', 'ID da pasta no Drive', item.google_drive_folder_id)}
           ${campoTextarea('arquivo_descricao', 'Descrição', item.descricao, { rows: 2 })}
-          ${campoTextarea('arquivo_observacoes', 'Observações', item.observacoes, { rows: 2 })}
         </div>
         <div class="rh-file-form-actions">
           <button class="save-btn" type="button" onclick="hubRhDpSalvarArquivo()" ${state.modal.arquivoSaving ? 'disabled' : ''}>
@@ -1762,14 +1757,10 @@ export function criarRhDpController({
 
   function renderSecaoObservacoes(readonly) {
     return `
-      <section class="rh-form-section rh-fixed-observations">
-        <div class="rh-form-section-title">
-          <strong>Observações</strong>
-        </div>
-        <label>
-          <textarea id="rh_observacoes" class="config-input rh-textarea" rows="3" ${readonly ? 'disabled' : ''}>${escapeHtml(state.modal.colaborador.observacoes || '')}</textarea>
-        </label>
-      </section>
+      <label class="rh-observations-field">
+        <span>Observações do cadastro</span>
+        <textarea id="rh_observacoes" class="config-input rh-textarea" rows="4" ${readonly ? 'disabled' : ''}>${escapeHtml(state.modal.colaborador.observacoes || '')}</textarea>
+      </label>
     `;
   }
 
@@ -1799,85 +1790,75 @@ export function criarRhDpController({
     return `<div class="rh-operational-history">${blocos.map(([titulo, tipo, itens, permitido, podeCriar, action]) => `<section class="rh-form-section rh-operational-section"><div class="rh-form-section-title"><strong>${titulo}</strong>${podeCriar && state.modal.id ? `<button class="secondary-btn" type="button" data-rh-action="${action}">+ Incluir</button>` : ''}</div><div class="rh-operational-list">${itens.length ? itens.slice(0, 8).map(item => renderRegistro(item, tipo)).join('') : '<p class="quick-link-empty">Nenhum registro encontrado.</p>'}</div>${itens.length > 8 ? `<small class="rh-operational-more">Exibindo os 8 registros mais recentes.</small>` : ''}</section>`).join('')}</div>`;
   }
 
-  function obterEtapasCadastro(readonly) {
-    const etapas = [
-      {
-        id: 'pessoais',
-        label: 'Dados pessoais',
-        conteudo: `${renderSecaoDadosPessoais(readonly)}${renderSecaoContatos(readonly)}`
-      },
-      {
-        id: 'endereco',
-        label: 'Endereço',
-        conteudo: renderSecaoEndereco(readonly)
-      },
-      {
-        id: 'documentos',
-        label: 'Documentos',
-        conteudo: `${renderSecaoDocumentos(readonly)}${renderSecaoArquivos(readonly)}`
-      },
-      {
-        id: 'vinculo',
-        label: 'Vínculo',
-        conteudo: renderSecaoVinculo(readonly)
-      },
-      {
-        id: 'complementos',
-        label: 'Complementos',
-        conteudo: `${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}`
-      },
-      {
-        id: 'historico',
-        label: 'Dados bancários',
-        conteudo: `${renderSecaoBancarios(readonly)}${renderSecaoChecklistHistorico(readonly)}`
-      },
-      ...(state.modal.id && (podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos()) ? [{
-        id: 'operacional',
-        label: 'Histórico RH',
-        conteudo: renderSecaoHistoricoOperacional()
-      }] : []),
-    ];
-
-    return podeVerSensiveis()
-      ? etapas
-      : etapas.filter(etapa => !['complementos', 'historico'].includes(etapa.id));
+  function atualizarBlocoCadastro(id, aberto) {
+    if (!state.modal.aberto || !id) return;
+    state.modal.blocosAbertos = {
+      ...state.modal.blocosAbertos,
+      [id]: Boolean(aberto)
+    };
   }
 
-  function mudarEtapaCadastro(indice) {
-    if (!state.modal.aberto || state.modal.saving) return;
+  function renderBlocoCadastro(id, titulo, conteudo, { className = '' } = {}) {
+    const aberto = state.modal.blocosAbertos?.[id] ?? id === 'dados-pessoais';
+    return `
+      <details
+        class="rh-form-section rh-collaborator-accordion ${className}"
+        data-rh-block="${escapeAttr(id)}"
+        ${aberto ? 'open' : ''}
+        ontoggle="hubRhDpAtualizarBlocoCadastro('${escapeAttr(id)}', this.open)"
+      >
+        <summary class="rh-collaborator-accordion-summary">
+          <strong>${escapeHtml(titulo)}</strong>
+          <i data-lucide="chevron-down" aria-hidden="true"></i>
+        </summary>
+        <div class="rh-collaborator-accordion-content">${conteudo}</div>
+      </details>
+    `;
+  }
+
+  function renderBlocosCadastro(readonly) {
+    const blocos = [
+      renderBlocoCadastro(
+        'dados-pessoais',
+        'Dados Pessoais',
+        `<div class="rh-personal-data-sections">${renderSecaoDadosPessoais(readonly)}${renderSecaoContatos(readonly)}${renderSecaoEndereco(readonly)}${renderSecaoDocumentos(readonly)}${renderSecaoBancarios(readonly)}</div>`,
+        { className: 'rh-personal-data-accordion' }
+      ),
+      renderBlocoCadastro('vinculo', 'Vínculo profissional', renderSecaoVinculo(readonly)),
+      ...(podeVerSensiveis() ? [
+        renderBlocoCadastro('complemento', 'Complemento', `${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}`)
+      ] : []),
+      renderBlocoCadastro('observacoes', 'Observações', renderSecaoObservacoes(readonly)),
+      renderBlocoCadastro('anexos', 'Anexos', renderSecaoArquivos(readonly))
+    ];
+
+    return blocos.join('');
+  }
+
+  function possuiAbaAnotacoes() {
+    return Boolean(state.modal.id && (podeVerSensiveis() || podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos()));
+  }
+
+  function renderAbasCadastro() {
+    return `
+      <nav class="rh-record-tabs" aria-label="Seções do cadastro" role="tablist">
+        <button type="button" id="rh-record-tab-cadastro" class="rh-record-tab ${state.modal.aba === 'cadastro' ? 'is-active' : ''}" role="tab" aria-selected="${state.modal.aba === 'cadastro'}" aria-controls="rh-record-tab-panel" onclick="hubRhDpMudarAbaCadastro('cadastro')">Cadastro</button>
+        ${possuiAbaAnotacoes() ? `<button type="button" id="rh-record-tab-anotacoes" class="rh-record-tab ${state.modal.aba === 'anotacoes' ? 'is-active' : ''}" role="tab" aria-selected="${state.modal.aba === 'anotacoes'}" aria-controls="rh-record-tab-panel" onclick="hubRhDpMudarAbaCadastro('anotacoes')">Anotações</button>` : ''}
+      </nav>
+    `;
+  }
+
+  function mudarAbaCadastro(aba) {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving) return;
     capturarFormulario();
-    const etapas = obterEtapasCadastro(state.modal.modo === 'view');
-    state.modal.etapa = Math.max(0, Math.min(Number(indice) || 0, etapas.length - 1));
+    state.modal.aba = aba === 'anotacoes' && possuiAbaAnotacoes() ? 'anotacoes' : 'cadastro';
     render();
   }
 
-  function avancarEtapaCadastro() {
-    const etapas = obterEtapasCadastro(state.modal.modo === 'view');
-    mudarEtapaCadastro(Math.min(state.modal.etapa + 1, etapas.length - 1));
-  }
-
-  function voltarEtapaCadastro() {
-    mudarEtapaCadastro(Math.max(state.modal.etapa - 1, 0));
-  }
-
-  function renderEtapasCadastro(etapas) {
-    return `
-      <nav class="rh-record-stepper" aria-label="Etapas do cadastro" role="tablist">
-        ${etapas.map((etapa, indice) => `
-          ${indice > 0 ? '<span class="rh-record-step-separator" aria-hidden="true"><i data-lucide="chevron-right"></i></span>' : ''}
-          <button
-            class="rh-record-step ${indice === state.modal.etapa ? 'is-active' : ''}"
-            type="button"
-            role="tab"
-            aria-selected="${indice === state.modal.etapa}"
-            aria-controls="rh-record-step-content"
-            onclick="hubRhDpMudarEtapaCadastro(${indice})"
-          >
-            <span>${escapeHtml(etapa.label)}</span>
-          </button>
-        `).join('')}
-      </nav>
-    `;
+  function renderConteudoAbaCadastro(readonly) {
+    return state.modal.aba === 'anotacoes' && possuiAbaAnotacoes()
+      ? `${renderSecaoHistoricoAlteracoes(readonly)}${podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos() ? renderSecaoHistoricoOperacional() : ''}`
+      : renderBlocosCadastro(readonly);
   }
 
   function renderAcoesCadastro() {
@@ -2072,12 +2053,7 @@ export function criarRhDpController({
     const titulo = state.modal.modo === 'create'
       ? 'Incluir colaborador'
       : state.modal.colaborador.nome_completo || (state.modal.loading ? 'Carregando cadastro...' : state.modal.modo === 'edit' ? 'Editar colaborador' : 'Visualizar colaborador');
-    const etapas = obterEtapasCadastro(readonly);
-    const etapaAtual = Math.max(0, Math.min(state.modal.etapa, etapas.length - 1));
-    state.modal.etapa = etapaAtual;
-    const etapa = etapas[etapaAtual];
-    const ultimaEtapa = etapaAtual === etapas.length - 1;
-
+    if (!possuiAbaAnotacoes()) state.modal.aba = 'cadastro';
     return `
       <section class="rh-collaborator-screen ${readonly ? '' : 'is-editing'}" role="region" aria-label="${escapeAttr(titulo)}">
           ${renderHubRecordHeader({
@@ -2093,20 +2069,18 @@ export function criarRhDpController({
             disabled: state.modal.saving
           })}
 
-          ${state.modal.loading ? '' : renderEtapasCadastro(etapas)}
           ${state.modal.loading ? '' : renderAcoesCadastro()}
+          ${renderAbasCadastro()}
 
-          <div id="rh-record-step-content" class="rh-record-content rh-record-step-content" role="tabpanel">
+          <div id="rh-record-tab-panel" class="rh-record-content rh-collaborator-content" role="tabpanel" aria-labelledby="rh-record-tab-${state.modal.aba}">
             ${state.modal.loading ? (window.hubRenderLoading?.('Carregando cadastro...') || '<p class="quick-link-empty" role="status">Carregando cadastro...</p>') : state.modal.erros.carregamento ? `
               <p class="admin-message error">${escapeHtml(state.modal.erros.carregamento)}</p>
             ` : `
               ${state.modal.mensagem ? `<p class="admin-message success">${escapeHtml(state.modal.mensagem)}</p>` : ''}
               ${state.modal.erros.geral ? `<p class="admin-message error">${escapeHtml(state.modal.erros.geral)}</p>` : ''}
-              ${etapa.conteudo}
+              ${renderConteudoAbaCadastro(readonly)}
             `}
           </div>
-
-          ${state.modal.loading ? '' : renderSecaoObservacoes(readonly)}
 
           ${state.modal.loading || readonly ? '' : renderHubRecordFormFooter({
             flow: 'rh-collaborator',
@@ -2114,14 +2088,9 @@ export function criarRhDpController({
             cancelOnClick: 'hubRhDpCancelarEdicaoCadastro()',
             cancelClassName: 'icon-btn rh-collaborator-cancel-button',
             cancelAriaLabel: 'Cancelar edição',
-            previousLabel: 'Anterior',
-            previousOnClick: 'hubRhDpVoltarEtapaCadastro()',
-            nextLabel: 'Próxima',
-            nextOnClick: 'hubRhDpAvancarEtapaCadastro()',
-            showPrevious: etapaAtual > 0,
-            showNext: !ultimaEtapa,
+            showPrevious: false,
+            showNext: false,
             showSave: true,
-            saveBeforeNext: true,
             saveLabel: 'Salvar',
             saveOnClick: 'hubRhDpSalvarCadastro()',
             saving: state.modal.saving,
@@ -2200,31 +2169,31 @@ export function criarRhDpController({
     const documentos = state.modal.documentos;
 
     if (String(colaborador.nome_completo || '').trim().length < 3) {
-      return { mensagem: 'Informe o nome completo do colaborador.', etapaId: 'pessoais' };
+      return { mensagem: 'Informe o nome completo do colaborador.', blocoId: 'dados-pessoais', campoId: 'rh_nome_completo' };
     }
 
     if (!colaborador.data_nascimento) {
-      return { mensagem: 'Informe a data de nascimento.', etapaId: 'pessoais' };
+      return { mensagem: 'Informe a data de nascimento.', blocoId: 'dados-pessoais', campoId: 'rh_data_nascimento' };
     }
 
     if (!colaborador.telefone_celular && !colaborador.email_contato) {
-      return { mensagem: 'Informe ao menos um telefone ou e-mail de contato.', etapaId: 'pessoais' };
+      return { mensagem: 'Informe ao menos um telefone ou e-mail de contato.', blocoId: 'dados-pessoais', campoId: 'rh_telefone_celular' };
     }
 
     if (colaborador.email_contato && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(colaborador.email_contato)) {
-      return { mensagem: 'Informe um e-mail de contato válido.', etapaId: 'pessoais' };
+      return { mensagem: 'Informe um e-mail de contato válido.', blocoId: 'dados-pessoais', campoId: 'rh_email_contato' };
     }
 
     if (colaborador.endereco_uf && String(colaborador.endereco_uf).trim().length !== 2) {
-      return { mensagem: 'Informe a UF do endereço com duas letras.', etapaId: 'endereco' };
+      return { mensagem: 'Informe a UF do endereço com duas letras.', blocoId: 'dados-pessoais', campoId: 'rh_endereco_uf' };
     }
 
     if (colaborador.endereco_cep && digitos(colaborador.endereco_cep).length !== 8) {
-      return { mensagem: 'Informe um CEP válido.', etapaId: 'endereco' };
+      return { mensagem: 'Informe um CEP válido.', blocoId: 'dados-pessoais', campoId: 'rh_endereco_cep' };
     }
 
     if (podeVerSensiveis() && !cpfValido(documentos.cpf)) {
-      return { mensagem: 'Informe um CPF válido.', etapaId: 'documentos' };
+      return { mensagem: 'Informe um CPF válido.', blocoId: 'dados-pessoais', campoId: 'rh_cpf' };
     }
 
     if (podeVerSensiveis()) {
@@ -2234,19 +2203,25 @@ export function criarRhDpController({
         return String(valor || '').trim();
       });
       if (possuiVinculo && !vinculo.data_admissao) {
-        return { mensagem: 'Informe a data de admissão do vínculo profissional.', etapaId: 'vinculo' };
+        return { mensagem: 'Informe a data de admissão do vínculo profissional.', blocoId: 'vinculo', campoId: 'rh_data_admissao' };
       }
 
       if (vinculo.data_desligamento && vinculo.data_admissao && vinculo.data_desligamento < vinculo.data_admissao) {
-        return { mensagem: 'A data de desligamento não pode ser anterior à admissão.', etapaId: 'vinculo' };
+        return { mensagem: 'A data de desligamento não pode ser anterior à admissão.', blocoId: 'vinculo', campoId: 'rh_data_desligamento' };
       }
 
-      const dependenteIncompleto = state.modal.dependentes.some(item => {
+      const indiceDependenteIncompleto = state.modal.dependentes.findIndex(item => {
         const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco;
         return possuiAlgumDado && (!item.nome_completo || !item.data_nascimento);
       });
-      if (dependenteIncompleto) {
-        return { mensagem: 'Informe nome e data de nascimento de cada dependente.', etapaId: 'complementos' };
+      if (indiceDependenteIncompleto >= 0) {
+        const dependente = state.modal.dependentes[indiceDependenteIncompleto];
+        const campoIncompleto = dependente.nome_completo ? 'nascimento' : 'nome';
+        return {
+          mensagem: 'Informe nome e data de nascimento de cada dependente.',
+          blocoId: 'complemento',
+          campoId: `rh_dep_${campoIncompleto}_${indiceDependenteIncompleto}`
+        };
       }
     }
 
@@ -2768,7 +2743,6 @@ export function criarRhDpController({
       state.modal.beneficios = dados.beneficios || [];
       state.modal.bancarios = dados.bancarios || {};
       state.modal.movimentacoes = dados.movimentacoes || [];
-      state.modal.checklist = dados.checklist || [];
       const [ferias, afastamentos, desligamentos] = await Promise.all([
         podeVerFerias() ? listarFeriasRhDp() : Promise.resolve([]),
         podeVerOcorrencias() ? listarAfastamentosRhDp() : Promise.resolve([]),
@@ -2832,15 +2806,14 @@ export function criarRhDpController({
 
   function editarCadastroAtual() {
     if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo !== 'view' || !state.modal.id || !podeEditar()) return;
-    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'bancarios', 'movimentacoes', 'checklist', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'etapa'];
+    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'bancarios', 'movimentacoes', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'blocosAbertos', 'aba'];
     state.modal.snapshotEdicao = JSON.parse(JSON.stringify(Object.fromEntries(
       camposEditaveis.map(campo => [campo, state.modal[campo]])
     )));
     state.modal.modo = 'edit';
+    state.modal.aba = 'cadastro';
     state.modal.mensagem = '';
     state.modal.erros = {};
-    const etapas = obterEtapasCadastro(false);
-    state.modal.etapa = Math.max(0, Math.min(state.modal.etapa, etapas.length - 1));
     render();
   }
 
@@ -2886,7 +2859,7 @@ export function criarRhDpController({
       google_drive_folder_id: obterValor('arquivo_google_drive_folder_id'),
       data_referencia: obterValor('arquivo_data_referencia'),
       data_validade: obterValor('arquivo_data_validade'),
-      observacoes: obterValor('arquivo_observacoes')
+      observacoes: state.modal.arquivoForm.observacoes || ''
     };
   }
 
@@ -3007,11 +2980,13 @@ export function criarRhDpController({
     capturarFormulario();
     const erro = validarFormulario();
     if (erro) {
-      const etapas = obterEtapasCadastro(false);
-      const etapaComErro = etapas.findIndex(etapa => etapa.id === erro.etapaId);
-      if (etapaComErro >= 0) state.modal.etapa = etapaComErro;
+      const blocoId = erro.blocoId;
+      if (blocoId) state.modal.blocosAbertos = { ...state.modal.blocosAbertos, [blocoId]: true };
+      state.modal.aba = 'cadastro';
       state.modal.erros.geral = erro.mensagem;
       render();
+      if (blocoId) document.querySelector(`[data-rh-block="${blocoId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (erro.campoId) document.getElementById(erro.campoId)?.focus({ preventScroll: true });
       return;
     }
 
@@ -3019,6 +2994,7 @@ export function criarRhDpController({
     state.modal.erros = {};
     render();
 
+    let idSalvo = state.modal.id;
     try {
       const editando = Boolean(state.modal.id);
       const resultado = await salvarCadastroPessoalRhDp({
@@ -3028,7 +3004,26 @@ export function criarRhDpController({
         vinculo: podeVerSensiveis() ? state.modal.vinculo : null,
         dependentes: podeVerSensiveis() ? state.modal.dependentes : null
       });
-      const idSalvo = resultado?.id || state.modal.id;
+      idSalvo = resultado?.id || state.modal.id;
+      if (!idSalvo) throw new Error('O cadastro foi salvo, mas não foi possível identificar o colaborador.');
+      state.modal.id = idSalvo;
+
+      if (podeVerSensiveis() && possuiDadosBancarios()) {
+        try {
+          const resultadoBancario = await salvarDadosBancariosRhDp({
+            id: state.modal.bancarios.id || null,
+            dados: payloadDadosBancarios(idSalvo)
+          });
+          state.modal.bancarios = { ...state.modal.bancarios, id: resultadoBancario?.id || state.modal.bancarios.id || '' };
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas os dados bancários não foram salvos: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
+      }
+
       state.modal.saving = false;
       state.modal.mensagem = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
       state.message = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
@@ -3042,7 +3037,6 @@ export function criarRhDpController({
           : 'Colaborador incluído, mas a lista não pôde ser recarregada agora.';
       }
 
-      if (!idSalvo) throw new Error('O cadastro foi salvo, mas não foi possível identificar o colaborador para abrir a visualização.');
       const colaboradorSalvo = state.colaboradores.find(item => item.id === idSalvo || item.codigo === idSalvo);
       const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
       mensagemCadastroPendente = state.message;
@@ -3088,14 +3082,35 @@ export function criarRhDpController({
     const bancariosSalvos = dados.bancarios || {};
     if (!preservarRascunhoBancario) state.modal.bancarios = bancariosSalvos;
     state.modal.movimentacoes = dados.movimentacoes || [];
-    state.modal.checklist = dados.checklist || [];
     if (state.modal.snapshotEdicao) {
       // Ações auxiliares já persistidas passam a fazer parte da base restaurada por Cancelar.
-      ['beneficios', 'bancarios', 'movimentacoes', 'checklist'].forEach(campoNome => {
+      ['beneficios', 'bancarios', 'movimentacoes'].forEach(campoNome => {
         const valorSalvo = campoNome === 'bancarios' ? bancariosSalvos : state.modal[campoNome];
         state.modal.snapshotEdicao[campoNome] = JSON.parse(JSON.stringify(valorSalvo));
       });
     }
+  }
+
+  function payloadDadosBancarios(colaboradorId = state.modal.id) {
+    const item = state.modal.bancarios || {};
+    return {
+      colaborador_id: colaboradorId,
+      banco_codigo: item.banco_codigo,
+      banco_nome: item.banco_nome,
+      tipo_conta: item.tipo_conta,
+      agencia: item.agencia,
+      conta: item.conta,
+      conta_digito: item.conta_digito,
+      pix_tipo: item.pix_tipo,
+      pix_chave: item.pix_chave,
+      titular_nome: item.titular_nome,
+      titular_cpf: item.titular_cpf
+    };
+  }
+
+  function possuiDadosBancarios() {
+    return Boolean(state.modal.bancarios?.id)
+      || Object.entries(state.modal.bancarios || {}).some(([chave, valor]) => chave !== 'id' && String(valor || '').trim());
   }
 
   async function salvarBeneficio() {
@@ -3104,23 +3119,6 @@ export function criarRhDpController({
       await salvarBeneficioRhDp({ beneficio: { colaborador_id: state.modal.id, tipo: obterValor('beneficio_tipo'), nome: obterValor('beneficio_nome'), operadora_fornecedor: obterValor('beneficio_operadora'), valor_empresa: obterValor('beneficio_valor_empresa'), valor_colaborador: obterValor('beneficio_valor_colaborador'), inicio_em: obterValor('beneficio_inicio') } });
       await recarregarDadosComplementaresCadastro(); state.modal.erros = {}; render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar o benefício.'; render(); }
-  }
-
-  async function salvarBancarios() {
-    capturarFormulario();
-    try {
-      await salvarDadosBancariosRhDp({ id: state.modal.bancarios.id || null, dados: { colaborador_id: state.modal.id, banco_codigo: state.modal.bancarios.banco_codigo, banco_nome: state.modal.bancarios.banco_nome, tipo_conta: state.modal.bancarios.tipo_conta, agencia: state.modal.bancarios.agencia, conta: state.modal.bancarios.conta, conta_digito: state.modal.bancarios.conta_digito, pix_tipo: state.modal.bancarios.pix_tipo, pix_chave: state.modal.bancarios.pix_chave, titular_nome: state.modal.bancarios.titular_nome, titular_cpf: state.modal.bancarios.titular_cpf } });
-      await recarregarDadosComplementaresCadastro(); state.modal.erros = {}; render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar os dados bancários.'; render(); }
-  }
-
-  async function atualizarChecklist(itemChave, concluido) {
-    capturarFormulario();
-    try {
-      const atual = state.modal.checklist.find(item => item.item_chave === itemChave);
-      await salvarChecklistAdmissionalRhDp({ id: atual?.id || null, item: { colaborador_id: state.modal.id, item_chave: itemChave, status: concluido ? 'concluido' : 'pendente' } });
-      await recarregarDadosComplementaresCadastro({ preservarRascunhoBancario: true }); render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível atualizar o checklist.'; render(); }
   }
 
   async function salvarMovimentacao() {
@@ -3219,9 +3217,8 @@ export function criarRhDpController({
     hubRhDpEditarCadastroAtual: editarCadastroAtual,
     hubRhDpFecharCadastro: fecharCadastro,
     hubRhDpCancelarEdicaoCadastro: cancelarEdicaoCadastro,
-    hubRhDpMudarEtapaCadastro: mudarEtapaCadastro,
-    hubRhDpAvancarEtapaCadastro: avancarEtapaCadastro,
-    hubRhDpVoltarEtapaCadastro: voltarEtapaCadastro,
+    hubRhDpAtualizarBlocoCadastro: atualizarBlocoCadastro,
+    hubRhDpMudarAbaCadastro: mudarAbaCadastro,
     hubRhDpAdicionarDependente: adicionarDependente,
     hubRhDpRemoverDependente: removerDependente,
     hubRhDpSalvarCadastro: salvarCadastro,
@@ -3237,8 +3234,6 @@ export function criarRhDpController({
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
     ,hubRhDpSalvarBeneficio: salvarBeneficio
-    ,hubRhDpSalvarBancarios: salvarBancarios
-    ,hubRhDpAtualizarChecklist: atualizarChecklist
     ,hubRhDpSalvarMovimentacao: salvarMovimentacao
     ,hubRhDpAbrirSecao: abrirSecao
     ,hubRhDpSalvarDemanda: salvarDemanda
