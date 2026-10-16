@@ -14,6 +14,7 @@ import {
   obterCadastroPessoalRhDp,
   obterFichaPdfRhDp,
   salvarBeneficioRhDp,
+  salvarDependenteRhDp,
   salvarDadosBancariosRhDp,
   salvarMovimentacaoRhDp,
   salvarArquivoColaboradorRhDp,
@@ -321,7 +322,27 @@ export function criarRhDpController({
   let faixaNavegacaoRhDp = '';
   let listenersMenuRhDpConfigurados = false;
   let resizeNavegacaoRhDpConfigurado = false;
-  let mensagemCadastroPendente = '';
+  let toastRhDpTimer = null;
+
+  function mostrarToastRhDp(mensagem) {
+    if (!mensagem || !document.body) return;
+    if (toastRhDpTimer) window.clearTimeout(toastRhDpTimer);
+    document.getElementById('rh-dp-toast')?.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'rh-dp-toast';
+    toast.className = 'rh-dp-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
+    toast.textContent = mensagem;
+    document.body.appendChild(toast);
+
+    toastRhDpTimer = window.setTimeout(() => {
+      toast.remove();
+      toastRhDpTimer = null;
+    }, 3000);
+  }
 
   function criarEstadoModal({
     aberto = false,
@@ -345,6 +366,9 @@ export function criarRhDpController({
       vinculo: novoVinculo(),
       dependentes: [],
       beneficios: [],
+      beneficiosPendentes: [],
+      beneficiosParaEncerrar: [],
+      complementoModal: { aberto: false, tipo: '', saving: false, erro: '', form: {} },
       bancarios: {},
       movimentacoes: [],
       ferias: [],
@@ -381,6 +405,11 @@ export function criarRhDpController({
 
   function podeCriar() {
     return pode('rh_dp.colaboradores', 'create') && podeVerSensiveis();
+  }
+
+  function podeAdicionarComplemento(tipo = 'dependente') {
+    if (!podeVerSensiveis()) return false;
+    return tipo === 'beneficio' ? podeEditar() : (podeCriar() || podeEditar());
   }
 
   function podeEditar() {
@@ -1345,7 +1374,8 @@ export function criarRhDpController({
     readonly = false,
     placeholder = '',
     mask = '',
-    maxLength = ''
+    maxLength = '',
+    minLength = ''
   } = {}) {
     return `
       <label>
@@ -1358,6 +1388,7 @@ export function criarRhDpController({
           ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}
           ${mask ? `data-rh-mask="${escapeAttr(mask)}" oninput="hubRhDpAplicarMascara(event)"` : ''}
           ${maxLength ? `maxlength="${escapeAttr(maxLength)}"` : ''}
+          ${minLength ? `minlength="${escapeAttr(minLength)}"` : ''}
           ${required ? 'required' : ''}
           ${readonly ? 'disabled' : ''}
         >
@@ -1393,11 +1424,11 @@ export function criarRhDpController({
     return legivel.charAt(0).toLocaleUpperCase('pt-BR') + legivel.slice(1);
   }
 
-  function campoSelect(id, label, valor, opcoes, { required = false, readonly = false } = {}) {
+  function campoSelect(id, label, valor, opcoes, { required = false, readonly = false, className = '' } = {}) {
     return `
       <label>
         <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
-        <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
+        <select id="rh_${escapeAttr(id)}" class="config-input${className ? ` ${escapeAttr(className)}` : ''}" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
           <option value="">Selecione</option>
           ${opcoes.map(opcao => `
             <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(formatarRotuloOpcaoSelect(opcao))}</option>
@@ -1444,21 +1475,21 @@ export function criarRhDpController({
           <strong>Dados pessoais</strong>
           <span>Campos marcados com * são obrigatórios.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-personal-grid">
           <label class="rh-span-2">
             <span>Nome completo *</span>
             <input id="rh_nome_completo" class="config-input" type="text" value="${escapeAttr(item.nome_completo || '')}" required ${readonly ? 'disabled' : ''}>
           </label>
           ${campo('data_nascimento', 'Data de nascimento', item.data_nascimento, { type: 'date', required: true, readonly })}
+          ${campoSelect('sexo', 'Sexo', item.sexo, ['Feminino', 'Masculino', 'Intersexo', 'Prefere não informar'], { readonly })}
           ${campoSelect('estado_civil', 'Estado civil', item.estado_civil, ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)', 'Separado(a)'], { readonly })}
           ${campo('nacionalidade', 'Nacionalidade', item.nacionalidade, { readonly })}
           ${campo('naturalidade', 'Naturalidade', item.naturalidade, { readonly })}
-          ${campoSelect('sexo', 'Sexo', item.sexo, ['Feminino', 'Masculino', 'Intersexo', 'Prefere não informar'], { readonly })}
           ${campoSelect('cor_raca', 'Cor/raça', item.cor_raca, ['Amarela', 'Branca', 'Indígena', 'Parda', 'Preta', 'Prefere não informar'], { readonly })}
           ${campoSelect('escolaridade', 'Escolaridade', item.escolaridade, ['Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Superior incompleto', 'Superior completo', 'Pós-graduação', 'Mestrado', 'Doutorado'], { readonly })}
           ${campo('nome_pai', 'Nome completo do pai', item.nome_pai, { readonly })}
           ${campo('nome_mae', 'Nome completo da mãe', item.nome_mae, { readonly })}
-          ${campoSelect('status', 'Status do cadastro', item.status, ['ativo', 'inativo'], { required: true, readonly })}
+          ${campoSelect('status', 'Status do cadastro', item.status, ['ativo', 'inativo'], { required: true, readonly, className: 'rh-status-input' })}
         </div>
       </section>
     `;
@@ -1472,7 +1503,7 @@ export function criarRhDpController({
           <strong>Contatos e emergência</strong>
           <span>Informe ao menos telefone ou e-mail.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-contact-grid">
           ${campo('telefone_celular', 'Telefone celular', item.telefone_celular, { readonly, mask: 'telefone', placeholder: '(00) 00000-0000' })}
           ${campo('email_contato', 'E-mail de contato', item.email_contato, { readonly, type: 'email' })}
           ${campo('contato_emergencia_nome', 'Contato de emergência', item.contato_emergencia_nome, { readonly })}
@@ -1488,9 +1519,9 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Endereço</strong>
-          <span>Preencha o CEP para buscar o endereço automaticamente.</span>
+          <span>Localização residencial com preenchimento automático pelo CEP.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-address-grid">
           <label>
             <span>CEP</span>
             <input
@@ -1536,25 +1567,25 @@ export function criarRhDpController({
           <strong>Documentos cadastrais</strong>
           <span>Dados sensíveis do cadastro. Arquivos ficam na seção de anexos.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-documents-grid">
           ${campo('cpf', 'CPF', formatarCpf(item.cpf), { required: true, readonly, mask: 'cpf', placeholder: '000.000.000-00' })}
-          ${campoSelect('identidade_tipo', 'Documento de identidade', item.identidade_tipo, ['rg', 'cnh'], { readonly })}
-          ${campo('identidade_numero', 'Número do RG/CNH', item.identidade_numero, { readonly })}
-          ${campo('cnh_categoria', 'Categoria da CNH', item.cnh_categoria, { readonly })}
-          ${campo('identidade_data_emissao', 'Data de emissão/expedição', item.identidade_data_emissao, { type: 'date', readonly })}
+          ${campoSelect('identidade_tipo', 'Tipo de documento', item.identidade_tipo, ['rg', 'cnh'], { readonly })}
+          ${campo('identidade_numero', 'Nº do documento', item.identidade_numero, { readonly })}
           ${campo('identidade_orgao_emissor', 'Órgão emissor', item.identidade_orgao_emissor, { readonly })}
           ${campo('identidade_uf_emissor', 'UF emissora', item.identidade_uf_emissor, { readonly, maxLength: 2 })}
-          ${campo('titulo_eleitor', 'Título de eleitor', item.titulo_eleitor, { readonly })}
-          ${campo('zona_eleitoral', 'Zona eleitoral', item.zona_eleitoral, { readonly })}
-          ${campo('secao_eleitoral', 'Seção eleitoral', item.secao_eleitoral, { readonly })}
-          ${campo('ctps_numero', 'Número da CTPS', item.ctps_numero, { readonly })}
-          ${campo('ctps_serie', 'Série da CTPS', item.ctps_serie, { readonly })}
-          ${campo('ctps_data_expedicao', 'Expedição da CTPS', item.ctps_data_expedicao, { type: 'date', readonly })}
-          ${campo('ctps_uf', 'UF da CTPS', item.ctps_uf, { readonly, maxLength: 2 })}
-          ${campo('pis_numero', 'Número do PIS', item.pis_numero, { readonly })}
-          ${campo('pis_data_cadastro', 'Data de cadastro do PIS', item.pis_data_cadastro, { type: 'date', readonly })}
+          ${campo('identidade_data_emissao', 'Data de emissão', item.identidade_data_emissao, { type: 'date', readonly })}
+          ${campo('cnh_categoria', 'Categoria CNH', item.cnh_categoria, { readonly })}
+          ${campo('titulo_eleitor', 'Título', item.titulo_eleitor, { readonly })}
+          ${campo('zona_eleitoral', 'Zona', item.zona_eleitoral, { readonly })}
+          ${campo('secao_eleitoral', 'Seção', item.secao_eleitoral, { readonly })}
+          ${campo('ctps_numero', 'Número CTPS', item.ctps_numero, { readonly })}
+          ${campo('ctps_serie', 'Série', item.ctps_serie, { readonly })}
+          ${campo('ctps_data_expedicao', 'Expedição', item.ctps_data_expedicao, { type: 'date', readonly })}
+          ${campo('ctps_uf', 'UF', item.ctps_uf, { readonly, maxLength: 2 })}
+          ${campo('pis_numero', 'Número PIS', item.pis_numero, { readonly })}
+          ${campo('pis_data_cadastro', 'Data de cadastro', item.pis_data_cadastro, { type: 'date', readonly })}
           ${campo('reservista_numero', 'Documento militar', item.reservista_numero, { readonly })}
-          ${campo('reservista_categoria', 'Categoria de reservista', item.reservista_categoria, { readonly })}
+          ${campo('reservista_categoria', 'Categoria', item.reservista_categoria, { readonly })}
         </div>
       </section>
     `;
@@ -1564,28 +1595,27 @@ export function criarRhDpController({
     if (!podeVerSensiveis()) return '';
 
     return `
-      <section class="rh-form-section">
-        <div class="rh-form-section-title rh-dependents-title">
+      <div class="rh-complement-subsection rh-dependents-section">
+        <div class="rh-form-section-title rh-dependents-title rh-complement-subsection-title">
           <div>
             <strong>Dependentes</strong>
-            <span>Sem limite fixo de registros.</span>
           </div>
-          ${readonly ? '' : '<button class="secondary-btn" type="button" onclick="hubRhDpAdicionarDependente()">Adicionar dependente</button>'}
+          <button class="secondary-btn" type="button" onclick="hubRhDpAbrirComplementoModal('dependente')" ${podeAdicionarComplemento('dependente') ? '' : 'disabled'}>+ Dependente</button>
         </div>
         <div class="rh-dependents-list">
           ${state.modal.dependentes.length
             ? state.modal.dependentes.map((item, indice) => `
-              <article class="rh-dependent-row">
-                <input id="rh_dep_id_${indice}" type="hidden" value="${escapeAttr(item.id || '')}">
-                ${campoDependente(indice, 'nome', 'Nome completo', item.nome_completo, 'text', readonly)}
-                ${campoDependente(indice, 'nascimento', 'Data de nascimento', item.data_nascimento, 'date', readonly)}
-                ${campoDependente(indice, 'parentesco', 'Parentesco', item.parentesco, 'text', readonly)}
-                ${readonly ? '' : `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverDependente(${indice})">Remover</button>`}
+              <article class="rh-dependent-row${readonly ? '' : ' has-actions'}">
+                <div class="rh-dependent-value"><span>Parentesco</span><strong>${escapeHtml(item.parentesco || '—')}</strong></div>
+                <div class="rh-dependent-value"><span>Nome</span><strong>${escapeHtml(item.nome_completo || '—')}</strong></div>
+                <div class="rh-dependent-value"><span>Nascimento</span><strong>${escapeHtml(item.data_nascimento ? formatarData(item.data_nascimento) : '—')}</strong></div>
+                <div class="rh-dependent-value"><span>CPF</span><strong>${escapeHtml(item.cpf ? formatarCpf(item.cpf) : '—')}</strong></div>
+                ${readonly ? '' : `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverDependente(${indice})" aria-label="Remover dependente ${escapeAttr(item.nome_completo || '')}">Remover</button>`}
               </article>
             `).join('')
             : '<p class="quick-link-empty">Nenhum dependente informado.</p>'}
         </div>
-      </section>
+      </div>
     `;
   }
 
@@ -1604,21 +1634,22 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Vínculo profissional</strong>
-          <span>Controle interno. Não substitui registros da contabilidade.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-employment-grid">
           ${campoSelect('tipo_vinculo', 'Tipo de vínculo', item.tipo_vinculo, ['clt', 'estagio', 'socio', 'prestador', 'temporario', 'outro'], { readonly })}
           ${campo('data_admissao', 'Data de admissão', item.data_admissao, { type: 'date', readonly })}
           ${campo('cargo', 'Cargo', item.cargo, { readonly })}
           ${campo('funcao', 'Função', item.funcao, { readonly })}
           ${campo('cbo', 'CBO', item.cbo, { readonly, placeholder: '0000-00' })}
+        </div>
+        <div class="rh-form-grid rh-employment-grid">
           ${campo('departamento', 'Departamento/área', item.departamento, { readonly })}
-          ${campo('gestor_responsavel', 'Gestor responsável', item.gestor_responsavel, { readonly })}
-          ${campoSelect('situacao', 'Situação profissional', item.situacao, ['ativo', 'experiencia', 'afastado', 'desligado'], { readonly })}
           ${campoSelect('tipo_remuneracao', 'Tipo de remuneração', item.tipo_remuneracao, ['salario', 'bolsa', 'pro_labore', 'honorario', 'outro'], { readonly })}
           ${campo('remuneracao_valor', 'Valor da remuneração', formatarMoeda(item.remuneracao_valor), { readonly, placeholder: '0,00' })}
           ${campoSelect('modelo_jornada', 'Modelo de jornada', item.modelo_jornada, ['integral', 'parcial', 'escala', 'flexivel', 'remoto', 'hibrido', 'outro'], { readonly })}
           ${campo('carga_horaria_semanal', 'Carga horária semanal', item.carga_horaria_semanal, { readonly, placeholder: '44' })}
+        </div>
+        <div class="rh-form-grid rh-employment-grid rh-employment-schedule-grid">
           ${campo('horario_entrada', 'Entrada', item.horario_entrada, { type: 'time', readonly })}
           ${campo('horario_saida', 'Saída', item.horario_saida, { type: 'time', readonly })}
           ${campo('intervalo_inicio', 'Início do intervalo', item.intervalo_inicio, { type: 'time', readonly })}
@@ -1632,16 +1663,15 @@ export function criarRhDpController({
 
   function renderSecaoBeneficios(readonly) {
     if (!podeVerSensiveis()) return '';
-    const itens = state.modal.beneficios;
-    return `<section class="rh-form-section"><div class="rh-form-section-title rh-files-title"><div><strong>Benefícios</strong><span>Controle interno de concessões e coparticipações.</span></div></div>
-      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · ${escapeHtml(obterRotuloStatusHub(item.status))}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div></article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div>
-      ${readonly || !state.modal.id ? '' : `<details class="rh-control-form"><summary>Adicionar benefício</summary><div class="rh-form-grid">${campoSelect('beneficio_tipo','Tipo','',['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'])}${campo('beneficio_nome','Nome do benefício','')}${campo('beneficio_operadora','Operadora/fornecedor','')}${campo('beneficio_valor_empresa','Valor empresa','',{placeholder:'0,00'})}${campo('beneficio_valor_colaborador','Valor colaborador','',{placeholder:'0,00'})}${campo('beneficio_inicio','Início','',{type:'date'})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarBeneficio()">Adicionar benefício</button></details>`}</section>`;
+    const itens = state.modal.beneficios.filter(item => !item._removerPendente);
+    return `<div class="rh-complement-subsection rh-benefits-section"><div class="rh-form-section-title rh-files-title rh-complement-subsection-title"><div><strong>Benefícios</strong></div><button class="secondary-btn" type="button" onclick="hubRhDpAbrirComplementoModal('beneficio')" ${podeAdicionarComplemento('beneficio') ? '' : 'disabled'}>+ Benefício</button></div>
+      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome || 'Benefício')}</strong><span>${escapeHtml(formatarRotuloOpcaoSelect(item.tipo))} · ${escapeHtml(item._pendente ? 'Pendente de salvar' : obterRotuloStatusHub(item.status))}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div>${!readonly && item.status !== 'encerrado' ? `<div class="rh-file-actions"><button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverBeneficio('${escapeAttr(item._chaveTemporaria || item.id)}')" aria-label="Remover benefício ${escapeAttr(item.nome || '')}">Remover</button></div>` : ''}</article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div></div>`;
   }
 
   function renderSecaoBancarios(readonly) {
     if (!podeVerSensiveis()) return '';
     const item = state.modal.bancarios;
-    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid">${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campo('banco_conta_digito','Dígito',item.conta_digito,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}${campo('banco_titular_nome','Titular',item.titular_nome,{readonly})}${campo('banco_titular_cpf','CPF do titular',formatarCpf(item.titular_cpf),{readonly,mask:'cpf'})}</div></section>`;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid rh-banking-grid">${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}</div></section>`;
   }
 
   function renderSecaoHistoricoAlteracoes(readonly) {
@@ -1746,15 +1776,6 @@ export function criarRhDpController({
     `;
   }
 
-  function campoDependente(indice, campoNome, label, valor, type, readonly) {
-    return `
-      <label>
-        <span>${escapeHtml(label)}</span>
-        <input id="rh_dep_${campoNome}_${indice}" class="config-input" type="${type}" value="${escapeAttr(valor || '')}" ${readonly ? 'disabled' : ''}>
-      </label>
-    `;
-  }
-
   function renderSecaoObservacoes(readonly) {
     return `
       <label class="rh-observations-field">
@@ -1826,7 +1847,11 @@ export function criarRhDpController({
       ),
       renderBlocoCadastro('vinculo', 'Vínculo profissional', renderSecaoVinculo(readonly)),
       ...(podeVerSensiveis() ? [
-        renderBlocoCadastro('complemento', 'Complemento', `${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}`)
+        renderBlocoCadastro(
+          'complemento',
+          'Dependentes e benefícios',
+          `<section class="rh-form-section rh-complement-section">${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}</section>`
+        )
       ] : []),
       renderBlocoCadastro('observacoes', 'Observações', renderSecaoObservacoes(readonly)),
       renderBlocoCadastro('anexos', 'Anexos', renderSecaoArquivos(readonly))
@@ -1859,6 +1884,48 @@ export function criarRhDpController({
     return state.modal.aba === 'anotacoes' && possuiAbaAnotacoes()
       ? `${renderSecaoHistoricoAlteracoes(readonly)}${podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos() ? renderSecaoHistoricoOperacional() : ''}`
       : renderBlocosCadastro(readonly);
+  }
+
+  function renderModalComplemento() {
+    const modal = state.modal.complementoModal;
+    if (!modal?.aberto) return '';
+    const ehBeneficio = modal.tipo === 'beneficio';
+    const form = modal.form || {};
+    const titulo = ehBeneficio ? 'Adicionar benefício' : 'Adicionar dependente';
+    const campos = ehBeneficio
+      ? `<div class="rh-form-grid">
+          ${campoSelect('complemento_beneficio_tipo', 'Tipo de benefício', form.tipo, ['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'], { required: true })}
+          ${campo('complemento_beneficio_nome', 'Nome do benefício', form.nome, { required: true })}
+          ${campo('complemento_beneficio_operadora', 'Operadora/fornecedor', form.operadora_fornecedor)}
+          ${campo('complemento_beneficio_valor_empresa', 'Valor empresa', form.valor_empresa, { placeholder: '0,00' })}
+          ${campo('complemento_beneficio_valor_colaborador', 'Valor colaborador', form.valor_colaborador, { placeholder: '0,00' })}
+          ${campo('complemento_beneficio_inicio', 'Início', form.inicio_em, { type: 'date' })}
+        </div>`
+      : `<div class="rh-form-grid rh-dependent-modal-grid">
+          ${campo('complemento_dependente_parentesco', 'Parentesco', form.parentesco)}
+          ${campo('complemento_dependente_nome', 'Nome completo', form.nome_completo, { required: true, minLength: 3 })}
+          ${campo('complemento_dependente_nascimento', 'Data de nascimento', form.data_nascimento, { type: 'date', required: true })}
+          ${campo('complemento_dependente_cpf', 'CPF', form.cpf, { mask: 'cpf', placeholder: '000.000.000-00' })}
+        </div>`;
+
+    return `
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
+        <section class="small-modal rh-modal rh-complement-modal">
+          <div class="small-modal-header">
+            <div><h3>${escapeHtml(titulo)}</h3><p>${ehBeneficio ? 'Informe os dados para incluir o benefício.' : 'Informe os dados cadastrais do dependente.'}</p></div>
+            <button class="secondary-btn" type="button" onclick="hubRhDpFecharComplementoModal()" ${modal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${modal.erro ? `<p class="admin-message error" role="alert">${escapeHtml(modal.erro)}</p>` : ''}
+            ${campos}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" onclick="hubRhDpFecharComplementoModal()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" onclick="hubRhDpSalvarComplementoModal()" ${modal.saving ? 'disabled' : ''}>${modal.saving ? 'Salvando...' : 'Adicionar'}</button>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function renderAcoesCadastro() {
@@ -2096,6 +2163,7 @@ export function criarRhDpController({
             saving: state.modal.saving,
             className: 'rh-collaborator-workflow-footer'
           })}
+          ${renderModalComplemento()}
       </section>
     `;
   }
@@ -2150,17 +2218,6 @@ export function criarRhDpController({
         }, { ...state.modal.bancarios });
       }
 
-      if (document.querySelector('[id^="rh_dep_nome_"]')) {
-        state.modal.dependentes = state.modal.dependentes.map((item, indice) => {
-          const lerCampo = (id) => document.getElementById(id)?.value ?? null;
-          return {
-            id: lerCampo(`rh_dep_id_${indice}`) ?? item.id ?? '',
-            nome_completo: lerCampo(`rh_dep_nome_${indice}`) ?? item.nome_completo ?? '',
-            data_nascimento: lerCampo(`rh_dep_nascimento_${indice}`) ?? item.data_nascimento ?? '',
-            parentesco: lerCampo(`rh_dep_parentesco_${indice}`) ?? item.parentesco ?? ''
-          };
-        });
-      }
     }
   }
 
@@ -2211,7 +2268,7 @@ export function criarRhDpController({
       }
 
       const indiceDependenteIncompleto = state.modal.dependentes.findIndex(item => {
-        const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco;
+        const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco || item.cpf;
         return possuiAlgumDado && (!item.nome_completo || !item.data_nascimento);
       });
       if (indiceDependenteIncompleto >= 0) {
@@ -2221,6 +2278,14 @@ export function criarRhDpController({
           mensagem: 'Informe nome e data de nascimento de cada dependente.',
           blocoId: 'complemento',
           campoId: `rh_dep_${campoIncompleto}_${indiceDependenteIncompleto}`
+        };
+      }
+
+      const indiceCpfDependenteInvalido = state.modal.dependentes.findIndex(item => !item.id && item.cpf && !cpfValido(item.cpf));
+      if (indiceCpfDependenteInvalido >= 0) {
+        return {
+          mensagem: 'Informe um CPF válido para cada novo dependente ou deixe o campo vazio.',
+          blocoId: 'complemento'
         };
       }
     }
@@ -2722,10 +2787,6 @@ export function criarRhDpController({
     });
     const colaboradorResumo = state.colaboradores.find(item => item.id === id || item.codigo === id);
     if (colaboradorResumo) state.modal.colaborador.nome_completo = colaboradorResumo.nome_completo || '';
-    if (modo === 'view' && mensagemCadastroPendente) {
-      state.modal.mensagem = mensagemCadastroPendente;
-      mensagemCadastroPendente = '';
-    }
     render();
 
     if (!id) return;
@@ -2806,7 +2867,7 @@ export function criarRhDpController({
 
   function editarCadastroAtual() {
     if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo !== 'view' || !state.modal.id || !podeEditar()) return;
-    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'bancarios', 'movimentacoes', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'blocosAbertos', 'aba'];
+    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'beneficiosPendentes', 'beneficiosParaEncerrar', 'bancarios', 'movimentacoes', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'blocosAbertos', 'aba'];
     state.modal.snapshotEdicao = JSON.parse(JSON.stringify(Object.fromEntries(
       camposEditaveis.map(campo => [campo, state.modal[campo]])
     )));
@@ -2826,20 +2887,144 @@ export function criarRhDpController({
     if (tipo === 'desligamento') abrirModalDesligamento(colaboradorId);
   }
 
-  function adicionarDependente() {
+  function abrirModalComplemento(tipo) {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || !podeAdicionarComplemento(tipo)) return;
+    if (!['dependente', 'beneficio'].includes(tipo)) return;
     capturarFormulario();
-    state.modal.dependentes.push({
+    state.modal.complementoModal = {
+      aberto: true,
+      tipo,
+      saving: false,
+      erro: '',
+      form: tipo === 'dependente'
+        ? { parentesco: '', nome_completo: '', data_nascimento: '', cpf: '' }
+        : { tipo: '', nome: '', operadora_fornecedor: '', valor_empresa: '', valor_colaborador: '', inicio_em: '' }
+    };
+    render();
+  }
+
+  function fecharModalComplemento() {
+    if (state.modal.complementoModal?.saving) return;
+    state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+    render();
+  }
+
+  async function salvarModalComplemento() {
+    const modal = state.modal.complementoModal;
+    if (!modal?.aberto || modal.saving || !podeAdicionarComplemento(modal.tipo)) return;
+    capturarFormulario();
+
+    if (modal.tipo === 'dependente') {
+      const dependente = {
+        parentesco: obterValor('complemento_dependente_parentesco').trim(),
+        nome_completo: obterValor('complemento_dependente_nome').trim(),
+        data_nascimento: obterValor('complemento_dependente_nascimento'),
+        cpf: obterValor('complemento_dependente_cpf')
+      };
+      modal.form = dependente;
+      if (!dependente.nome_completo || !dependente.data_nascimento) {
+        modal.erro = 'Informe o nome completo e a data de nascimento.';
+        render();
+        return;
+      }
+      if (Array.from(dependente.nome_completo).length < 3) {
+        modal.erro = 'O nome completo do dependente deve ter pelo menos 3 caracteres.';
+        render();
+        return;
+      }
+      if (dependente.cpf && !cpfValido(dependente.cpf)) {
+        modal.erro = 'Informe um CPF válido ou deixe o campo vazio.';
+        render();
+        return;
+      }
+
+      if (state.modal.modo === 'view') {
+        modal.saving = true;
+        modal.erro = '';
+        render();
+        try {
+          const salvo = await salvarDependenteRhDp({ dependente: { ...dependente, colaborador_id: state.modal.id } });
+          state.modal.dependentes.push(salvo);
+          state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+          mostrarToastRhDp('Dependente cadastrado com sucesso.');
+          render();
+        } catch (error) {
+          state.modal.complementoModal = { ...modal, saving: false, erro: error.message || 'Não foi possível salvar o dependente.' };
+          render();
+        }
+        return;
+      }
+
+      state.modal.dependentes.push({ id: '', ...dependente });
+      state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+      render();
+      return;
+    }
+
+    const beneficio = {
+      tipo: obterValor('complemento_beneficio_tipo'),
+      nome: obterValor('complemento_beneficio_nome').trim(),
+      operadora_fornecedor: obterValor('complemento_beneficio_operadora').trim(),
+      valor_empresa: obterValor('complemento_beneficio_valor_empresa'),
+      valor_colaborador: obterValor('complemento_beneficio_valor_colaborador'),
+      inicio_em: obterValor('complemento_beneficio_inicio')
+    };
+    modal.form = beneficio;
+    if (!beneficio.tipo || !beneficio.nome) {
+      modal.erro = 'Informe o tipo e o nome do benefício.';
+      render();
+      return;
+    }
+
+    if (state.modal.modo === 'view') {
+      modal.saving = true;
+      modal.erro = '';
+      render();
+      try {
+        const salvo = await salvarBeneficioRhDp({ beneficio: { ...beneficio, colaborador_id: state.modal.id } });
+        state.modal.beneficios.push({ ...beneficio, id: salvo.id, status: 'ativo' });
+        state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+        mostrarToastRhDp('Benefício cadastrado com sucesso.');
+        render();
+      } catch (error) {
+        state.modal.complementoModal = { ...modal, saving: false, erro: error.message || 'Não foi possível salvar o benefício.' };
+        render();
+      }
+      return;
+    }
+
+    const itemPendente = {
+      ...beneficio,
       id: '',
-      nome_completo: '',
-      data_nascimento: '',
-      parentesco: ''
-    });
+      status: 'ativo',
+      _pendente: true,
+      _chaveTemporaria: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    };
+    state.modal.beneficios.push(itemPendente);
+    state.modal.beneficiosPendentes.push(itemPendente);
+    state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
     render();
   }
 
   function removerDependente(indice) {
     capturarFormulario();
     state.modal.dependentes.splice(indice, 1);
+    render();
+  }
+
+  function removerBeneficio(chave) {
+    if (!state.modal.aberto || state.modal.saving || state.modal.modo === 'view' || !podeVerSensiveis()) return;
+    capturarFormulario();
+    const beneficio = state.modal.beneficios.find(item => (item._chaveTemporaria || item.id) === chave);
+    if (!beneficio) return;
+
+    if (beneficio._pendente || !beneficio.id) {
+      state.modal.beneficios = state.modal.beneficios.filter(item => item !== beneficio);
+      state.modal.beneficiosPendentes = state.modal.beneficiosPendentes.filter(item => item._chaveTemporaria !== beneficio._chaveTemporaria);
+    } else {
+      beneficio._removerPendente = true;
+      state.modal.beneficiosParaEncerrar.push(beneficio);
+    }
     render();
   }
 
@@ -2976,7 +3161,7 @@ export function criarRhDpController({
   }
 
   async function salvarCadastro() {
-    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo === 'view') return;
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.complementoModal?.aberto || state.modal.modo === 'view') return;
     capturarFormulario();
     const erro = validarFormulario();
     if (erro) {
@@ -3008,6 +3193,36 @@ export function criarRhDpController({
       if (!idSalvo) throw new Error('O cadastro foi salvo, mas não foi possível identificar o colaborador.');
       state.modal.id = idSalvo;
 
+      for (const beneficio of [...state.modal.beneficiosParaEncerrar]) {
+        try {
+          await salvarBeneficioRhDp({ id: beneficio.id, beneficio: { ...beneficio, colaborador_id: idSalvo, status: 'encerrado' } });
+          state.modal.beneficiosParaEncerrar = state.modal.beneficiosParaEncerrar.filter(item => item.id !== beneficio.id);
+          state.modal.beneficios = state.modal.beneficios.filter(item => item.id !== beneficio.id);
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas o benefício não foi removido: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
+      }
+
+      for (const pendente of [...state.modal.beneficiosPendentes]) {
+        try {
+          const resultadoBeneficio = await salvarBeneficioRhDp({ beneficio: { ...pendente, colaborador_id: idSalvo } });
+          state.modal.beneficiosPendentes = state.modal.beneficiosPendentes.filter(item => item._chaveTemporaria !== pendente._chaveTemporaria);
+          state.modal.beneficios = state.modal.beneficios.map(item => item._chaveTemporaria === pendente._chaveTemporaria
+            ? { ...item, id: resultadoBeneficio.id, _pendente: false }
+            : item);
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas os benefícios não foram salvos: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
+      }
+
       if (podeVerSensiveis() && possuiDadosBancarios()) {
         try {
           const resultadoBancario = await salvarDadosBancariosRhDp({
@@ -3025,22 +3240,23 @@ export function criarRhDpController({
       }
 
       state.modal.saving = false;
-      state.modal.mensagem = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
-      state.message = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
-      state.messageType = 'success';
+      let mensagemSucesso = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
+      state.modal.mensagem = '';
+      state.message = '';
+      state.messageType = '';
 
       try {
         state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       } catch {
-        state.message = editando
+        mensagemSucesso = editando
           ? 'Cadastro atualizado, mas a lista não pôde ser recarregada agora.'
           : 'Colaborador incluído, mas a lista não pôde ser recarregada agora.';
       }
 
       const colaboradorSalvo = state.colaboradores.find(item => item.id === idSalvo || item.codigo === idSalvo);
       const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
-      mensagemCadastroPendente = state.message;
       await abrirCadastro(colaboradorSalvo?.codigo || idSalvo, 'view', '', { atualizarRota });
+      mostrarToastRhDp(mensagemSucesso);
     } catch (error) {
       state.modal.saving = false;
       state.modal.erros.geral = error.message || 'Não foi possível salvar o cadastro.';
@@ -3066,8 +3282,9 @@ export function criarRhDpController({
       if (state.modal.snapshotEdicao?.colaborador && state.modal.id === id) {
         state.modal.snapshotEdicao.colaborador.status = status;
       }
-      state.message = status === 'inativo' ? 'Cadastro inativado com sucesso.' : 'Cadastro reativado com sucesso.';
-      state.messageType = 'success';
+      state.message = '';
+      state.messageType = '';
+      mostrarToastRhDp(status === 'inativo' ? 'Cadastro inativado com sucesso.' : 'Cadastro reativado com sucesso.');
       render();
     } catch (error) {
       state.message = error.message || 'Não foi possível alterar o status.';
@@ -3111,14 +3328,6 @@ export function criarRhDpController({
   function possuiDadosBancarios() {
     return Boolean(state.modal.bancarios?.id)
       || Object.entries(state.modal.bancarios || {}).some(([chave, valor]) => chave !== 'id' && String(valor || '').trim());
-  }
-
-  async function salvarBeneficio() {
-    capturarFormulario();
-    try {
-      await salvarBeneficioRhDp({ beneficio: { colaborador_id: state.modal.id, tipo: obterValor('beneficio_tipo'), nome: obterValor('beneficio_nome'), operadora_fornecedor: obterValor('beneficio_operadora'), valor_empresa: obterValor('beneficio_valor_empresa'), valor_colaborador: obterValor('beneficio_valor_colaborador'), inicio_em: obterValor('beneficio_inicio') } });
-      await recarregarDadosComplementaresCadastro(); state.modal.erros = {}; render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar o benefício.'; render(); }
   }
 
   async function salvarMovimentacao() {
@@ -3219,8 +3428,11 @@ export function criarRhDpController({
     hubRhDpCancelarEdicaoCadastro: cancelarEdicaoCadastro,
     hubRhDpAtualizarBlocoCadastro: atualizarBlocoCadastro,
     hubRhDpMudarAbaCadastro: mudarAbaCadastro,
-    hubRhDpAdicionarDependente: adicionarDependente,
+    hubRhDpAbrirComplementoModal: abrirModalComplemento,
+    hubRhDpFecharComplementoModal: fecharModalComplemento,
+    hubRhDpSalvarComplementoModal: salvarModalComplemento,
     hubRhDpRemoverDependente: removerDependente,
+    hubRhDpRemoverBeneficio: removerBeneficio,
     hubRhDpSalvarCadastro: salvarCadastro,
     hubRhDpAlterarStatus: alterarStatus,
     hubRhDpEditarArquivo: editarArquivo,
@@ -3233,7 +3445,6 @@ export function criarRhDpController({
     hubRhDpSelecionarPagina: selecionarPagina,
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
-    ,hubRhDpSalvarBeneficio: salvarBeneficio
     ,hubRhDpSalvarMovimentacao: salvarMovimentacao
     ,hubRhDpAbrirSecao: abrirSecao
     ,hubRhDpSalvarDemanda: salvarDemanda
