@@ -5,13 +5,22 @@ import { obterBaseHub } from './routeConfig.js';
 import { formatCoparticipacaoTable } from './simuladorSaudeCoparticipacao.js';
 
 const BANDS = ['0-18', '19-23', '24-28', '29-33', '34-38', '39-43', '44-48', '49-53', '54-58', '59+'];
-const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', manualPlanMode: false, manualPlanEditingId: '', editingLifeId: '', catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [], accommodationBands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
+const ACCOMMODATIONS = ['Apartamento', 'Enfermaria', 'Ambulatorial'];
+const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [], accommodationBands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
 let context = {};
+let quoteToastTimer = null;
+let quoteToastKey = '';
 
 function esc(value = '') { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
 function today() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
 function dateLabel(value) { return value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : '—'; }
 function money(value) { return Number.isFinite(value) ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'; }
+function parseManualPrice(value) {
+  let normalized = String(value ?? '').trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  if (normalized.includes(',')) normalized = normalized.replace(/\./g, '').replace(',', '.');
+  const price = Number(normalized);
+  return Number.isFinite(price) ? price : NaN;
+}
 function proposalDetail(item, key) {
   const value = item.plan?.detalhes?.[key] ?? item.table?.condicoes?.[key];
   if (key === 'coparticipacao') {
@@ -84,6 +93,15 @@ function pricesFor(tableId) {
 }
 function displayCatalogStatus(table) { return table.status === 'vigente' && (!table.vigencia_fim || table.vigencia_fim >= (quote.effectiveDate || today())) && table.vigencia_inicio <= (quote.effectiveDate || today()); }
 function validCatalogTables() { return accommodationVariants().filter(table => table.status === 'vigente' && displayCatalogStatus(table) && quote.catalog.plans.some(plan => plan.id === table.plano_id && plan.status === 'ativo') && (table.tipo_contratacao || 'Empresarial (PJ)') === quote.type); }
+function planPickerTables() {
+  const picker = quote.planPicker;
+  return validCatalogTables().filter(table => {
+    if (quote.plans.some(item => item.tableId === table.id)) return false;
+    if (!picker.accommodations.includes(table.acomodacao)) return false;
+    if (!picker.coparticipacoes.includes(String(Boolean(table.coparticipacao)))) return false;
+    return true;
+  });
+}
 function lifeAge(life) { return ageOf(life.nascimento); }
 function lifeBand(life) { return ageBand(lifeAge(life)); }
 function groupNumber(groupId) { const index = quote.lives.filter(life => life.tipo === 'titular').findIndex(life => life.id === groupId); return String(index + 1).padStart(2, '0'); }
@@ -114,33 +132,59 @@ function quoteOperators() {
   const seen = new Set();
   return operators.filter(operator => operator?.id && !seen.has(operator.id) && seen.add(operator.id));
 }
-function renderNotice() { return quote.catalogError ? `<div class="saude-quote-notice is-error" role="alert"><strong>Catálogo indisponível.</strong><span>${esc(quote.catalogError)}</span><button type="button" onclick="saudeQuoteReloadCatalog()">Tentar novamente</button></div>` : quote.notice ? `<div class="saude-quote-notice" role="status">${esc(quote.notice)}<button type="button" onclick="saudeQuoteClearNotice()">Fechar</button></div>` : ''; }
-function field(label, name, value, type = 'text', required = false) { return `<label class="saude-quote-field"><span>${esc(label)}${required ? ' *' : ''}</span><input name="${name}" type="${type}" value="${esc(value || '')}" ${required ? 'required' : ''}></label>`; }
+function clearQuoteToast() {
+  if (quoteToastTimer) window.clearTimeout(quoteToastTimer);
+  quoteToastTimer = null;
+  document.querySelector('.saude-quote-toast')?.remove();
+}
+function showQuoteToast(message, { isError = false, retry = false } = {}) {
+  clearQuoteToast();
+  const toast = document.createElement('div');
+  toast.className = `saude-quote-toast${isError ? ' is-error' : ''}`;
+  toast.setAttribute('role', isError ? 'alert' : 'status');
+  toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+  const text = document.createElement('span');
+  text.textContent = message;
+  toast.append(text);
+  if (retry) {
+    const action = document.createElement('button');
+    action.type = 'button';
+    action.className = 'secondary-btn';
+    action.textContent = 'Tentar novamente';
+    action.addEventListener('click', () => { quoteToastKey = ''; window.saudeQuoteReloadCatalog(); });
+    toast.append(action);
+  }
+  document.body.appendChild(toast);
+  quoteToastTimer = window.setTimeout(() => {
+    clearQuoteToast();
+    if (!isError && quote.notice === message) { quote.notice = ''; quoteToastKey = ''; }
+  }, 4200);
+}
+function syncQuoteToast() {
+  const isError = Boolean(quote.catalogError);
+  const message = isError ? `Catálogo indisponível. ${quote.catalogError}` : quote.notice;
+  if (!message) { quoteToastKey = ''; clearQuoteToast(); return; }
+  const key = `${isError ? 'error' : 'notice'}:${message}`;
+  if (key === quoteToastKey) return;
+  quoteToastKey = key;
+  showQuoteToast(message, { isError, retry: isError });
+}
 
 function renderHeader() {
   const canSave = quote.id
     ? Boolean(context.pode?.('simulador_saude', 'view'))
     : Boolean(context.pode?.('simulador_saude', 'create'));
-  return `<div class="saude-quote-header"><div class="saude-quote-title"><span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><span class="hub-page-kicker">Operações · Corretora</span><h2>Cotação de Plano de Saúde</h2><p>Cadastre as vidas e compare os valores dos planos por faixa etária.${quote.code ? ` · Cotação #${quote.code} · versão ${quote.version}` : ''}</p></div></div><div class="saude-quote-header-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteBackToList()"><i data-lucide="chevron-left" aria-hidden="true"></i> Voltar às cotações</button><button class="secondary-btn" type="button" onclick="saudeQuoteClear()"><i data-lucide="eraser" aria-hidden="true"></i> Limpar</button><button class="secondary-btn" type="button" onclick="saudeQuoteSave()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> ${quote.saving ? 'Salvando…' : 'Salvar'}</button><button class="primary-btn" type="button" onclick="saudeQuoteProposal()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> Gerar Proposta</button></div></div>`;
+  return `<div class="saude-quote-header"><div class="saude-quote-title"><span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Cotação de Plano de Saúde</h2><p>Cadastre as vidas e compare os valores dos planos por faixa etária.${quote.code ? ` · Cotação #${quote.code} · versão ${quote.version}` : ''}</p></div></div><div class="saude-quote-header-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteBackToList()"><i data-lucide="chevron-left" aria-hidden="true"></i> Voltar às cotações</button><button class="secondary-btn" type="button" onclick="saudeQuoteClear()"><i data-lucide="eraser" aria-hidden="true"></i> Limpar</button><button class="secondary-btn" type="button" onclick="saudeQuoteSave()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> ${quote.saving ? 'Salvando…' : 'Salvar'}</button><button class="save-btn" type="button" onclick="saudeQuoteProposal()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> Gerar Proposta</button></div></div>`;
 }
 
 function renderCompany() {
-  const tariffHint = quote.type === 'Individual' ? `<p class="saude-quote-empty">${quote.lives.length >= 2 ? 'Tarifa para 2 ou mais vidas aplicada automaticamente.' : 'Com uma vida, é aplicada a tarifa individual. Ao adicionar outra vida, o sistema verifica a tarifa de 2 ou mais.'}</p>` : '';
-  return `<section class="saude-quote-card"><header><h3><i data-lucide="landmark" aria-hidden="true"></i> Dados do Cliente / Empresa</h3></header><div class="saude-quote-company-grid"><label class="saude-quote-field"><span>Cliente / Razão Social</span><input value="${esc(quote.company)}" oninput="saudeQuoteField('company', this.value)"></label><label class="saude-quote-field"><span>CNPJ (se empresarial)</span><input value="${esc(quote.cnpj)}" inputmode="numeric" oninput="saudeQuoteField('cnpj', this.value)"></label><label class="saude-quote-field"><span>Cidade</span><input value="${esc(quote.city)}" oninput="saudeQuoteField('city', this.value)"></label><label class="saude-quote-field"><span>Tipo de contratação</span><select onchange="saudeQuoteField('type', this.value)"><option value="Individual" ${quote.type === 'Individual' ? 'selected' : ''}>Individual</option><option value="Empresarial (PJ)" ${quote.type === 'Empresarial (PJ)' ? 'selected' : ''}>Empresarial</option></select></label><label class="saude-quote-field"><span>Vigência desejada</span><input type="date" value="${esc(quote.effectiveDate)}" onchange="saudeQuoteField('effectiveDate', this.value)"></label></div>${tariffHint}</section>`;
-}
-
-function renderLifeModal() {
-  if (!['titular', 'dependente', 'edit-life'].includes(quote.modal)) return '';
-  const life = quote.lives.find(item => item.id === quote.editingLifeId) || { tipo: quote.modal, nome: '', nascimento: '', grupo_id: '' };
-  const isDependent = life.tipo === 'dependente';
-  const groupOptions = groupIds().map(id => `<option value="${esc(id)}" ${life.grupo_id === id ? 'selected' : ''}>Titular: ${esc(groupHead(id)?.nome || '—')} · Grupo ${groupNumber(id)}</option>`).join('');
-  return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal" role="dialog" aria-modal="true" aria-labelledby="saude-life-modal-title" onsubmit="saudeQuoteSaveLife(event)" onclick="event.stopPropagation()"><header><div><span class="hub-page-kicker">Cadastro de vidas</span><h3 id="saude-life-modal-title">${quote.editingLifeId ? 'Editar' : 'Adicionar'} ${isDependent ? 'dependente' : 'titular'}</h3></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header>${isDependent ? `<label class="saude-quote-field"><span>Titular / grupo *</span><select name="grupo_id" required>${groupOptions}</select></label>` : ''}${field('Nome', 'nome', life.nome, 'text', true)}${field('Data de nascimento', 'nascimento', life.nascimento, 'date', true)}${field('CPF (opcional)', 'cpf', life.cpf, 'text', false)}<footer><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Cancelar</button><button class="primary-btn" type="submit">${quote.editingLifeId ? 'Salvar' : 'Adicionar'}</button></footer></form></div>`;
+  return `<section class="saude-quote-card"><header><h3><i data-lucide="landmark" aria-hidden="true"></i> Dados do Cliente / Empresa</h3></header><div class="saude-quote-company-grid"><label class="saude-quote-field"><span>Cliente / Razão Social</span><input value="${esc(quote.company)}" oninput="saudeQuoteField('company', this.value)"></label><label class="saude-quote-field"><span>CNPJ (se empresarial)</span><input value="${esc(quote.cnpj)}" inputmode="numeric" oninput="saudeQuoteField('cnpj', this.value)"></label><label class="saude-quote-field"><span>Cidade</span><input value="${esc(quote.city)}" oninput="saudeQuoteField('city', this.value)"></label><label class="saude-quote-field"><span>Tipo de contratação</span><select onchange="saudeQuoteField('type', this.value)"><option value="Individual" ${quote.type === 'Individual' ? 'selected' : ''}>Individual</option><option value="Empresarial (PJ)" ${quote.type === 'Empresarial (PJ)' ? 'selected' : ''}>Empresarial</option></select></label><label class="saude-quote-field"><span>Vigência desejada</span><input type="date" value="${esc(quote.effectiveDate)}" onchange="saudeQuoteField('effectiveDate', this.value)"></label></div></section>`;
 }
 
 function renderImportModal() {
   if (quote.modal !== 'import') return '';
   const preview = quote.importPreview;
-  return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><section class="saude-quote-modal saude-quote-import-modal" role="dialog" aria-modal="true" aria-labelledby="saude-import-title" onclick="event.stopPropagation()"><header><div><span class="hub-page-kicker">Planilha</span><h3 id="saude-import-title">Importar vidas do Excel</h3><p>Cole as células copiadas da planilha. Cabeçalho opcional: Grupo, Tipo, Nome, Nascimento.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header>${preview ? `<div class="saude-import-results ${preview.errors.length ? 'has-errors' : ''}"><strong>${preview.validRows.length} linha(s) válida(s) · ${preview.errors.length} erro(s)</strong>${preview.errors.map(error => `<p>Linha ${error.line}: ${esc(error.message)}</p>`).join('') || '<p>Todos os grupos têm um titular e as datas estão válidas.</p>'}<div class="saude-import-preview">${preview.validRows.slice(0, 8).map(row => `<span>Grupo ${esc(row.grupo)} · ${esc(row.tipo)} · ${esc(row.nome)} · ${dateLabel(row.nascimento)}</span>`).join('')}</div></div>` : `<form onsubmit="saudeQuoteValidateImport(event)"><label class="saude-quote-field"><span>Dados copiados do Excel</span><textarea name="importText" rows="9" placeholder="Grupo&#9;Tipo&#9;Nome&#9;Nascimento">${esc(quote.importText)}</textarea></label><footer><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Cancelar</button><button class="primary-btn" type="submit">Validar dados</button></footer></form>`}${preview ? `<footer><button class="secondary-btn" type="button" onclick="saudeQuoteRevisarImport()">Voltar</button><button class="primary-btn" type="button" onclick="saudeQuoteCommitImport()" ${!preview.validRows.length || preview.errors.length ? 'disabled' : ''}>Adicionar vidas</button></footer>` : ''}</section></div>`;
+  return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><section class="saude-quote-modal saude-quote-import-modal" role="dialog" aria-modal="true" aria-labelledby="saude-import-title" onclick="event.stopPropagation()"><header><div><span class="hub-page-kicker">Planilha</span><h3 id="saude-import-title">Importar vidas do Excel</h3><p>Cole as células copiadas da planilha. Cabeçalho opcional: Grupo, Tipo, Nome, Nascimento.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header>${preview ? `<div class="saude-import-results ${preview.errors.length ? 'has-errors' : ''}"><strong>${preview.validRows.length} linha(s) válida(s) · ${preview.errors.length} erro(s)</strong>${preview.errors.map(error => `<p>Linha ${error.line}: ${esc(error.message)}</p>`).join('') || '<p>Todos os grupos têm um titular e as datas estão válidas.</p>'}<div class="saude-import-preview">${preview.validRows.slice(0, 8).map(row => `<span>Grupo ${esc(row.grupo)} · ${esc(row.tipo)} · ${esc(row.nome)} · ${dateLabel(row.nascimento)}</span>`).join('')}</div></div>` : `<form onsubmit="saudeQuoteValidateImport(event)"><label class="saude-quote-field"><span>Dados copiados do Excel</span><textarea name="importText" rows="9" placeholder="Grupo&#9;Tipo&#9;Nome&#9;Nascimento">${esc(quote.importText)}</textarea></label><footer><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Cancelar</button><button class="save-btn" type="submit">Validar dados</button></footer></form>`}${preview ? `<footer><button class="secondary-btn" type="button" onclick="saudeQuoteRevisarImport()">Voltar</button><button class="save-btn" type="button" onclick="saudeQuoteCommitImport()" ${!preview.validRows.length || preview.errors.length ? 'disabled' : ''}>Adicionar vidas</button></footer>` : ''}</section></div>`;
 }
 
 function normalizeImportToken(value) { return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -182,26 +226,83 @@ function previewLifeImport(text) {
 }
 
 function renderLives() {
-  const titulares = quote.lives.filter(item => item.tipo === 'titular').length; const dependents = quote.lives.filter(item => item.tipo === 'dependente').length;
-  const ages = Object.fromEntries(BANDS.map(band => [band, quote.lives.filter(life => lifeBand(life) === band).length]));
-  const maxAgeCount = Math.max(1, ...Object.values(ages));
+  const removedIds = new Set(quote.removedInlineLifeIds);
+  const visibleLives = quote.lives.filter(item => !removedIds.has(item.id));
+  const pendingAdds = quote.inlineLives.filter(item => item.mode === 'add');
+  const titulares = visibleLives.filter(item => item.tipo === 'titular').length + pendingAdds.filter(item => item.tipo === 'titular').length;
+  const dependents = visibleLives.filter(item => item.tipo === 'dependente').length + pendingAdds.filter(item => item.tipo === 'dependente').length;
   const groups = groupIds();
-  const rows = groups.flatMap(groupId => livesInGroup(groupId).map(life => `<tr><td>${String(groupNumber(groupId)).padStart(2, '0')}</td><td><span class="saude-life-badge ${life.tipo}">${life.tipo === 'titular' ? 'Titular' : 'Dependente'}</span></td><td><strong>${esc(life.nome)}</strong></td><td>${dateLabel(life.nascimento)}</td><td>${lifeAge(life) ?? '—'}</td><td>${lifeBand(life) || '—'}</td><td class="saude-life-actions"><button class="saude-quote-icon-button" type="button" title="Editar ${esc(life.nome)}" aria-label="Editar ${esc(life.nome)}" onclick="saudeQuoteEditLife('${esc(life.id)}')"><i data-lucide="pencil" aria-hidden="true"></i></button><button class="saude-quote-icon-button is-danger" type="button" title="Excluir ${esc(life.nome)}" aria-label="Excluir ${esc(life.nome)}" onclick="saudeQuoteDeleteLife('${esc(life.id)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`));
-  return `<section class="saude-quote-card"><header class="saude-lives-header"><div class="saude-lives-heading"><h3><i data-lucide="users-round" aria-hidden="true"></i> Vidas da Cotação</h3><div class="saude-quote-count-chips"><span>${titulares} titulares</span><span>${dependents} dependentes</span><span class="is-total">${quote.lives.length} vidas</span></div></div><div class="saude-quote-actions"><button class="primary-btn" type="button" onclick="saudeQuoteOpenModal('titular')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar Titular</button><button class="secondary-btn" type="button" onclick="saudeQuoteOpenModal('dependente')" ${!titulares ? 'disabled' : ''}><i data-lucide="plus" aria-hidden="true"></i> Adicionar Dependente</button><button class="secondary-btn" type="button" onclick="saudeQuoteOpenImport()"><i data-lucide="upload-cloud" aria-hidden="true"></i> Importar Excel</button></div></header><div class="saude-quote-lives-layout"><div class="saude-quote-table-wrap"><table class="saude-quote-lives-table"><thead><tr><th>Grupo</th><th>Tipo</th><th>Nome</th><th>Nascimento</th><th>Idade</th><th>Faixa Etária</th><th>Ações</th></tr></thead><tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="saude-quote-empty">Adicione um titular para iniciar a cotação.</td></tr>'}</tbody></table></div><aside class="saude-quote-summary"><h4>Resumo das Vidas</h4><div class="saude-quote-summary-counts"><article class="is-blue"><i data-lucide="users-round" aria-hidden="true"></i><div><strong>${titulares}</strong><small>Titulares</small></div></article><article class="is-green"><i data-lucide="users-round" aria-hidden="true"></i><div><strong>${dependents}</strong><small>Dependentes</small></div></article><article class="is-violet"><i data-lucide="users-round" aria-hidden="true"></i><div><strong>${quote.lives.length}</strong><small>Total de vidas</small></div></article></div><div class="saude-quote-summary-lower"><section class="saude-age-distribution"><h5>Por faixa etária</h5><ul>${BANDS.map(band => `<li><span>${band}</span><span class="saude-age-bar"><i style="width:${Math.round(ages[band] / maxAgeCount * 100)}%"></i></span><strong>${ages[band]}</strong></li>`).join('')}</ul></section><div class="saude-quote-summary-stats"><section><h5>Titulares x Dependentes</h5><p><span>Titulares</span><strong>${titulares}</strong></p><p><span>Dependentes</span><strong>${dependents}</strong></p></section><section><h5><i data-lucide="users-round" aria-hidden="true"></i> Total de grupos</h5><strong class="saude-group-count">${groups.length}</strong></section></div></div></aside></div></section>`;
+  const edits = new Map(quote.inlineLives.filter(item => item.mode === 'edit').map(item => [item.id, item]));
+  const rows = groups.flatMap(groupId => livesInGroup(groupId).filter(life => !removedIds.has(life.id)).map(life => {
+    const draft = edits.get(life.id);
+    if (draft) return inlineLifeRow(draft, groupId);
+    return `<tr><td>${String(groupNumber(groupId)).padStart(2, '0')}</td><td><span class="saude-life-badge ${life.tipo}">${life.tipo === 'titular' ? 'Titular' : 'Dependente'}</span></td><td><strong>${esc(life.nome)}</strong></td><td>${dateLabel(life.nascimento)}</td><td>${lifeAge(life) ?? '—'}</td><td>${lifeBand(life) || '—'}</td><td class="saude-life-remove-cell"></td></tr>`;
+  }));
+  rows.push(...pendingAdds.map(item => inlineLifeRow(item)));
+  const titularOptions = inlineTitularOptions();
+  const hasPendingInlineLives = quote.inlineLives.length || quote.removedInlineLifeIds.length;
+  return `<section class="saude-quote-card"><header class="saude-lives-header"><div class="saude-lives-heading"><h3><i data-lucide="users-round" aria-hidden="true"></i> Distribuição de Vidas</h3><div class="saude-quote-count-chips"><span>${titulares} titulares</span><span>${dependents} dependentes</span><span class="is-total">${visibleLives.length + pendingAdds.length} vidas</span></div></div><div class="saude-quote-actions">${hasPendingInlineLives ? '<button class="secondary-btn danger" type="button" onclick="saudeQuoteCancelAllInlineLives()">Cancelar</button><button class="save-btn" type="button" onclick="saudeQuoteSaveAllInlineLives()">Salvar</button>' : ''}${quote.batchEditingLives ? '' : '<button class="icon-btn saude-edit-all-lives" type="button" title="Editar todas as vidas" aria-label="Editar todas as vidas" onclick="saudeQuoteEditAllLives()" ' + (!quote.lives.length || hasPendingInlineLives ? 'disabled' : '') + '><i data-lucide="pencil" aria-hidden="true"></i></button>'}<button class="save-btn" type="button" onclick="saudeQuoteAddInline(\'titular\')"><i data-lucide="plus" aria-hidden="true"></i> Titular</button><button class="secondary-btn" type="button" onclick="saudeQuoteAddInline(\'dependente\')" ${!titularOptions.length ? 'disabled' : ''}><i data-lucide="plus" aria-hidden="true"></i> Dependente</button><button class="secondary-btn" type="button" onclick="saudeQuoteOpenImport()" ${hasPendingInlineLives ? 'disabled' : ''}><i data-lucide="upload-cloud" aria-hidden="true"></i> Importar Excel</button></div></header><div class="saude-quote-lives-layout"><div class="saude-quote-table-wrap"><table class="saude-quote-lives-table"><colgroup><col class="saude-life-col-group"><col class="saude-life-col-type"><col class="saude-life-col-name"><col class="saude-life-col-birth"><col class="saude-life-col-age"><col class="saude-life-col-band"><col class="saude-life-col-remove"></colgroup><thead><tr><th>Grupo</th><th>Tipo</th><th>Nome</th><th>Nascimento</th><th>Idade</th><th>Faixa Etária</th><th class="saude-life-remove-heading" aria-label="Remover"></th></tr></thead><tbody>${rows.length ? rows.join('') : '<tr><td colspan="7" class="saude-quote-empty">Adicione um titular para iniciar a cotação.</td></tr>'}</tbody></table></div></div></section>`;
+}
+
+function inlineTitularOptions() {
+  const removedIds = new Set(quote.removedInlineLifeIds);
+  return [
+    ...quote.lives.filter(life => life.tipo === 'titular' && !removedIds.has(life.id)).map(life => ({ id: life.id, nome: life.nome || 'Titular' })),
+    ...quote.inlineLives.filter(item => item.mode === 'add' && item.tipo === 'titular').map(item => ({ id: item.id, nome: item.draft.nome || 'Novo titular' }))
+  ];
+}
+
+function inlineTitularNumber(id) {
+  const savedIndex = quote.lives.filter(life => life.tipo === 'titular').findIndex(life => life.id === id);
+  if (savedIndex >= 0) return String(savedIndex + 1).padStart(2, '0');
+  const pendingIndex = quote.inlineLives.filter(item => item.mode === 'add' && item.tipo === 'titular').findIndex(item => item.id === id);
+  return String(quote.lives.filter(life => life.tipo === 'titular').length + pendingIndex + 1).padStart(2, '0');
+}
+
+function inlineLifeRow(item, groupId = '') {
+  const { key, id, mode, tipo, draft } = item;
+  const selectedGroup = draft.grupo_id || groupId || inlineTitularOptions()[0]?.id || '';
+  const draftAge = ageOf(draft.nascimento);
+  const groupCell = tipo === 'titular'
+    ? `<td>${mode === 'edit' ? String(groupNumber(id)).padStart(2, '0') : 'Novo grupo'}</td>`
+    : `<td><select class="saude-inline-input" data-inline-field="grupo_id" aria-label="Titular do grupo" onchange="saudeQuoteInlineField('${esc(key)}', 'grupo_id', this.value)">${inlineTitularOptions().map(option => `<option value="${esc(option.id)}" ${selectedGroup === option.id ? 'selected' : ''}>${inlineTitularNumber(option.id)} · ${esc(option.nome)}</option>`).join('')}</select></td>`;
+  const rowControl = mode === 'edit' && quote.batchEditingLives
+    ? `<button class="icon-btn danger saude-inline-remove-life" type="button" title="Remover vida" aria-label="Remover ${esc(draft.nome || 'vida')}" onclick="saudeQuoteRemoveInlineLife('${esc(key)}')"><i data-lucide="trash-2" aria-hidden="true"></i></button>`
+    : `<button class="icon-btn danger saude-inline-remove-life" type="button" title="Cancelar inclusão" aria-label="Cancelar inclusão de ${esc(draft.nome || 'vida')}" onclick="saudeQuoteCancelInlineLife('${esc(key)}')"><i data-lucide="x" aria-hidden="true"></i></button>`;
+  return `<tr class="saude-inline-life-row" data-inline-life="${esc(key)}">${groupCell}<td><span class="saude-life-badge ${tipo}">${tipo === 'titular' ? 'Titular' : 'Dependente'}</span></td><td><div class="saude-inline-name-cell"><input class="saude-inline-input" data-inline-field="nome" aria-label="Nome" placeholder="Nome" value="${esc(draft.nome || '')}" oninput="saudeQuoteInlineField('${esc(key)}', 'nome', this.value)" required></div></td><td><input class="saude-inline-input" data-inline-field="nascimento" aria-label="Nascimento" type="date" value="${esc(draft.nascimento || '')}" oninput="saudeQuoteInlineField('${esc(key)}', 'nascimento', this.value)" onchange="saudeQuoteInlineField('${esc(key)}', 'nascimento', this.value)" required></td><td data-inline-age>${draftAge ?? '—'}</td><td data-inline-band>${ageBand(draftAge) || '—'}</td><td class="saude-life-remove-cell">${rowControl}</td></tr>`;
 }
 
 function renderPlanPicker() {
   if (!quote.modal || quote.modal !== 'plan') return '';
-  const available = validCatalogTables().filter(table => !quote.plans.some(item => item.tableId === table.id));
+  const available = planPickerTables();
   if (quote.manualPlanMode) {
     const editing = quote.manualPlanEditingId ? quotePlanEntry(quote.manualPlanEditingId) : null;
     const currentOperator = normalizeImportToken(editing?.operator_snapshot?.nome || '').includes('bradesco') ? 'manual-bradesco' : 'manual-sulamerica';
     const currentPlan = editing?.plan_snapshot || {};
     const currentTable = editing?.table_snapshot || {};
-    const currentPrices = editing?.prices_snapshot || {};
-    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><span class="hub-page-kicker">Valores desta cotação</span><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required><option value="manual-sulamerica" ${currentOperator === 'manual-sulamerica' ? 'selected' : ''}>SulAmérica</option><option value="manual-bradesco" ${currentOperator === 'manual-bradesco' ? 'selected' : ''}>Bradesco</option></select></label><label class="saude-quote-field"><span>Nome do plano *</span><input name="planName" required maxlength="120" placeholder="Ex.: Executivo Nacional" value="${esc(currentPlan.nome || '')}"></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4><p>Informe as faixas disponíveis na proposta da operadora. Faixas vazias serão indicadas como incompletas se houver vidas nelas.</p></div></header><div class="saude-manual-price-grid">${BANDS.map((band, index) => `<label class="saude-quote-field"><span>${band} anos · R$</span><input name="price_${index}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></label>`).join('')}</div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="primary-btn" type="submit">${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
+    const currentPrices = editing?.prices_base_snapshot || editing?.prices_snapshot || {};
+    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required><option value="manual-sulamerica" ${currentOperator === 'manual-sulamerica' ? 'selected' : ''}>SulAmérica</option><option value="manual-bradesco" ${currentOperator === 'manual-bradesco' ? 'selected' : ''}>Bradesco</option></select></label><label class="saude-quote-field"><span>Nome do plano *</span><input name="planName" required maxlength="120" placeholder="Ex.: Executivo Nacional" value="${esc(currentPlan.nome || '')}"></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => `<tr><th>${band}</th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)">${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
   }
-  return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><div class="saude-quote-modal" role="dialog" aria-modal="true" aria-labelledby="saude-plan-modal-title" onclick="event.stopPropagation()"><header><div><span class="hub-page-kicker">Base de preços · ${esc(quote.type)}</span><h3 id="saude-plan-modal-title">Adicionar plano</h3></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header>${available.length ? `<form class="saude-plan-catalog-form" onsubmit="saudeQuoteAddPlan(event)"><label class="saude-quote-field"><span>Plano / tabela vigente *</span><select name="tableId" required><option value="">Selecione uma tabela</option>${available.map(table => { const plan = planInfo(table); const operator = operatorInfo(plan); return `<option value="${esc(table.id)}">${esc(operator.nome)} · ${esc(plan.nome)} · ${esc(table.acomodacao || 'Acomodação não informada')} · ${dateLabel(table.vigencia_inicio)}</option>`; }).join('')}</select></label><footer><button class="primary-btn" type="submit">Adicionar plano do catálogo</button></footer></form>` : `<p class="saude-quote-empty">Não há tabelas vigentes disponíveis para ${esc(quote.type)} na data informada. Confira o catálogo ou ajuste a vigência.</p><button class="secondary-btn" type="button" onclick="saudeQuoteGoCatalog()">Configurar catálogo</button>`}<section class="saude-manual-entry"><div><h4>Informar valores manualmente</h4><p>Use para cotações de SulAmérica ou Bradesco que não estejam no catálogo.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteShowManualPlan()">Adicionar plano manual</button></section></div></div>`;
+  const picker = quote.planPicker;
+  const operators = [...new Map(available.map(table => {
+    const operator = operatorInfo(planInfo(table));
+    return [operator.id, operator];
+  }).filter(([id]) => id)).values()];
+  const selectedOperator = operators.some(operator => operator.id === picker.operatorId) ? picker.operatorId : '';
+  const operatorTables = selectedOperator ? available.filter(table => operatorInfo(planInfo(table)).id === selectedOperator) : [];
+  const visibleTables = operatorTables.filter(table => picker.selectedTableIds.includes(table.id));
+  const tableRows = operatorTables.map(table => {
+    const plan = planInfo(table);
+    return `<label class="saude-plan-option"><input type="checkbox" name="tableIds" value="${esc(table.id)}" ${picker.selectedTableIds.includes(table.id) ? 'checked' : ''} onchange="saudeQuotePlanPickerTable(this.value, this.checked)"><span><strong>${esc(plan.nome || 'Plano sem nome')}</strong><small>${esc(table.acomodacao || 'Acomodação não informada')} · ${table.coparticipacao ? 'Com coparticipação' : 'Sem coparticipação'} · Vigência ${dateLabel(table.vigencia_inicio)}</small></span></label>`;
+  }).join('');
+  const emptyMessage = !picker.coparticipacoes.length || !picker.accommodations.length
+    ? 'Selecione ao menos uma opção de coparticipação e uma acomodação para ver as tabelas.'
+    : !available.length
+      ? `Não há tabelas vigentes para ${esc(quote.type)} com esses filtros. Confira a vigência ou o catálogo.`
+      : !selectedOperator
+        ? 'Selecione uma operadora para consultar os planos disponíveis.'
+        : tableRows ? '' : 'Não há planos disponíveis para esta operadora com os filtros escolhidos.';
+  return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><div class="saude-quote-modal saude-plan-catalog-modal" role="dialog" aria-modal="true" aria-labelledby="saude-plan-modal-title" onclick="event.stopPropagation()"><header><div><h3 id="saude-plan-modal-title">Adicionar planos</h3><p>Filtre as tabelas e escolha os planos para adicionar à cotação.</p></div><div class="saude-plan-header-actions"><button class="save-btn" type="button" onclick="saudeQuoteShowManualPlan()">Adicionar plano manual</button><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></div></header><form class="saude-plan-catalog-form" onsubmit="saudeQuoteAddPlan(event)"><div class="saude-plan-picker-filters"><fieldset class="saude-plan-accommodation-filter"><legend>Coparticipação</legend><div>${[['true', 'Sim'], ['false', 'Não']].map(([value, label]) => `<label><input type="checkbox" data-plan-picker-copay="${value}" value="${value}" ${picker.coparticipacoes.includes(value) ? 'checked' : ''} onchange="saudeQuotePlanPickerCopay(this.value, this.checked)"><span>${label}</span></label>`).join('')}</div></fieldset><fieldset class="saude-plan-accommodation-filter"><legend>Acomodação</legend><div>${ACCOMMODATIONS.map(value => `<label><input type="checkbox" data-plan-picker-accommodation="${esc(value)}" value="${esc(value)}" ${picker.accommodations.includes(value) ? 'checked' : ''} onchange="saudeQuotePlanPickerAccommodation(this.value, this.checked)"><span>${esc(value)}</span></label>`).join('')}</div></fieldset></div><label class="saude-quote-field saude-plan-operator-field"><span>Operadora</span><select name="operatorId" data-plan-picker-operator onchange="saudeQuotePlanPickerOperator(this.value)"><option value="">Selecione uma operadora</option>${operators.map(operator => `<option value="${esc(operator.id)}" ${selectedOperator === operator.id ? 'selected' : ''}>${esc(operator.nome)}</option>`).join('')}</select></label><section class="saude-plan-options-section"><h4>Planos disponíveis</h4>${tableRows ? `<div class="saude-plan-options">${tableRows}</div>` : `<p class="saude-quote-empty">${emptyMessage}</p>`}</section><footer><span class="saude-plan-selection-count">${visibleTables.length} tabela(s) selecionada(s)</span><button class="save-btn" type="submit" ${!visibleTables.length ? 'disabled' : ''}>Adicionar selecionados</button></footer></form></div></div>`;
 }
 
 function operatorVisualClass(name = '') {
@@ -221,31 +322,37 @@ function operatorMonogram(name = '') {
 function renderResult() {
   const plans = selectedPlans(); const allPlans = quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
   const options = items => items.map(item => `<option value="${esc(item.value)}" ${item.value === item.current ? 'selected' : ''}>${esc(item.label)}</option>`).join('');
-  const header = `<div class="saude-quote-result-tools"><div class="saude-result-title"><h3><i data-lucide="file-text" aria-hidden="true"></i> Resultado da Cotação</h3><p>Valores calculados pela idade na data de vigência informada.</p></div><div class="saude-quote-filters"><label><span>Operadoras</span><select onchange="saudeQuoteFilter('operatorFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.operatorFilter }, ...quoteOperators().map(item => ({ value: item.id, label: item.nome, current: quote.operatorFilter }))])}</select></label><label><span>Acomodação</span><select onchange="saudeQuoteFilter('accommodationFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.accommodationFilter }, ...['Apartamento', 'Enfermaria', 'Ambulatorial'].map(value => ({ value, label: value, current: quote.accommodationFilter }))])}</select></label><label><span>Coparticipação</span><select onchange="saudeQuoteFilter('copayFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.copayFilter }, { value: 'true', label: 'Sim', current: quote.copayFilter }, { value: 'false', label: 'Não', current: quote.copayFilter }])}</select></label><button class="primary-btn" type="button" onclick="saudeQuoteOpenModal('plan')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar Plano</button></div></div>`;
+  const header = `<div class="saude-quote-result-tools"><div class="saude-result-title"><h3><i data-lucide="file-text" aria-hidden="true"></i> Resultado da Cotação</h3><p>Valores calculados pela idade na data de vigência informada.</p></div><div class="saude-quote-filters"><label><span>Operadoras</span><select onchange="saudeQuoteFilter('operatorFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.operatorFilter }, ...quoteOperators().map(item => ({ value: item.id, label: item.nome, current: quote.operatorFilter }))])}</select></label><label><span>Acomodação</span><select onchange="saudeQuoteFilter('accommodationFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.accommodationFilter }, ...['Apartamento', 'Enfermaria', 'Ambulatorial'].map(value => ({ value, label: value, current: quote.accommodationFilter }))])}</select></label><label><span>Coparticipação</span><select onchange="saudeQuoteFilter('copayFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.copayFilter }, { value: 'true', label: 'Sim', current: quote.copayFilter }, { value: 'false', label: 'Não', current: quote.copayFilter }])}</select></label><button class="save-btn" type="button" onclick="saudeQuoteOpenModal('plan')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar Plano</button></div></div>`;
   if (!allPlans.length) return `<section class="saude-quote-card">${header}<div class="saude-quote-empty">Adicione planos do catálogo vigente para comparar valores.</div></section>`;
   const columns = plans.map(item => {
     const brand = operatorVisualClass(item.operator.nome);
-    return `<th class="saude-plan-heading"><div class="saude-plan-brand is-${brand}"><span class="saude-plan-mark">${esc(operatorMonogram(item.operator.nome))}</span><strong>${esc(item.operator.nome || 'Operadora')}</strong><span>${esc(item.plan.nome || 'Plano')}</span><small>${esc(item.table.acomodacao || 'Acomodação não informada')} · ${item.table.coparticipacao ? 'Coparticipação' : 'Sem coparticipação'}</small></div><div class="saude-plan-total saude-price-${brand}">${planTotal(item.tableId) === null ? '<b class="is-incomplete">Cotação incompleta</b>' : `<b>${money(planTotal(item.tableId))}</b>`}<small>${quote.lives.length} vidas${quote.lives.length && planTotal(item.tableId) !== null ? ` · ${money(planTotal(item.tableId) / quote.lives.length)}/vida` : ''}</small></div><label class="saude-plan-select"><input type="checkbox" ${item.selected ? 'checked' : ''} onchange="saudeQuoteTogglePlan('${esc(item.tableId)}', this.checked)"> Selecionar</label>${item.table.origem === 'manual' ? `<button class="saude-quote-link" type="button" onclick="saudeQuoteEditManualPlan('${esc(item.tableId)}')">Editar valores</button>` : ''}<button class="saude-quote-link is-danger" type="button" onclick="saudeQuoteRemovePlan('${esc(item.tableId)}')">Remover</button></th>`;
+    const catalogOperator = quote.catalog.operators.find(operator => operator.id === (item.operator.id || item.plan.operadora_id))
+      || quote.catalog.operators.find(operator => normalizeImportToken(operator.nome) === normalizeImportToken(item.operator.nome));
+    const logoUrl = catalogOperator?.logo_url || item.operator.logo_url || '';
+    const operatorLogo = logoUrl
+      ? `<img class="saude-plan-operator-logo" src="${esc(logoUrl)}" alt="Logomarca ${esc(item.operator.nome || 'operadora')}">`
+      : `<span class="saude-plan-mark" aria-hidden="true">${esc(operatorMonogram(item.operator.nome))}</span>`;
+    return `<th class="saude-plan-heading"><div class="saude-plan-column-controls"><button class="icon-btn danger saude-plan-remove" type="button" title="Remover plano" aria-label="Remover plano ${esc(item.plan.nome || item.operator.nome || '')}" onclick="saudeQuoteRemovePlan('${esc(item.tableId)}')"><i data-lucide="x" aria-hidden="true"></i></button><label class="saude-plan-select" title="Incluir ou retirar este plano da cotação"><input type="checkbox" aria-label="Incluir ou retirar este plano da cotação" ${item.selected ? 'checked' : ''} onchange="saudeQuoteTogglePlan('${esc(item.tableId)}', this.checked)"></label></div><div class="saude-plan-brand is-${brand}">${operatorLogo}<span>${esc(item.plan.nome || 'Plano')}</span><small>${esc(item.table.acomodacao || 'Acomodação não informada')} · ${item.table.coparticipacao ? 'Coparticipação' : 'Sem coparticipação'}</small></div><div class="saude-plan-total saude-price-${brand}">${planTotal(item.tableId) === null ? '<b class="is-incomplete">Cotação incompleta</b>' : `<b>${money(planTotal(item.tableId))}</b>`}</div>${item.table.origem === 'manual' ? `<div class="saude-plan-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteEditManualPlan('${esc(item.tableId)}')">Editar valores</button></div>` : ''}</th>`;
   }).join('');
   const groups = groupIds();
   const titulares = quote.lives.filter(item => item.tipo === 'titular').length;
   const dependents = quote.lives.filter(item => item.tipo === 'dependente').length;
   const body = groups.map(groupId => {
     const members = livesInGroup(groupId); const expanded = quote.expandedGroups.has(groupId); const title = groupHead(groupId)?.nome || 'Titular';
-    const values = plans.map(item => { const result = totalsFor(item.tableId, groupId); return `<td class="saude-price-${operatorVisualClass(item.operator.nome)} ${result.total === null ? 'is-incomplete' : ''}">${result.total === null ? 'Cotação incompleta' : money(result.total)}</td>`; }).join('');
-    const detail = expanded ? `<tr class="saude-group-detail"><td colspan="${1 + plans.length}"><div class="saude-group-people"><table><thead><tr><th>Tipo</th><th>Nome</th><th>Nascimento</th><th>Idade</th><th>Faixa Etária</th>${plans.map(item => `<th>${esc(item.operator.nome || item.plan.nome)}</th>`).join('')}</tr></thead><tbody>${members.map(life => `<tr><td>${life.tipo === 'titular' ? 'Titular' : 'Dependente'}</td><td>${esc(life.nome)}</td><td>${dateLabel(life.nascimento)}</td><td>${lifeAge(life) ?? '—'}</td><td>${lifeBand(life) || '—'}</td>${plans.map(item => { const price = planPrice(item.tableId, life); return `<td class="saude-price-${operatorVisualClass(item.operator.nome)} ${price === null ? 'is-incomplete' : ''}">${price === null ? 'Preço indisponível' : money(price)}</td>`; }).join('')}</tr>`).join('')}<tr class="saude-group-total"><td colspan="5">Total do Grupo ${String(groupNumber(groupId)).padStart(2, '0')}</td>${plans.map(item => { const total = totalsFor(item.tableId, groupId).total; return `<td class="saude-price-${operatorVisualClass(item.operator.nome)}">${total === null ? 'Cotação incompleta' : money(total)}</td>`; }).join('')}</tr></tbody></table></div></td></tr>` : '';
-    return `<tr class="saude-group-row"><td><button type="button" aria-expanded="${expanded}" onclick="saudeQuoteToggleGroup('${esc(groupId)}')">${expanded ? '▾' : '▸'} Grupo ${String(groupNumber(groupId)).padStart(2, '0')} · ${esc(title)}<small>${members.length} vidas (${members.filter(x => x.tipo === 'titular').length} titular + ${members.filter(x => x.tipo === 'dependente').length} dependentes)</small></button></td>${values}</tr>${detail}`;
+    const values = plans.map(() => '<td></td>').join('');
+    const detail = expanded ? `<tr class="saude-group-detail"><td colspan="${1 + plans.length}"><div class="saude-group-people"><table><colgroup><col style="width:65px"><col style="width:115px"><col style="width:55px">${plans.map(() => '<col>').join('')}</colgroup><thead><tr><th>Tipo</th><th>Nome</th><th>Idade</th>${plans.map(item => `<th>${esc(item.operator.nome || item.plan.nome)}</th>`).join('')}</tr></thead><tbody>${members.map(life => `<tr><td>${life.tipo === 'titular' ? 'Titular' : 'Dependente'}</td><td>${esc(life.nome)}</td><td>${lifeAge(life) ?? '—'}</td>${plans.map(item => { const price = planPrice(item.tableId, life); return `<td class="saude-price-${operatorVisualClass(item.operator.nome)} ${price === null ? 'is-incomplete' : ''}">${price === null ? 'Preço indisponível' : money(price)}</td>`; }).join('')}</tr>`).join('')}<tr class="saude-group-total"><td colspan="3">Total do Grupo ${String(groupNumber(groupId)).padStart(2, '0')}</td>${plans.map(item => { const total = totalsFor(item.tableId, groupId).total; return `<td class="saude-price-${operatorVisualClass(item.operator.nome)}">${total === null ? 'Cotação incompleta' : money(total)}</td>`; }).join('')}</tr></tbody></table></div></td></tr>` : '';
+    return `<tr class="saude-group-row"><td><button type="button" aria-expanded="${expanded}" onclick="saudeQuoteToggleGroup('${esc(groupId)}')">${expanded ? '▾' : '▸'} Grupo ${String(groupNumber(groupId)).padStart(2, '0')} · ${esc(title)}</button></td>${values}</tr>${detail}`;
   }).join('');
-  return `<section class="saude-quote-card saude-quote-result-card">${header}${quote.catalogError ? `<p class="saude-quote-empty">${esc(quote.catalogError)}</p>` : ''}<div class="saude-quote-table-wrap"><table class="saude-quote-results"><thead><tr><th class="saude-result-stub">Plano / Operadora</th>${columns || `<th>Nenhum plano corresponde aos filtros.</th>`}</tr><tr class="saude-total-row"><th>Total da Cotação<small>${quote.lives.length} vidas · ${titulares} titulares · ${dependents} dependentes</small></th>${plans.map(item => { const total = planTotal(item.tableId); const missing = quote.lives.flatMap(life => planPrice(item.tableId, life) === null ? [`${life.nome} (${lifeBand(life) || 'idade inválida'})`] : []); return `<td class="saude-price-${operatorVisualClass(item.operator.nome)} ${total === null ? 'is-incomplete' : ''}">${total === null ? `<strong>Cotação incompleta</strong><small>${esc(missing.join(', '))}</small>` : `<strong>${money(total)}</strong>`}</td>`; }).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${1 + plans.length}" class="saude-quote-empty">Adicione titulares para calcular a cotação.</td></tr>`}</tbody></table></div></section>`;
+  return `<section class="saude-quote-card saude-quote-result-card">${header}<div class="saude-quote-table-wrap"><table class="saude-quote-results"><thead><tr><th class="saude-result-stub"><div class="saude-result-stub-content"><strong>Plano / Operadora</strong><small>${quote.lives.length} vidas · ${titulares} titulares · ${dependents} dependentes</small></div></th>${columns || `<th>Nenhum plano corresponde aos filtros.</th>`}</tr></thead><tbody>${body || `<tr><td colspan="${1 + plans.length}" class="saude-quote-empty">Adicione titulares para calcular a cotação.</td></tr>`}</tbody></table></div></section>`;
 }
 
 function renderPage() {
   if (!context.pode?.('simulador_saude', 'view')) return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Acesso controlado pelas permissões do Hub.', classeConteudo: 'simulador-saude-page', conteudo: '<section class="admin-panel"><h2>Acesso não autorizado</h2><p>É necessária a permissão Visualizar Simulador - Saúde.</p></section>' });
   if (quote.loading) return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Abrindo cotação salva.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: '<section class="saude-quote-card"><div class="saude-quote-empty" role="status">Carregando cotação salva…</div></section>' });
-  const content = `${renderHeader()}${renderNotice()}${renderCompany()}${renderLives()}${renderResult()}${renderLifeModal()}${renderPlanPicker()}${renderImportModal()}`;
+  const content = `${renderHeader()}${renderCompany()}${renderLives()}${renderResult()}${renderPlanPicker()}${renderImportModal()}`;
   return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Monte e compare cotações de planos de saúde.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: content });
 }
-function rerender() { const root = document.getElementById('app'); if (root) root.innerHTML = renderPage(); }
+function rerender() { const root = document.getElementById('app'); if (root) root.innerHTML = renderPage(); syncQuoteToast(); }
 async function loadCatalog() { try { const response = await chamarApi('getSimuladorSaudeCatalog'); if (!response.ok) throw new Error(response.message); quote.catalog = response.data; quote.catalogError = ''; } catch (error) { quote.catalogError = error.message || 'Não foi possível carregar o catálogo de planos.'; } rerender(); }
 
 function serializeSnapshot() {
@@ -255,7 +362,7 @@ function serializeSnapshot() {
     vidas: quote.lives.map(life => ({ ...life })),
     planos: quote.plans.map(item => {
       const table = planFor(item.tableId); const plan = planInfo(table); const operator = item.operator_snapshot || operatorInfo(plan);
-      return { tableId: item.tableId, selected: Boolean(item.selected), table_snapshot: { ...table }, plan_snapshot: { ...plan }, operator_snapshot: { ...operator }, prices_snapshot: { ...pricesFor(item.tableId) } };
+      return { tableId: item.tableId, selected: Boolean(item.selected), table_snapshot: { ...table }, plan_snapshot: { ...plan }, operator_snapshot: { ...operator }, prices_snapshot: { ...pricesFor(item.tableId) }, ...(item.iof_applied ? { prices_base_snapshot: { ...(item.prices_base_snapshot || {}) }, iof_applied: true, iof_percent: item.iof_percent || 2.38 } : {}) };
     })
   };
 }
@@ -263,7 +370,7 @@ function serializeSnapshot() {
 function draftSignature() { return JSON.stringify(serializeSnapshot()); }
 
 function resetQuoteDraft() {
-  quote.id = ''; quote.code = ''; quote.version = 0; quote.company = ''; quote.cnpj = ''; quote.city = ''; quote.type = 'Empresarial (PJ)'; quote.effectiveDate = ''; quote.lives = []; quote.plans = []; quote.expandedGroups = new Set(); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.editingLifeId = ''; quote.notice = ''; quote.importText = ''; quote.importPreview = null; quote.saving = false; quote.loading = false; quote.initialized = true;
+  quote.id = ''; quote.code = ''; quote.version = 0; quote.company = ''; quote.cnpj = ''; quote.city = ''; quote.type = 'Empresarial (PJ)'; quote.effectiveDate = ''; quote.lives = []; quote.plans = []; quote.expandedGroups = new Set(); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; quote.modal = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.inlineLives = []; quote.batchEditingLives = false; quote.removedInlineLifeIds = []; quote.notice = ''; quoteToastKey = ''; clearQuoteToast(); quote.importText = ''; quote.importPreview = null; quote.saving = false; quote.loading = false; quote.initialized = true;
   quote.savedSignature = draftSignature();
 }
 
@@ -273,7 +380,7 @@ function applySavedQuote(record) {
   quote.id = record.id; quote.code = record.codigo || ''; quote.version = record.snapshot_version || 1; quote.company = client.nome ?? record.cliente_nome ?? ''; quote.cnpj = client.cnpj ?? record.cliente_cnpj ?? ''; quote.city = client.cidade ?? record.cliente_cidade ?? ''; quote.type = (client.tipo_contratacao ?? record.tipo_contratacao) === 'Familiar' ? 'Individual' : (client.tipo_contratacao ?? record.tipo_contratacao ?? 'Empresarial (PJ)'); quote.effectiveDate = client.vigencia ?? record.vigencia ?? '';
   quote.lives = Array.isArray(snapshot.vidas) ? snapshot.vidas.map(life => ({ ...life })) : [];
   quote.plans = Array.isArray(snapshot.planos) ? snapshot.planos.map(normalizeQuotePlanEntry) : [];
-  quote.expandedGroups = new Set(); quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.editingLifeId = ''; quote.initialized = true; quote.savedSignature = draftSignature();
+  quote.expandedGroups = new Set(); quote.modal = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.inlineLives = []; quote.batchEditingLives = false; quote.removedInlineLifeIds = []; quote.initialized = true; quote.savedSignature = draftSignature();
 }
 
 async function loadQuoteById(id) {
@@ -281,7 +388,6 @@ async function loadQuoteById(id) {
   if (!response.ok) throw new Error(response.message || 'Não foi possível carregar a cotação.');
   if (!response.data) throw new Error('Cotação não encontrada ou sem acesso.');
   applySavedQuote(response.data);
-  quote.notice = `Cotação #${response.data.codigo} carregada.`;
 }
 
 export async function mountSimuladorSaudeQuotePage(nextContext = {}) {
@@ -304,62 +410,242 @@ window.saudeQuoteBackToList = () => {
 };
 
 window.saudeQuoteField = (key, value) => { if (key === 'type' && value !== quote.type) { quote.plans = quote.plans.filter(item => item.table_snapshot?.origem === 'manual' || (planFor(item.tableId).tipo_contratacao || 'Empresarial (PJ)') === value); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; } quote[key] = value; if (key === 'effectiveDate' || key === 'type') rerender(); };
-window.saudeQuoteOpenModal = mode => { quote.modal = mode; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.editingLifeId = ''; rerender(); };
-window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.editingLifeId = ''; rerender(); };
-window.saudeQuoteOpenImport = () => { quote.modal = 'import'; quote.importPreview = null; quote.importText = ''; rerender(); };
+window.saudeQuoteOpenModal = mode => { quote.modal = mode; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; if (mode === 'plan') quote.planPicker = { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }; rerender(); };
+window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; rerender(); };
+window.saudeQuoteOpenImport = () => { if (quote.inlineLives.length || quote.removedInlineLifeIds.length) { showQuoteToast('Salve ou cancele as linhas em edição antes de importar vidas.', { isError: true }); return; } quote.modal = 'import'; quote.importPreview = null; quote.importText = ''; rerender(); };
 window.saudeQuoteValidateImport = event => { event.preventDefault(); quote.importText = new FormData(event.currentTarget).get('importText') || ''; quote.importPreview = previewLifeImport(quote.importText); rerender(); };
 window.saudeQuoteRevisarImport = () => { quote.importPreview = null; rerender(); };
 window.saudeQuoteCommitImport = () => { const preview = quote.importPreview; if (!preview?.validRows.length || preview.errors.length) return; const groupMap = new Map(); preview.validRows.filter(row => row.tipo === 'titular').forEach(row => groupMap.set(row.grupo, nextId())); const imported = preview.validRows.map(row => { const groupId = groupMap.get(row.grupo); return { id: nextId(), grupo_id: groupId, tipo: row.tipo, nome: row.nome.trim(), nascimento: row.nascimento, cpf: '' }; }); quote.lives.push(...imported); quote.modal = ''; quote.importPreview = null; quote.importText = ''; quote.notice = `${imported.length} vida(s) importada(s).`; rerender(); };
-window.saudeQuoteSaveLife = event => { event.preventDefault(); const form = event.currentTarget; const values = Object.fromEntries(new FormData(form).entries()); const age = ageOf(values.nascimento); if (age === null) { quote.notice = 'Confira a data de nascimento; ela deve ser válida e não futura.'; rerender(); return; } if (quote.editingLifeId) { const current = quote.lives.find(item => item.id === quote.editingLifeId); if (current.tipo === 'titular' && quote.lives.some(item => item.tipo === 'dependente' && item.grupo_id === current.id)) { values.grupo_id = current.id; } Object.assign(current, { nome: values.nome.trim(), nascimento: values.nascimento, cpf: values.cpf.trim(), grupo_id: values.grupo_id || current.grupo_id }); } else if (quote.modal === 'titular') { const id = nextId(); quote.lives.push({ id, grupo_id: id, tipo: 'titular', nome: values.nome.trim(), nascimento: values.nascimento, cpf: values.cpf.trim() }); } else { if (!values.grupo_id || !groupHead(values.grupo_id)) { quote.notice = 'Selecione um titular para vincular o dependente.'; rerender(); return; } quote.lives.push({ id: nextId(), grupo_id: values.grupo_id, tipo: 'dependente', nome: values.nome.trim(), nascimento: values.nascimento, cpf: values.cpf.trim() }); } quote.modal = ''; quote.editingLifeId = ''; quote.notice = ''; rerender(); };
-window.saudeQuoteEditLife = id => { quote.editingLifeId = id; quote.modal = 'edit-life'; rerender(); };
-window.saudeQuoteDeleteLife = id => { const life = quote.lives.find(item => item.id === id); if (!life) return; if (life.tipo === 'titular' && quote.lives.some(item => item.tipo === 'dependente' && item.grupo_id === id)) { quote.notice = 'Transfira ou exclua os dependentes antes de remover este titular.'; rerender(); return; } if (!window.confirm(`Excluir ${life.tipo === 'titular' ? 'titular' : 'dependente'} ${life.nome}?`)) return; quote.lives = quote.lives.filter(item => item.id !== id); if (life.tipo === 'titular') quote.expandedGroups.delete(id); rerender(); };
-window.saudeQuoteAddPlan = event => { event.preventDefault(); const tableId = new FormData(event.currentTarget).get('tableId'); if (!tableId || quote.plans.some(item => item.tableId === tableId)) return; quote.plans.push({ tableId, selected: true }); quote.modal = ''; quote.manualPlanMode = false; rerender(); };
-window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
-window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualPlanMode = false; rerender(); };
-window.saudeQuoteAddManualPlan = event => {
+window.saudeQuoteAddInline = tipo => {
+  const titulares = inlineTitularOptions();
+  if (tipo === 'dependente' && !titulares.length) { showQuoteToast('Adicione um titular antes de incluir dependentes.', { isError: true }); return; }
+  const id = nextId();
+  quote.inlineLives.push({ key: nextId(), id, mode: 'add', tipo, draft: { nome: '', nascimento: '', grupo_id: tipo === 'titular' ? id : titulares[0].id } });
+  quote.notice = ''; rerender();
+};
+window.saudeQuoteEditLife = id => {
+  if (quote.inlineLives.some(item => item.mode === 'edit' && item.id === id)) return;
+  const life = quote.lives.find(item => item.id === id);
+  if (!life) return;
+  quote.inlineLives.push({ key: nextId(), id, mode: 'edit', tipo: life.tipo, draft: { nome: life.nome || '', nascimento: life.nascimento || '', grupo_id: life.grupo_id || '' } });
+  quote.notice = ''; rerender();
+};
+window.saudeQuoteEditAllLives = () => {
+  if (quote.inlineLives.length || quote.removedInlineLifeIds.length || !quote.lives.length) return;
+  quote.inlineLives = quote.lives.map(life => ({ key: nextId(), id: life.id, mode: 'edit', tipo: life.tipo, draft: { nome: life.nome || '', nascimento: life.nascimento || '', grupo_id: life.grupo_id || '' } }));
+  quote.batchEditingLives = true;
+  quote.notice = '';
+  rerender();
+};
+window.saudeQuoteInlineField = (key, field, value) => {
+  const pending = quote.inlineLives.find(item => item.key === key);
+  if (!pending) return;
+  pending.draft = { ...pending.draft, [field]: value };
+  if (field === 'nascimento') {
+    const row = [...document.querySelectorAll('.saude-inline-life-row')].find(item => item.dataset.inlineLife === key);
+    const age = ageOf(value);
+    if (row) {
+      row.querySelector('[data-inline-age]').textContent = age ?? '—';
+      row.querySelector('[data-inline-band]').textContent = ageBand(age) || '—';
+    }
+  }
+};
+window.saudeQuoteCancelInlineLife = key => {
+  const pending = quote.inlineLives.find(item => item.key === key);
+  if (!pending) return;
+  if (pending.mode === 'add' && pending.tipo === 'titular' && quote.inlineLives.some(item => item.tipo === 'dependente' && item.draft.grupo_id === pending.id)) {
+    showQuoteToast('Reatribua ou cancele os dependentes deste novo titular antes de cancelar a linha.', { isError: true }); return;
+  }
+  quote.inlineLives = quote.inlineLives.filter(item => item.key !== key);
+  quote.notice = ''; rerender();
+};
+window.saudeQuoteRemoveInlineLife = key => {
+  const pending = quote.inlineLives.find(item => item.key === key && item.mode === 'edit');
+  const life = pending && quote.lives.find(item => item.id === pending.id);
+  if (!pending || !life) return;
+  const removedIds = new Set([...quote.removedInlineLifeIds, life.id]);
+  if (life.tipo === 'titular') {
+    const remainingDependents = quote.inlineLives.some(item => item.mode === 'add' && item.tipo === 'dependente' && item.draft.grupo_id === life.id)
+      || quote.lives.filter(item => item.tipo === 'dependente' && !removedIds.has(item.id)).some(dependent => {
+      const dependentDraft = quote.inlineLives.find(item => item.mode === 'edit' && item.id === dependent.id);
+      return (dependentDraft?.draft.grupo_id || dependent.grupo_id) === life.id;
+    });
+    if (remainingDependents) {
+      showQuoteToast('Reatribua ou remova os dependentes deste titular antes de removê-lo.', { isError: true });
+      return;
+    }
+  }
+  if (!window.confirm(`Remover ${life.tipo === 'titular' ? 'titular' : 'dependente'} ${pending.draft.nome || life.nome}?`)) return;
+  quote.inlineLives = quote.inlineLives.filter(item => item.key !== key);
+  quote.removedInlineLifeIds = [...removedIds];
+  quote.notice = '';
+  rerender();
+};
+window.saudeQuoteSaveAllInlineLives = () => {
+  if (!quote.inlineLives.length && !quote.removedInlineLifeIds.length) return;
+  const removedIds = new Set(quote.removedInlineLifeIds);
+  const pendingValues = [];
+  for (const pending of quote.inlineLives) {
+    const row = [...document.querySelectorAll('.saude-inline-life-row')].find(item => item.dataset.inlineLife === pending.key);
+    const nome = String(row?.querySelector('[data-inline-field="nome"]')?.value ?? pending.draft.nome).trim();
+    const nascimento = String(row?.querySelector('[data-inline-field="nascimento"]')?.value ?? pending.draft.nascimento);
+    const grupo_id = pending.tipo === 'titular' ? pending.id : String(row?.querySelector('[data-inline-field="grupo_id"]')?.value ?? pending.draft.grupo_id);
+    if (!nome) { showQuoteToast('Informe o nome em todas as linhas antes de salvar.', { isError: true }); row?.querySelector('[data-inline-field="nome"]')?.focus(); return; }
+    if (ageOf(nascimento) === null) { showQuoteToast('Informe uma data de nascimento válida e não futura em todas as linhas.', { isError: true }); row?.querySelector('[data-inline-field="nascimento"]')?.focus(); return; }
+    pendingValues.push({ pending, nome, nascimento, grupo_id });
+  }
+  const validTitularIds = new Set([
+    ...quote.lives.filter(life => life.tipo === 'titular' && !removedIds.has(life.id)).map(life => life.id),
+    ...pendingValues.filter(item => item.pending.mode === 'add' && item.pending.tipo === 'titular').map(item => item.pending.id)
+  ]);
+  const missingGroup = pendingValues.find(item => item.pending.tipo === 'dependente' && !validTitularIds.has(item.grupo_id));
+  if (missingGroup) { showQuoteToast('Selecione um titular válido para cada dependente.', { isError: true }); return; }
+  pendingValues.forEach(({ pending, nome, nascimento, grupo_id }) => {
+    if (pending.mode === 'edit') {
+      const existing = quote.lives.find(life => life.id === pending.id);
+      if (existing) Object.assign(existing, { nome, nascimento, ...(pending.tipo === 'dependente' ? { grupo_id } : {}) });
+    } else quote.lives.push({ id: pending.id, grupo_id: pending.tipo === 'titular' ? pending.id : grupo_id, tipo: pending.tipo, nome, nascimento, cpf: '' });
+  });
+  quote.lives = quote.lives.filter(life => !removedIds.has(life.id));
+  removedIds.forEach(id => quote.expandedGroups.delete(id));
+  const savedCount = pendingValues.length;
+  const removedCount = removedIds.size;
+  quote.inlineLives = [];
+  quote.batchEditingLives = false;
+  quote.removedInlineLifeIds = [];
+  quote.notice = removedCount ? `${removedCount} vida(s) removida(s); ${savedCount} vida(s) salva(s).` : `${savedCount} vida(s) salva(s) com sucesso.`;
+  rerender();
+};
+window.saudeQuoteCancelAllInlineLives = () => {
+  if (!quote.inlineLives.length && !quote.removedInlineLifeIds.length) return;
+  quote.inlineLives = [];
+  quote.batchEditingLives = false;
+  quote.removedInlineLifeIds = [];
+  quote.notice = '';
+  rerender();
+};
+window.saudeQuoteDeleteLife = id => { if (quote.inlineLives.length || quote.removedInlineLifeIds.length) { showQuoteToast('Salve ou cancele as linhas em edição antes de excluir uma vida.', { isError: true }); return; } const life = quote.lives.find(item => item.id === id); if (!life) return; if (life.tipo === 'titular' && quote.lives.some(item => item.tipo === 'dependente' && item.grupo_id === id)) { quote.notice = 'Transfira ou exclua os dependentes antes de remover este titular.'; rerender(); return; } if (!window.confirm(`Excluir ${life.tipo === 'titular' ? 'titular' : 'dependente'} ${life.nome}?`)) return; quote.lives = quote.lives.filter(item => item.id !== id); if (life.tipo === 'titular') quote.expandedGroups.delete(id); rerender(); };
+window.saudeQuotePlanPickerCopay = (value, checked) => { const values = new Set(quote.planPicker.coparticipacoes); checked ? values.add(value) : values.delete(value); quote.planPicker.coparticipacoes = ['true', 'false'].filter(item => values.has(item)); quote.planPicker.operatorId = ''; quote.planPicker.selectedTableIds = []; rerender(); [...document.querySelectorAll('[data-plan-picker-copay]')].find(input => input.value === value)?.focus(); };
+window.saudeQuotePlanPickerAccommodation = (value, checked) => { const values = new Set(quote.planPicker.accommodations); checked ? values.add(value) : values.delete(value); quote.planPicker.accommodations = ACCOMMODATIONS.filter(item => values.has(item)); quote.planPicker.operatorId = ''; quote.planPicker.selectedTableIds = []; rerender(); [...document.querySelectorAll('[data-plan-picker-accommodation]')].find(input => input.value === value)?.focus(); };
+window.saudeQuotePlanPickerOperator = value => { quote.planPicker.operatorId = value; quote.planPicker.selectedTableIds = []; rerender(); document.querySelector('[data-plan-picker-operator]')?.focus(); };
+window.saudeQuotePlanPickerTable = (tableId, checked) => { const selected = new Set(quote.planPicker.selectedTableIds); checked ? selected.add(tableId) : selected.delete(tableId); quote.planPicker.selectedTableIds = [...selected]; rerender(); [...document.querySelectorAll('.saude-plan-option input')].find(input => input.value === tableId)?.focus(); };
+window.saudeQuoteAddPlan = event => {
   event.preventDefault();
-  const values = new FormData(event.currentTarget);
+  const availableIds = new Set(planPickerTables().filter(table => operatorInfo(planInfo(table)).id === quote.planPicker.operatorId).map(table => table.id));
+  const tableIds = [...new Set(quote.planPicker.selectedTableIds)].filter(tableId => availableIds.has(tableId));
+  if (!tableIds.length) return;
+  quote.plans.push(...tableIds.map(tableId => ({ tableId, selected: true })));
+  quote.modal = ''; quote.manualPlanMode = false; rerender();
+};
+window.saudeQuoteManualPriceChanged = () => {
+  if (document.querySelector('[data-manual-iof-toggle]')?.checked) {
+    window.saudeQuoteCalculateManualIOF({ silent: true });
+    return;
+  }
+  quote.manualIofPreview = null;
+  document.querySelectorAll('[data-manual-iof-value]').forEach(cell => { cell.textContent = ''; });
+};
+window.saudeQuoteCalculateManualIOF = ({ silent = false } = {}) => {
+  const form = document.querySelector('.saude-manual-plan-modal');
+  if (!form) return false;
+  const formValues = new FormData(form);
+  const base = {};
+  let invalid = false;
+  BANDS.forEach((band, index) => {
+    const raw = String(formValues.get(`price_${index}`) ?? '').trim();
+    if (!raw) return;
+    const price = parseManualPrice(raw);
+    if (!Number.isFinite(price) || price < 0) invalid = true;
+    else base[band] = price;
+  });
+  if (invalid || !Object.keys(base).length) {
+    quote.manualIofPreview = null;
+    document.querySelectorAll('[data-manual-iof-value]').forEach(cell => { cell.textContent = ''; });
+    if (!silent) showQuoteToast(invalid ? 'Confira os valores. Os preços precisam ser números iguais ou maiores que zero.' : 'Informe ao menos um valor por faixa etária antes de calcular o IOF.', { isError: true });
+    return false;
+  }
+  const values = Object.fromEntries(Object.entries(base).map(([band, price]) => [band, Math.round((price * 1.0238 + Number.EPSILON) * 100) / 100]));
+  quote.manualIofPreview = { base, values };
+  document.querySelectorAll('[data-manual-iof-value]').forEach(cell => { cell.textContent = Number.isFinite(values[cell.dataset.manualIofValue]) ? money(values[cell.dataset.manualIofValue]) : ''; });
+  return true;
+};
+window.saudeQuoteToggleManualIOF = checked => {
+  if (!checked) {
+    quote.manualIofPreview = null;
+    document.querySelectorAll('[data-manual-iof-value]').forEach(cell => { cell.textContent = ''; });
+    return;
+  }
+  if (!window.saudeQuoteCalculateManualIOF()) {
+    const toggle = document.querySelector('[data-manual-iof-toggle]');
+    if (toggle) toggle.checked = false;
+  }
+};
+window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
+window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
+window.saudeQuoteAddManualPlan = source => {
+  if (source instanceof Event) source.preventDefault();
+  const form = source?.matches?.('.saude-manual-plan-modal')
+    ? source
+    : source?.currentTarget?.matches?.('.saude-manual-plan-modal')
+      ? source.currentTarget
+      : source?.form?.matches?.('.saude-manual-plan-modal')
+        ? source.form
+        : source?.closest?.('.saude-manual-plan-modal');
+  if (!form) { showQuoteToast('Não foi possível localizar o formulário do plano manual.', { isError: true }); return; }
+  try {
+  const values = new FormData(form);
   const operatorId = String(values.get('operatorId') || '');
+  if (!operatorId) { showQuoteToast('Selecione uma operadora para adicionar o plano.', { isError: true }); form.elements.operatorId?.focus(); return; }
   const operatorNeedle = operatorId === 'manual-bradesco' ? 'bradesco' : 'sulamerica';
   const operatorName = operatorId === 'manual-bradesco' ? 'Bradesco' : 'SulAmérica';
   const catalogOperator = quote.catalog.operators.find(operator => normalizeImportToken(operator.nome).includes(operatorNeedle));
   const resolvedOperatorId = catalogOperator?.id || operatorId;
   const planName = String(values.get('planName') || '').trim();
-  if (!planName) return;
+  if (!planName) { showQuoteToast('Informe o nome do plano para adicioná-lo à cotação.', { isError: true }); form.elements.planName?.focus(); return; }
 
-  const prices = {};
+  const basePrices = {};
   let invalidPrice = false;
   BANDS.forEach((band, index) => {
     const raw = String(values.get(`price_${index}`) ?? '').trim();
     if (!raw) return;
-    const price = Number(raw.replace(',', '.'));
+    const price = parseManualPrice(raw);
     if (!Number.isFinite(price) || price < 0) invalidPrice = true;
-    else prices[band] = price;
+    else basePrices[band] = price;
   });
-  if (invalidPrice) { window.alert('Confira os valores. Os preços precisam ser números iguais ou maiores que zero.'); return; }
-  if (!Object.keys(prices).length) { window.alert('Informe ao menos um valor por faixa etária para adicionar o plano.'); return; }
+  if (invalidPrice) { showQuoteToast('Confira os valores. Os preços precisam ser números iguais ou maiores que zero.', { isError: true }); return; }
+  if (!Object.keys(basePrices).length) { showQuoteToast('Informe ao menos um valor por faixa etária para adicionar o plano.', { isError: true }); return; }
+
+  const hasCurrentIof = quote.manualIofPreview && JSON.stringify(quote.manualIofPreview.base) === JSON.stringify(basePrices);
+  const prices = hasCurrentIof ? { ...quote.manualIofPreview.values } : { ...basePrices };
+  const pricingSnapshot = { prices_snapshot: prices, prices_base_snapshot: { ...basePrices }, iof_applied: Boolean(hasCurrentIof), iof_percent: hasCurrentIof ? 2.38 : 0 };
 
   const editingPlan = quote.manualPlanEditingId ? quotePlanEntry(quote.manualPlanEditingId) : null;
   const manualId = editingPlan?.tableId || `manual-${nextId()}`;
   const accommodation = String(values.get('accommodation') || '');
   const coparticipation = values.get('coparticipation') === 'true';
-  const table = { id: manualId, nome: 'Valores informados manualmente', acomodacao: accommodation, coparticipacao, status: 'vigente', vigencia_inicio: quote.effectiveDate || today(), vigencia_fim: null, origem: 'manual' };
+  const table = { id: manualId, nome: 'Valores informados manualmente', acomodacao: accommodation, coparticipacao: coparticipation, status: 'vigente', vigencia_inicio: quote.effectiveDate || today(), vigencia_fim: null, origem: 'manual' };
   const plan = { id: `${manualId}-plan`, operadora_id: resolvedOperatorId, nome: planName, modalidade: quote.type, abrangencia: String(values.get('coverage') || '').trim(), origem: 'manual' };
   if (editingPlan) {
-    Object.assign(editingPlan, { table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, prices_snapshot: prices });
+    Object.assign(editingPlan, { table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, ...pricingSnapshot });
   } else {
-    quote.plans.push({ tableId: manualId, selected: true, table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, prices_snapshot: prices });
+    quote.plans.push({ tableId: manualId, selected: true, table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, ...pricingSnapshot });
   }
   quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = '';
   quote.modal = '';
   quote.manualPlanMode = false;
   quote.manualPlanEditingId = '';
+  quote.manualIofPreview = null;
   quote.notice = editingPlan ? `Valores manuais do plano da ${operatorName} atualizados.` : `Plano manual da ${operatorName} adicionado a esta cotação.`;
   rerender();
+  } catch (error) {
+    showQuoteToast(error?.message || 'Não foi possível adicionar o plano manual à cotação.', { isError: true });
+  }
 };
 window.saudeQuoteEditManualPlan = tableId => {
-  if (!quotePlanEntry(tableId)?.table_snapshot || quotePlanEntry(tableId).table_snapshot.origem !== 'manual') return;
+  const entry = quotePlanEntry(tableId);
+  if (!entry?.table_snapshot || entry.table_snapshot.origem !== 'manual') return;
   quote.manualPlanEditingId = tableId;
+  quote.manualIofPreview = entry.iof_applied ? { base: { ...(entry.prices_base_snapshot || entry.prices_snapshot || {}) }, values: { ...(entry.prices_snapshot || {}) } } : null;
   quote.manualPlanMode = true;
   quote.modal = 'plan';
   rerender();
@@ -369,10 +655,9 @@ window.saudeQuoteRemovePlan = id => { quote.plans = quote.plans.filter(item => i
 window.saudeQuoteTogglePlan = (id, checked) => { const plan = quote.plans.find(item => item.tableId === id); if (plan) plan.selected = Boolean(checked); };
 window.saudeQuoteToggleGroup = id => { quote.expandedGroups.has(id) ? quote.expandedGroups.delete(id) : quote.expandedGroups.add(id); rerender(); };
 window.saudeQuoteFilter = (key, value) => { quote[key] = value; rerender(); };
-window.saudeQuoteReloadCatalog = () => loadCatalog();
-window.saudeQuoteClearNotice = () => { quote.notice = ''; rerender(); };
-
+window.saudeQuoteReloadCatalog = () => { quoteToastKey = ''; loadCatalog(); };
 async function persistCurrentQuote(status = 'rascunho') {
+  if (quote.inlineLives.length || quote.removedInlineLifeIds.length) throw new Error('Salve ou cancele as linhas de vidas antes de salvar a cotação.');
   if (!quote.lives.length) throw new Error('Adicione ao menos uma vida antes de salvar a cotação.');
   const response = await chamarApi('saveSimuladorSaudeQuote', {
     id: quote.id || null,
@@ -393,7 +678,10 @@ async function persistCurrentQuote(status = 'rascunho') {
 window.saudeQuoteSave = async () => {
   if (quote.saving) return;
   quote.saving = true; quote.notice = ''; rerender();
-  try { const saved = await persistCurrentQuote(); quote.notice = `Cotação #${saved.codigo} salva com sucesso.`; }
+  try {
+    const saved = await persistCurrentQuote();
+    quote.notice = `Cotação #${saved.codigo} salva com sucesso.`;
+  }
   catch (error) { quote.notice = error.message || 'Não foi possível salvar a cotação.'; }
   finally { quote.saving = false; rerender(); }
 };
