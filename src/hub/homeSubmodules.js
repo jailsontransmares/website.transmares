@@ -25,8 +25,8 @@ export const HOME_SUBMODULES = [
 
   { key: 'operacoes.corretora.visao_geral', parent: 'operacoes-corretora', label: 'Visão geral', route: '/operacoes/corretora' },
   { key: 'operacoes.corretora.consultoria_360', parent: 'operacoes-corretora', label: 'Consultoria 360°', route: '/operacoes/corretora/consultoria-360', permission: 'consultoria_360' },
-  { key: 'operacoes.corretora.simulador_saude', parent: 'operacoes-corretora', label: 'Simulador - Saúde', route: '/operacoes/corretora/simulador-saude', permission: 'simulador_saude' },
-  { key: 'simulador_saude.catalogo', parent: 'operacoes-corretora', group: 'operacoes.corretora.simulador_saude', label: 'Catálogo de Planos e Preços', route: '/operacoes/corretora/simulador-saude/catalogo', permission: 'simulador_saude.catalogo' },
+  { key: 'operacoes.corretora.simulador_saude', parent: 'operacoes', label: 'Simulador - Saúde', route: '/operacoes/corretora/simulador-saude', permission: 'simulador_saude' },
+  { key: 'simulador_saude.catalogo', parent: 'operacoes', group: 'operacoes.corretora.simulador_saude', label: 'Catálogo de Planos e Preços', route: '/operacoes/corretora/simulador-saude/catalogo', permission: 'simulador_saude.catalogo' },
 
   { key: 'financeiro.dashboard', parent: 'financeiro', label: 'Dashboard', route: '/financeiro/dashboard', permission: 'financeiro.dashboard' },
   { key: 'financeiro.lancamentos', parent: 'financeiro', label: 'Lançamentos', route: '/financeiro/lancamentos', permission: 'financeiro.lancamentos' },
@@ -72,7 +72,7 @@ export const HOME_SUBMODULES = [
 export const HOME_SUBMODULE_GROUPS = {
   'painel_ar.crm_2': { label: 'CRM 2.0', parent: 'painel-ar', route: '/painel-ar/200', permission: 'painel_ar' },
   'central_senhas.links': { label: 'Links Úteis', parent: 'central-senhas', route: '/central-senhas/links', permission: 'central_senhas' },
-  'operacoes.corretora.simulador_saude': { label: 'Simulador - Saúde', parent: 'operacoes-corretora', route: '/operacoes/corretora/simulador-saude', permission: 'simulador_saude' },
+  'operacoes.corretora.simulador_saude': { label: 'Simulador - Saúde', parent: 'operacoes', route: '/operacoes/corretora/simulador-saude', permission: 'simulador_saude' },
   'admin.sistema': { label: 'Sistema', parent: 'administracao' },
   'admin.parametros': { label: 'Parâmetros', parent: 'administracao' },
   'admin.cadastros': { label: 'Cadastros', parent: 'administracao' }

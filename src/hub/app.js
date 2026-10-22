@@ -1172,6 +1172,7 @@ function renderSubmodulosVisiveisHome() {
 
   const nomesModulos = new Map([
     ...(state.homeModuleSettings?.modules || []).map(item => [item.slug, item.nome]),
+    ['operacoes', 'Operações'],
     ['operacoes-corretora', 'Operações > Corretora']
   ]);
   const grupos = [...porPai.entries()].map(([parent, itens]) => {
@@ -1410,11 +1411,13 @@ const AREAS_MODULOS_HOME = [
   { id: 'corretora', label: 'Corretora', slugs: ['links-corretora'] },
   { id: 'ar', label: 'AR', slugs: ['links-ar', 'painel-ar'] },
   { id: 'gestao', label: 'Gestão', slugs: ['links-gestao', 'central-senhas', 'rh-dp', 'administracao'] },
+  { id: 'operacoes', label: 'Operações', slugs: [], virtualParents: ['operacoes'] },
   { id: 'operacoes-corretora', label: 'Operações > Corretora', slugs: [], virtualParents: ['operacoes-corretora'] },
   { id: 'financeiro', label: 'Financeiro', slugs: ['financeiro'] }
 ];
 
 const HOME_SUBMODULE_PARENT_LABELS = {
+  operacoes: 'Operações',
   'operacoes-corretora': 'Operações > Corretora'
 };
 
@@ -2468,7 +2471,7 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
-  if (idNormalizado === 'operacoes-corretora') return true;
+  if (['operacoes', 'operacoes-corretora'].includes(idNormalizado)) return true;
   const configuracao = (state.homeModuleSettings?.modules || []).find(item => item.slug === idNormalizado);
   if (configuracao && configuracao.status === 'inativo') return false;
 
@@ -5010,6 +5013,7 @@ const ACOES_TECNICAS_PERMISSAO_PERFIL = Object.freeze({
   'painel_ar.validacoes.recibos': { view: ['view'], edit: ['emitir_recibo'], delete: ['cancelar_recibo'] },
   central_senhas: { view: ['view', 'view_secret'], edit: ['create', 'update'], delete: ['delete'] },
   simulador_saude: { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'simulador_saude.catalogo': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
   admin: { view: ['view'] },
   'admin.usuarios': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
   'admin.perfis': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },

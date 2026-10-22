@@ -156,8 +156,8 @@
 .saude-life-col-type { width: 14%; }
 .saude-life-col-name { width: 24%; }
 .saude-life-col-birth { width: 16%; }
-.saude-life-col-age { width: 8%; }
-.saude-life-col-band { width: 24%; }
+.saude-life-col-age { width: 10%; }
+.saude-life-col-band { width: 22%; }
 .saude-life-col-remove { width: 6%; }
 .saude-quote-lives-table th { color: var(--texto); font-size: 10px; padding: 8px 9px; }
 .saude-quote-lives-table td { color: var(--texto); padding: 6px 9px; }
@@ -167,6 +167,7 @@
 .saude-quote-lives-table .saude-life-remove-cell { padding-left: 4px; padding-right: 8px; text-align: right; }
 .saude-inline-name-cell .saude-inline-input { min-width: 0; }
 .saude-inline-life-row td:nth-child(4) .saude-inline-input { max-width: 142px; min-width: 0; width: 100%; }
+.saude-inline-life-row td:nth-child(5) .saude-inline-input { max-width: 74px; min-width: 52px; width: 100%; }
 .saude-life-badge { border-radius: 4px; display: inline-block; min-width: 48px; text-align: center; }
 .saude-life-badge.titular { background: #dcecff; color: #0759c7; }
 .saude-life-badge.dependente { background: #d9f7e5; color: #087b39; }

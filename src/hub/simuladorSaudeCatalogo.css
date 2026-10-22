@@ -23,6 +23,7 @@
 .simsaude-table-card td { border-top: 1px solid var(--borda); font-size: 11px; padding: 8px; vertical-align: middle; }
 .simsaude-table-card td small { color: var(--texto-suave); display: block; margin-top: 2px; }
 .simsaude-table-card > header { align-items: center; gap: 12px; }
+.simsaude-plan-list-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .simsaude-bulk-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
 .simsaude-bulk-actions > span { color: var(--texto-suave); font-size: 11px; }
 .simsaude-bulk-actions .secondary-btn { min-height: 30px; padding: 0 9px; }
@@ -237,6 +238,7 @@
   .simsaude-toolbar-search { min-width: 0; }
 }
 @container (max-width: 520px) {
+  .simsaude-plan-list-actions { justify-content: flex-start; }
   .simsaude-page-actions { grid-template-columns: minmax(0,1fr); }
   .simsaude-toolbar-search { width: 100%; }
   .simsaude-filter-modal .simsaude-filters { grid-template-columns: 1fr; }

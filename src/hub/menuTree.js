@@ -49,6 +49,15 @@ export const HUB_MENU_TREE = [
         note: 'Substitui visualmente o item Painel AR, mantendo /painel-ar como rota legada.'
       },
       {
+        id: 'operacoes-simulador-saude',
+        label: 'Simulador - Saúde',
+        type: 'route',
+        route: '/operacoes/corretora/simulador-saude',
+        moduleId: 'simulador-saude',
+        permission: { resource: 'simulador_saude', action: 'view' },
+        status: 'active'
+      },
+      {
         id: 'operacoes-corretora',
         label: 'Corretora',
         type: 'group',
@@ -69,15 +78,6 @@ export const HUB_MENU_TREE = [
             type: 'route',
             route: '/operacoes/corretora/consultoria-360',
             permission: { resource: 'consultoria_360', action: 'view' },
-            status: 'active'
-          },
-          {
-            id: 'operacoes-corretora-simulador-saude',
-            label: 'Simulador - Saúde',
-            type: 'route',
-            route: '/operacoes/corretora/simulador-saude',
-            moduleId: 'simulador-saude',
-            permission: { resource: 'simulador_saude', action: 'view' },
             status: 'active'
           }
         ]
