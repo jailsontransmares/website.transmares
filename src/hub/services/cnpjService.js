@@ -1,7 +1,7 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
 
 export function normalizarCnpjLocal(value = '') {
-  return String(value ?? '').replace(/\D/g, '');
+  return String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
 }
 
 export function mapearCnpjConsultado(data = {}) {

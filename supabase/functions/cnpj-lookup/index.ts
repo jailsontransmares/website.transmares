@@ -35,8 +35,8 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function digits(value: unknown) {
-  return text(value).replace(/\D/g, "");
+function normalizeCnpj(value: unknown) {
+  return text(value).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 14);
 }
 
 function pick(source: Record<string, unknown>, ...keys: string[]) {
@@ -90,7 +90,7 @@ async function consultarCnpj(cnpj: string) {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${OPEN_CNPJ_URL}/${cnpj}`, {
+    const response = await fetch(`${OPEN_CNPJ_URL}/${encodeURIComponent(cnpj)}`, {
       method: "GET",
       headers: { Accept: "application/json" },
       signal: controller.signal
@@ -120,9 +120,9 @@ Deno.serve(async request => {
 
   try {
     const payload = await request.json().catch(() => ({}));
-    const cnpj = digits(payload?.cnpj);
+    const cnpj = normalizeCnpj(payload?.cnpj);
 
-    if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) {
+    if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj) || /^(\d)\1{13}$/.test(cnpj)) {
       return json({ ok: false, message: "Informe um CNPJ válido." }, 400);
     }
 

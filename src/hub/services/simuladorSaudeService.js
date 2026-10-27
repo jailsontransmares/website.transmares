@@ -5,7 +5,6 @@ const TABLES = {
   plans: 'simulador_saude_planos',
   prices: 'simulador_saude_tabelas_precos',
   bands: 'simulador_saude_precos_faixa',
-  accommodationBands: 'simulador_saude_precos_faixa_acomodacao',
   history: 'simulador_saude_catalogo_historico'
 };
 
@@ -31,12 +30,11 @@ async function findMatchingPlan(supabase, plan) {
 
 export async function getSimuladorSaudeCatalog() {
   const supabase = exigirSupabaseConfigurado();
-  const [operators, plans, tables, bands, accommodationBands, history] = await Promise.all([
+  const [operators, plans, tables, bands, history] = await Promise.all([
     supabase.from(TABLES.operators).select('*').order('nome'),
     supabase.from(TABLES.plans).select('*').order('nome'),
     supabase.from(TABLES.prices).select('*').order('vigencia_inicio', { ascending: false }),
     supabase.from(TABLES.bands).select('*'),
-    supabase.from(TABLES.accommodationBands).select('*'),
     supabase.from(TABLES.history).select('*').order('created_at', { ascending: false }).limit(20)
   ]);
   return {
@@ -44,7 +42,6 @@ export async function getSimuladorSaudeCatalog() {
     plans: unwrap(plans, 'Não foi possível carregar os planos.'),
     tables: unwrap(tables, 'Não foi possível carregar as tabelas de preços.'),
     bands: unwrap(bands, 'Não foi possível carregar os preços por faixa.'),
-    accommodationBands: unwrap(accommodationBands, 'Não foi possível carregar os preços por acomodação.'),
     history: unwrap(history, 'Não foi possível carregar o histórico.')
   };
 }
@@ -133,8 +130,7 @@ async function ensurePlan(supabase, draft, operatorId) {
 }
 
 function normalizePrices(draft, tipoContratacao, accommodations) {
-  const primaryAccommodation = draft.acomodacao || accommodations[0];
-  const pricesByAccommodation = draft.precos_por_acomodacao || { [primaryAccommodation]: draft.precos || {} };
+  const pricesByAccommodation = draft.precos_por_acomodacao || (accommodations[0] ? { [accommodations[0]]: draft.precos || {} } : {});
   return accommodations.flatMap(acomodacao => {
     const prices = pricesByAccommodation[acomodacao] || {};
     const variants = Object.values(prices).some(value => value && typeof value === 'object' && !Array.isArray(value))
@@ -154,12 +150,10 @@ export async function saveSimuladorSaudeTable(draft) {
   const operatorId = draft.operadora_id || (draft.plano_id ? null : await ensureOperator(supabase, draft.operadora_nome));
   const planId = await ensurePlan(supabase, draft, operatorId);
   const requestedStatus = draft.status || 'em_revisao';
-  const accommodations = [...new Set((Array.isArray(draft.acomodacoes) ? draft.acomodacoes : [draft.acomodacao]).filter(item => ['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(item)))];
-  const primaryAccommodation = draft.acomodacao || accommodations[0];
+  const accommodations = [...new Set((Array.isArray(draft.acomodacoes) ? draft.acomodacoes : []).filter(item => ['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(item)))];
   const table = {
     plano_id: planId,
     nome: String(draft.nome || '').trim(),
-    acomodacao: String(primaryAccommodation || '').trim(),
     acomodacoes: accommodations,
     coparticipacao: draft.coparticipacao === true || draft.coparticipacao === 'true',
     codigo_interno: String(draft.codigo_interno || '').trim() || null,
@@ -172,7 +166,7 @@ export async function saveSimuladorSaudeTable(draft) {
     observacoes: String(draft.observacoes || '').trim() || null
   };
   if (!table.nome) throw new Error('Informe o nome da tabela.');
-  if (!['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(table.acomodacao) || !accommodations.length || !accommodations.includes(table.acomodacao)) throw new Error('Selecione ao menos uma acomodação para a tabela.');
+  if (!accommodations.length) throw new Error('Selecione ao menos uma acomodação para a tabela.');
   if (draft.coparticipacao !== true && draft.coparticipacao !== false && draft.coparticipacao !== 'true' && draft.coparticipacao !== 'false') throw new Error('Informe se a tabela possui coparticipação.');
   if (!table.vigencia_inicio && requestedStatus === 'vigente') throw new Error('Informe o início da vigência antes de ativar a tabela.');
   if (!['Individual', 'Empresarial (PJ)'].includes(table.tipo_contratacao)) throw new Error('Selecione Individual ou Empresarial (PJ).');
@@ -185,23 +179,16 @@ export async function saveSimuladorSaudeTable(draft) {
     tableId = unwrap(await supabase.from(TABLES.prices).insert(table).select('id').single(), 'Não foi possível criar a tabela.').id;
   }
 
-  const prices = normalizePrices({ ...draft, acomodacao: table.acomodacao }, table.tipo_contratacao, accommodations);
-  const extraAccommodations = accommodations.filter(accommodation => accommodation !== table.acomodacao);
-  const existingExtraBands = unwrap(await supabase.from(TABLES.accommodationBands).select('acomodacao').eq('tabela_preco_id', tableId), 'Não foi possível consultar os preços por acomodação.');
-  for (const accommodation of new Set(existingExtraBands.map(row => row.acomodacao))) {
-    if (!extraAccommodations.includes(accommodation)) {
-      unwrap(await supabase.from(TABLES.accommodationBands).delete().eq('tabela_preco_id', tableId).eq('acomodacao', accommodation), 'Não foi possível remover a acomodação desmarcada.');
+  const prices = normalizePrices(draft, table.tipo_contratacao, accommodations);
+  const existingBands = unwrap(await supabase.from(TABLES.bands).select('acomodacao').eq('tabela_preco_id', tableId), 'Não foi possível consultar os preços por acomodação.');
+  for (const accommodation of new Set(existingBands.map(row => row.acomodacao))) {
+    if (!accommodations.includes(accommodation)) {
+      unwrap(await supabase.from(TABLES.bands).delete().eq('tabela_preco_id', tableId).eq('acomodacao', accommodation), 'Não foi possível remover os preços da acomodação desmarcada.');
     }
   }
-  const primaryPrices = prices.filter(row => row.acomodacao === table.acomodacao);
-  const extraPrices = prices.filter(row => row.acomodacao !== table.acomodacao);
-  if (primaryPrices.length) {
-    const payload = primaryPrices.map(row => ({ tabela_preco_id: tableId, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
-    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços da acomodação principal.');
-  }
-  if (extraPrices.length) {
-    const payload = extraPrices.map(row => ({ tabela_preco_id: tableId, acomodacao: row.acomodacao, faixa_etaria: row.faixa_etaria, regra_vidas: row.regra_vidas, valor: row.valor }));
-    unwrap(await supabase.from(TABLES.accommodationBands).upsert(payload, { onConflict: 'tabela_preco_id,acomodacao,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por acomodação.');
+  if (prices.length) {
+    const payload = prices.map(row => ({ tabela_preco_id: tableId, ...row }));
+    unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,acomodacao,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por acomodação.');
   }
   if (requestedStatus !== 'em_revisao') {
     unwrap(await supabase.from(TABLES.prices).update({ status: requestedStatus }).eq('id', tableId), 'Não foi possível atualizar o status da tabela.');
@@ -263,7 +250,7 @@ export async function saveSimuladorSaudeQuote(payload) {
   if (!['Individual', 'Empresarial (PJ)'].includes(payload.tipo_contratacao || 'Empresarial (PJ)')) throw new Error('Selecione Individual ou Empresarial (PJ).');
   const record = {
     cliente_nome: String(payload.cliente_nome || '').trim(),
-    cliente_cnpj: String(payload.cliente_cnpj || '').replace(/\D/g, '') || null,
+    cliente_cnpj: String(payload.cliente_cnpj || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || null,
     cliente_cidade: String(payload.cliente_cidade || '').trim() || null,
     tipo_contratacao: payload.tipo_contratacao || 'Empresarial (PJ)',
     vigencia: payload.vigencia || null,

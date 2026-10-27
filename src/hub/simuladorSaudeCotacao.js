@@ -2,16 +2,41 @@ import './simuladorSaudeCotacao.css';
 import { chamarApi } from './api.js';
 import { SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
+import { renderHubRecordHeader } from './recordWorkflow.js';
 import { formatCoparticipacaoTable } from './simuladorSaudeCoparticipacao.js';
+import { consultarCnpj } from './services/cnpjService.js';
 
 const BANDS = ['0-18', '19-23', '24-28', '29-33', '34-38', '39-43', '44-48', '49-53', '54-58', '59+'];
 const ACCOMMODATIONS = ['Apartamento', 'Enfermaria', 'Ambulatorial'];
-const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [], accommodationBands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
+const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', citySource: 'unset', cnpjLookupLoading: false, cnpjLookupError: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
 let context = {};
 let quoteToastTimer = null;
 let quoteToastKey = '';
+let cnpjLookupTimer = null;
+let cnpjLookupRequestId = 0;
 
 function esc(value = '') { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+function normalizeCnpj(value) {
+  const chars = String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
+  return `${chars.slice(0, 12)}${chars.slice(12).replace(/\D/g, '').slice(0, 2)}`;
+}
+function maskCnpj(value) {
+  const cnpj = normalizeCnpj(value);
+  if (cnpj.length <= 2) return cnpj;
+  if (cnpj.length <= 5) return `${cnpj.slice(0, 2)}.${cnpj.slice(2)}`;
+  if (cnpj.length <= 8) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5)}`;
+  if (cnpj.length <= 12) return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8)}`;
+  return `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}`;
+}
+function cnpjCaretPosition(masked, charCount) {
+  if (!charCount) return 0;
+  let count = 0;
+  for (let index = 0; index < masked.length; index += 1) {
+    if (/[A-Z0-9]/.test(masked[index])) count += 1;
+    if (count >= charCount) return index + 1;
+  }
+  return masked.length;
+}
 function today() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
 function dateLabel(value) { return value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : '—'; }
 function money(value) { return Number.isFinite(value) ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'; }
@@ -91,7 +116,7 @@ function nextId() { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-$
 function quotePlanEntry(tableId) { return quote.plans.find(item => item.tableId === tableId) || {}; }
 function accommodationVariants() {
   return quote.catalog.tables.flatMap(table => {
-    const accommodations = [...new Set([table.acomodacao, ...(Array.isArray(table.acomodacoes) ? table.acomodacoes : [])].filter(Boolean))];
+    const accommodations = [...new Set((Array.isArray(table.acomodacoes) ? table.acomodacoes : []).filter(Boolean))];
     return accommodations.map(acomodacao => ({ ...table, id: `${table.id}::${acomodacao}`, tabela_preco_id: table.id, acomodacao }));
   });
 }
@@ -114,10 +139,7 @@ function pricesFor(tableId) {
   if (saved) return saved;
   const table = planFor(tableId);
   const parentTableId = table.tabela_preco_id || table.id;
-  const parent = quote.catalog.tables.find(item => item.id === parentTableId);
-  const rows = table.acomodacao === (parent?.acomodacao || table.acomodacao)
-    ? quote.catalog.bands.filter(item => item.tabela_preco_id === parentTableId)
-    : (quote.catalog.accommodationBands || []).filter(item => item.tabela_preco_id === parentTableId && item.acomodacao === table.acomodacao);
+  const rows = quote.catalog.bands.filter(item => item.tabela_preco_id === parentTableId && item.acomodacao === table.acomodacao);
   if (table.tipo_contratacao === 'Individual') {
     return Object.fromEntries(['uma_vida', 'duas_ou_mais'].map(rule => [rule, Object.fromEntries(rows.filter(item => item.regra_vidas === rule).map(item => [item.faixa_etaria, Number(item.valor)]))]));
   }
@@ -169,10 +191,10 @@ function clearQuoteToast() {
   quoteToastTimer = null;
   document.querySelector('.saude-quote-toast')?.remove();
 }
-function showQuoteToast(message, { isError = false, retry = false } = {}) {
+function showQuoteToast(message, { isError = false, retry = false, isCorner = false } = {}) {
   clearQuoteToast();
   const toast = document.createElement('div');
-  toast.className = `saude-quote-toast${isError ? ' is-error' : ''}`;
+  toast.className = `saude-quote-toast${isError ? ' is-error' : ''}${isCorner ? ' is-corner' : ''}`;
   toast.setAttribute('role', isError ? 'alert' : 'status');
   toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
   const text = document.createElement('span');
@@ -193,24 +215,90 @@ function showQuoteToast(message, { isError = false, retry = false } = {}) {
   }, 4200);
 }
 function syncQuoteToast() {
-  const isError = Boolean(quote.catalogError);
-  const message = isError ? `Catálogo indisponível. ${quote.catalogError}` : quote.notice;
+  const isError = Boolean(quote.cnpjLookupError || quote.catalogError);
+  const message = quote.cnpjLookupError || (quote.catalogError ? `Catálogo indisponível. ${quote.catalogError}` : quote.notice);
   if (!message) { quoteToastKey = ''; clearQuoteToast(); return; }
   const key = `${isError ? 'error' : 'notice'}:${message}`;
   if (key === quoteToastKey) return;
   quoteToastKey = key;
-  showQuoteToast(message, { isError, retry: isError });
+  showQuoteToast(message, { isError, retry: Boolean(quote.catalogError) && !quote.cnpjLookupError, isCorner: Boolean(quote.cnpjLookupError) });
+}
+function setCnpjLookupStatus(message = '') {
+  const status = document.querySelector('[data-saude-cnpj-lookup-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+  const button = document.querySelector('[data-saude-cnpj-lookup-button]');
+  if (button) button.disabled = Boolean(message);
+}
+function cancelCnpjLookup() {
+  cnpjLookupRequestId += 1;
+  if (cnpjLookupTimer) window.clearTimeout(cnpjLookupTimer);
+  cnpjLookupTimer = null;
+  quote.cnpjLookupLoading = false;
+  setCnpjLookupStatus();
+  return cnpjLookupRequestId;
+}
+function queueCnpjLookup(cnpj, delay = 450) {
+  const requestId = cancelCnpjLookup();
+  quote.cnpjLookupError = '';
+  syncQuoteToast();
+  if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj)) return;
+  cnpjLookupTimer = window.setTimeout(() => {
+    cnpjLookupTimer = null;
+    lookupCnpj(cnpj, requestId);
+  }, delay);
+}
+async function lookupCnpj(cnpj, requestId) {
+  if (requestId !== cnpjLookupRequestId || quote.cnpj !== cnpj) return;
+  quote.cnpjLookupLoading = true;
+  setCnpjLookupStatus('Consultando CNPJ…');
+  try {
+    const result = await consultarCnpj(cnpj);
+    if (!result.found || !result.data) throw new Error('CNPJ não localizado na consulta.');
+    if (requestId !== cnpjLookupRequestId || quote.cnpj !== cnpj) return;
+    const municipality = String(result.data.municipio || '').trim();
+    const state = String(result.data.uf || '').trim().toUpperCase();
+    if (!municipality || !state) throw new Error('Cidade não retornada');
+    if (!quote.city.trim() || quote.citySource === 'unset' || quote.citySource === 'cnpj') {
+      quote.city = `${municipality} / ${state}`;
+      quote.citySource = 'cnpj';
+      const cityInput = document.querySelector('[data-saude-quote-city]');
+      if (cityInput) cityInput.value = quote.city;
+    }
+  } catch (error) {
+    if (requestId !== cnpjLookupRequestId || quote.cnpj !== cnpj) return;
+    const detail = error instanceof Error ? error.message.trim() : '';
+    quote.cnpjLookupError = `${detail || 'Não foi possível consultar o CNPJ.'} Preencha Cidade / UF manualmente.`;
+    syncQuoteToast();
+  } finally {
+    if (requestId === cnpjLookupRequestId) {
+      quote.cnpjLookupLoading = false;
+      setCnpjLookupStatus();
+    }
+  }
 }
 
 function renderHeader() {
   const canSave = quote.id
     ? Boolean(context.pode?.('simulador_saude', 'view'))
     : Boolean(context.pode?.('simulador_saude', 'create'));
-  return `<div class="saude-quote-header"><div class="saude-quote-title"><span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Cotação de Plano de Saúde</h2><p>Cadastre as vidas e compare os valores dos planos por faixa etária.${quote.code ? ` · Cotação #${quote.code} · versão ${quote.version}` : ''}</p></div></div><div class="saude-quote-header-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteBackToList()"><i data-lucide="chevron-left" aria-hidden="true"></i> Voltar às cotações</button><button class="secondary-btn" type="button" onclick="saudeQuoteClear()"><i data-lucide="eraser" aria-hidden="true"></i> Limpar</button><button class="secondary-btn" type="button" onclick="saudeQuoteSave()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> ${quote.saving ? 'Salvando…' : 'Salvar'}</button><button class="save-btn" type="button" onclick="saudeQuoteProposal()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> Gerar Proposta</button></div></div>`;
+  const actions = `<button class="secondary-btn" type="button" onclick="saudeQuoteClear()"><i data-lucide="eraser" aria-hidden="true"></i> Limpar</button><button class="secondary-btn" type="button" onclick="saudeQuoteSave()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> ${quote.saving ? 'Salvando…' : 'Salvar'}</button><button class="save-btn" type="button" onclick="saudeQuoteProposal()" ${quote.saving || !canSave ? 'disabled' : ''}><i data-lucide="file-text" aria-hidden="true"></i> Gerar Proposta</button>`;
+  return renderHubRecordHeader({
+    onBack: 'saudeQuoteBackToList()',
+    backAriaLabel: 'Voltar às cotações',
+    className: 'saude-quote-header hub-record-header',
+    backClassName: 'icon-btn hub-record-back-button',
+    contentClassName: 'hub-record-header-content saude-quote-title',
+    actionsClassName: 'hub-record-header-actions saude-quote-header-actions',
+    content: `<span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Cotação de Plano de Saúde</h2>${quote.code ? `<p>Cotação #${quote.code} · versão ${quote.version}</p>` : ''}</div>`,
+    actions,
+    disabled: quote.loading
+  });
 }
 
 function renderCompany() {
-  return `<section class="saude-quote-card"><header><h3><i data-lucide="landmark" aria-hidden="true"></i> Dados do Cliente / Empresa</h3></header><div class="saude-quote-company-grid"><label class="saude-quote-field"><span>Cliente / Razão Social</span><input value="${esc(quote.company)}" oninput="saudeQuoteField('company', this.value)"></label><label class="saude-quote-field"><span>CNPJ (se empresarial)</span><input value="${esc(quote.cnpj)}" inputmode="numeric" oninput="saudeQuoteField('cnpj', this.value)"></label><label class="saude-quote-field"><span>Cidade</span><input value="${esc(quote.city)}" oninput="saudeQuoteField('city', this.value)"></label><label class="saude-quote-field"><span>Tipo de contratação</span><select onchange="saudeQuoteField('type', this.value)"><option value="Individual" ${quote.type === 'Individual' ? 'selected' : ''}>Individual</option><option value="Empresarial (PJ)" ${quote.type === 'Empresarial (PJ)' ? 'selected' : ''}>Empresarial</option></select></label><label class="saude-quote-field"><span>Vigência desejada</span><input type="date" value="${esc(quote.effectiveDate)}" onchange="saudeQuoteField('effectiveDate', this.value)"></label></div></section>`;
+  return `<section class="saude-quote-card"><header><h3><i data-lucide="landmark" aria-hidden="true"></i> Dados do Cliente / Empresa</h3></header><div class="saude-quote-company-grid"><label class="saude-quote-field"><span>Cliente / Razão Social</span><input value="${esc(quote.company)}" oninput="saudeQuoteField('company', this.value)"></label><label class="saude-quote-field saude-quote-cnpj-field"><span>CNPJ (se empresarial)</span><span class="saude-quote-cnpj-control"><input value="${esc(maskCnpj(quote.cnpj))}" inputmode="text" maxlength="18" autocomplete="off" placeholder="00.000.000/0000-00" aria-describedby="saude-quote-cnpj-status" oninput="saudeQuoteCnpjInput(this)"><button class="icon-btn saude-quote-cnpj-lookup" type="button" data-saude-cnpj-lookup-button aria-label="Consultar CNPJ" title="Consultar CNPJ" onclick="saudeQuoteLookupCnpj()"><i data-lucide="search" aria-hidden="true"></i></button></span><small id="saude-quote-cnpj-status" class="saude-quote-cnpj-status" data-saude-cnpj-lookup-status aria-live="polite" hidden></small></label><label class="saude-quote-field"><span>Cidade</span><input data-saude-quote-city value="${esc(quote.city)}" oninput="saudeQuoteField('city', this.value)"></label><label class="saude-quote-field"><span>Tipo de contratação</span><select onchange="saudeQuoteField('type', this.value)"><option value="Individual" ${quote.type === 'Individual' ? 'selected' : ''}>Individual</option><option value="Empresarial (PJ)" ${quote.type === 'Empresarial (PJ)' ? 'selected' : ''}>Empresarial</option></select></label><label class="saude-quote-field"><span>Vigência desejada</span><input data-saude-effective-date type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="DD/MM/AAAA" value="${esc(formatBirthDateInput(quote.effectiveDate))}" oninput="saudeQuoteEffectiveDateInput(this)"></label></div></section>`;
 }
 
 function renderImportModal() {
@@ -405,14 +493,15 @@ function serializeSnapshot() {
 function draftSignature() { return JSON.stringify(serializeSnapshot()); }
 
 function resetQuoteDraft() {
-  quote.id = ''; quote.code = ''; quote.version = 0; quote.company = ''; quote.cnpj = ''; quote.city = ''; quote.type = 'Empresarial (PJ)'; quote.effectiveDate = ''; quote.lives = []; quote.plans = []; quote.expandedGroups = new Set(); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; quote.modal = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.inlineLives = []; quote.batchEditingLives = false; quote.removedInlineLifeIds = []; quote.notice = ''; quoteToastKey = ''; clearQuoteToast(); quote.importText = ''; quote.importPreview = null; quote.saving = false; quote.loading = false; quote.initialized = true;
+  cancelCnpjLookup();
+  quote.id = ''; quote.code = ''; quote.version = 0; quote.company = ''; quote.cnpj = ''; quote.city = ''; quote.citySource = 'unset'; quote.cnpjLookupError = ''; quote.type = 'Empresarial (PJ)'; quote.effectiveDate = ''; quote.lives = []; quote.plans = []; quote.expandedGroups = new Set(); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; quote.modal = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.inlineLives = []; quote.batchEditingLives = false; quote.removedInlineLifeIds = []; quote.notice = ''; quoteToastKey = ''; clearQuoteToast(); quote.importText = ''; quote.importPreview = null; quote.saving = false; quote.loading = false; quote.initialized = true;
   quote.savedSignature = draftSignature();
 }
 
 function applySavedQuote(record) {
   if (!record) return;
   const snapshot = record.snapshot || {}; const client = snapshot.cliente || {};
-  quote.id = record.id; quote.code = record.codigo || ''; quote.version = record.snapshot_version || 1; quote.company = client.nome ?? record.cliente_nome ?? ''; quote.cnpj = client.cnpj ?? record.cliente_cnpj ?? ''; quote.city = client.cidade ?? record.cliente_cidade ?? ''; quote.type = (client.tipo_contratacao ?? record.tipo_contratacao) === 'Familiar' ? 'Individual' : (client.tipo_contratacao ?? record.tipo_contratacao ?? 'Empresarial (PJ)'); quote.effectiveDate = client.vigencia ?? record.vigencia ?? '';
+  quote.id = record.id; quote.code = record.codigo || ''; quote.version = record.snapshot_version || 1; quote.company = client.nome ?? record.cliente_nome ?? ''; quote.cnpj = normalizeCnpj(client.cnpj ?? record.cliente_cnpj ?? ''); quote.city = client.cidade ?? record.cliente_cidade ?? ''; quote.citySource = quote.city ? 'saved' : 'unset'; quote.cnpjLookupError = ''; quote.type = (client.tipo_contratacao ?? record.tipo_contratacao) === 'Familiar' ? 'Individual' : (client.tipo_contratacao ?? record.tipo_contratacao ?? 'Empresarial (PJ)'); quote.effectiveDate = client.vigencia ?? record.vigencia ?? '';
   quote.lives = Array.isArray(snapshot.vidas) ? snapshot.vidas.map(life => ({ ...life })) : [];
   quote.plans = Array.isArray(snapshot.planos) ? snapshot.planos.map(normalizeQuotePlanEntry) : [];
   quote.expandedGroups = new Set(); quote.modal = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.inlineLives = []; quote.batchEditingLives = false; quote.removedInlineLifeIds = []; quote.initialized = true; quote.savedSignature = draftSignature();
@@ -428,11 +517,22 @@ async function loadQuoteById(id) {
 export async function mountSimuladorSaudeQuotePage(nextContext = {}) {
   context = { ...nextContext };
   resetQuoteDraft();
-  const quoteId = new URLSearchParams(window.location.search).get('quoteId');
-  quote.loading = Boolean(quoteId);
+  const params = new URLSearchParams(window.location.search);
+  const quoteId = params.get('quoteId');
+  const duplicateQuoteId = params.get('duplicateQuoteId');
+  const sourceQuoteId = quoteId || duplicateQuoteId;
+  quote.loading = Boolean(sourceQuoteId);
   rerender();
-  if (quoteId) {
-    try { await loadQuoteById(quoteId); }
+  if (sourceQuoteId) {
+    try {
+      await loadQuoteById(sourceQuoteId);
+      if (duplicateQuoteId && !quoteId) {
+        const originalCode = quote.code;
+        quote.id = ''; quote.code = ''; quote.version = 0;
+        quote.notice = `Cópia da cotação #${originalCode || 'original'} pronta. Salve para criar uma nova cotação.`;
+        quote.savedSignature = draftSignature();
+      }
+    }
     catch (error) { quote.notice = error.message || 'Não foi possível carregar a cotação.'; }
     finally { quote.loading = false; rerender(); }
   }
@@ -444,8 +544,59 @@ window.saudeQuoteBackToList = () => {
   context.navegarParaRota?.(`${obterBaseHub(window.location.pathname)}/${SIMULADOR_SAUDE_ROUTE}`);
 };
 
+window.saudeQuoteCnpjInput = input => {
+  const raw = input.value;
+  const cursor = input.selectionStart ?? raw.length;
+  const charCount = normalizeCnpj(raw.slice(0, cursor)).length;
+  const cnpj = normalizeCnpj(raw);
+  input.value = maskCnpj(cnpj);
+  const nextCursor = cnpjCaretPosition(input.value, Math.min(charCount, cnpj.length));
+  input.setSelectionRange(nextCursor, nextCursor);
+  if (cnpj === quote.cnpj) return;
+  quote.cnpj = cnpj;
+  if (quote.citySource === 'cnpj' || quote.citySource === 'saved') {
+    quote.city = '';
+    quote.citySource = 'unset';
+    const cityInput = document.querySelector('[data-saude-quote-city]');
+    if (cityInput) cityInput.value = '';
+  }
+  queueCnpjLookup(cnpj);
+};
+
+window.saudeQuoteLookupCnpj = () => {
+  const cnpj = normalizeCnpj(quote.cnpj);
+  if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj)) {
+    quote.cnpjLookupError = 'Digite os 14 caracteres do CNPJ antes de consultar.';
+    syncQuoteToast();
+    return;
+  }
+  quote.cnpj = cnpj;
+  queueCnpjLookup(cnpj, 0);
+};
+
+window.saudeQuoteEffectiveDateInput = input => {
+  const dateText = formatBirthDateTyping(input.value);
+  input.value = dateText;
+  const effectiveDate = normalizeManualBirthDate(dateText);
+  quote.effectiveDate = effectiveDate;
+  if (!effectiveDate) {
+    quote.inlineLives.forEach(item => {
+      if (item.draft.ageSource === 'nascimento') item.draft.idade = ageOf(item.draft.nascimento) ?? '';
+    });
+    return;
+  }
+  const cursor = input.selectionStart ?? dateText.length;
+  window.saudeQuoteField('effectiveDate', effectiveDate);
+  const updatedInput = document.querySelector('[data-saude-effective-date]');
+  if (updatedInput) {
+    updatedInput.focus();
+    updatedInput.setSelectionRange(Math.min(cursor, dateText.length), Math.min(cursor, dateText.length));
+  }
+};
+
 window.saudeQuoteField = (key, value) => {
   if (key === 'type' && value !== quote.type) { quote.plans = quote.plans.filter(item => item.table_snapshot?.origem === 'manual' || (planFor(item.tableId).tipo_contratacao || 'Empresarial (PJ)') === value); quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = ''; }
+  if (key === 'city') quote.citySource = 'manual';
   quote[key] = value;
   if (key === 'effectiveDate') quote.inlineLives.forEach(item => {
     if (item.draft.ageSource === 'nascimento') item.draft.idade = ageOf(item.draft.nascimento) ?? '';
@@ -742,7 +893,14 @@ async function persistCurrentQuote(status = 'rascunho') {
     snapshot: serializeSnapshot()
   });
   if (!response.ok) throw new Error(response.message || 'Não foi possível salvar a cotação.');
+  const wasNewQuote = !quote.id;
   quote.id = response.data.id; quote.code = response.data.codigo; quote.version = response.data.snapshot_version || quote.version + 1;
+  if (wasNewQuote) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('duplicateQuoteId');
+    url.searchParams.set('quoteId', quote.id);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
   quote.savedSignature = draftSignature();
   return response.data;
 }
