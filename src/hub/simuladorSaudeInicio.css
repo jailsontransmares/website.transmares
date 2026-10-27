@@ -28,10 +28,11 @@
 .saude-home-status { background: color-mix(in srgb, var(--cor-principal) 8%, var(--card)); border-radius: 99px; color: var(--cor-principal); display: inline-flex; font-size: 10px; font-weight: 700; padding: 5px 8px; white-space: nowrap; }
 .saude-home-status.is-proposta { background: #e9f7ee; color: #087c38; }
 .saude-home-status.is-arquivada { background: #edf0f4; color: #596779; }
+.saude-home-status-cell { align-items: center; display: flex; gap: 6px; white-space: nowrap; }
 .saude-home-open { align-items: center; background: none; border: 0; color: var(--cor-principal); cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; gap: 6px; padding: 4px 6px; }
 .saude-home-open svg { height: 14px; width: 14px; }
 .saude-home-row-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
-.saude-home-row-actions .saude-home-row-action { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 0; width: 28px; }
+.saude-home-row-actions .saude-home-row-action, .saude-home-status-cell .saude-home-row-action { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 0; width: 28px; }
 .saude-home-row-action svg { height: 14px; width: 14px; }
 .saude-home-row-action:disabled { cursor: wait; opacity: .55; }
 .saude-home-notice { color: #087c38; font-size: 12px; margin: 10px 14px 0; }

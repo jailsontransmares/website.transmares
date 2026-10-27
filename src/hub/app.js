@@ -578,7 +578,7 @@ const state = {
     selecionados: [],
     recibos: [],
     paginaRecibos: 1,
-    filtrosRecibos: { numero: '', parceiro: '', pedido: '', cliente: '' },
+    filtrosRecibos: { numero: '', parceiro: '', pedido: '', cliente: '', status: 'emitido' },
     reciboAtivo: null,
     impostos: {
       itens: [],
@@ -11855,10 +11855,16 @@ function renderConsultarRecibosAr() {
         <input class="config-input" name="pedido" value="${escapeAttr(filtrosRecibos.pedido)}" placeholder="Nº do pedido" aria-label="Número do pedido" oninput="alterarFiltroRecibosValidacoesAr('pedido', this.value)">
         <input class="config-input" name="cliente" value="${escapeAttr(filtrosRecibos.cliente)}" placeholder="Nome do cliente" aria-label="Nome do cliente" oninput="alterarFiltroRecibosValidacoesAr('cliente', this.value)">
         <button class="icon-btn ar-recibos-search-button" type="submit" aria-label="Buscar recibos" title="Buscar recibos"><i data-lucide="search" aria-hidden="true"></i></button>
+        <details class="hub-row-actions-menu ar-recibos-status-filter-menu" data-hub-action-menu data-hub-action-min-width="170" data-hub-action-max-width="220" data-hub-action-gap="6" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="selected">
+          <summary class="icon-btn ${filtrosRecibos.status !== 'todos' ? 'is-active' : ''}" aria-haspopup="menu" aria-label="Filtrar por status${filtrosRecibos.status !== 'todos' ? `: ${escapeAttr(obterRotuloStatusHub(filtrosRecibos.status))}` : ''}" title="Filtrar por status"><i data-lucide="filter" aria-hidden="true"></i></summary>
+          <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Filtrar recibos por status">
+            ${[['emitido', 'Emitidos'], ['quitado', 'Quitados'], ['cancelado', 'Cancelados'], ['todos', 'Todos']].map(([status, rotulo]) => `<button type="button" role="menuitemradio" aria-checked="${filtrosRecibos.status === status ? 'true' : 'false'}" onclick="alterarStatusFiltroRecibosValidacoesAr('${status}')">${rotulo}${filtrosRecibos.status === status ? '<i data-lucide="check" aria-hidden="true"></i>' : ''}</button>`).join('')}
+          </div>
+        </details>
         <button class="secondary-btn ar-recibos-clear-button" type="button" onclick="limparFiltrosRecibosValidacoesAr()">Limpar</button>
       </form>
 
-      ${loading ? renderHubLoading('Carregando recibos...') : renderTabelaRecibosAr(recibosFiltrados, Object.values(filtrosRecibos).some(valor => String(valor || '').trim()))}
+      ${loading ? renderHubLoading('Carregando recibos...') : renderTabelaRecibosAr(recibosFiltrados, Object.entries(filtrosRecibos).some(([campo, valor]) => campo === 'status' ? valor !== 'emitido' : String(valor || '').trim()))}
     </div>
   `;
 }
@@ -11876,7 +11882,8 @@ function filtrarListaRecibosAr(recibos, filtros = {}) {
     return (!normalizados.numero || normalizarBuscaReciboAr(recibo.numero).includes(normalizados.numero))
       && (!normalizados.parceiro || normalizarBuscaReciboAr(recibo.parceiro_nome).includes(normalizados.parceiro))
       && (!normalizados.pedido || pedidos.some(valor => normalizarBuscaReciboAr(valor).includes(normalizados.pedido)))
-      && (!normalizados.cliente || clientes.some(valor => normalizarBuscaReciboAr(valor).includes(normalizados.cliente)));
+      && (!normalizados.cliente || clientes.some(valor => normalizarBuscaReciboAr(valor).includes(normalizados.cliente)))
+      && (!filtros.status || filtros.status === 'todos' || String(recibo.status || '').toLocaleLowerCase('pt-BR') === filtros.status);
   });
 }
 
@@ -11890,8 +11897,17 @@ function aplicarFiltrosRecibosValidacoesAr(event) {
   renderPainelAr();
 }
 
+function alterarStatusFiltroRecibosValidacoesAr(status) {
+  const opcoes = ['emitido', 'quitado', 'cancelado', 'todos'];
+  if (!opcoes.includes(status)) return;
+  state.ar.validacoes.filtrosRecibos.status = status;
+  state.ar.validacoes.paginaRecibos = 1;
+  renderPainelAr();
+}
+
 function limparFiltrosRecibosValidacoesAr() {
-  state.ar.validacoes.filtrosRecibos = { numero: '', parceiro: '', pedido: '', cliente: '' };
+  state.ar.validacoes.filtrosRecibos = { numero: '', parceiro: '', pedido: '', cliente: '', status: 'emitido' };
+  state.ar.validacoes.paginaRecibos = 1;
   renderPainelAr();
 }
 
@@ -11928,10 +11944,11 @@ function renderTabelaRecibosAr(recibos, temFiltros = false) {
               <td title="${escapeAttr(recibo.parceiro_nome || '-')}">${escapeHtml(recibo.parceiro_nome || '-')}</td>
               <td>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</td>
               <td>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</td>
-              <td><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</mark></td>
+              <td><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : recibo.status === 'quitado' ? 'paid' : ''}">${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</mark></td>
               <td><div class="ar-recibos-actions">
-                <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
-                <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' || !podeCancelar ? 'disabled' : ''}>Cancelar</button>
+                <button class="icon-btn ar-recibo-action-icon" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')" aria-label="Visualizar recibo ${escapeAttr(recibo.numero || '')}" title="Visualizar recibo"><i data-lucide="search" aria-hidden="true"></i></button>
+                ${recibo.status === 'emitido' ? `<button class="icon-btn ar-recibo-action-icon ar-recibo-mark-paid-button" type="button" onclick="marcarReciboQuitadoValidacoesAr(event, '${escapeAttr(recibo.id)}')" ${!podeCancelar ? 'disabled' : ''} aria-label="Marcar recibo ${escapeAttr(recibo.numero || '')} como quitado" title="Marcar como quitado"><i data-lucide="check-circle-2" aria-hidden="true"></i></button>` : ''}
+                <button class="icon-btn ar-recibo-action-icon" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status !== 'emitido' || !podeCancelar ? 'disabled' : ''} aria-label="Cancelar recibo ${escapeAttr(recibo.numero || '')}" title="Cancelar recibo"><i data-lucide="x" aria-hidden="true"></i></button>
               </div></td>
             </tr>
           `).join('')}
@@ -15249,6 +15266,13 @@ async function visualizarReciboValidacoesAr(id) {
     return;
   }
 
+  try {
+    janela.blur();
+    window.focus();
+  } catch {
+    // O navegador pode bloquear a alteração de foco entre abas.
+  }
+
   const estilos = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
     .map(link => `<link rel="stylesheet" href="${escapeAttr(link.href)}">`)
     .join('');
@@ -15394,6 +15418,40 @@ async function cancelarReciboValidacoesAr(id) {
     state.ar.validacoes.loading = false;
     state.ar.validacoes.message = erro.message || 'Erro ao cancelar o recibo.';
     renderPainelAr();
+  }
+}
+
+async function marcarReciboQuitadoValidacoesAr(event, id) {
+  if (!pode('painel_ar.validacoes', 'cancelar_recibo')) {
+    state.ar.validacoes.message = 'Seu usuário não possui permissão para atualizar o status do recibo.';
+    renderPainelAr();
+    return;
+  }
+
+  const recibo = state.ar.validacoes.recibos.find(item => item.id === id);
+  if (!recibo || recibo.status !== 'emitido') return;
+  if (!window.confirm(`Marcar o recibo ${recibo.numero || ''} como quitado?`)) return;
+
+  const botao = event?.currentTarget;
+  if (botao?.disabled) return;
+  if (botao) {
+    botao.disabled = true;
+    botao.setAttribute('aria-busy', 'true');
+  }
+
+  try {
+    const response = await chamarApi('markArReceiptPaid', { recibo_id: id });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível marcar o recibo como quitado.'));
+
+    Object.assign(recibo, response.data || {}, { status: 'quitado' });
+    renderPainelAr();
+    window.hubToast?.success(`Recibo ${recibo.numero || ''} marcado como quitado.`.trim());
+  } catch (erro) {
+    if (botao?.isConnected) {
+      botao.disabled = false;
+      botao.removeAttribute('aria-busy');
+    }
+    window.hubToast?.error(erro.message || 'Erro ao marcar o recibo como quitado.');
   }
 }
 
@@ -18271,6 +18329,7 @@ Object.assign(window, {
   descartarAlteracoesPermissoesUsuarioAdmin,
   arquivarParceiroIndicacaoAdmin,
   cancelarReciboValidacoesAr,
+  marcarReciboQuitadoValidacoesAr,
   abrirConfiguracaoImpostosValidacoesAr,
   fecharConfiguracaoImpostosValidacoesAr,
   novoImpostoValidacoesAr,
@@ -18406,6 +18465,7 @@ Object.assign(window, {
   alterarFiltroRecibosValidacoesAr,
   aplicarFiltrosRecibosValidacoesAr,
   limparFiltrosRecibosValidacoesAr,
+  alterarStatusFiltroRecibosValidacoesAr,
   selecionarPaginaRecibosValidacoesAr,
   selecionarParceiroAr,
   selecionarProdutoAr,

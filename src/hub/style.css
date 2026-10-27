@@ -11020,7 +11020,7 @@ body.is-resizing-ar-products-column * {
 .ar-recibos-data-table th:last-child,
 .ar-recibos-data-table td:last-child {
   text-align: right;
-  width: 190px;
+  width: 220px;
 }
 
 .ar-recibos-actions {
@@ -11034,6 +11034,30 @@ body.is-resizing-ar-products-column * {
   font-size: 12px;
   min-height: 28px;
   padding: 5px 9px;
+}
+
+.ar-recibos-actions .ar-recibo-action-icon {
+  align-items: center;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.ar-recibos-actions .ar-recibo-action-icon svg {
+  height: 15px;
+  width: 15px;
+}
+
+.ar-recibos-actions .ar-recibo-mark-paid-button {
+  color: #15803d;
+}
+
+.ar-recibo-mark-paid-button svg {
+  height: 14px;
+  width: 14px;
 }
 
 .ar-validacoes-sort {
@@ -11183,6 +11207,10 @@ body.is-resizing-ar-products-column * {
   padding: 5px 9px;
 }
 
+.ar-recibos-actions .ar-recibo-mark-paid-button {
+  color: #15803d;
+}
+
 .ar-status-chip {
   background: color-mix(in srgb, #16a34a 12%, var(--card));
   border: 1px solid color-mix(in srgb, #16a34a 28%, var(--borda));
@@ -11199,6 +11227,12 @@ body.is-resizing-ar-products-column * {
   background: color-mix(in srgb, #ef4444 10%, var(--card));
   border-color: color-mix(in srgb, #ef4444 24%, var(--borda));
   color: #991b1b;
+}
+
+.ar-status-chip.paid {
+  background: color-mix(in srgb, #2563eb 11%, var(--card));
+  border-color: color-mix(in srgb, #2563eb 28%, var(--borda));
+  color: #1d4ed8;
 }
 
 .ar-recibo-modal {
@@ -19229,9 +19263,33 @@ table[data-resizable-table] > thead > tr > th {
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(125px, 1fr) minmax(160px, 1.25fr) minmax(125px, 1fr) minmax(170px, 1.35fr) 38px auto;
+  grid-template-columns: minmax(125px, 1fr) minmax(160px, 1.25fr) minmax(125px, 1fr) minmax(170px, 1.35fr) 38px 38px auto;
   margin: 0 0 2px;
   min-width: 0;
+}
+
+.ar-recibos-status-filter-menu > summary {
+  height: 38px;
+  min-height: 38px;
+  min-width: 38px;
+  padding: 0;
+  width: 38px;
+}
+
+.ar-recibos-status-filter-menu .hub-row-actions-popover {
+  min-width: 170px;
+}
+
+.ar-recibos-status-filter-menu .hub-row-actions-popover button {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.ar-recibos-status-filter-menu .hub-row-actions-popover svg {
+  height: 14px;
+  width: 14px;
 }
 
 .ar-recibos-filters .config-input {

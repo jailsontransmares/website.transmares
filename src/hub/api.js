@@ -8,6 +8,7 @@ import {
   excluirImportacaoRepasseAR,
   excluirImpostoReciboAR,
   importarRepasseAR,
+  marcarReciboQuitadoAR,
   listarParceirosLancamentoManualAR,
   listarImpostosReciboAR,
   salvarImpostoReciboAR,
@@ -287,6 +288,11 @@ export async function chamarApi(action, payload = {}) {
 
     if (action === 'cancelarArRecibo') {
       const dados = await cancelarReciboAR(payload);
+      return { ok: true, data: dados };
+    }
+
+    if (action === 'markArReceiptPaid') {
+      const dados = await marcarReciboQuitadoAR(payload);
       return { ok: true, data: dados };
     }
 

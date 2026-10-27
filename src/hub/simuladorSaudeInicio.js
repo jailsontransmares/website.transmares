@@ -2,6 +2,7 @@ import './simuladorSaudeInicio.css';
 import { chamarApi } from './api.js';
 import { SIMULADOR_SAUDE_CATALOGO_ROUTE, SIMULADOR_SAUDE_COTACAO_ROUTE, SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
+import { carregarPropostaSalvaSimuladorSaude } from './simuladorSaudeCotacao.js';
 
 const state = { quotes: [], loading: false, error: '', notice: '', busyId: '', requestId: 0, search: '', statusFilter: 'todas' };
 let context = {};
@@ -73,7 +74,7 @@ function renderTable() {
       <td class="saude-home-code"><button class="saude-home-open" type="button" onclick="saudeHomeOpenQuote('${esc(quote.id)}')" aria-label="Abrir cotação #${esc(quote.codigo ?? '—')}" title="Abrir cotação #${esc(quote.codigo ?? '—')}"><i data-lucide="search" aria-hidden="true"></i><span>#${esc(quote.codigo ?? '—')}</span></button></td>
       <td><strong>${esc(quote.cliente_nome || 'Cliente não informado')}</strong>${quote.cliente_cidade ? `<small>${esc(quote.cliente_cidade)}</small>` : ''}</td>
       <td>${livesCount}</td>
-      <td><span class="saude-home-status is-${esc(quote.status || 'rascunho')}">${statusLabel(quote.status)}</span></td>
+      <td><div class="saude-home-status-cell">${quote.status === 'proposta' ? `<button class="icon-btn saude-home-row-action" type="button" onclick="saudeHomeViewProposal('${esc(quote.id)}')" aria-label="Visualizar proposta da cotação #${esc(quote.codigo ?? '')}" title="Visualizar proposta"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}<span class="saude-home-status is-${esc(quote.status || 'rascunho')}">${statusLabel(quote.status)}</span></div></td>
       <td><div class="saude-home-row-actions">${actions}</div></td>
     </tr>`;
   }).join('');
@@ -147,6 +148,28 @@ window.saudeHomeNewQuote = () => context.navegarParaRota?.(hubRoute(SIMULADOR_SA
 window.saudeHomeOpenQuote = id => {
   if (!id) return;
   context.navegarParaRota?.(`${hubRoute(SIMULADOR_SAUDE_COTACAO_ROUTE)}?quoteId=${encodeURIComponent(id)}`);
+};
+window.saudeHomeViewProposal = async id => {
+  if (!id) return;
+  const proposalWindow = window.open('about:blank', '_blank');
+  if (!proposalWindow) {
+    state.notice = 'Permita a abertura de nova aba para visualizar a proposta.';
+    rerender();
+    return;
+  }
+  proposalWindow.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Preparando proposta</title></head><body style="color:#435977;font:14px Arial,sans-serif;padding:32px">Carregando proposta salva…</body></html>');
+  try {
+    const proposalHtml = await carregarPropostaSalvaSimuladorSaude(id);
+    if (proposalWindow.closed) return;
+    proposalWindow.document.open();
+    proposalWindow.document.write(proposalHtml);
+    proposalWindow.document.close();
+  } catch (error) {
+    if (proposalWindow.closed) return;
+    proposalWindow.document.open();
+    proposalWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Erro ao abrir proposta</title></head><body style="color:#8e2932;font:14px Arial,sans-serif;padding:32px"><h2>Não foi possível abrir a proposta</h2><p>${esc(error.message || 'Falha ao carregar os dados da cotação.')}</p></body></html>`);
+    proposalWindow.document.close();
+  }
 };
 window.saudeHomeDuplicateQuote = id => {
   if (!id || !context.pode?.('simulador_saude', 'create')) return;

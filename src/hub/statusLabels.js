@@ -42,6 +42,7 @@ const STATUS_LABELS = {
   dispensado: 'Dispensado',
   liquidado: 'Liquidado',
   liquidada: 'Liquidada',
+  quitado: 'Quitado',
   conciliado: 'Conciliado',
   conciliada: 'Conciliada',
   desconciliada: 'Desconciliada',

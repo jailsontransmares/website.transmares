@@ -348,3 +348,23 @@ export async function cancelarReciboAR(payload = {}) {
 
   return data;
 }
+
+export async function marcarReciboQuitadoAR(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  if (!payload.recibo_id) throw new Error('Selecione um recibo para marcar como quitado.');
+
+  const { data, error } = await supabase
+    .from('ar_recibos')
+    .update({ status: 'quitado', updated_at: new Date().toISOString() })
+    .eq('id', payload.recibo_id)
+    .eq('status', 'emitido')
+    .select('*')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(normalizarErroValidacoes(error, 'Não foi possível marcar o recibo como quitado.'));
+  }
+  if (!data) throw new Error('Este recibo não está mais emitido e não pode ser marcado como quitado.');
+
+  return data;
+}
