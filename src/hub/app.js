@@ -15336,7 +15336,9 @@ async function visualizarReciboValidacoesAr(id) {
             .ar-recibo-preview-page .ar-recibo-report-receipt { break-inside: avoid; min-width: 0; page-break-inside: avoid; }
             .ar-recibo-preview-page .ar-recibo-report-fields { display: grid !important; gap: 3px 12px; grid-template-columns: minmax(135px, 175px) minmax(0, 1fr) !important; }
             .ar-recibo-preview-page .ar-recibo-report-right-fields { display: grid !important; gap: 4px; grid-template-columns: 125px minmax(0, 1fr) !important; }
-            .ar-recibo-preview-page .ar-recibo-report-dates { display: flex !important; justify-content: space-between; }
+            .ar-recibo-preview-page .ar-recibo-report-dates { align-items: flex-start !important; display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 8px !important; justify-content: space-between !important; }
+            .ar-recibo-preview-page .ar-recibo-report-dates > div { flex: 1 1 0; min-width: 0; }
+            .ar-recibo-preview-page .ar-recibo-report-dates strong { display: inline !important; font-size: 10px; margin: 0 0 0 4px !important; }
             .ar-recibo-preview-page .ar-recibo-report-totals { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
           }
         </style>

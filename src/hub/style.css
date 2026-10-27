@@ -19333,8 +19333,23 @@ table[data-resizable-table] > thead > tr > th {
   }
 
   html body.ar-recibo-preview-page .ar-recibo-report-dates {
+    align-items: flex-start !important;
     display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
     justify-content: space-between !important;
+  }
+
+  html body.ar-recibo-preview-page .ar-recibo-report-dates > div {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  html body.ar-recibo-preview-page .ar-recibo-report-dates strong {
+    display: inline !important;
+    font-size: 10px;
+    margin: 0 0 0 4px !important;
   }
 
   html body.ar-recibo-preview-page .ar-recibo-report-totals {
