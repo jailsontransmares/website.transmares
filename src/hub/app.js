@@ -15334,8 +15334,8 @@ async function visualizarReciboValidacoesAr(id) {
             .ar-recibo-preview-page .ar-recibo-report-top-grid { display: grid !important; gap: 16px; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) !important; }
             .ar-recibo-preview-page .ar-recibo-report-partner,
             .ar-recibo-preview-page .ar-recibo-report-receipt { break-inside: avoid; min-width: 0; page-break-inside: avoid; }
-            .ar-recibo-preview-page .ar-recibo-report-fields { display: grid !important; gap: 8px 14px; grid-template-columns: minmax(135px, 175px) minmax(0, 1fr) !important; }
-            .ar-recibo-preview-page .ar-recibo-report-right-fields { display: grid !important; gap: 10px; grid-template-columns: 125px minmax(0, 1fr) !important; }
+            .ar-recibo-preview-page .ar-recibo-report-fields { display: grid !important; gap: 3px 12px; grid-template-columns: minmax(135px, 175px) minmax(0, 1fr) !important; }
+            .ar-recibo-preview-page .ar-recibo-report-right-fields { display: grid !important; gap: 4px; grid-template-columns: 125px minmax(0, 1fr) !important; }
             .ar-recibo-preview-page .ar-recibo-report-dates { display: flex !important; justify-content: space-between; }
             .ar-recibo-preview-page .ar-recibo-report-totals { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
           }

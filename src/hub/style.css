@@ -11359,7 +11359,7 @@ body.is-resizing-ar-products-column * {
   border: 1px solid var(--borda);
   border-radius: 12px;
   min-width: 0;
-  padding: 18px 20px;
+  padding: 8px 9px;
 }
 
 .ar-recibo-report-partner {
@@ -11369,7 +11369,7 @@ body.is-resizing-ar-products-column * {
 .ar-recibo-report-fields {
   align-items: center;
   display: grid;
-  gap: 8px 14px;
+  gap: 3px 14px;
   grid-template-columns: minmax(135px, 175px) minmax(0, 1fr);
 }
 
@@ -11385,20 +11385,20 @@ body.is-resizing-ar-products-column * {
   font-size: 12px;
   font-weight: 650;
   min-width: 0;
-  min-height: 30px;
+  min-height: 14px;
   overflow-wrap: anywhere;
-  padding: 5px 0;
+  padding: 2px 0;
 }
 
 .ar-recibo-report-right-fields {
   align-items: start;
   display: grid;
-  gap: 10px;
+  gap: 4px;
   grid-template-columns: 125px minmax(0, 1fr);
 }
 
 .ar-recibo-report-right-fields > span {
-  padding-top: 10px;
+  padding-top: 4px;
 }
 
 .ar-recibo-report-right-fields > strong {
@@ -11408,14 +11408,14 @@ body.is-resizing-ar-products-column * {
   color: var(--texto);
   font-size: 12px;
   font-weight: 650;
-  min-height: 38px;
+  min-height: 17px;
   min-width: 0;
   overflow-wrap: anywhere;
-  padding: 10px 12px;
+  padding: 4px 7px;
 }
 
 .ar-recibo-report-right-fields > .ar-recibo-report-observation {
-  min-height: 60px !important;
+  min-height: 25px !important;
   white-space: pre-wrap;
 }
 
@@ -11425,8 +11425,8 @@ body.is-resizing-ar-products-column * {
   font-size: 11px;
   gap: 12px;
   justify-content: space-between;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 5px;
+  padding-top: 5px;
 }
 
 .ar-recibo-report-dates > div {
@@ -11448,7 +11448,7 @@ body.is-resizing-ar-products-column * {
   border-radius: 11px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 12px;
+  margin-top: 5px;
   overflow: hidden;
 }
 
@@ -11456,7 +11456,7 @@ body.is-resizing-ar-products-column * {
   display: grid;
   gap: 3px;
   justify-items: center;
-  padding: 7px 8px;
+  padding: 3px 7px;
   text-align: center;
 }
 
@@ -19322,13 +19322,13 @@ table[data-resizable-table] > thead > tr > th {
 
   html body.ar-recibo-preview-page .ar-recibo-report-fields {
     display: grid !important;
-    gap: 8px 14px !important;
+    gap: 3px 12px !important;
     grid-template-columns: minmax(135px, 175px) minmax(0, 1fr) !important;
   }
 
   html body.ar-recibo-preview-page .ar-recibo-report-right-fields {
     display: grid !important;
-    gap: 10px !important;
+    gap: 4px !important;
     grid-template-columns: 125px minmax(0, 1fr) !important;
   }
 
