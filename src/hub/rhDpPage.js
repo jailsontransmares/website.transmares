@@ -12,9 +12,10 @@ import {
   listarOcorrenciasRhDp,
   listarColaboradoresRhDp,
   obterCadastroPessoalRhDp,
+  obterFichaPdfRhDp,
   salvarBeneficioRhDp,
+  salvarDependenteRhDp,
   salvarDadosBancariosRhDp,
-  salvarChecklistAdmissionalRhDp,
   salvarMovimentacaoRhDp,
   salvarArquivoColaboradorRhDp,
   salvarCompetenciaRhDp,
@@ -25,7 +26,8 @@ import {
   salvarFeriasRhDp,
   salvarAfastamentoRhDp,
   salvarOcorrenciaRhDp,
-  salvarCadastroPessoalRhDp
+  salvarCadastroPessoalRhDp,
+  sincronizarPlanilhaRhDp
 } from './services/rhDpService.js';
 import {
   abrirMenuAcaoGlobal,
@@ -33,6 +35,9 @@ import {
   limparMenusAcoesGlobais
 } from './actionMenuPortal.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
+import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
+import { registerHubRecordShortcutHandler, renderHubRecordHeader, renderHubRecordEditButton, renderHubRecordFormFooter, removeHubRecordWorkflowFooter } from './recordWorkflow.js';
+import { removeHubFormFooterPortals } from './formFooterPortal.js';
 
 const LIMITE_POR_PAGINA = 10;
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
@@ -241,12 +246,15 @@ function normalizarBusca(valor = '') {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
 export function criarRhDpController({
   renderShell,
   pode,
+  submoduleEnabled = () => true,
+  renderUnavailable = () => {},
   escapeHtml,
   escapeAttr,
   obterPartesRota,
@@ -304,10 +312,37 @@ export function criarRhDpController({
       colaboradorId: ''
     },
     busca: '',
-    filtroStatus: 'todos',
+    filtroStatus: 'ativo',
+    syncingSpreadsheet: false,
     pagina: 1,
     modal: criarEstadoModal()
   };
+
+  let menuMaisRhDpAberto = null;
+  let faixaNavegacaoRhDp = '';
+  let listenersMenuRhDpConfigurados = false;
+  let resizeNavegacaoRhDpConfigurado = false;
+  let toastRhDpTimer = null;
+
+  function mostrarToastRhDp(mensagem) {
+    if (!mensagem || !document.body) return;
+    if (toastRhDpTimer) window.clearTimeout(toastRhDpTimer);
+    document.getElementById('rh-dp-toast')?.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'rh-dp-toast';
+    toast.className = 'rh-dp-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
+    toast.textContent = mensagem;
+    document.body.appendChild(toast);
+
+    toastRhDpTimer = window.setTimeout(() => {
+      toast.remove();
+      toastRhDpTimer = null;
+    }, 3000);
+  }
 
   function criarEstadoModal({
     aberto = false,
@@ -323,15 +358,19 @@ export function criarRhDpController({
       id,
       loading,
       saving: false,
-      etapa: 0,
+      snapshotEdicao: null,
+      blocosAbertos: { 'dados-pessoais': true },
+      aba: 'cadastro',
       colaborador: novoColaborador(),
       documentos: novosDocumentos(),
       vinculo: novoVinculo(),
       dependentes: [],
       beneficios: [],
+      beneficiosPendentes: [],
+      beneficiosParaEncerrar: [],
+      complementoModal: { aberto: false, tipo: '', saving: false, erro: '', form: {} },
       bancarios: {},
       movimentacoes: [],
-      checklist: [],
       ferias: [],
       afastamentos: [],
       desligamentos: [],
@@ -356,8 +395,21 @@ export function criarRhDpController({
     return pode('rh_dp.colaboradores', 'view_sensitive');
   }
 
+  function podeSincronizarPlanilha() {
+    return podeEditar() && podeVerSensiveis();
+  }
+
+  function podeImportarPlanilha() {
+    return pode('rh_dp.colaboradores', 'create') && podeEditar() && podeVerSensiveis();
+  }
+
   function podeCriar() {
     return pode('rh_dp.colaboradores', 'create') && podeVerSensiveis();
+  }
+
+  function podeAdicionarComplemento(tipo = 'dependente') {
+    if (!podeVerSensiveis()) return false;
+    return tipo === 'beneficio' ? podeEditar() : (podeCriar() || podeEditar());
   }
 
   function podeEditar() {
@@ -417,8 +469,8 @@ export function criarRhDpController({
 
   function obterSecaoPermitida(secao) {
     const candidata = RH_SECOES.find(item => item.id === secao);
-    if (candidata?.pode()) return candidata.id;
-    return RH_SECOES.find(item => item.pode())?.id || '';
+    if (candidata?.pode() && submoduleEnabled(`rh_dp.${candidata.id === 'demandas' ? 'demandas_contabilidade' : candidata.id}`)) return candidata.id;
+    return RH_SECOES.find(item => item.pode() && submoduleEnabled(`rh_dp.${item.id === 'demandas' ? 'demandas_contabilidade' : item.id}`))?.id || '';
   }
 
   function obterCadastroRota() {
@@ -443,14 +495,114 @@ export function criarRhDpController({
     return `${obterRotaColaboradores()}/${modo === 'edit' ? 'editar' : 'visualizar'}/${id}`;
   }
 
+  function obterFaixaNavegacaoRhDp() {
+    const largura = typeof window === 'undefined' ? 1280 : window.innerWidth;
+    if (largura <= 480) return 'compact';
+    if (largura <= 760) return 'mobile';
+    if (largura <= 1000) return 'tablet';
+    return 'desktop';
+  }
+
+  function fecharMenuMaisRhDp() {
+    if (!menuMaisRhDpAberto) return;
+    fecharMenuAcaoGlobal(menuMaisRhDpAberto.menu);
+    menuMaisRhDpAberto.menu.hidden = true;
+    menuMaisRhDpAberto.trigger.setAttribute('aria-expanded', 'false');
+    menuMaisRhDpAberto = null;
+  }
+
+  function renderMaisRhDp(itens, ativo) {
+    if (!itens.length) return '';
+    return `
+      <div class="hub-responsive-more">
+        <button class="hub-responsive-more-trigger ${ativo ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-module-more-menu" data-rh-more-trigger>
+          <span>Mais</span><span aria-hidden="true">⌄</span>
+        </button>
+        <div id="rh-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>
+          ${itens.map(([id, nome]) => `<button class="hub-responsive-more-item" role="menuitem" type="button" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function configurarMenusMaisRhDp() {
+    if (listenersMenuRhDpConfigurados) return;
+    document.addEventListener('click', event => {
+      if (!menuMaisRhDpAberto) return;
+      if (menuMaisRhDpAberto.trigger.contains(event.target) || menuMaisRhDpAberto.menu.contains(event.target)) return;
+      fecharMenuMaisRhDp();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !menuMaisRhDpAberto) return;
+      event.preventDefault();
+      const trigger = menuMaisRhDpAberto.trigger;
+      fecharMenuMaisRhDp();
+      trigger.focus();
+    });
+    listenersMenuRhDpConfigurados = true;
+  }
+
+  function conectarMenuMaisRhDp() {
+    configurarMenusMaisRhDp();
+    document.querySelectorAll('[data-rh-more-trigger]').forEach(trigger => {
+      trigger.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+        if (!menu) return;
+        const abrir = menu.hidden;
+        fecharMenuMaisRhDp();
+        if (!abrir) return;
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        menuMaisRhDpAberto = { menu, trigger };
+        abrirMenuAcaoGlobal(trigger, menu, { minWidth: 190, maxWidth: 320, gap: 6, flipVertical: true });
+      });
+      const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+      menu?.querySelectorAll('[role="menuitem"]').forEach(item => item.addEventListener('click', fecharMenuMaisRhDp));
+    });
+  }
+
+  function configurarResizeNavegacaoRhDp() {
+    if (resizeNavegacaoRhDpConfigurado || typeof window === 'undefined') return;
+    faixaNavegacaoRhDp = obterFaixaNavegacaoRhDp();
+    window.addEventListener('resize', () => {
+      const novaFaixa = obterFaixaNavegacaoRhDp();
+      if (novaFaixa === faixaNavegacaoRhDp) return;
+      faixaNavegacaoRhDp = novaFaixa;
+
+      const partesRota = obterPartesRota?.() || [];
+      if (partesRota[0] !== 'rh-dp') return;
+
+      const navegacaoAtual = document
+        .getElementById('app')
+        ?.querySelector('.rh-module-tabs[aria-label="Menu do RH e DP"]');
+      if (!navegacaoAtual) return;
+
+      fecharMenuMaisRhDp();
+      const template = document.createElement('template');
+      template.innerHTML = renderMenuRhDp().trim();
+      const novaNavegacao = template.content.firstElementChild;
+      if (!novaNavegacao) return;
+
+      navegacaoAtual.replaceWith(novaNavegacao);
+      conectarMenuMaisRhDp();
+    });
+    resizeNavegacaoRhDpConfigurado = true;
+  }
+
   function renderMenuRhDp() {
     const itens = [
-      ['dashboard', 'Dashboard', podeVerDashboard()],
-      ['colaboradores', 'Colaboradores', podeVer()],
-      ['demandas', 'Demandas à contabilidade', podeVerDemandas()],
-      ['fechamentos', 'Fechamento mensal', podeVerFechamentos()]
-    ].filter(([, , permitido]) => permitido);
-    return `<nav class="module-tabs rh-module-tabs" role="group" aria-label="Menu do RH e DP">${itens.map(([id, nome]) => `<button type="button" class="${state.secao === id ? 'active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}</nav>`;
+      ['dashboard', 'Dashboard', podeVerDashboard(), 'rh_dp.dashboard'],
+      ['colaboradores', 'Colaboradores', podeVer(), 'rh_dp.colaboradores'],
+      ['demandas', 'Demandas à contabilidade', podeVerDemandas(), 'rh_dp.demandas_contabilidade'],
+      ['fechamentos', 'Fechamento mensal', podeVerFechamentos(), 'rh_dp.fechamentos']
+    ].filter(([, , permitido, submodulo]) => permitido && submoduleEnabled(submodulo));
+    const faixa = obterFaixaNavegacaoRhDp();
+    const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+    const principais = itens.slice(0, limite);
+    const secundarias = itens.slice(limite);
+    return `<nav class="module-tabs rh-module-tabs hub-module-nav" role="group" aria-label="Menu do RH e DP">${principais.map(([id, nome]) => `<button type="button" class="hub-module-nav-item ${state.secao === id ? 'active is-active' : ''}" onclick="hubRhDpAbrirSecao('${id}')">${nome}</button>`).join('')}${renderMaisRhDp(secundarias, secundarias.some(([id]) => id === state.secao))}</nav>`;
   }
 
   function renderMetricasRhDp(itens, acoes = '') {
@@ -874,7 +1026,8 @@ export function criarRhDpController({
         item.nome_completo,
         item.telefone_celular,
         item.email_contato,
-        item.endereco_cidade
+        item.cpf_busca,
+        ...(item.dependentes_busca || [])
       ].some(valor => normalizarBusca(valor).includes(busca));
     });
   }
@@ -921,6 +1074,10 @@ export function criarRhDpController({
           <strong>Nenhum colaborador encontrado</strong>
           <p>${state.colaboradores.length ? 'Revise os filtros aplicados.' : 'Inclua o primeiro cadastro pessoal do módulo.'}</p>
         </div>
+        ${renderHubStatusLegend([
+          { status: 'ativo', rotulo: 'Ativo' },
+          { status: 'inativo', rotulo: 'Inativo' }
+        ], 'Legenda de status dos colaboradores')}
       `;
     }
 
@@ -930,98 +1087,94 @@ export function criarRhDpController({
           <span>Colaborador</span>
           <span>Contato</span>
           <span>Nascimento</span>
-          <span>Status</span>
-          <span>Atualização</span>
-          <span>Ações</span>
+          <span>Última atualização</span>
         </div>
         ${pagina.map(item => renderLinha(item)).join('')}
       </div>
-      ${totalPaginas > 1 ? `
-        <div class="rh-pagination">
-          <span>${filtrados.length} registros</span>
-          <div>
-            <button class="secondary-btn" type="button" onclick="hubRhDpSelecionarPagina(${state.pagina - 1})" ${state.pagina <= 1 ? 'disabled' : ''}>Anterior</button>
-            <span>Página ${state.pagina} de ${totalPaginas}</span>
-            <button class="secondary-btn" type="button" onclick="hubRhDpSelecionarPagina(${state.pagina + 1})" ${state.pagina >= totalPaginas ? 'disabled' : ''}>Próxima</button>
-          </div>
+      <div class="rh-pagination">
+        <span>Mostrando ${inicio + 1}–${Math.min(inicio + pagina.length, filtrados.length)} de ${filtrados.length} colaboradores</span>
+        <div>
+          <button class="secondary-btn" type="button" aria-label="Página anterior" onclick="hubRhDpSelecionarPagina(${state.pagina - 1})" ${state.pagina <= 1 ? 'disabled' : ''}>‹</button>
+          <span>Página ${state.pagina} de ${totalPaginas}</span>
+          <button class="secondary-btn" type="button" aria-label="Próxima página" onclick="hubRhDpSelecionarPagina(${state.pagina + 1})" ${state.pagina >= totalPaginas ? 'disabled' : ''}>›</button>
         </div>
-      ` : ''}
+      </div>
+      ${renderHubStatusLegend([
+        { status: 'ativo', rotulo: 'Ativo' },
+        { status: 'inativo', rotulo: 'Inativo' }
+      ], 'Legenda de status dos colaboradores')}
     `;
+  }
+
+  function iniciaisColaborador(nome) {
+    const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    const primeira = partes[0][0];
+    const ultima = partes.length > 1 ? partes[partes.length - 1][0] : partes[0][1] || '';
+    return `${primeira}${ultima}`.toLocaleUpperCase('pt-BR');
   }
 
   function renderLinha(item) {
     const idade = calcularIdade(item.data_nascimento);
     const contato = item.telefone_celular || item.email_contato || '-';
     const status = item.status === 'inativo' ? 'inativo' : 'ativo';
-    const colaboradorId = escapeAttr(item.id);
     const colaboradorCodigo = escapeAttr(item.codigo || item.id);
 
     return `
       <article class="rh-table rh-table-row" role="row">
         <div class="rh-person-cell">
-          <strong>${escapeHtml(item.nome_completo || '-')}</strong>
-          <span>${escapeHtml(item.endereco_cidade || 'Cidade não informada')}</span>
+          <span class="rh-person-avatar" aria-hidden="true">${escapeHtml(iniciaisColaborador(item.nome_completo))}</span>
+          <div class="rh-person-name-row">
+            ${renderHubStatusDot(status, 'do colaborador')}
+            <button class="rh-person-name" type="button" aria-label="Visualizar cadastro de ${escapeAttr(item.nome_completo || 'colaborador')}" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">${escapeHtml(item.nome_completo || '-')}</button>
+          </div>
         </div>
         <span>${escapeHtml(contato)}</span>
         <span>${escapeHtml(formatarData(item.data_nascimento))}${idade == null ? '' : `<small>${idade} anos</small>`}</span>
-        <span><span class="status-badge ${status}">${status}</span></span>
         <span>${escapeHtml(formatarDataHora(item.updated_at))}</span>
-        <div class="rh-row-actions">
-          <details class="rh-row-actions-menu">
-            <summary class="icon-action-btn hub-quick-actions-trigger" aria-label="Ações rápidas de ${escapeAttr(item.nome_completo)}" title="Ações rápidas">⋮</summary>
-            <div class="rh-row-actions-popover" role="menu">
-              <button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">Visualizar</button>
-              ${podeEditar() ? `<button type="button" role="menuitem" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'edit')">Editar</button>` : ''}
-              ${status === 'ativo' && podeCriarFerias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-ferias" data-colaborador-id="${colaboradorId}">Incluir férias</button>` : ''}
-              ${status === 'ativo' && podeCriarOcorrencias() ? `<button type="button" role="menuitem" data-rh-action="quick-open-afastamento" data-colaborador-id="${colaboradorId}">Lançar afastamento</button>` : ''}
-              ${status === 'ativo' && podeCriarDesligamentos() ? `<button type="button" role="menuitem" data-rh-action="quick-open-desligamento" data-colaborador-id="${colaboradorId}">Lançar desligamento</button>` : ''}
-              ${podeInativar() ? `<button class="${status === 'ativo' ? 'danger-text' : ''}" type="button" role="menuitem" onclick="hubRhDpAlterarStatus('${colaboradorId}', '${status === 'ativo' ? 'inativo' : 'ativo'}')">${status === 'ativo' ? 'Inativar' : 'Reativar'}</button>` : ''}
-            </div>
-          </details>
-        </div>
       </article>
     `;
   }
 
   function renderToolbar() {
-    const dados = resumo();
     const filtros = [
-      ['todos', 'Todos', 'T', dados.total],
-      ['ativo', 'Ativos', 'A', dados.ativos],
-      ['inativo', 'Inativos', 'I', dados.inativos]
+      ['todos', 'Todos'],
+      ['ativo', 'Ativos'],
+      ['inativo', 'Inativos']
     ];
+    const filtroSelecionado = filtros.find(([id]) => id === state.filtroStatus) || filtros[0];
 
     return `
       <div class="rh-toolbar">
-        <div class="rh-status-filters" role="group" aria-label="Filtrar colaboradores por status">
-          ${filtros.map(([id, nome, abreviacao, quantidade]) => `
-            <button
-              class="rh-status-filter ${id === 'ativo' ? 'is-ativo' : id === 'inativo' ? 'is-inativo' : ''} ${state.filtroStatus === id ? 'is-active' : ''}"
-              type="button"
-              aria-label="${nome}: ${quantidade} colaboradores"
-              aria-pressed="${state.filtroStatus === id ? 'true' : 'false'}"
-              onclick="hubRhDpFiltrarStatus('${id}')"
-            >
-              <span class="rh-status-filter-label">${nome}</span>
-              <span class="rh-status-filter-short" aria-hidden="true">${abreviacao}</span>
-              <span class="rh-status-filter-count">${quantidade}</span>
-            </button>
-          `).join('')}
-        </div>
+        <label class="rh-search">
+          <span>Buscar colaboradores</span>
+          <input
+            id="rh_dp_busca"
+            class="config-input"
+            type="search"
+            value="${escapeAttr(state.busca)}"
+            placeholder="Buscar colaborador(a)"
+            aria-label="Buscar colaborador(a)"
+            oninput="hubRhDpFiltrarBusca(this.value)"
+          >
+        </label>
         <div class="rh-collaborators-actions">
-          ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create">+ Incluir</button>' : ''}
-          <label class="rh-search">
-            <span>Buscar colaboradores</span>
-            <input
-              id="rh_dp_busca"
-              class="config-input"
-              type="search"
-              value="${escapeAttr(state.busca)}"
-              placeholder="Filtrar colaboradores"
-              aria-label="Filtrar colaboradores"
-              oninput="hubRhDpFiltrarBusca(this.value)"
-            >
-          </label>
+          ${podeSincronizarPlanilha() ? `<button class="secondary-btn rh-collaborators-sync" type="button" data-rh-action="sync-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Envia até 20 alterações pendentes do Hub para a planilha">Enviar ao Sheets</button>` : ''}
+          ${podeImportarPlanilha() ? `<button class="secondary-btn rh-collaborators-import" type="button" data-rh-action="import-spreadsheet" ${state.syncingSpreadsheet || state.loading ? 'disabled' : ''} title="Cria no Hub colaboradores com CPF que ainda não existe no cadastro; CPFs já cadastrados não são alterados">${state.syncingSpreadsheet ? 'Importando…' : 'Importar da planilha'}</button>` : ''}
+          <details class="hub-row-actions-menu rh-filter-menu" data-hub-action-menu data-hub-action-min-width="210" data-hub-action-max-width="260" data-hub-action-gap="8" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="selected">
+            <summary class="secondary-btn rh-filter-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="Filtrar colaboradores por status${state.filtroStatus !== 'todos' ? `: ${filtroSelecionado[1]}` : ''}" title="Filtrar colaboradores">
+              <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
+            </summary>
+            <div class="hub-row-actions-popover rh-filter-popover" data-hub-action-popover role="menu" aria-label="Filtros de colaboradores">
+              <div class="rh-filter-heading" role="presentation"><strong>Status</strong></div>
+              ${filtros.map(([id, nome]) => `
+                <button type="button" role="menuitemradio" aria-checked="${state.filtroStatus === id ? 'true' : 'false'}" class="rh-filter-option ${state.filtroStatus === id ? 'is-selected' : ''}" onclick="hubRhDpFiltrarStatus('${id}')">
+                  <span class="rh-filter-check" aria-hidden="true"></span>
+                  <span>${nome}</span>
+                </button>
+              `).join('')}
+            </div>
+          </details>
         </div>
       </div>
     `;
@@ -1040,20 +1193,24 @@ export function criarRhDpController({
       : `
         ${state.secao === 'dashboard' ? renderDashboard() : state.secao === 'demandas' ? renderDemandas() : state.secao === 'fechamentos' ? renderFechamentos() : state.modal.aberto ? `${renderModal()}${renderModalFerias()}${renderModalAfastamento()}${renderModalDesligamento()}` : `
         <section class="admin-panel rh-panel">
-          <div class="admin-panel-header rh-panel-header">
-            ${renderMenuRhDp()}
-            <div>
-              <h2>Colaboradores</h2>
-              <p>Cadastro pessoal para controle interno da Transmares.</p>
+          <div class="admin-panel-header rh-panel-header rh-collaborators-header">
+            <div class="rh-collaborators-title-row">
+              <div>
+                <h2>Colaboradores</h2>
+                <p>Cadastro pessoal para controle interno da Transmares.</p>
+              </div>
+              ${podeCriar() ? '<button class="save-btn rh-collaborators-add" type="button" data-rh-action="open-create"><i data-lucide="plus" aria-hidden="true"></i> Incluir colaborador</button>' : ''}
             </div>
+            ${renderMenuRhDp()}
           </div>
 
           <div class="rh-collaborators-overview">${renderToolbar()}</div>
-          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : 'success'}">${escapeHtml(state.message)}</p>` : ''}
+          ${state.message ? `<p class="admin-message ${state.messageType === 'error' ? 'error' : state.messageType === 'warning' ? 'warning' : 'success'}" role="${state.messageType === 'error' ? 'alert' : 'status'}">${escapeHtml(state.message)}</p>` : ''}
           ${state.loading ? (window.hubRenderLoading?.('Carregando colaboradores...') || '<p class="quick-link-empty" role="status">Carregando colaboradores...</p>') : renderTabela()}
         </section>`}
       `;
 
+    fecharMenuMaisRhDp();
     limparMenusAcoesGlobais();
     document.getElementById('app').innerHTML = renderShell({
       tituloPagina: 'RH & DP',
@@ -1062,63 +1219,19 @@ export function criarRhDpController({
       conteudo
     });
     conectarEventos();
+    conectarMenuMaisRhDp();
+    configurarResizeNavegacaoRhDp();
   }
 
   function conectarEventos() {
-    document.querySelector('[data-rh-action="open-create"]')?.addEventListener('click', () => {
+    document.querySelectorAll('[data-rh-action="open-create"]').forEach(botao => botao.addEventListener('click', () => {
       abrirCadastro('', 'create');
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-ferias"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'ferias'));
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-afastamento"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'afastamento'));
-    });
-    document.querySelectorAll('[data-rh-action="quick-open-desligamento"]').forEach(botao => {
-      botao.addEventListener('click', () => abrirCadastro(botao.dataset.colaboradorId || '', 'edit', 'desligamento'));
-    });
+    }));
+    document.querySelector('[data-rh-action="sync-spreadsheet"]')?.addEventListener('click', sincronizarPlanilha);
+    document.querySelector('[data-rh-action="import-spreadsheet"]')?.addEventListener('click', importarDaPlanilha);
     document.querySelector('[data-rh-action="quick-open-modal-ferias"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('ferias'));
     document.querySelector('[data-rh-action="quick-open-modal-afastamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('afastamento'));
     document.querySelector('[data-rh-action="quick-open-modal-desligamento"]')?.addEventListener('click', () => abrirAcaoOperacionalColaborador('desligamento'));
-    document.querySelectorAll('.rh-row-actions-menu').forEach(menu => {
-      const popover = menu.querySelector('.rh-row-actions-popover');
-      const trigger = menu.querySelector('summary');
-      if (!popover || !trigger) return;
-
-      menu.addEventListener('toggle', () => {
-        if (!menu.open) {
-          fecharMenuAcaoGlobal(popover);
-          return;
-        }
-
-        abrirMenuAcaoGlobal(trigger, popover, {
-          minWidth: 120,
-          maxWidth: 190,
-          gap: 6
-        });
-      });
-
-      trigger.addEventListener('click', () => window.requestAnimationFrame(() => {
-        if (menu.open) {
-          abrirMenuAcaoGlobal(trigger, popover, {
-            minWidth: 120,
-            maxWidth: 190,
-            gap: 6
-          });
-        }
-      }));
-    });
-    document.querySelectorAll('[data-rh-action="close-modal"]').forEach(botao => {
-      botao.addEventListener('click', () => {
-        fecharCadastro();
-      });
-    });
-    document.querySelector('[data-rh-action="save-modal"]')?.addEventListener('click', () => {
-      salvarCadastro();
-    });
-    document.querySelector('[data-rh-action="save-modal-close"]')?.addEventListener('click', () => {
-      salvarCadastro(true);
-    });
     document.querySelector('[data-rh-action="open-ferias-modal"]')?.addEventListener('click', () => {
       abrirModalFerias();
     });
@@ -1200,13 +1313,69 @@ export function criarRhDpController({
     });
   }
 
+  async function sincronizarPlanilha() {
+    if (state.syncingSpreadsheet || !podeSincronizarPlanilha()) return;
+    state.syncingSpreadsheet = true;
+    state.message = '';
+    render();
+
+    try {
+      const result = await sincronizarPlanilhaRhDp();
+      const processed = Number(result.processed) || 0;
+      const failed = (result.results || []).filter(item => item.status !== 'success').length;
+      state.message = processed === 0
+        ? 'Não há alterações pendentes para enviar à planilha.'
+        : failed
+          ? `${processed} alteração(ões) processada(s); ${failed} apresentou(aram) erro e será(ão) tentada(s) novamente.`
+          : `${processed} alteração(ões) sincronizada(s) com a planilha.`;
+      state.messageType = failed ? 'error' : 'success';
+    } catch (error) {
+      state.message = error.message || 'Não foi possível sincronizar com a planilha.';
+      state.messageType = 'error';
+    } finally {
+      state.syncingSpreadsheet = false;
+      render();
+    }
+  }
+
+  async function importarDaPlanilha() {
+    if (state.syncingSpreadsheet || !podeImportarPlanilha()) return;
+    state.syncingSpreadsheet = true;
+    state.message = '';
+    render();
+
+    try {
+      const result = await sincronizarPlanilhaRhDp({ importar: true });
+      state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
+      const imported = Number(result.imported) || 0;
+      const existing = Number(result.existing) || 0;
+      const failures = Array.isArray(result.failures) ? result.failures : [];
+      const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      const skippedColumns = Number(result.skippedColumns) || warnings.length;
+      const remaining = Number(result.remaining) || 0;
+      const parts = [`${imported} colaborador(es) novo(s) importado(s)`, `${existing} CPF(s) já existente(s) ignorado(s)`];
+      if (remaining) parts.push(`${remaining} cadastro(s) novo(s) aguardando outra execução`);
+      if (skippedColumns) parts.push(`${skippedColumns} coluna(s) ignorada(s) por formato${warnings.slice(0, 3).map(item => ` — linha ${item.row}: ${item.column}`).join('')}`);
+      if (failures.length) parts.push(`${failures.length} linha(s) com problema${failures.slice(0, 3).map(item => ` — linha ${item.row}: ${item.message}`).join('')}`);
+      state.message = parts.join('; ') + '.';
+      state.messageType = failures.length ? 'error' : skippedColumns ? 'warning' : 'success';
+    } catch (error) {
+      state.message = error.message || 'Não foi possível importar os dados da planilha.';
+      state.messageType = 'error';
+    } finally {
+      state.syncingSpreadsheet = false;
+      render();
+    }
+  }
+
   function campo(id, label, valor, {
     type = 'text',
     required = false,
     readonly = false,
     placeholder = '',
     mask = '',
-    maxLength = ''
+    maxLength = '',
+    minLength = ''
   } = {}) {
     return `
       <label>
@@ -1219,6 +1388,7 @@ export function criarRhDpController({
           ${placeholder ? `placeholder="${escapeAttr(placeholder)}"` : ''}
           ${mask ? `data-rh-mask="${escapeAttr(mask)}" oninput="hubRhDpAplicarMascara(event)"` : ''}
           ${maxLength ? `maxlength="${escapeAttr(maxLength)}"` : ''}
+          ${minLength ? `minlength="${escapeAttr(minLength)}"` : ''}
           ${required ? 'required' : ''}
           ${readonly ? 'disabled' : ''}
         >
@@ -1226,14 +1396,42 @@ export function criarRhDpController({
     `;
   }
 
-  function campoSelect(id, label, valor, opcoes, { required = false, readonly = false } = {}) {
+  const rotulosOpcoesSelect = {
+    ativo: 'Ativo', inativo: 'Inativo',
+    rg: 'RG', cnh: 'CNH', clt: 'CLT',
+    estagio: 'Estágio', socio: 'Sócio', temporario: 'Temporário',
+    experiencia: 'Em experiência', afastado: 'Afastado', desligado: 'Desligado',
+    salario: 'Salário', pro_labore: 'Pró-labore', honorario: 'Honorário',
+    flexivel: 'Flexível', hibrido: 'Híbrido',
+    vale_transporte: 'Vale-transporte', vale_refeicao: 'Vale-refeição',
+    vale_alimentacao: 'Vale-alimentação', plano_saude: 'Plano de saúde',
+    seguro_vida: 'Seguro de vida',
+    corrente: 'Conta corrente', poupanca: 'Poupança', pagamento: 'Conta de pagamento',
+    cpf: 'CPF', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Aleatória',
+    nao_definido: 'Não definido', nao_aplicavel: 'Não aplicável',
+    cargo_funcao: 'Cargo/função', remuneracao: 'Remuneração',
+    jornada: 'Jornada', beneficio: 'Benefício', dados_bancarios: 'Dados bancários',
+    situacao: 'Situação', outro: 'Outro', outros: 'Outros'
+  };
+
+  function formatarRotuloOpcaoSelect(opcao) {
+    const texto = String(opcao ?? '').trim();
+    if (!texto) return texto;
+    const rotuloConhecido = rotulosOpcoesSelect[texto.toLocaleLowerCase('pt-BR')];
+    if (rotuloConhecido) return rotuloConhecido;
+
+    const legivel = texto.replaceAll('_', ' ');
+    return legivel.charAt(0).toLocaleUpperCase('pt-BR') + legivel.slice(1);
+  }
+
+  function campoSelect(id, label, valor, opcoes, { required = false, readonly = false, className = '' } = {}) {
     return `
       <label>
         <span>${escapeHtml(label)}${required ? ' *' : ''}</span>
-        <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
+        <select id="rh_${escapeAttr(id)}" class="config-input${className ? ` ${escapeAttr(className)}` : ''}" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
           <option value="">Selecione</option>
           ${opcoes.map(opcao => `
-            <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(opcao)}</option>
+            <option value="${escapeAttr(opcao)}" ${String(valor || '') === opcao ? 'selected' : ''}>${escapeHtml(formatarRotuloOpcaoSelect(opcao))}</option>
           `).join('')}
         </select>
       </label>
@@ -1247,7 +1445,7 @@ export function criarRhDpController({
         <select id="rh_${escapeAttr(id)}" class="config-input" ${required ? 'required' : ''} ${readonly ? 'disabled' : ''}>
           <option value="">Selecione</option>
           ${opcoes.map(([chave, nome]) => `
-            <option value="${escapeAttr(chave)}" ${String(valor || '') === chave ? 'selected' : ''}>${escapeHtml(nome)}</option>
+            <option value="${escapeAttr(chave)}" ${String(valor || '') === chave ? 'selected' : ''}>${escapeHtml(formatarRotuloOpcaoSelect(nome))}</option>
           `).join('')}
         </select>
       </label>
@@ -1277,21 +1475,21 @@ export function criarRhDpController({
           <strong>Dados pessoais</strong>
           <span>Campos marcados com * são obrigatórios.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-personal-grid">
           <label class="rh-span-2">
             <span>Nome completo *</span>
             <input id="rh_nome_completo" class="config-input" type="text" value="${escapeAttr(item.nome_completo || '')}" required ${readonly ? 'disabled' : ''}>
           </label>
           ${campo('data_nascimento', 'Data de nascimento', item.data_nascimento, { type: 'date', required: true, readonly })}
+          ${campoSelect('sexo', 'Sexo', item.sexo, ['Feminino', 'Masculino', 'Intersexo', 'Prefere não informar'], { readonly })}
           ${campoSelect('estado_civil', 'Estado civil', item.estado_civil, ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)', 'Separado(a)'], { readonly })}
           ${campo('nacionalidade', 'Nacionalidade', item.nacionalidade, { readonly })}
           ${campo('naturalidade', 'Naturalidade', item.naturalidade, { readonly })}
-          ${campoSelect('sexo', 'Sexo', item.sexo, ['Feminino', 'Masculino', 'Intersexo', 'Prefere não informar'], { readonly })}
           ${campoSelect('cor_raca', 'Cor/raça', item.cor_raca, ['Amarela', 'Branca', 'Indígena', 'Parda', 'Preta', 'Prefere não informar'], { readonly })}
           ${campoSelect('escolaridade', 'Escolaridade', item.escolaridade, ['Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Superior incompleto', 'Superior completo', 'Pós-graduação', 'Mestrado', 'Doutorado'], { readonly })}
           ${campo('nome_pai', 'Nome completo do pai', item.nome_pai, { readonly })}
           ${campo('nome_mae', 'Nome completo da mãe', item.nome_mae, { readonly })}
-          ${campoSelect('status', 'Status do cadastro', item.status, ['ativo', 'inativo'], { required: true, readonly })}
+          ${campoSelect('status', 'Status do cadastro', item.status, ['ativo', 'inativo'], { required: true, readonly, className: 'rh-status-input' })}
         </div>
       </section>
     `;
@@ -1305,7 +1503,7 @@ export function criarRhDpController({
           <strong>Contatos e emergência</strong>
           <span>Informe ao menos telefone ou e-mail.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-contact-grid">
           ${campo('telefone_celular', 'Telefone celular', item.telefone_celular, { readonly, mask: 'telefone', placeholder: '(00) 00000-0000' })}
           ${campo('email_contato', 'E-mail de contato', item.email_contato, { readonly, type: 'email' })}
           ${campo('contato_emergencia_nome', 'Contato de emergência', item.contato_emergencia_nome, { readonly })}
@@ -1321,9 +1519,9 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Endereço</strong>
-          <span>Preencha o CEP para buscar o endereço automaticamente.</span>
+          <span>Localização residencial com preenchimento automático pelo CEP.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-address-grid">
           <label>
             <span>CEP</span>
             <input
@@ -1369,25 +1567,25 @@ export function criarRhDpController({
           <strong>Documentos cadastrais</strong>
           <span>Dados sensíveis do cadastro. Arquivos ficam na seção de anexos.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-documents-grid">
           ${campo('cpf', 'CPF', formatarCpf(item.cpf), { required: true, readonly, mask: 'cpf', placeholder: '000.000.000-00' })}
-          ${campoSelect('identidade_tipo', 'Documento de identidade', item.identidade_tipo, ['rg', 'cnh'], { readonly })}
-          ${campo('identidade_numero', 'Número do RG/CNH', item.identidade_numero, { readonly })}
-          ${campo('cnh_categoria', 'Categoria da CNH', item.cnh_categoria, { readonly })}
-          ${campo('identidade_data_emissao', 'Data de emissão/expedição', item.identidade_data_emissao, { type: 'date', readonly })}
+          ${campoSelect('identidade_tipo', 'Tipo de documento', item.identidade_tipo, ['rg', 'cnh'], { readonly })}
+          ${campo('identidade_numero', 'Nº do documento', item.identidade_numero, { readonly })}
           ${campo('identidade_orgao_emissor', 'Órgão emissor', item.identidade_orgao_emissor, { readonly })}
           ${campo('identidade_uf_emissor', 'UF emissora', item.identidade_uf_emissor, { readonly, maxLength: 2 })}
-          ${campo('titulo_eleitor', 'Título de eleitor', item.titulo_eleitor, { readonly })}
-          ${campo('zona_eleitoral', 'Zona eleitoral', item.zona_eleitoral, { readonly })}
-          ${campo('secao_eleitoral', 'Seção eleitoral', item.secao_eleitoral, { readonly })}
-          ${campo('ctps_numero', 'Número da CTPS', item.ctps_numero, { readonly })}
-          ${campo('ctps_serie', 'Série da CTPS', item.ctps_serie, { readonly })}
-          ${campo('ctps_data_expedicao', 'Expedição da CTPS', item.ctps_data_expedicao, { type: 'date', readonly })}
-          ${campo('ctps_uf', 'UF da CTPS', item.ctps_uf, { readonly, maxLength: 2 })}
-          ${campo('pis_numero', 'Número do PIS', item.pis_numero, { readonly })}
-          ${campo('pis_data_cadastro', 'Data de cadastro do PIS', item.pis_data_cadastro, { type: 'date', readonly })}
+          ${campo('identidade_data_emissao', 'Data de emissão', item.identidade_data_emissao, { type: 'date', readonly })}
+          ${campo('cnh_categoria', 'Categoria CNH', item.cnh_categoria, { readonly })}
+          ${campo('titulo_eleitor', 'Título', item.titulo_eleitor, { readonly })}
+          ${campo('zona_eleitoral', 'Zona', item.zona_eleitoral, { readonly })}
+          ${campo('secao_eleitoral', 'Seção', item.secao_eleitoral, { readonly })}
+          ${campo('ctps_numero', 'Número CTPS', item.ctps_numero, { readonly })}
+          ${campo('ctps_serie', 'Série', item.ctps_serie, { readonly })}
+          ${campo('ctps_data_expedicao', 'Expedição', item.ctps_data_expedicao, { type: 'date', readonly })}
+          ${campo('ctps_uf', 'UF', item.ctps_uf, { readonly, maxLength: 2 })}
+          ${campo('pis_numero', 'Número PIS', item.pis_numero, { readonly })}
+          ${campo('pis_data_cadastro', 'Data de cadastro', item.pis_data_cadastro, { type: 'date', readonly })}
           ${campo('reservista_numero', 'Documento militar', item.reservista_numero, { readonly })}
-          ${campo('reservista_categoria', 'Categoria de reservista', item.reservista_categoria, { readonly })}
+          ${campo('reservista_categoria', 'Categoria', item.reservista_categoria, { readonly })}
         </div>
       </section>
     `;
@@ -1397,28 +1595,27 @@ export function criarRhDpController({
     if (!podeVerSensiveis()) return '';
 
     return `
-      <section class="rh-form-section">
-        <div class="rh-form-section-title rh-dependents-title">
+      <div class="rh-complement-subsection rh-dependents-section">
+        <div class="rh-form-section-title rh-dependents-title rh-complement-subsection-title">
           <div>
             <strong>Dependentes</strong>
-            <span>Sem limite fixo de registros.</span>
           </div>
-          ${readonly ? '' : '<button class="secondary-btn" type="button" onclick="hubRhDpAdicionarDependente()">Adicionar dependente</button>'}
+          <button class="secondary-btn" type="button" onclick="hubRhDpAbrirComplementoModal('dependente')" ${podeAdicionarComplemento('dependente') ? '' : 'disabled'}>+ Dependente</button>
         </div>
         <div class="rh-dependents-list">
           ${state.modal.dependentes.length
             ? state.modal.dependentes.map((item, indice) => `
-              <article class="rh-dependent-row">
-                <input id="rh_dep_id_${indice}" type="hidden" value="${escapeAttr(item.id || '')}">
-                ${campoDependente(indice, 'nome', 'Nome completo', item.nome_completo, 'text', readonly)}
-                ${campoDependente(indice, 'nascimento', 'Data de nascimento', item.data_nascimento, 'date', readonly)}
-                ${campoDependente(indice, 'parentesco', 'Parentesco', item.parentesco, 'text', readonly)}
-                ${readonly ? '' : `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverDependente(${indice})">Remover</button>`}
+              <article class="rh-dependent-row${readonly ? '' : ' has-actions'}">
+                <div class="rh-dependent-value"><span>Parentesco</span><strong>${escapeHtml(item.parentesco || '—')}</strong></div>
+                <div class="rh-dependent-value"><span>Nome</span><strong>${escapeHtml(item.nome_completo || '—')}</strong></div>
+                <div class="rh-dependent-value"><span>Nascimento</span><strong>${escapeHtml(item.data_nascimento ? formatarData(item.data_nascimento) : '—')}</strong></div>
+                <div class="rh-dependent-value"><span>CPF</span><strong>${escapeHtml(item.cpf ? formatarCpf(item.cpf) : '—')}</strong></div>
+                ${readonly ? '' : `<button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverDependente(${indice})" aria-label="Remover dependente ${escapeAttr(item.nome_completo || '')}">Remover</button>`}
               </article>
             `).join('')
             : '<p class="quick-link-empty">Nenhum dependente informado.</p>'}
         </div>
-      </section>
+      </div>
     `;
   }
 
@@ -1437,28 +1634,28 @@ export function criarRhDpController({
       <section class="rh-form-section">
         <div class="rh-form-section-title">
           <strong>Vínculo profissional</strong>
-          <span>Controle interno. Não substitui registros da contabilidade.</span>
         </div>
-        <div class="rh-form-grid">
+        <div class="rh-form-grid rh-employment-grid">
           ${campoSelect('tipo_vinculo', 'Tipo de vínculo', item.tipo_vinculo, ['clt', 'estagio', 'socio', 'prestador', 'temporario', 'outro'], { readonly })}
           ${campo('data_admissao', 'Data de admissão', item.data_admissao, { type: 'date', readonly })}
           ${campo('cargo', 'Cargo', item.cargo, { readonly })}
           ${campo('funcao', 'Função', item.funcao, { readonly })}
           ${campo('cbo', 'CBO', item.cbo, { readonly, placeholder: '0000-00' })}
+        </div>
+        <div class="rh-form-grid rh-employment-grid">
           ${campo('departamento', 'Departamento/área', item.departamento, { readonly })}
-          ${campo('gestor_responsavel', 'Gestor responsável', item.gestor_responsavel, { readonly })}
-          ${campoSelect('situacao', 'Situação profissional', item.situacao, ['ativo', 'experiencia', 'afastado', 'desligado'], { readonly })}
           ${campoSelect('tipo_remuneracao', 'Tipo de remuneração', item.tipo_remuneracao, ['salario', 'bolsa', 'pro_labore', 'honorario', 'outro'], { readonly })}
           ${campo('remuneracao_valor', 'Valor da remuneração', formatarMoeda(item.remuneracao_valor), { readonly, placeholder: '0,00' })}
           ${campoSelect('modelo_jornada', 'Modelo de jornada', item.modelo_jornada, ['integral', 'parcial', 'escala', 'flexivel', 'remoto', 'hibrido', 'outro'], { readonly })}
           ${campo('carga_horaria_semanal', 'Carga horária semanal', item.carga_horaria_semanal, { readonly, placeholder: '44' })}
+        </div>
+        <div class="rh-form-grid rh-employment-grid rh-employment-schedule-grid">
           ${campo('horario_entrada', 'Entrada', item.horario_entrada, { type: 'time', readonly })}
           ${campo('horario_saida', 'Saída', item.horario_saida, { type: 'time', readonly })}
           ${campo('intervalo_inicio', 'Início do intervalo', item.intervalo_inicio, { type: 'time', readonly })}
           ${campo('intervalo_fim', 'Fim do intervalo', item.intervalo_fim, { type: 'time', readonly })}
           ${campo('dias_trabalho', 'Dias de trabalho', item.dias_trabalho, { readonly, placeholder: 'Segunda a sexta' })}
           ${campo('data_desligamento', 'Data de desligamento', item.data_desligamento, { type: 'date', readonly })}
-          ${campoTextarea('vinculo_observacoes', 'Observações do vínculo', item.observacoes, { readonly })}
         </div>
       </section>
     `;
@@ -1466,23 +1663,20 @@ export function criarRhDpController({
 
   function renderSecaoBeneficios(readonly) {
     if (!podeVerSensiveis()) return '';
-    const itens = state.modal.beneficios;
-    return `<section class="rh-form-section"><div class="rh-form-section-title rh-files-title"><div><strong>Benefícios</strong><span>Controle interno de concessões e coparticipações.</span></div></div>
-      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(item.tipo.replaceAll('_',' '))} · ${escapeHtml(obterRotuloStatusHub(item.status))}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div></article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div>
-      ${readonly || !state.modal.id ? '' : `<details class="rh-control-form"><summary>Adicionar benefício</summary><div class="rh-form-grid">${campoSelect('beneficio_tipo','Tipo','',['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'])}${campo('beneficio_nome','Nome do benefício','')}${campo('beneficio_operadora','Operadora/fornecedor','')}${campo('beneficio_valor_empresa','Valor empresa','',{placeholder:'0,00'})}${campo('beneficio_valor_colaborador','Valor colaborador','',{placeholder:'0,00'})}${campo('beneficio_inicio','Início','',{type:'date'})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarBeneficio()">Adicionar benefício</button></details>`}</section>`;
+    const itens = state.modal.beneficios.filter(item => !item._removerPendente);
+    return `<div class="rh-complement-subsection rh-benefits-section"><div class="rh-form-section-title rh-files-title rh-complement-subsection-title"><div><strong>Benefícios</strong></div><button class="secondary-btn" type="button" onclick="hubRhDpAbrirComplementoModal('beneficio')" ${podeAdicionarComplemento('beneficio') ? '' : 'disabled'}>+ Benefício</button></div>
+      <div class="rh-files-list">${itens.length ? itens.map(item => `<article class="rh-file-row"><div class="rh-file-main"><strong>${escapeHtml(item.nome || 'Benefício')}</strong><span>${escapeHtml(formatarRotuloOpcaoSelect(item.tipo))} · ${escapeHtml(item._pendente ? 'Pendente de salvar' : obterRotuloStatusHub(item.status))}</span><small>${item.operadora_fornecedor ? escapeHtml(item.operadora_fornecedor) : ''}</small></div>${!readonly && item.status !== 'encerrado' ? `<div class="rh-file-actions"><button class="icon-action-btn danger-text" type="button" onclick="hubRhDpRemoverBeneficio('${escapeAttr(item._chaveTemporaria || item.id)}')" aria-label="Remover benefício ${escapeAttr(item.nome || '')}">Remover</button></div>` : ''}</article>`).join('') : '<p class="quick-link-empty">Nenhum benefício informado.</p>'}</div></div>`;
   }
 
   function renderSecaoBancarios(readonly) {
     if (!podeVerSensiveis()) return '';
     const item = state.modal.bancarios;
-    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid">${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campo('banco_conta_digito','Dígito',item.conta_digito,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}${campo('banco_titular_nome','Titular',item.titular_nome,{readonly})}${campo('banco_titular_cpf','CPF do titular',formatarCpf(item.titular_cpf),{readonly,mask:'cpf'})}</div>${readonly || !state.modal.id ? '' : '<button type="button" class="save-btn" onclick="hubRhDpSalvarBancarios()">Salvar dados bancários</button>'}</section>`;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Dados bancários</strong><span>Dados sensíveis para controle interno.</span></div><div class="rh-form-grid rh-banking-grid">${campoSelect('banco_tipo_conta','Tipo de conta',item.tipo_conta,['corrente','poupanca','pagamento','outro'],{readonly})}${campo('banco_codigo','Código do banco',item.banco_codigo,{readonly})}${campo('banco_nome','Banco',item.banco_nome,{readonly})}${campo('banco_agencia','Agência',item.agencia,{readonly})}${campo('banco_conta','Conta',item.conta,{readonly})}${campoSelect('banco_pix_tipo','Tipo da chave PIX',item.pix_tipo,['cpf','email','telefone','aleatoria'],{readonly})}${campo('banco_pix_chave','Chave PIX',item.pix_chave,{readonly})}</div></section>`;
   }
 
-  const CHECKLIST_ADMISSIONAL = [['dados_pessoais','Dados pessoais'],['documentos','Documentos'],['vinculo','Vínculo profissional'],['beneficios','Benefícios'],['dados_bancarios','Dados bancários'],['anexos','Anexos'],['conferencia_contabilidade','Conferência da contabilidade']];
-  function renderSecaoChecklistHistorico(readonly) {
+  function renderSecaoHistoricoAlteracoes(readonly) {
     if (!podeVerSensiveis()) return '';
-    const registros = Object.fromEntries(state.modal.checklist.map(item => [item.item_chave, item]));
-    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Checklist admissional e histórico</strong><span>Registros de acompanhamento; não gera eventos oficiais.</span></div><div class="rh-checklist">${CHECKLIST_ADMISSIONAL.map(([chave,nome]) => { const item=registros[chave]; const concluido=item?.status==='concluido'; return `<label class="rh-checklist-row"><input type="checkbox" ${concluido?'checked':''} ${readonly||!state.modal.id?'disabled':''} onchange="hubRhDpAtualizarChecklist('${chave}', this.checked)"><span>${escapeHtml(nome)}</span><small>${concluido ? `Concluído em ${formatarData(item.concluido_em)}` : 'Pendente'}</small></label>`; }).join('')}</div><div class="rh-history-list">${state.modal.movimentacoes.length ? state.modal.movimentacoes.map(item=>`<article><strong>${escapeHtml(item.titulo)}</strong><span>${formatarData(item.data_efetivacao)} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</span>${item.descricao?`<small>${escapeHtml(item.descricao)}</small>`:''}</article>`).join(''):'<p class="quick-link-empty">Nenhuma movimentação registrada.</p>'}</div>${readonly||!state.modal.id?'':`<details class="rh-control-form"><summary>Registrar alteração</summary><div class="rh-form-grid">${campoSelect('mov_tipo','Tipo','',['cargo_funcao','remuneracao','jornada','beneficio','dados_bancarios','situacao','outro'])}${campo('mov_data','Data de efetivação','',{type:'date'})}${campo('mov_titulo','Título','')}${campoTextarea('mov_descricao','Descrição','',{rows:2})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarMovimentacao()">Registrar alteração</button></details>`}</section>`;
+    return `<section class="rh-form-section"><div class="rh-form-section-title"><strong>Histórico de alterações</strong><span>Alterações profissionais registradas no cadastro.</span></div><div class="rh-history-list">${state.modal.movimentacoes.length ? state.modal.movimentacoes.map(item=>`<article><strong>${escapeHtml(item.titulo)}</strong><span>${formatarData(item.data_efetivacao)} · ${escapeHtml(item.tipo.replaceAll('_',' '))}</span>${item.descricao?`<small>${escapeHtml(item.descricao)}</small>`:''}</article>`).join(''):'<p class="quick-link-empty">Nenhuma alteração registrada.</p>'}</div>${readonly||!state.modal.id?'':`<details class="rh-control-form"><summary>Registrar alteração</summary><div class="rh-form-grid">${campoSelect('mov_tipo','Tipo','',['cargo_funcao','remuneracao','jornada','beneficio','dados_bancarios','situacao','outro'])}${campo('mov_data','Data de efetivação','',{type:'date'})}${campo('mov_titulo','Título','')}${campoTextarea('mov_descricao','Descrição','',{rows:2})}</div><button type="button" class="save-btn" onclick="hubRhDpSalvarMovimentacao()">Registrar alteração</button></details>`}</section>`;
   }
 
   function renderSecaoArquivos(readonly) {
@@ -1571,7 +1765,6 @@ export function criarRhDpController({
           ${campo('arquivo_data_validade', 'Validade', item.data_validade, { type: 'date' })}
           ${campo('arquivo_google_drive_folder_id', 'ID da pasta no Drive', item.google_drive_folder_id)}
           ${campoTextarea('arquivo_descricao', 'Descrição', item.descricao, { rows: 2 })}
-          ${campoTextarea('arquivo_observacoes', 'Observações', item.observacoes, { rows: 2 })}
         </div>
         <div class="rh-file-form-actions">
           <button class="save-btn" type="button" onclick="hubRhDpSalvarArquivo()" ${state.modal.arquivoSaving ? 'disabled' : ''}>
@@ -1583,25 +1776,12 @@ export function criarRhDpController({
     `;
   }
 
-  function campoDependente(indice, campoNome, label, valor, type, readonly) {
-    return `
-      <label>
-        <span>${escapeHtml(label)}</span>
-        <input id="rh_dep_${campoNome}_${indice}" class="config-input" type="${type}" value="${escapeAttr(valor || '')}" ${readonly ? 'disabled' : ''}>
-      </label>
-    `;
-  }
-
   function renderSecaoObservacoes(readonly) {
     return `
-      <section class="rh-form-section rh-fixed-observations">
-        <div class="rh-form-section-title">
-          <strong>Observações</strong>
-        </div>
-        <label>
-          <textarea id="rh_observacoes" class="config-input rh-textarea" rows="3" ${readonly ? 'disabled' : ''}>${escapeHtml(state.modal.colaborador.observacoes || '')}</textarea>
-        </label>
-      </section>
+      <label class="rh-observations-field">
+        <span>Observações do cadastro</span>
+        <textarea id="rh_observacoes" class="config-input rh-textarea" rows="4" ${readonly ? 'disabled' : ''}>${escapeHtml(state.modal.colaborador.observacoes || '')}</textarea>
+      </label>
     `;
   }
 
@@ -1631,85 +1811,306 @@ export function criarRhDpController({
     return `<div class="rh-operational-history">${blocos.map(([titulo, tipo, itens, permitido, podeCriar, action]) => `<section class="rh-form-section rh-operational-section"><div class="rh-form-section-title"><strong>${titulo}</strong>${podeCriar && state.modal.id ? `<button class="secondary-btn" type="button" data-rh-action="${action}">+ Incluir</button>` : ''}</div><div class="rh-operational-list">${itens.length ? itens.slice(0, 8).map(item => renderRegistro(item, tipo)).join('') : '<p class="quick-link-empty">Nenhum registro encontrado.</p>'}</div>${itens.length > 8 ? `<small class="rh-operational-more">Exibindo os 8 registros mais recentes.</small>` : ''}</section>`).join('')}</div>`;
   }
 
-  function obterEtapasCadastro(readonly) {
-    const etapas = [
-      {
-        id: 'pessoais',
-        label: 'Dados pessoais',
-        conteudo: `${renderSecaoDadosPessoais(readonly)}${renderSecaoContatos(readonly)}`
-      },
-      {
-        id: 'endereco',
-        label: 'Endereço',
-        conteudo: renderSecaoEndereco(readonly)
-      },
-      {
-        id: 'documentos',
-        label: 'Documentos',
-        conteudo: `${renderSecaoDocumentos(readonly)}${renderSecaoArquivos(readonly)}`
-      },
-      {
-        id: 'vinculo',
-        label: 'Vínculo',
-        conteudo: renderSecaoVinculo(readonly)
-      },
-      {
-        id: 'complementos',
-        label: 'Complementos',
-        conteudo: `${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}`
-      },
-      {
-        id: 'historico',
-        label: 'Dados bancários',
-        conteudo: `${renderSecaoBancarios(readonly)}${renderSecaoChecklistHistorico(readonly)}`
-      },
-      ...(state.modal.id && (podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos()) ? [{
-        id: 'operacional',
-        label: 'Histórico RH',
-        conteudo: renderSecaoHistoricoOperacional()
-      }] : []),
-    ];
-
-    return podeVerSensiveis()
-      ? etapas
-      : etapas.filter(etapa => !['complementos', 'historico'].includes(etapa.id));
+  function atualizarBlocoCadastro(id, aberto) {
+    if (!state.modal.aberto || !id) return;
+    state.modal.blocosAbertos = {
+      ...state.modal.blocosAbertos,
+      [id]: Boolean(aberto)
+    };
   }
 
-  function mudarEtapaCadastro(indice) {
-    if (!state.modal.aberto || state.modal.saving) return;
+  function renderBlocoCadastro(id, titulo, conteudo, { className = '' } = {}) {
+    const aberto = state.modal.blocosAbertos?.[id] ?? id === 'dados-pessoais';
+    return `
+      <details
+        class="rh-form-section rh-collaborator-accordion ${className}"
+        data-rh-block="${escapeAttr(id)}"
+        ${aberto ? 'open' : ''}
+        ontoggle="hubRhDpAtualizarBlocoCadastro('${escapeAttr(id)}', this.open)"
+      >
+        <summary class="rh-collaborator-accordion-summary">
+          <strong>${escapeHtml(titulo)}</strong>
+          <i data-lucide="chevron-down" aria-hidden="true"></i>
+        </summary>
+        <div class="rh-collaborator-accordion-content">${conteudo}</div>
+      </details>
+    `;
+  }
+
+  function renderBlocosCadastro(readonly) {
+    const blocos = [
+      renderBlocoCadastro(
+        'dados-pessoais',
+        'Dados Pessoais',
+        `<div class="rh-personal-data-sections">${renderSecaoDadosPessoais(readonly)}${renderSecaoContatos(readonly)}${renderSecaoEndereco(readonly)}${renderSecaoDocumentos(readonly)}${renderSecaoBancarios(readonly)}</div>`,
+        { className: 'rh-personal-data-accordion' }
+      ),
+      renderBlocoCadastro('vinculo', 'Vínculo profissional', renderSecaoVinculo(readonly)),
+      ...(podeVerSensiveis() ? [
+        renderBlocoCadastro(
+          'complemento',
+          'Dependentes e benefícios',
+          `<section class="rh-form-section rh-complement-section">${renderSecaoDependentes(readonly)}${renderSecaoBeneficios(readonly)}</section>`
+        )
+      ] : []),
+      renderBlocoCadastro('observacoes', 'Observações', renderSecaoObservacoes(readonly)),
+      renderBlocoCadastro('anexos', 'Anexos', renderSecaoArquivos(readonly))
+    ];
+
+    return blocos.join('');
+  }
+
+  function possuiAbaAnotacoes() {
+    return Boolean(state.modal.id && (podeVerSensiveis() || podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos()));
+  }
+
+  function renderAbasCadastro() {
+    return `
+      <nav class="rh-record-tabs" aria-label="Seções do cadastro" role="tablist">
+        <button type="button" id="rh-record-tab-cadastro" class="rh-record-tab ${state.modal.aba === 'cadastro' ? 'is-active' : ''}" role="tab" aria-selected="${state.modal.aba === 'cadastro'}" aria-controls="rh-record-tab-panel" onclick="hubRhDpMudarAbaCadastro('cadastro')">Cadastro</button>
+        ${possuiAbaAnotacoes() ? `<button type="button" id="rh-record-tab-anotacoes" class="rh-record-tab ${state.modal.aba === 'anotacoes' ? 'is-active' : ''}" role="tab" aria-selected="${state.modal.aba === 'anotacoes'}" aria-controls="rh-record-tab-panel" onclick="hubRhDpMudarAbaCadastro('anotacoes')">Anotações</button>` : ''}
+      </nav>
+    `;
+  }
+
+  function mudarAbaCadastro(aba) {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving) return;
     capturarFormulario();
-    const etapas = obterEtapasCadastro(state.modal.modo === 'view');
-    state.modal.etapa = Math.max(0, Math.min(Number(indice) || 0, etapas.length - 1));
+    state.modal.aba = aba === 'anotacoes' && possuiAbaAnotacoes() ? 'anotacoes' : 'cadastro';
     render();
   }
 
-  function avancarEtapaCadastro() {
-    const etapas = obterEtapasCadastro(state.modal.modo === 'view');
-    mudarEtapaCadastro(Math.min(state.modal.etapa + 1, etapas.length - 1));
+  function renderConteudoAbaCadastro(readonly) {
+    return state.modal.aba === 'anotacoes' && possuiAbaAnotacoes()
+      ? `${renderSecaoHistoricoAlteracoes(readonly)}${podeVerFerias() || podeVerOcorrencias() || podeVerDesligamentos() ? renderSecaoHistoricoOperacional() : ''}`
+      : renderBlocosCadastro(readonly);
   }
 
-  function voltarEtapaCadastro() {
-    mudarEtapaCadastro(Math.max(state.modal.etapa - 1, 0));
-  }
+  function renderModalComplemento() {
+    const modal = state.modal.complementoModal;
+    if (!modal?.aberto) return '';
+    const ehBeneficio = modal.tipo === 'beneficio';
+    const form = modal.form || {};
+    const titulo = ehBeneficio ? 'Adicionar benefício' : 'Adicionar dependente';
+    const campos = ehBeneficio
+      ? `<div class="rh-form-grid">
+          ${campoSelect('complemento_beneficio_tipo', 'Tipo de benefício', form.tipo, ['vale_transporte','vale_refeicao','vale_alimentacao','plano_saude','seguro_vida','auxilio','outro'], { required: true })}
+          ${campo('complemento_beneficio_nome', 'Nome do benefício', form.nome, { required: true })}
+          ${campo('complemento_beneficio_operadora', 'Operadora/fornecedor', form.operadora_fornecedor)}
+          ${campo('complemento_beneficio_valor_empresa', 'Valor empresa', form.valor_empresa, { placeholder: '0,00' })}
+          ${campo('complemento_beneficio_valor_colaborador', 'Valor colaborador', form.valor_colaborador, { placeholder: '0,00' })}
+          ${campo('complemento_beneficio_inicio', 'Início', form.inicio_em, { type: 'date' })}
+        </div>`
+      : `<div class="rh-form-grid rh-dependent-modal-grid">
+          ${campo('complemento_dependente_parentesco', 'Parentesco', form.parentesco)}
+          ${campo('complemento_dependente_nome', 'Nome completo', form.nome_completo, { required: true, minLength: 3 })}
+          ${campo('complemento_dependente_nascimento', 'Data de nascimento', form.data_nascimento, { type: 'date', required: true })}
+          ${campo('complemento_dependente_cpf', 'CPF', form.cpf, { mask: 'cpf', placeholder: '000.000.000-00' })}
+        </div>`;
 
-  function renderEtapasCadastro(etapas) {
     return `
-      <nav class="rh-modal-steps" aria-label="Etapas do cadastro" role="tablist">
-        ${etapas.map((etapa, indice) => `
-          <button
-            class="rh-modal-step ${indice === state.modal.etapa ? 'is-active' : ''}"
-            type="button"
-            role="tab"
-            aria-selected="${indice === state.modal.etapa}"
-            aria-controls="rh-modal-step-content"
-            onclick="hubRhDpMudarEtapaCadastro(${indice})"
-          >
-            <span class="rh-modal-step-number">${indice + 1}</span>
-            <span>${escapeHtml(etapa.label)}</span>
-          </button>
-        `).join('')}
-      </nav>
+      <div class="modal-backdrop rh-modal-backdrop" role="dialog" aria-modal="true" aria-label="${escapeAttr(titulo)}">
+        <section class="small-modal rh-modal rh-complement-modal">
+          <div class="small-modal-header">
+            <div><h3>${escapeHtml(titulo)}</h3><p>${ehBeneficio ? 'Informe os dados para incluir o benefício.' : 'Informe os dados cadastrais do dependente.'}</p></div>
+            <button class="secondary-btn" type="button" onclick="hubRhDpFecharComplementoModal()" ${modal.saving ? 'disabled' : ''}>Fechar</button>
+          </div>
+          <div class="rh-modal-content">
+            ${modal.erro ? `<p class="admin-message error" role="alert">${escapeHtml(modal.erro)}</p>` : ''}
+            ${campos}
+          </div>
+          <div class="small-modal-actions rh-modal-actions">
+            <button class="secondary-btn" type="button" onclick="hubRhDpFecharComplementoModal()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="save-btn" type="button" onclick="hubRhDpSalvarComplementoModal()" ${modal.saving ? 'disabled' : ''}>${modal.saving ? 'Salvando...' : 'Adicionar'}</button>
+          </div>
+        </section>
+      </div>
     `;
+  }
+
+  function renderAcoesCadastro() {
+    if (!['view', 'edit'].includes(state.modal.modo) || !state.modal.id) return '';
+    const colaborador = state.modal.colaborador;
+    const colaboradorId = escapeAttr(state.modal.id);
+    const ativo = colaborador.status !== 'inativo';
+    const acoes = [];
+
+    if (ativo && podeCriarFerias()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-ferias">Incluir férias</button>');
+    if (ativo && podeCriarOcorrencias()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-afastamento">Lançar afastamento</button>');
+    if (ativo && podeCriarDesligamentos()) acoes.push('<button type="button" role="menuitem" data-rh-action="quick-open-modal-desligamento">Lançar desligamento</button>');
+    if (podeInativar()) acoes.push(`<button type="button" role="menuitem" class="${ativo ? 'danger-text' : ''}" onclick="hubRhDpAlterarStatus('${colaboradorId}', '${ativo ? 'inativo' : 'ativo'}')">${ativo ? 'Inativar' : 'Reativar'}</button>`);
+
+    return acoes.length
+      ? `<details class="hub-row-actions-menu rh-record-actions-menu" data-hub-action-menu data-hub-action-min-width="220" data-hub-action-max-width="280" data-hub-action-gap="8" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="first">
+          <summary class="hub-quick-actions-trigger rh-record-actions-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="rh-collaborator-record-actions" aria-label="Abrir ações do cadastro" title="Ações do cadastro"><span aria-hidden="true">+</span></summary>
+          <div id="rh-collaborator-record-actions" class="hub-row-actions-popover rh-record-actions-popover" data-hub-action-popover role="menu" aria-label="Ações do cadastro">${acoes.join('')}</div>
+        </details>`
+      : '';
+  }
+
+  const ROTULOS_FICHA_PDF = {
+    id: 'Identificador do registro', colaborador_id: 'Identificador do colaborador', codigo: 'Matrícula',
+    nome_completo: 'Nome completo', data_nascimento: 'Data de nascimento', estado_civil: 'Estado civil',
+    nacionalidade: 'Nacionalidade', naturalidade: 'Naturalidade', nome_pai: 'Nome do pai', nome_mae: 'Nome da mãe',
+    sexo: 'Sexo', escolaridade: 'Escolaridade', cor_raca: 'Cor/raça', telefone_celular: 'Telefone celular',
+    email_contato: 'E-mail', contato_emergencia_nome: 'Contato de emergência', contato_emergencia_telefone: 'Telefone de emergência',
+    endereco_logradouro: 'Logradouro', endereco_numero: 'Número', endereco_complemento: 'Complemento', endereco_bairro: 'Bairro',
+    endereco_cidade: 'Cidade', endereco_uf: 'UF', endereco_cep: 'CEP', status: 'Status', observacoes: 'Observações',
+    cpf: 'CPF', identidade_tipo: 'Tipo de identidade', identidade_numero: 'Número da identidade',
+    identidade_data_emissao: 'Data de emissão', identidade_orgao_emissor: 'Órgão emissor', identidade_uf_emissor: 'UF emissora',
+    cnh_categoria: 'Categoria CNH', titulo_eleitor: 'Título de eleitor', zona_eleitoral: 'Zona eleitoral', secao_eleitoral: 'Seção eleitoral',
+    ctps_numero: 'Número CTPS', ctps_serie: 'Série CTPS', ctps_data_expedicao: 'Expedição CTPS', ctps_uf: 'UF CTPS',
+    pis_numero: 'PIS/NIT', pis_data_cadastro: 'Data de cadastro do PIS', reservista_numero: 'Documento militar',
+    reservista_categoria: 'Categoria de reservista', tipo_vinculo: 'Tipo de vínculo', data_admissao: 'Data de admissão',
+    data_desligamento: 'Data de desligamento', cargo: 'Cargo', funcao: 'Função', cbo: 'CBO', departamento: 'Setor/Departamento',
+    gestor_responsavel: 'Gestor responsável', situacao: 'Situação profissional', tipo_remuneracao: 'Tipo de remuneração',
+    remuneracao_valor: 'Remuneração', modelo_jornada: 'Modelo de jornada', carga_horaria_semanal: 'Carga horária semanal',
+    horario_entrada: 'Entrada', horario_saida: 'Saída', intervalo_inicio: 'Início do intervalo', intervalo_fim: 'Fim do intervalo',
+    dias_trabalho: 'Dias de trabalho', tipo_conta: 'Tipo de conta', banco_codigo: 'Código do banco', banco_nome: 'Banco',
+    agencia: 'Agência', conta: 'Conta', conta_digito: 'Dígito da conta', operacao: 'Operação', pix_tipo: 'Tipo de chave PIX',
+    pix_chave: 'Chave PIX', titular_nome: 'Titular da conta', titular_cpf: 'CPF do titular', nome: 'Nome',
+    data_nascimento: 'Data de nascimento', parentesco: 'Parentesco', ativo: 'Ativo', tipo: 'Tipo', operadora_fornecedor: 'Operadora/Fornecedor',
+    valor_empresa: 'Valor empresa', valor_colaborador: 'Valor colaborador', inicio_em: 'Início', fim_em: 'Fim',
+    data_efetivacao: 'Data de efetivação', titulo: 'Título', descricao: 'Descrição', dados_anteriores: 'Dados anteriores',
+    dados_novos: 'Dados novos', referencia_externa: 'Referência externa', item_chave: 'Item', concluido_em: 'Concluído em',
+    periodo_aquisitivo_inicio: 'Início do período aquisitivo', periodo_aquisitivo_fim: 'Fim do período aquisitivo',
+    inicio_gozo: 'Início das férias', fim_gozo: 'Fim das férias', dias_gozo: 'Dias de gozo', abono_pecuniario: 'Abono pecuniário',
+    retorno_em: 'Retorno em', retorno_resumo: 'Resumo do retorno', divergencia_descricao: 'Descrição da divergência',
+    previsao_retorno_em: 'Previsão de retorno', cid_referencia: 'Referência CID', comunicacao_emitida: 'Comunicação emitida',
+    data_ocorrencia: 'Data da ocorrência', categoria: 'Categoria', providencias: 'Providências',
+    requer_acompanhamento: 'Requer acompanhamento', encerrada_em: 'Encerrada em', motivo_resumo: 'Resumo do motivo',
+    comunicado_em: 'Comunicado em', ultimo_dia_trabalho: 'Último dia de trabalho', competencia: 'Competência', aviso_previo: 'Aviso prévio',
+    enviado_em: 'Enviado em', retorno_contabilidade: 'Retorno da contabilidade', criado_em: 'Criado em',
+    created_at: 'Criado em', updated_at: 'Atualizado em', created_by: 'Criado por (ID)', updated_by: 'Atualizado por (ID)',
+    nome_arquivo: 'Arquivo', tipo_documento: 'Tipo de documento', mime_type: 'Tipo do arquivo', tamanho_bytes: 'Tamanho (bytes)',
+    data_referencia: 'Data de referência', data_validade: 'Data de validade', retencao_ate: 'Retenção até',
+    versao_atual: 'Versão', origem: 'Origem', status: 'Status', descartado_motivo: 'Motivo do descarte',
+    descartado_drive_at: 'Descarte no Drive em', rh_checklist_desligamento: 'Checklist de desligamento',
+    rh_arquivos_colaboradores_versoes: 'Histórico de versões'
+  };
+
+  function valorFichaPdf(valor) {
+    if (valor === null || valor === undefined || valor === '') return '';
+    if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não';
+    if (typeof valor === 'object') return JSON.stringify(valor, null, 2);
+    const texto = String(valor);
+    const data = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+    if (data) return `${data[3]}/${data[2]}/${data[1]}${data[4] ? ` ${data[4]}` : ''}`;
+    return texto;
+  }
+
+  function rotuloFichaPdf(chave) {
+    if (ROTULOS_FICHA_PDF[chave]) return ROTULOS_FICHA_PDF[chave];
+    return String(chave).replaceAll('_', ' ').replace(/\b\p{L}/gu, letra => letra.toLocaleUpperCase('pt-BR'));
+  }
+
+  function renderCamposFichaPdf(registro) {
+    if (!registro || typeof registro !== 'object') return '';
+    return Object.entries(registro)
+      .filter(([chave, valor]) => chave !== 'rh_colaboradores' && valor !== null && valor !== undefined && valor !== '')
+      .map(([chave, valor]) => `<div class="field"><b>${escapeHtml(rotuloFichaPdf(chave))}</b><span>${escapeHtml(valorFichaPdf(valor))}</span></div>`)
+      .join('');
+  }
+
+  function renderGrupoFichaPdf(titulo, registros) {
+    const itens = (Array.isArray(registros) ? registros : registros ? [registros] : [])
+      .map(registro => renderCamposFichaPdf(registro)).filter(Boolean);
+    return `<section><h2>${escapeHtml(titulo)}</h2>${itens.length ? itens.map(campos => `<div class="record"><div class="fields">${campos}</div></div>`).join('') : '<p class="empty">Nenhum registro informado.</p>'}</section>`;
+  }
+
+  function criarDocumentoFichaPdf(ficha, versao) {
+    const completa = versao === 'completa';
+    const colaborador = ficha.colaborador || {};
+    const vinculo = ficha.vinculo || {};
+    const grupos = completa ? [
+      ['Identificação e dados pessoais', colaborador],
+      ['Documentos cadastrais', ficha.documentos],
+      ['Vínculo profissional', vinculo],
+      ['Dependentes', ficha.dependentes],
+      ['Benefícios', ficha.beneficios],
+      ['Dados bancários', ficha.bancarios],
+      ['Checklist admissional', ficha.checklist],
+      ['Movimentações e alterações', ficha.movimentacoes],
+      ['Férias', ficha.ferias],
+      ['Afastamentos', ficha.afastamentos],
+      ['Ocorrências', ficha.ocorrencias],
+      ['Desligamentos', ficha.desligamentos],
+      ['Arquivos vinculados (metadados)', ficha.arquivos]
+    ] : [
+      ['Identificação funcional', {
+        codigo: colaborador.codigo,
+        nome_completo: colaborador.nome_completo,
+        status: colaborador.status
+      }],
+      ['Vínculo profissional', {
+        cargo: vinculo.cargo,
+        funcao: vinculo.funcao,
+        departamento: vinculo.departamento,
+        gestor_responsavel: vinculo.gestor_responsavel,
+        tipo_vinculo: vinculo.tipo_vinculo,
+        situacao: vinculo.situacao,
+        modelo_jornada: vinculo.modelo_jornada,
+        data_admissao: vinculo.data_admissao,
+        data_desligamento: vinculo.data_desligamento
+      }]
+    ];
+    const titulo = completa ? 'FICHA CADASTRAL COMPLETA DO COLABORADOR' : 'FICHA FUNCIONAL SIMPLIFICADA';
+    const dataEmissao = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date());
+    const conteudo = grupos.map(([nome, registros]) => renderGrupoFichaPdf(nome, registros)).join('');
+
+    return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(titulo)} - ${escapeHtml(colaborador.nome_completo || 'Colaborador')}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"><style>
+      @page{size:A4 portrait;margin:8mm}
+      *{box-sizing:border-box}
+      body{margin:0;background:#F5F7FA;color:#0B172A;font:10px/1.4 "Inter",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+      .sheet{width:210mm;min-height:297mm;margin:18px auto;background:#fff;border:1px solid rgba(15,23,42,.08);box-shadow:0 10px 30px rgba(15,23,42,.12)}
+      .topbar{display:grid;grid-template-columns:minmax(0,1fr) 30mm 38mm;align-items:stretch;border-bottom:1px solid #64748b}
+      .title{background:#294895;color:#fff;padding:9px 12px;display:flex;flex-direction:column;justify-content:center}
+      .title h1{font-size:12px;line-height:1.25;letter-spacing:.35px;margin:0 0 4px}
+      .title p{font-size:8.5px;margin:0;overflow-wrap:anywhere}
+      .meta{padding:5px 7px;border-left:1px solid #64748b;display:flex;flex-direction:column;justify-content:center;overflow-wrap:anywhere}
+      .meta b,.label{display:block;color:#475569;font-size:6.5px;font-weight:700;letter-spacing:.15px;text-transform:uppercase;margin-bottom:3px}
+      .meta span{font-size:8px;font-weight:700}
+      .meta small{font-size:7px;color:#526273;margin-top:3px}
+      section{margin:0;break-inside:auto}
+      h2{font-size:8px;text-transform:uppercase;letter-spacing:.35px;color:#1F3676;background:#E8EEF9;border-top:1px solid rgba(41,72,149,.2);border-bottom:1px solid rgba(41,72,149,.2);padding:4px 7px;margin:0;break-after:avoid}
+      .record{break-inside:auto}
+      .record+.record{border-top:1px solid rgba(15,23,42,.12)}
+      .fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:1px solid rgba(15,23,42,.12)}
+      .field{min-width:0;min-height:8mm;padding:3px 6px;border-right:1px solid rgba(15,23,42,.12);border-bottom:1px solid rgba(15,23,42,.12);overflow-wrap:anywhere;break-inside:avoid}
+      .field b{display:block;color:#64748B;font-size:6.5px;letter-spacing:.15px;text-transform:uppercase;margin-bottom:3px}
+      .field span{display:block;font-size:8.5px;min-height:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+      .empty{margin:5px 7px;padding:4px 0;color:#64748B;font-size:8px;font-style:italic}
+      .footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:1px solid rgba(15,23,42,.12)}
+      .footer .field{min-height:25px}
+      .footer .field .label{font-size:6.5px;min-height:0;white-space:normal}
+      .signature{height:12px;border-bottom:1px solid rgba(15,23,42,.32)}
+      @media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}section{orphans:2;widows:2}}
+      </style></head><body><main class="sheet"><header class="topbar"><div class="title"><h1>${escapeHtml(titulo)}</h1><p>${escapeHtml(colaborador.nome_completo || 'Colaborador')} · Transmares · RH &amp; DP</p></div><div class="meta"><b>Matrícula / eSocial</b><span>${escapeHtml(valorFichaPdf(colaborador.codigo) || '—')}</span></div><div class="meta"><b>Status</b><span>${escapeHtml(valorFichaPdf(colaborador.status) || '—')}</span><small>Emitida em ${escapeHtml(dataEmissao)}</small></div></header>${conteudo}<footer class="footer"><div class="field"><span class="label">Última atualização</span><span>${escapeHtml(valorFichaPdf(colaborador.updated_at) || '—')}</span></div><div class="field"><span class="label">Responsável pelo cadastro</span><span> </span></div><div class="field"><span class="label">Assinatura do colaborador</span><div class="signature"></div></div></footer></main><script>window.addEventListener('load',()=>document.fonts.ready.then(()=>setTimeout(()=>window.print(),150)));</script></body></html>`;
+  }
+
+  async function gerarFichaPdf(versao) {
+    if (!podeVer() || !state.modal.id || !['simplificada', 'completa'].includes(versao)) return;
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      state.modal.erros.geral = 'O navegador bloqueou a janela de impressão. Permita pop-ups para gerar a ficha.';
+      render();
+      return;
+    }
+    janela.document.open();
+    janela.document.write('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Gerando ficha</title><body style="font:16px Arial;padding:24px">Carregando dados para a ficha…</body></html>');
+    janela.document.close();
+
+    try {
+      const ficha = await obterFichaPdfRhDp({ id: state.modal.id, versao });
+      janela.document.open();
+      janela.document.write(criarDocumentoFichaPdf(ficha, versao));
+      janela.document.close();
+      janela.focus();
+    } catch (error) {
+      janela.close();
+      state.modal.erros.geral = error.message || 'Não foi possível gerar a ficha PDF.';
+      render();
+    }
   }
 
   function renderModal() {
@@ -1718,49 +2119,51 @@ export function criarRhDpController({
     const readonly = state.modal.modo === 'view';
     const titulo = state.modal.modo === 'create'
       ? 'Incluir colaborador'
-      : state.modal.modo === 'edit'
-        ? 'Editar colaborador'
-        : 'Visualizar colaborador';
-    const etapas = obterEtapasCadastro(readonly);
-    const etapaAtual = Math.max(0, Math.min(state.modal.etapa, etapas.length - 1));
-    state.modal.etapa = etapaAtual;
-    const etapa = etapas[etapaAtual];
-    const ultimaEtapa = etapaAtual === etapas.length - 1;
-
+      : state.modal.colaborador.nome_completo || (state.modal.loading ? 'Carregando cadastro...' : state.modal.modo === 'edit' ? 'Editar colaborador' : 'Visualizar colaborador');
+    if (!possuiAbaAnotacoes()) state.modal.aba = 'cadastro';
     return `
-      <section class="rh-collaborator-screen" role="region" aria-label="${escapeAttr(titulo)}">
-          <div class="small-modal-header">
-            <div>
-              <h3>${escapeHtml(titulo)}</h3>
-              <p>Cadastro pessoal e documentos para controle interno.</p>
-            </div>
-            <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>Fechar</button>
-          </div>
+      <section class="rh-collaborator-screen ${readonly ? '' : 'is-editing'}" role="region" aria-label="${escapeAttr(titulo)}">
+          ${renderHubRecordHeader({
+            onBack: 'hubRhDpFecharCadastro()',
+            backAriaLabel: 'Voltar à lista de colaboradores',
+            className: 'rh-record-header hub-record-header',
+            backClassName: 'icon-btn hub-record-back-button rh-collaborator-back-button',
+            contentClassName: 'hub-record-header-content rh-collaborator-header-content',
+            content: `<h3>${escapeHtml(titulo)}</h3><p>Cadastro de colaborador</p>`,
+            actions: readonly
+              ? `<div class="rh-pdf-actions"><button type="button" class="secondary-btn" onclick="hubRhDpGerarFichaPdf('simplificada')" aria-label="Gerar ficha simplificada em PDF" title="Dados funcionais para compartilhamento">PDF simplificada</button><button type="button" class="secondary-btn" onclick="hubRhDpGerarFichaPdf('completa')" aria-label="Gerar ficha completa em PDF" title="Inclui todos os dados e históricos do cadastro">PDF completa</button>${podeEditar() ? renderHubRecordEditButton({ onClick: 'hubRhDpEditarCadastroAtual()', label: 'Editar', className: 'save-btn hub-record-edit-button' }) : ''}</div>`
+              : '',
+            disabled: state.modal.saving
+          })}
 
-          ${state.modal.loading ? '' : renderEtapasCadastro(etapas)}
+          ${state.modal.loading ? '' : renderAcoesCadastro()}
+          ${renderAbasCadastro()}
 
-          <div id="rh-modal-step-content" class="rh-modal-content rh-modal-phase-content" role="tabpanel">
+          <div id="rh-record-tab-panel" class="rh-record-content rh-collaborator-content" role="tabpanel" aria-labelledby="rh-record-tab-${state.modal.aba}">
             ${state.modal.loading ? (window.hubRenderLoading?.('Carregando cadastro...') || '<p class="quick-link-empty" role="status">Carregando cadastro...</p>') : state.modal.erros.carregamento ? `
               <p class="admin-message error">${escapeHtml(state.modal.erros.carregamento)}</p>
             ` : `
               ${state.modal.mensagem ? `<p class="admin-message success">${escapeHtml(state.modal.mensagem)}</p>` : ''}
               ${state.modal.erros.geral ? `<p class="admin-message error">${escapeHtml(state.modal.erros.geral)}</p>` : ''}
-              ${etapa.conteudo}
+              ${renderConteudoAbaCadastro(readonly)}
             `}
           </div>
 
-          ${state.modal.loading ? '' : renderSecaoObservacoes(readonly)}
-
-          ${state.modal.loading ? '' : `
-            <div class="small-modal-actions rh-modal-actions">
-              <button class="secondary-btn" type="button" data-rh-action="close-modal" ${state.modal.saving ? 'disabled' : ''}>${readonly ? 'Fechar' : 'Cancelar'}</button>
-              <div class="rh-modal-step-actions">
-                ${etapaAtual > 0 ? '<button class="secondary-btn" type="button" onclick="hubRhDpVoltarEtapaCadastro()">Anterior</button>' : ''}
-                ${!ultimaEtapa ? '<button class="save-btn" type="button" onclick="hubRhDpAvancarEtapaCadastro()">Próxima</button>' : ''}
-                ${readonly ? '' : `<button class="secondary-btn" type="button" data-rh-action="save-modal" ${state.modal.saving ? 'disabled' : ''}>${state.modal.saving ? 'Salvando...' : 'Salvar'}</button><button class="save-btn" type="button" data-rh-action="save-modal-close" ${state.modal.saving ? 'disabled' : ''}>Salvar e Fechar</button>`}
-              </div>
-            </div>
-          `}
+          ${state.modal.loading || readonly ? '' : renderHubRecordFormFooter({
+            flow: 'rh-collaborator',
+            cancelLabel: '×',
+            cancelOnClick: 'hubRhDpCancelarEdicaoCadastro()',
+            cancelClassName: 'icon-btn rh-collaborator-cancel-button',
+            cancelAriaLabel: 'Cancelar edição',
+            showPrevious: false,
+            showNext: false,
+            showSave: true,
+            saveLabel: 'Salvar',
+            saveOnClick: 'hubRhDpSalvarCadastro()',
+            saving: state.modal.saving,
+            className: 'rh-collaborator-workflow-footer'
+          })}
+          ${renderModalComplemento()}
       </section>
     `;
   }
@@ -1795,14 +2198,26 @@ export function criarRhDpController({
         return acc;
       }, { ...state.modal.vinculo });
 
-      if (document.querySelector('[id^="rh_dep_nome_"]')) {
-        state.modal.dependentes = state.modal.dependentes.map((item, indice) => ({
-          id: document.getElementById(`rh_dep_id_${indice}`)?.value || item.id || '',
-          nome_completo: document.getElementById(`rh_dep_nome_${indice}`)?.value || item.nome_completo || '',
-          data_nascimento: document.getElementById(`rh_dep_nascimento_${indice}`)?.value || item.data_nascimento || '',
-          parentesco: document.getElementById(`rh_dep_parentesco_${indice}`)?.value || item.parentesco || ''
-        }));
+      if (document.getElementById('rh_banco_codigo')) {
+        const camposBancarios = {
+          banco_codigo: 'banco_codigo',
+          banco_nome: 'banco_nome',
+          tipo_conta: 'banco_tipo_conta',
+          agencia: 'banco_agencia',
+          conta: 'banco_conta',
+          conta_digito: 'banco_conta_digito',
+          pix_tipo: 'banco_pix_tipo',
+          pix_chave: 'banco_pix_chave',
+          titular_nome: 'banco_titular_nome',
+          titular_cpf: 'banco_titular_cpf'
+        };
+        state.modal.bancarios = Object.entries(camposBancarios).reduce((acc, [campoNome, idCampo]) => {
+          const campoAtual = document.getElementById(`rh_${idCampo}`);
+          if (campoAtual) acc[campoNome] = campoAtual.value;
+          return acc;
+        }, { ...state.modal.bancarios });
       }
+
     }
   }
 
@@ -1811,31 +2226,31 @@ export function criarRhDpController({
     const documentos = state.modal.documentos;
 
     if (String(colaborador.nome_completo || '').trim().length < 3) {
-      return 'Informe o nome completo do colaborador.';
+      return { mensagem: 'Informe o nome completo do colaborador.', blocoId: 'dados-pessoais', campoId: 'rh_nome_completo' };
     }
 
     if (!colaborador.data_nascimento) {
-      return 'Informe a data de nascimento.';
+      return { mensagem: 'Informe a data de nascimento.', blocoId: 'dados-pessoais', campoId: 'rh_data_nascimento' };
     }
 
     if (!colaborador.telefone_celular && !colaborador.email_contato) {
-      return 'Informe ao menos um telefone ou e-mail de contato.';
+      return { mensagem: 'Informe ao menos um telefone ou e-mail de contato.', blocoId: 'dados-pessoais', campoId: 'rh_telefone_celular' };
     }
 
     if (colaborador.email_contato && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(colaborador.email_contato)) {
-      return 'Informe um e-mail de contato válido.';
+      return { mensagem: 'Informe um e-mail de contato válido.', blocoId: 'dados-pessoais', campoId: 'rh_email_contato' };
     }
 
     if (colaborador.endereco_uf && String(colaborador.endereco_uf).trim().length !== 2) {
-      return 'Informe a UF do endereço com duas letras.';
+      return { mensagem: 'Informe a UF do endereço com duas letras.', blocoId: 'dados-pessoais', campoId: 'rh_endereco_uf' };
     }
 
     if (colaborador.endereco_cep && digitos(colaborador.endereco_cep).length !== 8) {
-      return 'Informe um CEP válido.';
+      return { mensagem: 'Informe um CEP válido.', blocoId: 'dados-pessoais', campoId: 'rh_endereco_cep' };
     }
 
     if (podeVerSensiveis() && !cpfValido(documentos.cpf)) {
-      return 'Informe um CPF válido.';
+      return { mensagem: 'Informe um CPF válido.', blocoId: 'dados-pessoais', campoId: 'rh_cpf' };
     }
 
     if (podeVerSensiveis()) {
@@ -1845,28 +2260,46 @@ export function criarRhDpController({
         return String(valor || '').trim();
       });
       if (possuiVinculo && !vinculo.data_admissao) {
-        return 'Informe a data de admissão do vínculo profissional.';
+        return { mensagem: 'Informe a data de admissão do vínculo profissional.', blocoId: 'vinculo', campoId: 'rh_data_admissao' };
       }
 
       if (vinculo.data_desligamento && vinculo.data_admissao && vinculo.data_desligamento < vinculo.data_admissao) {
-        return 'A data de desligamento não pode ser anterior à admissão.';
+        return { mensagem: 'A data de desligamento não pode ser anterior à admissão.', blocoId: 'vinculo', campoId: 'rh_data_desligamento' };
       }
 
-      const dependenteIncompleto = state.modal.dependentes.some(item => {
-        const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco;
+      const indiceDependenteIncompleto = state.modal.dependentes.findIndex(item => {
+        const possuiAlgumDado = item.nome_completo || item.data_nascimento || item.parentesco || item.cpf;
         return possuiAlgumDado && (!item.nome_completo || !item.data_nascimento);
       });
-      if (dependenteIncompleto) {
-        return 'Informe nome e data de nascimento de cada dependente.';
+      if (indiceDependenteIncompleto >= 0) {
+        const dependente = state.modal.dependentes[indiceDependenteIncompleto];
+        const campoIncompleto = dependente.nome_completo ? 'nascimento' : 'nome';
+        return {
+          mensagem: 'Informe nome e data de nascimento de cada dependente.',
+          blocoId: 'complemento',
+          campoId: `rh_dep_${campoIncompleto}_${indiceDependenteIncompleto}`
+        };
+      }
+
+      const indiceCpfDependenteInvalido = state.modal.dependentes.findIndex(item => !item.id && item.cpf && !cpfValido(item.cpf));
+      if (indiceCpfDependenteInvalido >= 0) {
+        return {
+          mensagem: 'Informe um CPF válido para cada novo dependente ou deixe o campo vazio.',
+          blocoId: 'complemento'
+        };
       }
     }
 
-    return '';
+    return null;
   }
 
   async function abrir() {
     const secaoRota = obterSecaoRota();
     const secaoPermitida = obterSecaoPermitida(secaoRota);
+    if (!secaoPermitida) {
+      renderUnavailable('rh-dp');
+      return;
+    }
     const partesRota = obterPartesRota?.() || [];
     const secaoInformada = String(partesRota[1] || '').trim().toLowerCase();
 
@@ -1890,7 +2323,7 @@ export function criarRhDpController({
     }
 
     try {
-      state.colaboradores = await listarColaboradoresRhDp();
+      state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       if (state.secao === 'demandas') state.demandas = await listarDemandasContabilidadeRhDp();
       if (state.secao === 'fechamentos') state.competencias = await listarCompetenciasRhDp();
       if (state.secao === 'dashboard') {
@@ -2337,6 +2770,7 @@ export function criarRhDpController({
   async function abrirCadastro(id = '', modo = 'view', acaoOperacionalPendente = '', { atualizarRota = true } = {}) {
     if (modo === 'create' && !podeCriar()) return;
     if (modo === 'edit' && !podeEditar()) return;
+    removeHubFormFooterPortals();
 
     if (atualizarRota && navegarParaRota && montarCaminhoModulo) {
       const cadastro = state.colaboradores.find(item => item.id === id || item.codigo === id);
@@ -2351,6 +2785,8 @@ export function criarRhDpController({
       arquivosLoading: Boolean(id) && podeVerArquivos(),
       acaoOperacionalPendente
     });
+    const colaboradorResumo = state.colaboradores.find(item => item.id === id || item.codigo === id);
+    if (colaboradorResumo) state.modal.colaborador.nome_completo = colaboradorResumo.nome_completo || '';
     render();
 
     if (!id) return;
@@ -2368,7 +2804,6 @@ export function criarRhDpController({
       state.modal.beneficios = dados.beneficios || [];
       state.modal.bancarios = dados.bancarios || {};
       state.modal.movimentacoes = dados.movimentacoes || [];
-      state.modal.checklist = dados.checklist || [];
       const [ferias, afastamentos, desligamentos] = await Promise.all([
         podeVerFerias() ? listarFeriasRhDp() : Promise.resolve([]),
         podeVerOcorrencias() ? listarAfastamentosRhDp() : Promise.resolve([]),
@@ -2399,6 +2834,7 @@ export function criarRhDpController({
   function fecharCadastro() {
     if (state.modal.saving) return;
     state.modal.aberto = false;
+    removeHubRecordWorkflowFooter('rh-collaborator');
     if (obterCadastroRota() && navegarParaRota) {
       navegarParaRota(obterRotaColaboradores());
       return;
@@ -2406,28 +2842,189 @@ export function criarRhDpController({
     render();
   }
 
+  async function cancelarEdicaoCadastro() {
+    if (state.modal.saving) return;
+    if (state.modal.modo === 'create' || !state.modal.id) {
+      fecharCadastro();
+      return;
+    }
+    if (state.modal.snapshotEdicao) {
+      removeHubRecordWorkflowFooter('rh-collaborator');
+      Object.assign(state.modal, state.modal.snapshotEdicao, {
+        modo: 'view',
+        saving: false,
+        snapshotEdicao: null,
+        mensagem: '',
+        erros: {}
+      });
+      render();
+      return;
+    }
+    const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
+    const codigo = atualizarRota ? (state.modal.colaborador.codigo || state.modal.id) : state.modal.id;
+    await abrirCadastro(codigo, 'view', '', { atualizarRota });
+  }
+
+  function editarCadastroAtual() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo !== 'view' || !state.modal.id || !podeEditar()) return;
+    const camposEditaveis = ['colaborador', 'documentos', 'vinculo', 'dependentes', 'beneficios', 'beneficiosPendentes', 'beneficiosParaEncerrar', 'bancarios', 'movimentacoes', 'ferias', 'afastamentos', 'desligamentos', 'arquivos', 'blocosAbertos', 'aba'];
+    state.modal.snapshotEdicao = JSON.parse(JSON.stringify(Object.fromEntries(
+      camposEditaveis.map(campo => [campo, state.modal[campo]])
+    )));
+    state.modal.modo = 'edit';
+    state.modal.aba = 'cadastro';
+    state.modal.mensagem = '';
+    state.modal.erros = {};
+    render();
+  }
+
   function abrirAcaoOperacionalColaborador(tipo) {
     if (!state.modal.id) return;
+    capturarFormulario();
     const colaboradorId = state.modal.id;
     if (tipo === 'ferias') abrirModalFerias(colaboradorId);
     if (tipo === 'afastamento') abrirModalAfastamento(colaboradorId);
     if (tipo === 'desligamento') abrirModalDesligamento(colaboradorId);
   }
 
-  function adicionarDependente() {
+  function abrirModalComplemento(tipo) {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || !podeAdicionarComplemento(tipo)) return;
+    if (!['dependente', 'beneficio'].includes(tipo)) return;
     capturarFormulario();
-    state.modal.dependentes.push({
+    state.modal.complementoModal = {
+      aberto: true,
+      tipo,
+      saving: false,
+      erro: '',
+      form: tipo === 'dependente'
+        ? { parentesco: '', nome_completo: '', data_nascimento: '', cpf: '' }
+        : { tipo: '', nome: '', operadora_fornecedor: '', valor_empresa: '', valor_colaborador: '', inicio_em: '' }
+    };
+    render();
+  }
+
+  function fecharModalComplemento() {
+    if (state.modal.complementoModal?.saving) return;
+    state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+    render();
+  }
+
+  async function salvarModalComplemento() {
+    const modal = state.modal.complementoModal;
+    if (!modal?.aberto || modal.saving || !podeAdicionarComplemento(modal.tipo)) return;
+    capturarFormulario();
+
+    if (modal.tipo === 'dependente') {
+      const dependente = {
+        parentesco: obterValor('complemento_dependente_parentesco').trim(),
+        nome_completo: obterValor('complemento_dependente_nome').trim(),
+        data_nascimento: obterValor('complemento_dependente_nascimento'),
+        cpf: obterValor('complemento_dependente_cpf')
+      };
+      modal.form = dependente;
+      if (!dependente.nome_completo || !dependente.data_nascimento) {
+        modal.erro = 'Informe o nome completo e a data de nascimento.';
+        render();
+        return;
+      }
+      if (Array.from(dependente.nome_completo).length < 3) {
+        modal.erro = 'O nome completo do dependente deve ter pelo menos 3 caracteres.';
+        render();
+        return;
+      }
+      if (dependente.cpf && !cpfValido(dependente.cpf)) {
+        modal.erro = 'Informe um CPF válido ou deixe o campo vazio.';
+        render();
+        return;
+      }
+
+      if (state.modal.modo === 'view') {
+        modal.saving = true;
+        modal.erro = '';
+        render();
+        try {
+          const salvo = await salvarDependenteRhDp({ dependente: { ...dependente, colaborador_id: state.modal.id } });
+          state.modal.dependentes.push(salvo);
+          state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+          mostrarToastRhDp('Dependente cadastrado com sucesso.');
+          render();
+        } catch (error) {
+          state.modal.complementoModal = { ...modal, saving: false, erro: error.message || 'Não foi possível salvar o dependente.' };
+          render();
+        }
+        return;
+      }
+
+      state.modal.dependentes.push({ id: '', ...dependente });
+      state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+      render();
+      return;
+    }
+
+    const beneficio = {
+      tipo: obterValor('complemento_beneficio_tipo'),
+      nome: obterValor('complemento_beneficio_nome').trim(),
+      operadora_fornecedor: obterValor('complemento_beneficio_operadora').trim(),
+      valor_empresa: obterValor('complemento_beneficio_valor_empresa'),
+      valor_colaborador: obterValor('complemento_beneficio_valor_colaborador'),
+      inicio_em: obterValor('complemento_beneficio_inicio')
+    };
+    modal.form = beneficio;
+    if (!beneficio.tipo || !beneficio.nome) {
+      modal.erro = 'Informe o tipo e o nome do benefício.';
+      render();
+      return;
+    }
+
+    if (state.modal.modo === 'view') {
+      modal.saving = true;
+      modal.erro = '';
+      render();
+      try {
+        const salvo = await salvarBeneficioRhDp({ beneficio: { ...beneficio, colaborador_id: state.modal.id } });
+        state.modal.beneficios.push({ ...beneficio, id: salvo.id, status: 'ativo' });
+        state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
+        mostrarToastRhDp('Benefício cadastrado com sucesso.');
+        render();
+      } catch (error) {
+        state.modal.complementoModal = { ...modal, saving: false, erro: error.message || 'Não foi possível salvar o benefício.' };
+        render();
+      }
+      return;
+    }
+
+    const itemPendente = {
+      ...beneficio,
       id: '',
-      nome_completo: '',
-      data_nascimento: '',
-      parentesco: ''
-    });
+      status: 'ativo',
+      _pendente: true,
+      _chaveTemporaria: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    };
+    state.modal.beneficios.push(itemPendente);
+    state.modal.beneficiosPendentes.push(itemPendente);
+    state.modal.complementoModal = { aberto: false, tipo: '', saving: false, erro: '', form: {} };
     render();
   }
 
   function removerDependente(indice) {
     capturarFormulario();
     state.modal.dependentes.splice(indice, 1);
+    render();
+  }
+
+  function removerBeneficio(chave) {
+    if (!state.modal.aberto || state.modal.saving || state.modal.modo === 'view' || !podeVerSensiveis()) return;
+    capturarFormulario();
+    const beneficio = state.modal.beneficios.find(item => (item._chaveTemporaria || item.id) === chave);
+    if (!beneficio) return;
+
+    if (beneficio._pendente || !beneficio.id) {
+      state.modal.beneficios = state.modal.beneficios.filter(item => item !== beneficio);
+      state.modal.beneficiosPendentes = state.modal.beneficiosPendentes.filter(item => item._chaveTemporaria !== beneficio._chaveTemporaria);
+    } else {
+      beneficio._removerPendente = true;
+      state.modal.beneficiosParaEncerrar.push(beneficio);
+    }
     render();
   }
 
@@ -2447,7 +3044,7 @@ export function criarRhDpController({
       google_drive_folder_id: obterValor('arquivo_google_drive_folder_id'),
       data_referencia: obterValor('arquivo_data_referencia'),
       data_validade: obterValor('arquivo_data_validade'),
-      observacoes: obterValor('arquivo_observacoes')
+      observacoes: state.modal.arquivoForm.observacoes || ''
     };
   }
 
@@ -2563,12 +3160,18 @@ export function criarRhDpController({
     }
   }
 
-  async function salvarCadastro(fecharAoSalvar = false) {
+  async function salvarCadastro() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.complementoModal?.aberto || state.modal.modo === 'view') return;
     capturarFormulario();
     const erro = validarFormulario();
     if (erro) {
-      state.modal.erros.geral = erro;
+      const blocoId = erro.blocoId;
+      if (blocoId) state.modal.blocosAbertos = { ...state.modal.blocosAbertos, [blocoId]: true };
+      state.modal.aba = 'cadastro';
+      state.modal.erros.geral = erro.mensagem;
       render();
+      if (blocoId) document.querySelector(`[data-rh-block="${blocoId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (erro.campoId) document.getElementById(erro.campoId)?.focus({ preventScroll: true });
       return;
     }
 
@@ -2576,42 +3179,94 @@ export function criarRhDpController({
     state.modal.erros = {};
     render();
 
+    let idSalvo = state.modal.id;
     try {
       const editando = Boolean(state.modal.id);
-      await salvarCadastroPessoalRhDp({
+      const resultado = await salvarCadastroPessoalRhDp({
         id: state.modal.id || null,
         colaborador: state.modal.colaborador,
         documentos: podeVerSensiveis() ? state.modal.documentos : null,
         vinculo: podeVerSensiveis() ? state.modal.vinculo : null,
         dependentes: podeVerSensiveis() ? state.modal.dependentes : null
       });
-      state.modal.saving = false;
-      state.modal.mensagem = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
-      if (fecharAoSalvar) {
-        state.modal.aberto = false;
-        state.message = state.modal.mensagem;
+      idSalvo = resultado?.id || state.modal.id;
+      if (!idSalvo) throw new Error('O cadastro foi salvo, mas não foi possível identificar o colaborador.');
+      state.modal.id = idSalvo;
+
+      for (const beneficio of [...state.modal.beneficiosParaEncerrar]) {
+        try {
+          await salvarBeneficioRhDp({ id: beneficio.id, beneficio: { ...beneficio, colaborador_id: idSalvo, status: 'encerrado' } });
+          state.modal.beneficiosParaEncerrar = state.modal.beneficiosParaEncerrar.filter(item => item.id !== beneficio.id);
+          state.modal.beneficios = state.modal.beneficios.filter(item => item.id !== beneficio.id);
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas o benefício não foi removido: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
       }
-      state.message = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
-      state.messageType = 'success';
+
+      for (const pendente of [...state.modal.beneficiosPendentes]) {
+        try {
+          const resultadoBeneficio = await salvarBeneficioRhDp({ beneficio: { ...pendente, colaborador_id: idSalvo } });
+          state.modal.beneficiosPendentes = state.modal.beneficiosPendentes.filter(item => item._chaveTemporaria !== pendente._chaveTemporaria);
+          state.modal.beneficios = state.modal.beneficios.map(item => item._chaveTemporaria === pendente._chaveTemporaria
+            ? { ...item, id: resultadoBeneficio.id, _pendente: false }
+            : item);
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas os benefícios não foram salvos: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
+      }
+
+      if (podeVerSensiveis() && possuiDadosBancarios()) {
+        try {
+          const resultadoBancario = await salvarDadosBancariosRhDp({
+            id: state.modal.bancarios.id || null,
+            dados: payloadDadosBancarios(idSalvo)
+          });
+          state.modal.bancarios = { ...state.modal.bancarios, id: resultadoBancario?.id || state.modal.bancarios.id || '' };
+        } catch (error) {
+          state.modal.saving = false;
+          state.modal.modo = 'edit';
+          state.modal.erros.geral = `Cadastro salvo, mas os dados bancários não foram salvos: ${error.message || 'tente novamente.'}`;
+          render();
+          return;
+        }
+      }
+
+      state.modal.saving = false;
+      let mensagemSucesso = editando ? 'Cadastro atualizado com sucesso.' : 'Colaborador incluído com sucesso.';
+      state.modal.mensagem = '';
+      state.message = '';
+      state.messageType = '';
 
       try {
-        state.colaboradores = await listarColaboradoresRhDp();
+        state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
       } catch {
-        state.message = editando
+        mensagemSucesso = editando
           ? 'Cadastro atualizado, mas a lista não pôde ser recarregada agora.'
           : 'Colaborador incluído, mas a lista não pôde ser recarregada agora.';
       }
 
-      if (fecharAoSalvar && obterCadastroRota() && navegarParaRota) {
-        await navegarParaRota(obterRotaColaboradores());
-      } else {
-        render();
-      }
+      const colaboradorSalvo = state.colaboradores.find(item => item.id === idSalvo || item.codigo === idSalvo);
+      const atualizarRota = Boolean(obterCadastroRota() && navegarParaRota);
+      await abrirCadastro(colaboradorSalvo?.codigo || idSalvo, 'view', '', { atualizarRota });
+      mostrarToastRhDp(mensagemSucesso);
     } catch (error) {
       state.modal.saving = false;
       state.modal.erros.geral = error.message || 'Não foi possível salvar o cadastro.';
       render();
     }
+  }
+
+  function salvarCadastroPorAtalho() {
+    if (!state.modal.aberto || state.modal.loading || state.modal.saving || state.modal.modo === 'view') return;
+    void salvarCadastro();
   }
 
   async function alterarStatus(id, status) {
@@ -2620,10 +3275,16 @@ export function criarRhDpController({
     if (!item || !window.confirm(`Deseja ${verbo} o cadastro de ${item.nome_completo}?`)) return;
 
     try {
+      if (state.modal.id === id) capturarFormulario();
       await alterarStatusColaboradorRhDp({ id, status });
-      state.colaboradores = await listarColaboradoresRhDp();
-      state.message = status === 'inativo' ? 'Cadastro inativado com sucesso.' : 'Cadastro reativado com sucesso.';
-      state.messageType = 'success';
+        state.colaboradores = await listarColaboradoresRhDp({ incluirSensiveis: podeVerSensiveis() });
+      if (state.modal.id === id) state.modal.colaborador = { ...state.modal.colaborador, status };
+      if (state.modal.snapshotEdicao?.colaborador && state.modal.id === id) {
+        state.modal.snapshotEdicao.colaborador.status = status;
+      }
+      state.message = '';
+      state.messageType = '';
+      mostrarToastRhDp(status === 'inativo' ? 'Cadastro inativado com sucesso.' : 'Cadastro reativado com sucesso.');
       render();
     } catch (error) {
       state.message = error.message || 'Não foi possível alterar o status.';
@@ -2632,40 +3293,48 @@ export function criarRhDpController({
     }
   }
 
-  async function recarregarFase5() {
+  async function recarregarDadosComplementaresCadastro({ preservarRascunhoBancario = false } = {}) {
     const dados = await obterCadastroPessoalRhDp({ id: state.modal.id, incluirSensiveis: true });
     state.modal.beneficios = dados.beneficios || [];
-    state.modal.bancarios = dados.bancarios || {};
+    const bancariosSalvos = dados.bancarios || {};
+    if (!preservarRascunhoBancario) state.modal.bancarios = bancariosSalvos;
     state.modal.movimentacoes = dados.movimentacoes || [];
-    state.modal.checklist = dados.checklist || [];
+    if (state.modal.snapshotEdicao) {
+      // Ações auxiliares já persistidas passam a fazer parte da base restaurada por Cancelar.
+      ['beneficios', 'bancarios', 'movimentacoes'].forEach(campoNome => {
+        const valorSalvo = campoNome === 'bancarios' ? bancariosSalvos : state.modal[campoNome];
+        state.modal.snapshotEdicao[campoNome] = JSON.parse(JSON.stringify(valorSalvo));
+      });
+    }
   }
 
-  async function salvarBeneficio() {
-    try {
-      await salvarBeneficioRhDp({ beneficio: { colaborador_id: state.modal.id, tipo: obterValor('beneficio_tipo'), nome: obterValor('beneficio_nome'), operadora_fornecedor: obterValor('beneficio_operadora'), valor_empresa: obterValor('beneficio_valor_empresa'), valor_colaborador: obterValor('beneficio_valor_colaborador'), inicio_em: obterValor('beneficio_inicio') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar o benefício.'; render(); }
+  function payloadDadosBancarios(colaboradorId = state.modal.id) {
+    const item = state.modal.bancarios || {};
+    return {
+      colaborador_id: colaboradorId,
+      banco_codigo: item.banco_codigo,
+      banco_nome: item.banco_nome,
+      tipo_conta: item.tipo_conta,
+      agencia: item.agencia,
+      conta: item.conta,
+      conta_digito: item.conta_digito,
+      pix_tipo: item.pix_tipo,
+      pix_chave: item.pix_chave,
+      titular_nome: item.titular_nome,
+      titular_cpf: item.titular_cpf
+    };
   }
 
-  async function salvarBancarios() {
-    try {
-      await salvarDadosBancariosRhDp({ id: state.modal.bancarios.id || null, dados: { colaborador_id: state.modal.id, banco_codigo: obterValor('banco_codigo'), banco_nome: obterValor('banco_nome'), tipo_conta: obterValor('banco_tipo_conta'), agencia: obterValor('banco_agencia'), conta: obterValor('banco_conta'), conta_digito: obterValor('banco_conta_digito'), pix_tipo: obterValor('banco_pix_tipo'), pix_chave: obterValor('banco_pix_chave'), titular_nome: obterValor('banco_titular_nome'), titular_cpf: obterValor('banco_titular_cpf') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível salvar os dados bancários.'; render(); }
-  }
-
-  async function atualizarChecklist(itemChave, concluido) {
-    try {
-      const atual = state.modal.checklist.find(item => item.item_chave === itemChave);
-      await salvarChecklistAdmissionalRhDp({ id: atual?.id || null, item: { colaborador_id: state.modal.id, item_chave: itemChave, status: concluido ? 'concluido' : 'pendente' } });
-      await recarregarFase5(); render();
-    } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível atualizar o checklist.'; render(); }
+  function possuiDadosBancarios() {
+    return Boolean(state.modal.bancarios?.id)
+      || Object.entries(state.modal.bancarios || {}).some(([chave, valor]) => chave !== 'id' && String(valor || '').trim());
   }
 
   async function salvarMovimentacao() {
+    capturarFormulario();
     try {
       await salvarMovimentacaoRhDp({ movimentacao: { colaborador_id: state.modal.id, tipo: obterValor('mov_tipo'), data_efetivacao: obterValor('mov_data'), titulo: obterValor('mov_titulo'), descricao: obterValor('mov_descricao') } });
-      await recarregarFase5(); state.modal.erros = {}; render();
+      await recarregarDadosComplementaresCadastro({ preservarRascunhoBancario: true }); state.modal.erros = {}; render();
     } catch (error) { state.modal.erros.geral = error.message || 'Não foi possível registrar a alteração.'; render(); }
   }
 
@@ -2754,12 +3423,16 @@ export function criarRhDpController({
 
   Object.assign(window, {
     hubRhDpAbrirCadastro: abrirCadastro,
+    hubRhDpEditarCadastroAtual: editarCadastroAtual,
     hubRhDpFecharCadastro: fecharCadastro,
-    hubRhDpMudarEtapaCadastro: mudarEtapaCadastro,
-    hubRhDpAvancarEtapaCadastro: avancarEtapaCadastro,
-    hubRhDpVoltarEtapaCadastro: voltarEtapaCadastro,
-    hubRhDpAdicionarDependente: adicionarDependente,
+    hubRhDpCancelarEdicaoCadastro: cancelarEdicaoCadastro,
+    hubRhDpAtualizarBlocoCadastro: atualizarBlocoCadastro,
+    hubRhDpMudarAbaCadastro: mudarAbaCadastro,
+    hubRhDpAbrirComplementoModal: abrirModalComplemento,
+    hubRhDpFecharComplementoModal: fecharModalComplemento,
+    hubRhDpSalvarComplementoModal: salvarModalComplemento,
     hubRhDpRemoverDependente: removerDependente,
+    hubRhDpRemoverBeneficio: removerBeneficio,
     hubRhDpSalvarCadastro: salvarCadastro,
     hubRhDpAlterarStatus: alterarStatus,
     hubRhDpEditarArquivo: editarArquivo,
@@ -2772,9 +3445,6 @@ export function criarRhDpController({
     hubRhDpSelecionarPagina: selecionarPagina,
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
-    ,hubRhDpSalvarBeneficio: salvarBeneficio
-    ,hubRhDpSalvarBancarios: salvarBancarios
-    ,hubRhDpAtualizarChecklist: atualizarChecklist
     ,hubRhDpSalvarMovimentacao: salvarMovimentacao
     ,hubRhDpAbrirSecao: abrirSecao
     ,hubRhDpSalvarDemanda: salvarDemanda
@@ -2787,7 +3457,10 @@ export function criarRhDpController({
     ,hubRhDpSalvarFerias: salvarFerias
     ,hubRhDpSalvarAfastamento: salvarAfastamento
     ,hubRhDpSalvarOcorrencia: salvarOcorrencia
+    ,hubRhDpGerarFichaPdf: gerarFichaPdf
   });
+
+  registerHubRecordShortcutHandler('rh-collaborator', 'save', salvarCadastroPorAtalho);
 
   return {
     abrir,

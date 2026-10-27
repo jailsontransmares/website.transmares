@@ -1,4 +1,11 @@
 /hub/* /hub/index.html 200
+/central-senhas /hub/central-senhas 301
+/central-senhas/* /hub/central-senhas/:splat 301
+/central-de-senhas /hub/central-senhas 301
+/senhas /hub/central-senhas 301
+/links-corretora /hub/links-corretora 301
+/links-ar /hub/links-ar 301
+/links-gestao /hub/links-gestao 301
 /planos-individuais /servicos/planos-individuais.html 301
 /seguro-auto /servicos/seguro-auto.html 301
 /seguro-de-vida-individual /servicos/seguro-de-vida-individual.html 301

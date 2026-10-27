@@ -1,4 +1,5 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import { HOME_SUBMODULES, obterSubmodulosHomeConfigurados } from '../homeSubmodules.js';
 import {
   canAccessModule,
   montarPermissoesLegadas,
@@ -147,6 +148,7 @@ function normalizarUsuario(registros, authUser, perfis = [], grupos = []) {
     perfil_nome: perfis.find(item => item.id === usuarioEncontrado.perfil_id)?.nome || '',
     grupo: grupo.nome || '',
     status: usuarioEncontrado.status || 'ativo',
+    trocar_senha_proximo_acesso: usuarioEncontrado.trocar_senha_proximo_acesso === true,
     preferencia_modo_visual: usuarioEncontrado.preferencia_modo_visual || usuarioEncontrado.modo_visual || ''
   };
 }
@@ -174,7 +176,10 @@ function deveExibirModuloNaHome(item) {
 }
 
 function normalizarCards(registros, usuario, permissoes) {
-  const ativos = registros.filter(deveExibirModuloNaHome);
+  const idsLinksLegados = new Set(['links-corretora', 'links-ar', 'links-gestao']);
+  const ativos = registros
+    .filter(deveExibirModuloNaHome)
+    .filter(item => !idsLinksLegados.has(normalizarSlugModulo(item.slug || item.modulo_id || item.id_modulo || item.titulo || item.id)));
   const cards = ativos
     .map(item => {
       const dados = obterDadosItem(item);
@@ -208,6 +213,31 @@ function normalizarCards(registros, usuario, permissoes) {
     .filter(card => card.id !== 'administracao')
     .filter(card => canAccessModule(permissoes, card.id))
     .map(({ ordem, ...card }) => card);
+}
+
+function normalizarConfiguracaoModulosHome(registros = []) {
+  const modulos = registros
+    .filter(item => obterTipoItem(item) === 'modulo')
+    .map(item => {
+      const dados = obterDadosItem(item);
+      const slugFonte = dados.slug || dados.modulo_id || item.slug || item.id_modulo || item.modulo_id || item.titulo || item.nome || item.label || item.id;
+      const slug = normalizarSlugModulo(slugFonte);
+      const visibilidade = dados.exibir_home;
+
+      return {
+        id: item.id,
+        slug,
+        status: normalizarStatus(item.status || 'ativo') === 'inativo' ? 'inativo' : 'ativo',
+        exibir_home: !(visibilidade === false || String(visibilidade).toLowerCase() === 'false')
+      };
+    })
+    .filter(item => item.slug);
+
+  if (!modulos.length) {
+    return DEFAULT_CARDS.map(item => ({ id: item.id, slug: item.id, status: 'ativo', exibir_home: true }));
+  }
+
+  return modulos;
 }
 
 function normalizarAvisos(registros, limite) {
@@ -298,9 +328,23 @@ async function carregarPermissoesEfetivas(supabase, usuario) {
 export async function carregarDadosIniciaisSupabase() {
   const supabase = exigirSupabaseConfigurado();
   const { data: authData } = await supabase.auth.getUser();
+  const usuarios = await selecionarTabelaObrigatoria('usuarios');
+  const usuarioAutenticado = normalizarUsuario(usuarios, authData?.user);
 
-  const [usuarios, perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp] = await Promise.all([
-    selecionarTabelaObrigatoria('usuarios'),
+  if (usuarioAutenticado.trocar_senha_proximo_acesso) {
+    return {
+      usuario: usuarioAutenticado,
+      config: { ...DEFAULT_CONFIG },
+      permissions: [],
+      cards: [],
+      avisos: [],
+      aniversariantes: [],
+      favoritos: [],
+      meta: { modo_visual_efetivo: DEFAULT_CONFIG.modo_visual_padrao, fonte_dados: 'supabase' }
+    };
+  }
+
+  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, recursosSubmodulos] = await Promise.all([
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
@@ -308,7 +352,10 @@ export async function carregarDadosIniciaisSupabase() {
     selecionarTabelaOpcional('avisos_internos'),
     selecionarTabelaOpcional('aniversarios'),
     selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
-    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status'))
+    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status')),
+    selecionarTabelaOpcional('recursos_acesso', query => query
+      .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
+      .in('chave', HOME_SUBMODULES.map(item => item.key)))
   ]);
 
   const config = normalizarConfiguracoes(configuracoes);
@@ -333,6 +380,11 @@ export async function carregarDadosIniciaisSupabase() {
     config,
     permissions,
     cards: normalizarCards(moduloItens, usuario, permissions),
+    homeModuleSettings: {
+      modules: normalizarConfiguracaoModulosHome(itens),
+      submodules: obterSubmodulosHomeConfigurados(recursosSubmodulos)
+        .filter(item => recursosSubmodulos.some(recurso => recurso.chave === item.key))
+    },
     avisos: normalizarAvisos(avisosInternos, config.limite_avisos),
     aniversariantes: normalizarAniversariantes(
       aniversariantesCadastros.length ? aniversariantesCadastros : aniversarios,

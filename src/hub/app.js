@@ -1,18 +1,49 @@
-import './style.css';
+﻿import './style.css';
+import './crm2Phase2.css';
+import './crm2PessoaFisica.js';
+import './crm2PessoaJuridica.js';
+import './crm2PessoaJuridica.css';
+import './crm2Vinculos.js';
+import './crm2Vinculos.css';
+import './crm2Pedidos.js';
+import './crm2Pedidos.css';
+import './cnpjLookupModal.js';
+import './cnpjLookupModal.css';
+import './crm2Timeline.js';
+import './crm2Timeline.css';
+import './crm2Oportunidades.js';
+import './crm2Oportunidades.css';
+import './crm2Comunicacao.js';
+import './crm2Comunicacao.css';
+import './crm2Automacoes.js';
+import './crm2Automacoes.css';
+import { CONSULTORIA360_ROUTE, mountConsultoria360Page, renderCorretoraOperationalPage } from './consultoria360.js';
+import {
+  SIMULADOR_SAUDE_COTACAO_ROUTE,
+  SIMULADOR_SAUDE_CATALOGO_ROUTE,
+  SIMULADOR_SAUDE_ROUTE,
+} from './simuladorSaudeRoutes.js';
+import { mountSimuladorSaudeCatalogPage } from './simuladorSaudeCatalogo.js';
+import { mountSimuladorSaudeHomePage } from './simuladorSaudeInicio.js';
+import { mountSimuladorSaudeQuotePage } from './simuladorSaudeCotacao.js';
+import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
+import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
-import { entrarComSenha, obterSessaoAtual, sairDoHub } from './services/authService.js';
-import { canAccessModule, hasPermission, normalizarPermissoes } from './services/permissionService.js';
+import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
+import { entrarComSenha, obterSessaoAtual, sairDoHub, trocarSenhaProvisoria } from './services/authService.js';
+import { canAccessModule, hasPermission, normalizarPermissoes, LINK_RESOURCES } from './services/permissionService.js';
 import {
   atualizarContextoInicialHub,
   invalidarContextoAcessoHub,
   limparContextoAcessoHub
 } from './services/hubAccessContext.js';
 import { HUB_MENU_TREE } from './menuTree.js';
-import {
-  abrirMenuAcaoGlobal,
-  limparMenusAcoesGlobais
-} from './actionMenuPortal.js';
+import { HOME_SUBMODULE_GROUPS, HOME_SUBMODULES } from './homeSubmodules.js';
+import { HUB_ADMIN_ROUTE_TABS, HUB_ROUTE_ALIASES, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
+import { resolveCrm2CadastroTab } from './crm2CadastroRoute.js';
+import { renderCrm2CadastroPagination } from './crm2CadastroUi.js';
+import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
   renderHubNotificationBell,
@@ -20,31 +51,107 @@ import {
 } from './notificationsUi.js';
 import {
   Archive,
+  ArrowRight,
   AtSign,
+  Bold,
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Check,
+  CheckCircle2,
+  CircleX,
+  ClipboardList,
   Circle,
   CircleHelp,
   CircleAlert,
   Clock3,
+  Contact,
   createIcons,
+  Building2,
+  BadgeCheck,
+  BellRing,
+  BriefcaseBusiness,
+  CalendarCheck,
+  CalendarRange,
+  ChartNoAxesColumnIncreasing,
+  ChartPie,
+  CircleDollarSign,
+  Calculator,
+  CreditCard,
+  Database,
+  Download,
+  DownloadCloud,
+  Compass,
+  Copy,
   ExternalLink,
+  Eraser,
+  Eye,
+  EyeOff,
+  File,
+  FilePlus2,
+  FileText,
   Filter,
+  FileSignature,
+  Folder,
   House,
+  HeartPulse,
+  HandCoins,
+  History,
+  IdCard,
+  Info,
+  Italic,
   KeyRound,
   Landmark,
+  Link2,
   LayoutDashboard,
+  LayoutGrid,
+  List,
+  ListChecks,
+  ListOrdered,
   MessageCircle,
+  MessagesSquare,
   Menu,
+  Maximize2,
+  Minimize2,
   Moon,
+  MoreHorizontal,
+  MoreVertical,
+  Paperclip,
   Pin,
+  Plus,
+  Pencil,
+  Network,
+  Package,
+  Receipt,
+  ReceiptText,
+  Repeat,
+  Scale,
+  ScrollText,
+  ShoppingBag,
+  SlidersHorizontal,
+  Split,
+  Tags,
+  Target,
+  TestTubeDiagonal,
+  UserRound,
+  Wallet,
+  RemoveFormatting,
   Search,
+  Save,
+  ShieldCheck,
   Settings,
+  Settings2,
   Sun,
   Trash2,
   RotateCcw,
   RefreshCw,
+  Strikethrough,
+  UploadCloud,
+  Underline,
+  Unlink,
   UsersRound,
   Workflow,
   X
@@ -52,37 +159,144 @@ import {
 
 const HUB_LUCIDE_ICONS = {
   Archive,
+  ArrowRight,
   AtSign,
+  Bold,
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Check,
+  CheckCircle2,
+  ClipboardList,
+  Contact,
   Circle,
   CircleAlert,
   CircleHelp,
+  CircleX,
   Clock3,
+  Building2,
+  BadgeCheck,
+  BellRing,
+  BriefcaseBusiness,
+  CalendarCheck,
+  CalendarRange,
+  ChartNoAxesColumnIncreasing,
+  ChartPie,
+  CircleDollarSign,
+  Calculator,
+  CreditCard,
+  Database,
+  Download,
+  DownloadCloud,
+  Compass,
+  Copy,
+  Eye,
+  EyeOff,
+  File,
+  FilePlus2,
+  FileText,
+  FileSignature,
   Filter,
+  Folder,
   House,
+  HeartPulse,
+  HandCoins,
+  History,
+  IdCard,
+  Info,
+  Italic,
   KeyRound,
   Landmark,
+  Link2,
   LayoutDashboard,
+  LayoutGrid,
+  List,
+  ListChecks,
+  ListOrdered,
   MessageCircle,
+  MessagesSquare,
   Menu,
+  Maximize2,
+  Minimize2,
   Moon,
+  MoreHorizontal,
+  MoreVertical,
+  Paperclip,
   Pin,
+  Plus,
+  Pencil,
+  Network,
+  Package,
+  Receipt,
+  ReceiptText,
+  Repeat,
+  Scale,
+  ScrollText,
+  ShoppingBag,
+  SlidersHorizontal,
+  Split,
+  Tags,
+  Target,
+  TestTubeDiagonal,
+  UserRound,
+  Wallet,
+  RemoveFormatting,
   Search,
+  Save,
+  ShieldCheck,
   Settings,
+  Settings2,
   Sun,
   Trash2,
+  Unlink,
   RotateCcw,
   RefreshCw,
+  Strikethrough,
+  UploadCloud,
+  Underline,
   UsersRound,
   Workflow,
   X,
-  ExternalLink
+  ExternalLink,
+  Eraser
 };
 
 const CRM_STATUS_OPTIONS = ['em prospecção', 'cliente ativo', 'finalizado', 'lead perdido'];
 const SIDEBAR_PINNED_STORAGE_KEY = 'hub-sidebar-pinned';
+
+// Mock visual da central de avisos. Substituir pela fonte de dados quando a integração for criada.
+const MOCK_CENTRAL_AVISOS = [
+  {
+    id: 'mock-aviso-1',
+    categoria: 'Comunicado',
+    titulo: 'Reunião geral da equipe',
+    descricao: 'A reunião mensal acontecerá na próxima sexta-feira, às 9h.',
+    quando: 'Hoje, 08:30',
+    prioridade: 'Alta',
+    lido: false
+  },
+  {
+    id: 'mock-aviso-2',
+    categoria: 'Operacional',
+    titulo: 'Atualização dos procedimentos internos',
+    descricao: 'Os procedimentos revisados já estão disponíveis para consulta.',
+    quando: 'Ontem, 16:10',
+    prioridade: 'Normal',
+    lido: false
+  },
+  {
+    id: 'mock-aviso-3',
+    categoria: 'Confraternização',
+    titulo: 'Aniversário da empresa',
+    descricao: 'Reserve a data para a confraternização da Transmares.',
+    quando: '05/08/2026',
+    prioridade: 'Normal',
+    lido: true
+  }
+];
 
 function sidebarMobileHub() {
   return typeof window !== 'undefined'
@@ -103,6 +317,7 @@ const state = {
   usuario: null,
   config: null,
   cards: [],
+  homeModuleSettings: { modules: [], submodules: [] },
   avisos: [],
   aniversariantes: [],
   favoritos: [],
@@ -124,9 +339,19 @@ const state = {
   modulosHome: {
     aberto: false,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
+    returnPath: '',
     loading: false,
     saving: false,
     message: ''
@@ -212,7 +437,6 @@ const state = {
     colunasParceirosIndicacao: [],
     colunasParceirosIndicacaoRascunho: [],
     seletorColunasParceirosAberto: false,
-    acoesParceirosAberto: false,
     loteParceirosModo: null,
     loteParceirosSelecionados: [],
     loteParceirosProcessando: false,
@@ -251,6 +475,7 @@ const state = {
   passwords: {
     categorias: [],
     grupos: [],
+    seguradoras: [],
     items: [],
     resumo: {
       total: 0,
@@ -260,11 +485,18 @@ const state = {
     historico: [],
     aba: 'acessos',
     filtros: {
-      categoria: '',
+      seguradoraId: '',
       grupo: '',
-      status: ''
+      status: 'ativo',
+      statusSeguradora: 'ativo'
     },
+    filtrosAbertos: false,
+    busca: '',
+    categoriasRecolhidas: {},
+    senhasVisiveis: {},
     modalAberto: false,
+    cadastroSeguradoraAberto: false,
+    seguradoraCadastroId: '',
     modalId: '',
     erros: {},
     salvando: false,
@@ -280,9 +512,20 @@ const state = {
   buscaTimer: null,
   listaGrupos: [],
   listaAc: '',
+  listaStatusProdutos: 'ativo',
+  produtosInativos: [],
+  produtosInativosCarregados: false,
+  produtosInativosCarregando: false,
+  alterandoStatusProdutos: false,
   filtrosListaAberto: false,
   produtosListaSelecionados: [],
+  ordenacaoGruposProdutos: 'asc',
+  ordenacaoGruposProdutosInicializada: false,
+  gruposProdutosExpandidos: {},
+  largurasColunasProdutos: null,
+  redimensionamentoColunaProdutos: null,
   modalVisualizacaoProdutos: false,
+  novoProdutoGrupo: null,
   mensagemProdutosLista: '',
   tipoMensagemProdutosLista: '',
   edicaoProdutosGrupo: {
@@ -365,6 +608,7 @@ const state = {
       requestId: '',
       comments: [],
       attachments: [],
+      attachmentView: 'list',
       message: ''
     },
     sincronizando: false,
@@ -389,25 +633,27 @@ const state = {
   campoProdutoAtivo: '',
   loading: false,
   gerando: false,
+  geracaoLinksToken: 0,
   message: ''
 },
   temaAtual: 'claro'
 };
 
 const ADMIN_PARTNER_COLUMNS_STORAGE_KEY = 'hub-admin-partners-visible-columns-v1';
+let renderizarRotaAtual;
+let navegarParaModulo;
+let renderPainelAr;
+let selecionarAbaAr;
 const ADMIN_PARTNER_SEARCH_DEBOUNCE_MS = 650;
 const ADMIN_PARTNER_COLUMNS = [
-  { id: 'acoes', label: 'Ações', locked: true, min: '112px', size: '0.55fr' },
-  { id: 'parceiro', label: 'Parceiro', locked: true, min: '220px', size: '1.5fr' },
-  { id: 'codigo_revendedor', label: 'Cód. revendedor', min: '120px', size: '0.7fr' },
-  { id: 'ac', label: 'AC', min: '80px', size: '0.45fr' },
-  { id: 'contato', label: 'Contato', min: '180px', size: '1fr' },
-  { id: 'empresa', label: 'Empresa', min: '160px', size: '0.9fr' },
-  { id: 'remunerado', label: 'Remunerado', min: '110px', size: '0.55fr' },
-  { id: 'status', label: 'Status', min: '130px', size: '0.7fr' },
-  { id: 'atualizado', label: 'Atualizado em', min: '120px', size: '0.6fr' }
+  { id: 'parceiro', label: 'Parceiro', locked: true, min: '180px', size: '1.2fr' },
+  { id: 'contato', label: 'Contato', min: '100px', size: '0.5fr' },
+  { id: 'email_cadastro_certificado', label: 'E-mail para cadastro', min: '145px', size: '0.7fr' },
+  { id: 'empresa', label: 'Empresa', min: '140px', size: '0.8fr' },
+  { id: 'remunerado', label: 'Remunerado', min: '100px', size: '0.55fr' },
+  { id: 'status', label: 'Status', min: '90px', size: '0.4fr' }
 ];
-const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['acoes', 'parceiro', 'codigo_revendedor', 'ac', 'contato', 'status', 'atualizado'];
+const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['parceiro', 'contato', 'email_cadastro_certificado', 'status'];
 
 function sincronizarContextoInicialHub() {
   atualizarContextoInicialHub({
@@ -522,6 +768,9 @@ document.addEventListener('DOMContentLoaded', iniciarApp);
 document.addEventListener('DOMContentLoaded', iniciarIconesLucideHub);
 document.addEventListener('DOMContentLoaded', iniciarTooltipsGlobais);
 document.addEventListener('click', fecharFiltrosListaAoClicarForaAr);
+document.addEventListener('click', fecharFiltrosSenhasAoClicarFora);
+document.addEventListener('pointerdown', iniciarRedimensionamentoColunaProdutosAr);
+document.addEventListener('keydown', ajustarColunaProdutosComTecladoAr);
 document.addEventListener('click', fecharDropdownCrmAr);
 document.addEventListener('click', fecharDropdownLogsAdmin);
 window.addEventListener('resize', reposicionarDropdownsCrmAr);
@@ -535,11 +784,13 @@ window.addEventListener('hubAdminUsuariosAtualizados', () => {
   agendarAtualizacaoContextoAcessoHub('usuario-atualizado');
 });
 window.addEventListener('popstate', () => {
+  limparMenusAcoesGlobais();
+  hubLimparDropdowns({ remover: true });
+  if (window.simsaudeCatalogoTratarPopstate?.() === false) return;
   if (state.usuario) {
     renderizarRotaAtual();
   }
 });
-
 async function iniciarApp(exibirLoadingInicial = true) {
   try {
     if (exibirLoadingInicial) {
@@ -563,14 +814,22 @@ async function iniciarApp(exibirLoadingInicial = true) {
       return false;
     }
 
+    if (response.data.usuario?.trocar_senha_proximo_acesso) {
+      state.usuario = response.data.usuario;
+      state.auth.loading = false;
+      renderTrocaSenhaObrigatoria();
+      return true;
+    }
+
     state.usuario = response.data.usuario;
     state.config = response.data.config;
     state.cards = response.data.cards || [];
+    state.homeModuleSettings = response.data.homeModuleSettings || { modules: [], submodules: [] };
     state.avisos = response.data.avisos || [];
     state.aniversariantes = response.data.aniversariantes || [];
     state.favoritos = response.data.favoritos || [];
     state.meta = response.data.meta || null;
-    state.permissions = response.data.permissions || normalizarPermissoes([]);
+    state.permissions = normalizarPermissoes(response.data.permissions || []);
     sincronizarContextoInicialHub();
     inicializarNotificacoesHub();
 
@@ -592,6 +851,7 @@ function limparDadosSessao() {
   state.usuario = null;
   state.config = null;
   state.cards = [];
+  state.homeModuleSettings = { modules: [], submodules: [] };
   state.avisos = [];
   state.aniversariantes = [];
   state.favoritos = [];
@@ -614,7 +874,7 @@ function renderLogin() {
         <label>
           <span>Nome de usuário</span>
           <input id="login_username" class="config-input" type="text" value="${escapeAttr(state.auth.identificador)}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-          <small>Se você ainda não tem nome de usuário, entre temporariamente com seu e-mail.</small>
+          <small>Enquanto sua conta não tiver nome de usuário cadastrado, você também pode entrar com o e-mail.</small>
         </label>
 
         <label>
@@ -641,6 +901,69 @@ function renderLoginLoading() {
     </section>
   `;
 }
+
+function renderTrocaSenhaObrigatoria() {
+  document.getElementById('app').innerHTML = `
+    <section class="login-card">
+      <div class="login-logo" aria-label="Transmares Corretora de Seguros">
+        <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
+      </div>
+      <h1>Crie sua senha</h1>
+      <p>Este é seu primeiro acesso. Defina uma senha pessoal para continuar.</p>
+      <form class="login-form" onsubmit="concluirTrocaSenhaObrigatoria(event)">
+        <label><span>Nova senha</span><input id="primeiro_acesso_senha" class="config-input" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label><span>Confirmar nova senha</span><input id="primeiro_acesso_confirmar" class="config-input" type="password" autocomplete="new-password" minlength="8" required></label>
+        ${state.auth.message ? `<p class="admin-message">${escapeHtml(state.auth.message)}</p>` : ''}
+        <button class="save-btn" type="submit" ${state.auth.loading ? 'disabled' : ''}>${state.auth.loading ? 'Salvando...' : 'Salvar senha e continuar'}</button>
+        <button class="secondary-btn" type="button" onclick="sair()">Sair</button>
+      </form>
+    </section>
+  `;
+}
+
+async function concluirTrocaSenhaObrigatoria(event) {
+  event.preventDefault();
+  const senha = document.getElementById('primeiro_acesso_senha')?.value || '';
+  const confirmar = document.getElementById('primeiro_acesso_confirmar')?.value || '';
+
+  if (senha.length < 8) {
+    state.auth.message = 'A senha deve ter pelo menos 8 caracteres.';
+    renderTrocaSenhaObrigatoria();
+    return;
+  }
+  if (senha !== confirmar) {
+    state.auth.message = 'A confirmação da senha não confere.';
+    renderTrocaSenhaObrigatoria();
+    return;
+  }
+
+  state.auth.loading = true;
+  state.auth.message = '';
+  renderTrocaSenhaObrigatoria();
+  let trocaConcluida = false;
+  try {
+    await trocarSenhaProvisoria(senha);
+    trocaConcluida = true;
+    const email = state.usuario?.email || state.auth.email;
+    const sessao = await entrarComSenha(email, senha);
+    if (!sessao?.user?.email) {
+      throw new Error('Entre novamente usando a nova senha.');
+    }
+    state.auth.loading = false;
+    state.auth.message = '';
+    await iniciarApp(false);
+  } catch (erro) {
+    state.auth.loading = false;
+    if (trocaConcluida) {
+      state.auth.email = state.usuario?.email || state.auth.email;
+      state.auth.message = `A senha foi alterada. Entre com sua nova senha para continuar. ${erro.message || ''}`.trim();
+      renderLogin();
+    } else {
+      state.auth.message = erro.message || 'Não foi possível alterar a senha.';
+      renderTrocaSenhaObrigatoria();
+    }
+  }
+}
 async function entrarNoHub(event) {
   event.preventDefault();
 
@@ -649,8 +972,6 @@ async function entrarNoHub(event) {
 
   try {
     state.auth.identificador = identificador;
-    state.auth.email = identificador.includes('@') ? identificador : '';
-
     state.auth.loading = true;
     state.auth.message = '';
     renderLoginLoading();
@@ -662,6 +983,7 @@ async function entrarNoHub(event) {
     }
 
     state.auth.email = sessao.user.email;
+
     const carregou = await iniciarApp(false);
 
     if (!carregou) {
@@ -828,11 +1150,95 @@ function renderDashboard() {
         `).join('')}
       </section>
 
+      ${renderSubmodulosVisiveisHome()}
+
       ${renderModalConfigurarModulosHome()}
     </main>
   `;
 }
 
+function renderSubmodulosVisiveisHome() {
+  const visiveis = HOME_SUBMODULES.filter(item => submoduloHomeEstaVisivel(item))
+    .filter(item => moduloEstaAtivo(item.parent))
+    .filter(podeVisualizarSubmoduloHome);
+  if (!visiveis.length) return '';
+
+  const porPai = new Map();
+  for (const item of visiveis) {
+    const lista = porPai.get(item.parent) || [];
+    lista.push(item);
+    porPai.set(item.parent, lista);
+  }
+
+  const nomesModulos = new Map([
+    ...(state.homeModuleSettings?.modules || []).map(item => [item.slug, item.nome]),
+    ['operacoes', 'Operações'],
+    ['operacoes-corretora', 'Operações > Corretora']
+  ]);
+  const grupos = [...porPai.entries()].map(([parent, itens]) => {
+    const porChave = new Map(itens.map(item => [item.key, item]));
+    const elementos = [];
+    const gruposUsados = new Set();
+
+    for (const item of itens) {
+      if (item.group) {
+        if (gruposUsados.has(item.group)) continue;
+        gruposUsados.add(item.group);
+        const paiGrupo = porChave.get(item.group);
+        const definicao = HOME_SUBMODULE_GROUPS[item.group];
+        const filhos = itens.filter(filho => filho.group === item.group);
+        elementos.push(`
+          <div class="home-submodule-group">
+            ${paiGrupo ? `<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(paiGrupo.key)}')">${escapeHtml(paiGrupo.label)} <span aria-hidden="true">›</span></button>` : `<strong class="home-submodule-group-title">${escapeHtml(definicao?.label || item.group)}</strong>`}
+            ${filhos.length ? `<div class="home-submodule-children">${filhos.map(filho => `<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(filho.key)}')">${escapeHtml(filho.label)} <span aria-hidden="true">›</span></button>`).join('')}</div>` : ''}
+          </div>
+        `);
+        continue;
+      }
+
+      if (itens.some(filho => filho.group === item.key)) continue;
+      elementos.push(`<button type="button" class="home-submodule-link" onclick="navegarParaSubmoduloHome('${escapeAttr(item.key)}')">${escapeHtml(item.label)} <span aria-hidden="true">›</span></button>`);
+    }
+
+    return `
+      <section class="home-submodule-parent-group" aria-label="Atalhos de ${escapeAttr(nomesModulos.get(parent) || parent)}">
+        <h3>${escapeHtml(nomesModulos.get(parent) || parent)}</h3>
+        <div class="home-submodule-links">${elementos.join('')}</div>
+      </section>
+    `;
+  }).join('');
+
+  return `
+    <section class="home-submodules-section" aria-labelledby="home-submodules-title">
+      <div class="section-title"><h2 id="home-submodules-title">Atalhos visíveis</h2><p>Submódulos disponíveis, organizados pelo módulo principal.</p></div>
+      <div class="home-submodule-parent-grid">${grupos}</div>
+    </section>
+  `;
+}
+
+function podeVisualizarSubmoduloHome(item) {
+  if (!item?.permission) return true;
+  if (item.key === 'central_senhas.links') {
+    return pode(item.permission, 'view') || podeAcessarGerenciamentoLinks();
+  }
+  return pode(item.permission, 'view');
+}
+
+function navegarParaSubmoduloHome(key) {
+  const item = HOME_SUBMODULES.find(submodule => submodule.key === key);
+  if (!item || !submoduloHomeEstaVisivel(item) || !moduloEstaAtivo(item.parent)
+    || !podeVisualizarSubmoduloHome(item)) {
+    return renderModuloIndisponivel(item?.parent || '');
+  }
+
+  const [pathname = '/', hash = ''] = item.route.split('#');
+  const base = obterBaseHub();
+  const url = new URL(window.location.href);
+  url.pathname = `${base}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+  url.hash = hash ? `#${hash}` : '';
+  window.history.pushState({}, '', url);
+  return renderizarRotaAtual();
+}
 
 function podeConfigurarModulosHome() {
   return pode('admin.modulos', 'update') || pode('admin', 'update') || pode('admin', 'view');
@@ -847,9 +1253,9 @@ function renderBotaoConfigurarModulosHome() {
     <button
       class="icon-btn module-config-edit-btn"
       type="button"
-      onclick="abrirModalConfigurarModulosHome()"
-      title="Configurar módulos da Home"
-      aria-label="Configurar módulos da Home"
+      onclick="navegarParaConfiguracaoModulosHome()"
+      title="Configurar módulos"
+      aria-label="Configurar módulos"
     >✏️</button>
   `;
 }
@@ -864,11 +1270,15 @@ function renderModalConfigurarModulosHome() {
   const alterado = verificarAlteracoesModulosHome();
 
   return `
-    <div class="modal-backdrop admin-user-modal-backdrop" role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
+    <div class="modal-backdrop admin-user-modal-backdrop" data-home-modules-modal-root role="dialog" aria-modal="true" aria-label="Configurar módulos da Home">
       <section class="small-modal admin-user-modal is-permissions-stage home-modules-modal">
         <div class="small-modal-header">
-          <div>
+          <div class="home-modules-modal-title">
+            <span class="home-modules-modal-title-icon"><i data-lucide="layout-grid" aria-hidden="true"></i></span>
+            <div>
             <h3>Configurar módulos</h3>
+              <p>Defina o status e a exibição globais e ajuste o acesso por perfil.</p>
+            </div>
           </div>
           <button class="icon-btn" type="button" onclick="fecharModalConfigurarModulosHome()" title="Fechar" aria-label="Fechar" ${modal.saving ? 'disabled' : ''}>×</button>
         </div>
@@ -881,8 +1291,9 @@ function renderModalConfigurarModulosHome() {
         </div>
 
         <div class="small-modal-actions admin-user-permissions-actions">
-          <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
-          <div class="admin-user-permissions-actions-right">
+          <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
+          <div class="home-modules-footer-actions">
+            <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
             <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${modal.saving || !alterado ? 'disabled' : ''}>
               ${modal.saving ? 'Salvando...' : 'Salvar alterações'}
             </button>
@@ -893,13 +1304,122 @@ function renderModalConfigurarModulosHome() {
   `;
 }
 
-function renderConteudoModalConfigurarModulosHome() {
+function renderConteudoPaginaConfiguracaoModulosHome() {
+  const resumo = obterResumoVisibilidadeModulosHome();
+  const ativos = [
+    ...(state.modulosHome.modules || []),
+    ...(state.modulosHome.submodules || []).map(item => ({ id: item.key }))
+  ].filter(item => obterStatusModuloHomeDraft(item.id) === 'ativo').length;
+
   return `
-    <div class="home-modules-modal-table-wrap">
-      ${renderListaModulosHomeModal()}
+    <section class="admin-panel home-modules-page" data-home-modules-page-root>
+      <div class="admin-panel-header home-modules-page-header">
+        <div>
+          <h2>Configurar módulos</h2>
+          <p>Defina status, presença na Home e acesso por perfil em um único lugar.</p>
+        </div>
+        <div class="home-modules-page-summary" aria-label="Resumo dos módulos">
+          <span><strong>${ativos}</strong> ativos</span>
+          <span><strong>${resumo.visiveis}</strong> visíveis</span>
+        </div>
+      </div>
+      ${state.modulosHome.message ? `<p class="admin-message ${state.modulosHome.message.includes('Erro') || state.modulosHome.message.includes('Não foi') ? 'error' : ''}" role="status">${escapeHtml(state.modulosHome.message)}</p>` : ''}
+      <div class="home-modules-page-body">
+        ${state.modulosHome.loading ? renderHubLoading('Carregando módulos...') : renderConteudoModalConfigurarModulosHome()}
+      </div>
+      <footer class="home-modules-page-actions">
+        <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
+        <div class="home-modules-footer-actions">
+          <button class="secondary-btn" type="button" onclick="voltarDaPaginaConfiguracaoModulosHome()" ${state.modulosHome.saving ? 'disabled' : ''}>Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${state.modulosHome.saving || !verificarAlteracoesModulosHome() ? 'disabled' : ''}>
+            ${state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+        </div>
+      </footer>
+    </section>
+  `;
+}
+
+function renderPaginaConfiguracaoModulosHome() {
+  return renderHubShell({
+    tituloPagina: 'Configuração de módulos',
+    descricaoPagina: 'Defina status, presença na Home e acesso por perfil em um único lugar.',
+    classeConteudo: 'home-modules-page-host',
+    conteudo: renderConteudoPaginaConfiguracaoModulosHome()
+  });
+}
+
+function renderConteudoModalConfigurarModulosHome() {
+  const resumo = obterResumoVisibilidadeModulosHome();
+  const permiteVerPermissoesPerfil = pode('admin.permissoes', 'view');
+  return `
+    <div class="home-modules-modal-content">
+      <div class="home-modules-toolbar">
+        <label class="home-modules-search">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input type="search" data-home-modules-search data-home-module-focus="search" value="${escapeAttr(state.modulosHome.busca || '')}" placeholder="Buscar módulo..." aria-label="Buscar módulo ou submódulo" oninput="alterarBuscaModuloHome(this.value)">
+        </label>
+        <div class="home-modules-filters" role="group" aria-label="Filtrar por visibilidade">
+          ${renderFiltroModulosHome('todos', 'Todos', resumo.total)}
+          ${renderFiltroModulosHome('visiveis', 'Visíveis', resumo.visiveis)}
+          ${renderFiltroModulosHome('ocultos', 'Ocultos', resumo.ocultos)}
+        </div>
+        <label class="home-modules-area-select-label">
+          <span>Área</span>
+          <select class="home-modules-area-select" data-home-module-focus="area-select" aria-label="Filtrar por área" onchange="alterarAreaModuloHome(this.value)">
+            <option value="todas" ${state.modulosHome.area === 'todas' ? 'selected' : ''}>Todas as áreas</option>
+            ${AREAS_MODULOS_HOME.map(area => `<option value="${area.id}" ${state.modulosHome.area === area.id ? 'selected' : ''}>${escapeHtml(area.label)}</option>`).join('')}
+          </select>
+        </label>
+        ${permiteVerPermissoesPerfil ? renderSeletorPerfilModulosHome() : ''}
+      </div>
+      <div class="home-modules-modal-table-wrap">
+        ${renderListaModulosHomeModal()}
+      </div>
     </div>
   `;
 }
+
+function renderResumoListaModulosHome(total = 0) {
+  return `
+    <div class="home-modules-list-heading">
+      <div><h3>Módulos e submódulos</h3><p>${total} ${total === 1 ? 'item exibido' : 'itens exibidos'}</p></div>
+      <div class="home-modules-availability-legend" aria-label="Legenda de status">
+        <span><i class="is-available" aria-hidden="true"></i>Disponível</span>
+        <span><i class="is-unavailable" aria-hidden="true"></i>Indisponível</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderSeletorPerfilModulosHome() {
+  const modal = state.modulosHome;
+  const perfis = modal.profiles || [];
+
+  return `
+    <label class="home-modules-profile-select-label">
+      <span>Perfil</span>
+      <select class="home-modules-area-select" data-home-module-focus="profile-select" aria-label="Escolher perfil para configurar os módulos" title="Acesso por permissões de visualização; atalhos ligados ao mesmo recurso compartilham o acesso." onchange="selecionarPerfilModulosHome(this.value)" ${modal.saving || !perfis.length ? 'disabled' : ''}>
+        <option value="">Selecione um perfil</option>
+        ${perfis.map(perfil => `<option value="${escapeAttr(perfil.id)}" ${perfil.id === modal.selectedProfileId ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || 'Perfil')}</option>`).join('')}
+      </select>
+    </label>
+  `;
+}
+
+const AREAS_MODULOS_HOME = [
+  { id: 'corretora', label: 'Corretora', slugs: ['links-corretora'] },
+  { id: 'ar', label: 'AR', slugs: ['links-ar', 'painel-ar'] },
+  { id: 'gestao', label: 'Gestão', slugs: ['links-gestao', 'central-senhas', 'rh-dp', 'administracao'] },
+  { id: 'operacoes', label: 'Operações', slugs: [], virtualParents: ['operacoes'] },
+  { id: 'operacoes-corretora', label: 'Operações > Corretora', slugs: [], virtualParents: ['operacoes-corretora'] },
+  { id: 'financeiro', label: 'Financeiro', slugs: ['financeiro'] }
+];
+
+const HOME_SUBMODULE_PARENT_LABELS = {
+  operacoes: 'Operações',
+  'operacoes-corretora': 'Operações > Corretora'
+};
 
 function renderFiltroModulosHome(filtro, label, total) {
   const ativo = state.modulosHome.filtro === filtro;
@@ -911,15 +1431,20 @@ function renderFiltroModulosHome(filtro, label, total) {
   ].filter(Boolean).join(' ');
 
   return `
-    <button class="${classes}" type="button" onclick="selecionarFiltroModulosHome('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
+    <button class="${classes}" type="button" data-home-module-filter="${filtro}" data-home-module-focus="filter-${filtro}" onclick="selecionarFiltroModulosHome('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
       ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
     </button>
   `;
 }
 
 function obterResumoVisibilidadeModulosHome() {
-  return (state.modulosHome.modules || []).reduce((acc, modulo) => {
-    const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
+  const itens = [
+    ...(state.modulosHome.modules || []),
+    ...(state.modulosHome.submodules || []).map(item => ({ id: item.key }))
+  ];
+
+  return itens.reduce((acc, item) => {
+    const visivel = obterVisibilidadeModuloHomeDraft(item.id);
     acc.total += 1;
 
     if (visivel) {
@@ -950,137 +1475,613 @@ function obterModuloHomeDraft(id) {
 }
 
 function obterVisibilidadeModuloHomeDraft(id) {
-  return obterModuloHomeDraft(id).exibir_home !== false;
+  const item = obterModuloHomeDraft(id);
+  if (item.status === 'inativo' || item.exibir_home === false) return false;
+
+  const submodulo = (state.modulosHome.submodules || []).find(registro => registro.key === id);
+  if (!submodulo) return true;
+
+  const moduloPai = (state.modulosHome.modules || []).find(modulo => modulo.slug === submodulo.parent);
+  if (moduloPai && (obterStatusModuloHomeDraft(moduloPai.id) === 'inativo'
+    || obterModuloHomeDraft(moduloPai.id).exibir_home === false)) return false;
+
+  if (submodulo.group) {
+    const grupo = (state.modulosHome.submodules || []).find(registro => registro.key === submodulo.group);
+    if (grupo && (obterStatusModuloHomeDraft(grupo.key) === 'inativo'
+      || obterModuloHomeDraft(grupo.key).exibir_home === false)) return false;
+  }
+
+  return true;
 }
 
 function obterStatusModuloHomeDraft(id) {
   return obterModuloHomeDraft(id).status === 'inativo' ? 'inativo' : 'ativo';
 }
 
-function obterModulosHomeFiltrados() {
-  const filtro = state.modulosHome.filtro || 'todos';
-  const modules = state.modulosHome.modules || [];
+function aplicarSnapshotConfiguracaoModulosHome(data = {}) {
+  const modules = data.modules || [];
+  const submodules = data.submodules || [];
+  const profiles = data.profiles || [];
+  const profilePermissions = data.profilePermissions || [];
+  const original = [...modules, ...submodules.map(item => ({
+    id: item.key,
+    status: item.status,
+    exibir_home: item.exibir_home
+  }))].reduce((acc, modulo) => {
+    acc[modulo.id] = {
+      exibir_home: modulo.status !== 'inativo' && modulo.exibir_home !== false,
+      status: modulo.status === 'inativo' ? 'inativo' : 'ativo'
+    };
+    return acc;
+  }, {});
 
-  if (filtro === 'visiveis') {
-    return modules.filter(modulo => obterVisibilidadeModuloHomeDraft(modulo.id));
+  state.modulosHome.modules = modules;
+  state.modulosHome.submodules = submodules;
+  state.modulosHome.profiles = profiles;
+  state.modulosHome.profilePermissions = profilePermissions;
+  state.modulosHome.profilePermissionOriginals = profiles.reduce((acc, perfil) => {
+    acc[perfil.id] = mapearPermissoesVisibilidadePerfilModulo(profilePermissions, perfil.id);
+    return acc;
+  }, {});
+  state.modulosHome.profilePermissionDrafts = Object.fromEntries(
+    Object.entries(state.modulosHome.profilePermissionOriginals).map(([perfilId, permissoes]) => [perfilId, { ...permissoes }])
+  );
+  if (!profiles.some(perfil => perfil.id === state.modulosHome.selectedProfileId)) {
+    state.modulosHome.selectedProfileId = profiles[0]?.id || '';
   }
+  state.modulosHome.original = original;
+  state.modulosHome.draft = { ...original };
+  state.homeModuleSettings = { modules, submodules };
+}
 
-  if (filtro === 'ocultos') {
-    return modules.filter(modulo => !obterVisibilidadeModuloHomeDraft(modulo.id));
-  }
-
-  return modules;
+function mapearPermissoesVisibilidadePerfilModulo(permissoes = [], perfilId = '') {
+  return (permissoes || []).reduce((acc, permissao) => {
+    if (permissao.perfil_id === perfilId && permissao.acao === 'view' && permissao.permitido !== false) {
+      acc[permissao.recurso_chave] = true;
+    }
+    return acc;
+  }, {});
 }
 
 function renderListaModulosHomeModal() {
-  const modules = state.modulosHome.modules || [];
+  const query = normalizarTextoBuscaModuloHome(state.modulosHome.busca || '');
+  const areaSelecionada = state.modulosHome.area || 'todas';
+  const grupos = AREAS_MODULOS_HOME
+    .filter(area => areaSelecionada === 'todas' || area.id === areaSelecionada)
+    .map(area => ({
+      ...area,
+      modulos: (state.modulosHome.modules || []).filter(modulo => area.slugs.includes(modulo.slug))
+    }))
+    .map(area => ({
+      ...area,
+      linhas: area.modulos.map(modulo => {
+        const correspondeModulo = correspondeBuscaModuloHome(modulo.nome || modulo.slug, query);
+        const submodulos = (state.modulosHome.submodules || [])
+          .filter(item => item.parent === modulo.slug)
+          .filter(item => passaFiltroVisibilidadeModuloHome(item.key))
+          .filter(item => !query || correspondeModulo || correspondeBuscaModuloHome(item.label, query));
+        const moduloVisivelNoFiltro = passaFiltroVisibilidadeModuloHome(modulo.id);
+        const moduloCorresponde = !query || correspondeModulo || submodulos.length > 0;
 
-  if (!modules.length) {
-    return '<p class="quick-link-empty">Nenhum módulo encontrado.</p>';
+        if (!moduloCorresponde || (!moduloVisivelNoFiltro && !submodulos.length)) return null;
+
+        return {
+          modulo,
+          submodulos,
+          moduloContextual: !moduloVisivelNoFiltro || (query && !correspondeModulo)
+        };
+      }).filter(Boolean).concat((area.virtualParents || []).map(parent => {
+        const label = HOME_SUBMODULE_PARENT_LABELS[parent] || parent;
+        const correspondePai = correspondeBuscaModuloHome(label, query);
+        const submodulos = (state.modulosHome.submodules || [])
+          .filter(item => item.parent === parent)
+          .filter(item => passaFiltroVisibilidadeModuloHome(item.key))
+          .filter(item => !query || correspondePai || correspondeBuscaModuloHome(item.label, query));
+
+        if (!submodulos.length) return null;
+        return {
+          modulo: { id: null, slug: parent, nome: label, virtual: true },
+          submodulos,
+          moduloContextual: false
+        };
+      }).filter(Boolean))
+    }))
+    .filter(area => area.linhas.length);
+
+  if (!grupos.length) {
+    return `<div class="home-modules-list">${renderResumoListaModulosHome()}<p class="home-modules-empty">${query ? 'Nenhum item encontrado.' : 'Nenhum módulo encontrado para este filtro.'}</p></div>`;
   }
 
+  const quantidadeExibida = grupos.reduce((total, area) => total + area.linhas.reduce((subtotal, linha) => subtotal
+    + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0), 0);
+
   return `
-    <div class="crud-list admin-modules-list home-modules-modal-list">
-      <div class="home-modules-modal-header home-modules-modal-grid">
-        <span>Módulo</span>
-        <span>Status</span>
-        <span>Exibição</span>
+    <div class="home-modules-list">
+      ${renderResumoListaModulosHome(quantidadeExibida)}
+      <div class="home-modules-area-grid">
+      ${grupos.map(area => {
+        const quantidade = area.linhas.reduce((total, linha) => total + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0);
+        const unidadeQuantidade = area.virtualParents?.length
+          ? (quantidade === 1 ? 'item' : 'itens')
+          : (quantidade === 1 ? 'módulo' : 'módulos');
+        const recolhido = state.modulosHome.gruposRecolhidos?.[area.id] === true;
+        const idConteudo = `home-modules-area-${area.id}`;
+        const mostraPerfil = pode('admin.permissoes', 'view');
+        return `
+          <section class="home-modules-area-card${recolhido ? ' is-collapsed' : ''}" data-home-module-area="${area.id}" data-home-module-area-items="${area.virtualParents?.length ? 'true' : 'false'}">
+            <header class="home-modules-area-card-header${mostraPerfil ? ' has-profile-column' : ''}">
+              <div class="home-modules-area-title">
+                <strong>${escapeHtml(area.label)}</strong>
+                <span class="home-modules-area-count">${quantidade} ${unidadeQuantidade}</span>
+              </div>
+              ${renderAcoesLoteAreaModulosHome(area)}
+              ${renderCabecalhoListaModulosHome(mostraPerfil)}
+              <button class="home-modules-collapse-button" type="button" data-home-module-focus="area-${area.id}" onclick="alternarGrupoModulosHome('${area.id}')" aria-expanded="${!recolhido}" aria-controls="${idConteudo}" aria-label="${recolhido ? 'Expandir' : 'Recolher'} área ${escapeAttr(area.label)}">
+                <i data-lucide="chevron-${recolhido ? 'down' : 'up'}" aria-hidden="true"></i>
+              </button>
+            </header>
+            <div class="home-modules-area-card-body" id="${idConteudo}" ${recolhido ? 'hidden' : ''}>
+              ${area.linhas.map(({ modulo, submodulos, moduloContextual }) => `
+                <div class="home-modules-parent-group">
+                  ${modulo.virtual ? '' : renderLinhaModuloHomeModal({ ...modulo, contexto: Boolean(moduloContextual) })}
+                  ${renderSubmodulosModal(modulo, submodulos)}
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        `;
+      }).join('')}
       </div>
-      ${modules.map(modulo => renderLinhaModuloHomeModal(modulo)).join('')}
     </div>
   `;
+}
+
+function renderAcoesLoteAreaModulosHome(area) {
+  const title = `Aplica ao grupo inteiro ${area.label}, inclusive itens ocultos pelos filtros atuais.`;
+  const possuiModuloProtegido = (state.modulosHome.modules || []).some(modulo =>
+    area.slugs.includes(modulo.slug) && modulo.bloqueavel === false
+  );
+  const titleInativar = possuiModuloProtegido
+    ? `Inativar todos. ${title} Módulos protegidos permanecem ativos.`
+    : `Inativar todos. ${title}`;
+  return `
+    <div class="home-modules-area-bulk-actions" role="group" aria-label="Ações em lote para ${escapeAttr(area.label)}">
+      <button class="is-activate" type="button" data-home-module-focus="bulk-${area.id}-ativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ativar')" title="Ativar todos. ${escapeAttr(title)}" aria-label="Ativar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="check-circle-2" aria-hidden="true"></i></button>
+      <button class="is-deactivate" type="button" data-home-module-focus="bulk-${area.id}-inativar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'inativar')" title="${escapeAttr(titleInativar)}" aria-label="Inativar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="circle-x" aria-hidden="true"></i></button>
+      <button class="is-show" type="button" data-home-module-focus="bulk-${area.id}-exibir" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'exibir')" title="Exibir todos. ${escapeAttr(title)}" aria-label="Exibir todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="eye" aria-hidden="true"></i></button>
+      <button class="is-hide" type="button" data-home-module-focus="bulk-${area.id}-ocultar" onclick="aplicarAcaoLoteAreaModulosHome('${area.id}', 'ocultar')" title="Ocultar todos. ${escapeAttr(title)}" aria-label="Ocultar todos" ${state.modulosHome.saving ? 'disabled' : ''}><i data-lucide="eye-off" aria-hidden="true"></i></button>
+    </div>
+  `;
+}
+
+function renderCabecalhoListaModulosHome(mostraPerfil) {
+  return `
+    <div class="home-modules-list-header home-modules-modal-grid${mostraPerfil ? ' has-profile-column' : ''}" aria-hidden="true">
+      <span>Status</span>
+      <span>Na Home</span>
+      ${mostraPerfil ? '<span>Acesso</span>' : ''}
+    </div>
+  `;
+}
+
+function atualizarModalConfigurarModulosHome({ preservarBusca = false } = {}) {
+  const raizAtual = document.querySelector('[data-home-modules-modal-root]');
+  const raizPaginaAtual = document.querySelector('[data-home-modules-page-root]');
+  const raizComponente = raizPaginaAtual || raizAtual;
+  if (!raizComponente) {
+    renderDashboard();
+    return;
+  }
+
+  const ativo = document.activeElement;
+  const foco = ativo?.closest('[data-home-module-focus]')?.dataset.homeModuleFocus;
+  const cursor = ativo?.matches('[data-home-modules-search]') ? ativo.selectionStart : null;
+  const scrollTop = raizAtual?.querySelector('.permission-modal-content')?.scrollTop || 0;
+  const pageScrollTop = window.scrollY || 0;
+
+  if (preservarBusca) {
+    const listaAtual = raizComponente.querySelector('.home-modules-modal-table-wrap');
+    if (listaAtual) {
+      listaAtual.innerHTML = renderListaModulosHomeModal();
+      aplicarIconesLucideHub(listaAtual);
+      normalizarTooltipsGlobais(listaAtual);
+    }
+    return;
+  }
+
+  if (raizPaginaAtual) {
+    raizPaginaAtual.outerHTML = renderConteudoPaginaConfiguracaoModulosHome();
+    const novaRaizPagina = document.querySelector('[data-home-modules-page-root]');
+    if (novaRaizPagina) {
+      aplicarIconesLucideHub(novaRaizPagina);
+      normalizarTooltipsGlobais(novaRaizPagina);
+    }
+    if (foco && novaRaizPagina) {
+      const novoAtivo = [...novaRaizPagina.querySelectorAll('[data-home-module-focus]')]
+        .find(elemento => elemento.dataset.homeModuleFocus === foco);
+      novoAtivo?.focus({ preventScroll: true });
+      if (cursor !== null) novoAtivo?.setSelectionRange?.(cursor, cursor);
+    }
+    window.scrollTo(0, pageScrollTop);
+    return;
+  }
+
+  raizAtual.outerHTML = renderModalConfigurarModulosHome();
+  const novaRaiz = document.querySelector('[data-home-modules-modal-root]');
+  if (novaRaiz) {
+    aplicarIconesLucideHub(novaRaiz);
+    normalizarTooltipsGlobais(novaRaiz);
+  }
+  const conteudo = novaRaiz?.querySelector('.permission-modal-content');
+  if (conteudo) conteudo.scrollTop = scrollTop;
+
+  if (foco && novaRaiz) {
+    const novoAtivo = [...novaRaiz.querySelectorAll('[data-home-module-focus]')]
+      .find(elemento => elemento.dataset.homeModuleFocus === foco);
+    novoAtivo?.focus({ preventScroll: true });
+    if (cursor !== null) novoAtivo?.setSelectionRange?.(cursor, cursor);
+  }
+}
+
+function atualizarControlesModalModulosHome() {
+  const raiz = document.querySelector('[data-home-modules-modal-root], [data-home-modules-page-root]');
+  if (!raiz) return;
+
+  const resumo = obterResumoVisibilidadeModulosHome();
+  const contagens = { todos: resumo.total, visiveis: resumo.visiveis, ocultos: resumo.ocultos };
+  raiz.querySelectorAll('[data-home-module-filter]').forEach(botao => {
+    const total = botao.querySelector('span');
+    if (total) total.textContent = String(contagens[botao.dataset.homeModuleFilter] ?? 0);
+  });
+
+  raiz.querySelectorAll('[data-home-module-area]').forEach(area => {
+    const quantidade = [...area.querySelectorAll('[data-home-module-row]')]
+      .filter(linha => !linha.hidden).length;
+    const unidade = area.dataset.homeModuleAreaItems === 'true'
+      ? (quantidade === 1 ? 'item' : 'itens')
+      : (quantidade === 1 ? 'módulo' : 'módulos');
+    const contador = area.querySelector('.home-modules-area-count');
+    if (contador) contador.textContent = `${quantidade} ${unidade}`;
+  });
+
+  const salvar = raiz.querySelector('.home-modules-footer-actions .save-btn');
+  if (salvar) {
+    salvar.disabled = state.modulosHome.saving || !verificarAlteracoesModulosHome();
+    salvar.textContent = state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações';
+  }
+}
+
+function atualizarLinhasVisibilidadeModalModulosHome() {
+  const raiz = document.querySelector('[data-home-modules-modal-root], [data-home-modules-page-root]');
+  if (!raiz) return;
+
+  raiz.querySelectorAll('[data-home-module-row]').forEach(linha => {
+    const id = linha.dataset.homeModuleRow;
+    const status = obterStatusModuloHomeDraft(id);
+    const visivel = obterVisibilidadeModuloHomeDraft(id);
+    const submodulo = (state.modulosHome.submodules || []).find(item => item.key === id);
+    const moduloPai = submodulo
+      ? (state.modulosHome.modules || []).find(item => item.slug === submodulo.parent)
+      : null;
+    const grupo = submodulo?.group
+      ? (state.modulosHome.submodules || []).find(item => item.key === submodulo.group)
+      : null;
+    const paiInativo = moduloPai && obterStatusModuloHomeDraft(moduloPai.id) === 'inativo';
+    const grupoInativo = grupo && obterStatusModuloHomeDraft(grupo.key) === 'inativo';
+    const statusInput = linha.querySelector('.home-modules-status-toggle input[type="checkbox"]');
+    const statusLabel = statusInput?.closest('.home-modules-status-toggle');
+    const moduloStatus = (state.modulosHome.modules || []).find(item => item.id === id);
+    const protegido = !submodulo && !moduloStatus?.bloqueavel && status === 'ativo';
+    const nome = linha.querySelector('.home-modules-item-name strong')?.textContent || 'módulo';
+    const checkbox = linha.querySelector('.home-modules-visibility-action input[type="checkbox"]');
+
+    if (statusInput) {
+      statusInput.checked = status !== 'inativo';
+      statusInput.disabled = state.modulosHome.saving || Boolean(paiInativo) || protegido;
+      statusInput.setAttribute('aria-label', protegido
+        ? 'Status Ativo, módulo protegido'
+        : `${status === 'inativo' ? 'Ativar' : 'Inativar'} ${nome}`);
+      statusLabel?.classList.toggle('is-disabled', statusInput.disabled);
+      const rotuloStatus = statusLabel?.querySelector('.home-modules-visibility-label');
+      if (rotuloStatus) rotuloStatus.textContent = status === 'inativo' ? 'Inativo' : 'Ativo';
+    }
+    if (checkbox) {
+      checkbox.checked = visivel;
+      checkbox.disabled = status === 'inativo' || state.modulosHome.saving || Boolean(paiInativo || grupoInativo);
+      checkbox.setAttribute('aria-label', `${visivel ? 'Ocultar' : 'Exibir'} ${nome} na Home`);
+      checkbox.closest('.home-modules-visibility')?.classList.toggle('is-disabled', checkbox.disabled);
+      const rotulo = checkbox.closest('.home-modules-visibility-action')?.querySelector('.home-modules-visibility-label');
+      if (rotulo) rotulo.textContent = visivel ? 'Visível' : 'Oculto';
+    }
+
+    linha.hidden = !passaFiltroVisibilidadeModuloHome(id);
+  });
+
+  atualizarControlesModalModulosHome();
+}
+
+function aplicarAcaoLoteAreaModulosHome(areaId, acao) {
+  if (state.modulosHome.saving) return;
+  const area = AREAS_MODULOS_HOME.find(item => item.id === areaId);
+  if (!area) return;
+
+  const modulos = (state.modulosHome.modules || []).filter(modulo => area.slugs.includes(modulo.slug));
+  const modulosPorSlug = new Map(modulos.map(modulo => [modulo.slug, modulo]));
+  const submodulos = (state.modulosHome.submodules || []).filter(item =>
+    area.slugs.includes(item.parent) || area.virtualParents?.includes(item.parent)
+  );
+  const draft = { ...(state.modulosHome.draft || {}) };
+
+  for (const modulo of modulos) {
+    const atual = obterModuloHomeDraft(modulo.id);
+    if (acao === 'ativar') {
+      draft[modulo.id] = { ...atual, status: 'ativo' };
+    } else if (acao === 'inativar' && modulo.bloqueavel !== false) {
+      draft[modulo.id] = { ...atual, status: 'inativo', exibir_home: false };
+    } else if (acao === 'exibir' && obterStatusModuloHomeDraft(modulo.id) === 'ativo') {
+      draft[modulo.id] = { ...atual, exibir_home: true };
+    } else if (acao === 'ocultar') {
+      draft[modulo.id] = { ...atual, exibir_home: false };
+    }
+  }
+
+  for (const submodulo of submodulos) {
+    const atual = obterModuloHomeDraft(submodulo.key);
+    const pai = modulosPorSlug.get(submodulo.parent);
+    const paiAtivo = !pai || obterStatusModuloHomeDraft(pai.id) === 'ativo';
+    const grupo = submodulo.group
+      ? submodulos.find(item => item.key === submodulo.group)
+      : null;
+    const grupoAtivo = !grupo || obterStatusModuloHomeDraft(grupo.key) === 'ativo';
+
+    if (acao === 'ativar') {
+      draft[submodulo.key] = { ...atual, status: 'ativo' };
+    } else if (acao === 'inativar') {
+      draft[submodulo.key] = { ...atual, status: 'inativo', exibir_home: false };
+    } else if (acao === 'exibir'
+      && obterStatusModuloHomeDraft(submodulo.key) === 'ativo'
+      && paiAtivo && grupoAtivo) {
+      draft[submodulo.key] = { ...atual, exibir_home: true };
+    } else if (acao === 'ocultar') {
+      draft[submodulo.key] = { ...atual, exibir_home: false };
+    }
+  }
+
+  state.modulosHome.draft = draft;
+  atualizarModalConfigurarModulosHome();
+}
+
+function normalizarTextoBuscaModuloHome(valor = '') {
+  return String(valor || '').trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function correspondeBuscaModuloHome(valor, query) {
+  return !query || normalizarTextoBuscaModuloHome(valor).includes(query);
+}
+
+function passaFiltroVisibilidadeModuloHome(id) {
+  const filtro = state.modulosHome.filtro || 'todos';
+  const visivel = obterVisibilidadeModuloHomeDraft(id);
+  return filtro === 'todos' || (filtro === 'visiveis' ? visivel : !visivel);
+}
+
+const HOME_SUBMODULE_ICONS = {
+  'painel_ar.inicio': 'house',
+  'painel_ar.gerar_links': 'link-2',
+  'painel_ar.crm_2': 'contact',
+  'painel_ar.crm2.cadastro_pf': 'user-round',
+  'painel_ar.crm2.cadastro_pj': 'building-2',
+  'painel_ar.crm2.vinculos': 'network',
+  'painel_ar.crm2.pedidos': 'shopping-bag',
+  'painel_ar.crm2.oportunidades': 'target',
+  'painel_ar.crm2.comunicacao': 'messages-square',
+  'painel_ar.crm2.automacoes': 'workflow',
+  'painel_ar.produtos': 'package',
+  'painel_ar.validacoes': 'badge-check',
+  'painel_ar.historico': 'history',
+  'painel_ar.crm': 'users-round',
+  'central_senhas.acessos': 'key-round',
+  'central_senhas.links': 'link-2',
+  'central_senhas.links_corretora': 'briefcase-business',
+  'central_senhas.links_ar': 'calculator',
+  'central_senhas.links_gestao': 'settings-2',
+  'operacoes.corretora.visao_geral': 'compass',
+  'operacoes.corretora.consultoria_360': 'briefcase-business',
+  'operacoes.corretora.simulador_saude': 'heart-pulse',
+  'simulador_saude.catalogo': 'tags',
+  'financeiro.dashboard': 'layout-dashboard',
+  'financeiro.lancamentos': 'receipt-text',
+  'home.financeiro.lancamentos.titulos': 'file-text',
+  'home.financeiro.lancamentos.receber': 'hand-coins',
+  'home.financeiro.lancamentos.pagar': 'receipt',
+  'home.financeiro.lancamentos.parcelas': 'calendar-range',
+  'home.financeiro.lancamentos.recorrentes': 'repeat',
+  'home.financeiro.lancamentos.rateios': 'split',
+  'home.financeiro.lancamentos.baixas': 'circle-dollar-sign',
+  'financeiro.conciliacao': 'scale',
+  'financeiro.cartoes': 'credit-card',
+  'financeiro.relatorios': 'chart-no-axes-column-increasing',
+  'financeiro.cadastros': 'contact',
+  'home.financeiro.cadastros.pessoas': 'users-round',
+  'home.financeiro.cadastros.contas': 'wallet',
+  'home.financeiro.cadastros.categorias': 'tags',
+  'home.financeiro.cadastros.centros_custo': 'landmark',
+  'home.financeiro.cadastros.linhas_negocio': 'chart-pie',
+  'home.financeiro.cadastros.contratos': 'file-signature',
+  'financeiro.configuracoes': 'settings',
+  'home.financeiro.configuracoes.parametros': 'sliders-horizontal',
+  'home.financeiro.configuracoes.alertas': 'bell-ring',
+  'home.financeiro.configuracoes.backups': 'database',
+  'home.financeiro.configuracoes.auditoria': 'shield-check',
+  'home.financeiro.configuracoes.homologacao': 'test-tube-diagonal',
+  'rh_dp.dashboard': 'layout-dashboard',
+  'rh_dp.colaboradores': 'users-round',
+  'rh_dp.demandas_contabilidade': 'clipboard-list',
+  'rh_dp.fechamentos': 'calendar-check',
+  'admin.sistema.corretora': 'building-2',
+  'admin.logs_integracoes': 'scroll-text',
+  'admin.limites': 'sliders-horizontal',
+  'admin.categorias': 'tags',
+  'admin.grupos': 'users-round',
+  'admin.usuarios': 'user-round',
+  'admin.perfis': 'id-card',
+  'admin.parceiros_indicacao': 'hand-coins'
+};
+
+function renderSubmodulosModal(modulo, submodules = []) {
+  if (!submodules.length) return '';
+
+  const existingKeys = new Set(submodules.map(item => item.key));
+  let previousGroup = '';
+  return submodules.map(item => {
+    const syntheticGroup = item.group && !existingKeys.has(item.group) ? HOME_SUBMODULE_GROUPS[item.group] : null;
+    const heading = syntheticGroup && previousGroup !== item.group
+      ? `<div class="home-modules-modal-group-heading">${escapeHtml(syntheticGroup.label)}</div>`
+      : '';
+    previousGroup = syntheticGroup ? item.group : '';
+    return `${heading}${renderLinhaModuloHomeModal({
+      id: item.key,
+      nome: item.label,
+      status: item.status,
+      exibir_home: item.exibir_home,
+      isSubmodule: true,
+      nested: Boolean(item.group && existingKeys.has(item.group)),
+      permissionKey: item.permissionKey,
+      parentInactive: obterStatusModuloHomeDraft(modulo.id) === 'inativo',
+      groupInactive: Boolean(item.group && (state.modulosHome.submodules || []).some(grupo => grupo.key === item.group && obterStatusModuloHomeDraft(grupo.key) === 'inativo'))
+    })}`;
+  }).join('');
 }
 
 function renderLinhaModuloHomeModal(modulo) {
   const id = escapeAttr(modulo.id || '');
   const status = obterStatusModuloHomeDraft(modulo.id);
   const visivel = obterVisibilidadeModuloHomeDraft(modulo.id);
-  const toggleDisabled = status === 'inativo' || state.modulosHome.saving;
-  const botaoStatusDesabilitado = state.modulosHome.saving || (!modulo.bloqueavel && status === 'ativo');
-  const proximoStatus = status === 'ativo' ? 'inativo' : 'ativo';
-  const acaoStatus = status === 'ativo' ? 'Ativo' : 'Inativo';
-  const acaoVisibilidade = visivel ? 'Visível' : 'Oculto';
-  const tituloStatus = !modulo.bloqueavel && status === 'ativo'
-    ? 'Este módulo é protegido e não pode ser inativado.'
-    : 'Alterar status do módulo.';
-  const tituloVisibilidade = toggleDisabled
-    ? 'Módulos inativos não aparecem na Home.'
-    : 'Alterar visibilidade na Home.';
+  const toggleDisabled = status === 'inativo' || state.modulosHome.saving || Boolean(modulo.parentInactive || modulo.groupInactive);
+  const protegido = !modulo.isSubmodule && !modulo.bloqueavel && status === 'ativo';
+  const statusDisabled = state.modulosHome.saving || Boolean(modulo.parentInactive) || protegido;
+  const nome = modulo.nome || modulo.label || modulo.slug || 'Módulo';
+  const permissionKey = modulo.permissionKey || '';
+  const mostraPerfil = pode('admin.permissoes', 'view');
+  const perfilSelecionado = (state.modulosHome.profiles || []).find(perfil => perfil.id === state.modulosHome.selectedProfileId);
+  const permiteEditarPermissao = pode('admin.permissoes', 'update');
+  const acessoPermitido = obterPermissaoPerfilModuloDraft(permissionKey);
+  const nomePerfil = perfilSelecionado?.nome || perfilSelecionado?.slug || 'perfil selecionado';
+  const icone = modulo.isSubmodule ? (HOME_SUBMODULE_ICONS[id] || 'file') : 'layout-grid';
+  const perfilLabel = permissionKey
+    ? `${acessoPermitido ? 'Remover' : 'Conceder'} acesso a ${nome} para o perfil selecionado. Esta permissão também pode controlar outros atalhos associados ao mesmo recurso.`
+    : `Não há permissão cadastrada para ${nome}.`;
 
   return `
-    <article class="home-modules-modal-row home-modules-modal-grid">
-      <div class="admin-user-identity">
-        <strong>${escapeHtml(modulo.nome || modulo.slug || 'Módulo')}</strong>
+    <article class="home-modules-modal-row home-modules-modal-grid${mostraPerfil ? ' has-profile-column' : ''}${modulo.isSubmodule ? ' is-submodule' : ' is-module'}${modulo.nested ? ' is-nested' : ''}${modulo.contexto ? ' is-context' : ''}" data-home-module-row="${id}">
+      <div class="home-modules-item-name${modulo.isSubmodule ? ' home-submodule-identity' : ''}">
+        <span class="home-modules-item-icon"><i data-lucide="${icone}" aria-hidden="true"></i></span>
+        <strong>${escapeHtml(nome)}</strong>
       </div>
-      <div class="crud-actions home-modules-modal-action">
-        <button
-          class="${status === 'ativo' ? 'secondary-btn' : 'save-btn'}"
-          type="button"
-          onclick="alterarStatusModuloHome('${id}', '${proximoStatus}')"
-          title="${escapeAttr(tituloStatus)}"
-          ${botaoStatusDesabilitado ? 'disabled' : ''}
-        >
-          ${escapeHtml(!modulo.bloqueavel && status === 'ativo' ? 'Protegido' : acaoStatus)}
-        </button>
+      <div class="home-modules-row-setting">
+        <span id="home-module-status-label-${id}" class="home-modules-setting-label">Status</span>
+        <div class="home-modules-modal-action home-modules-status-action">
+          <label class="home-modules-visibility home-modules-status-toggle${statusDisabled ? ' is-disabled' : ''}">
+            <input type="checkbox" data-home-module-focus="status-${id}" ${status !== 'inativo' ? 'checked' : ''} onchange="alterarStatusModuloHome('${id}', this.checked ? 'ativo' : 'inativo')" aria-label="${protegido ? 'Status Ativo, módulo protegido' : `${status === 'inativo' ? 'Ativar' : 'Inativar'} ${escapeAttr(nome)}`}" ${statusDisabled ? 'disabled' : ''}>
+            <span class="home-modules-switch" aria-hidden="true"></span>
+            <span class="home-modules-visibility-label">${status === 'inativo' ? 'Inativo' : 'Ativo'}</span>
+            ${protegido ? '<small class="home-modules-status-protected">Protegido</small>' : ''}
+          </label>
+        </div>
       </div>
-      <div class="crud-actions home-modules-modal-action">
-        <button
-          class="${visivel ? 'secondary-btn' : 'save-btn'}"
-          type="button"
-          onclick="alterarVisibilidadeModuloHome('${id}', ${visivel ? 'false' : 'true'})"
-          title="${escapeAttr(tituloVisibilidade)}"
-          ${toggleDisabled ? 'disabled' : ''}
-        >
-          ${escapeHtml(acaoVisibilidade)}
-        </button>
+      <div class="home-modules-row-setting">
+        <span class="home-modules-setting-label">Na Home</span>
+        <div class="home-modules-modal-action home-modules-visibility-action">
+          <label class="home-modules-visibility${toggleDisabled ? ' is-disabled' : ''}">
+            <input type="checkbox" data-home-module-focus="visibility-${id}" ${visivel ? 'checked' : ''} onchange="alterarVisibilidadeModuloHome('${id}', this.checked)" aria-label="${visivel ? 'Ocultar' : 'Exibir'} ${escapeAttr(nome)} na Home" ${toggleDisabled ? 'disabled' : ''}>
+            <span class="home-modules-switch" aria-hidden="true"></span>
+            <span class="home-modules-visibility-label">${visivel ? 'Visível' : 'Oculto'}</span>
+          </label>
+        </div>
       </div>
+      ${mostraPerfil ? `
+        <div class="home-modules-row-setting">
+          <span class="home-modules-setting-label">Acesso${perfilSelecionado ? `: ${escapeHtml(nomePerfil)}` : ''}</span>
+          <div class="home-modules-modal-action home-modules-profile-action">
+            ${permissionKey && perfilSelecionado
+              ? `<label class="home-modules-visibility${!permiteEditarPermissao || state.modulosHome.saving ? ' is-disabled' : ''}">
+                <input type="checkbox" data-home-module-focus="profile-permission-${escapeAttr(permissionKey)}" ${acessoPermitido ? 'checked' : ''} onchange="alterarPermissaoPerfilModulo('${escapeAttr(permissionKey)}', this.checked)" aria-label="${escapeAttr(perfilLabel)}" ${state.modulosHome.saving || !permiteEditarPermissao ? 'disabled' : ''}>
+                <span class="home-modules-switch" aria-hidden="true"></span>
+                <span class="home-modules-visibility-label">${acessoPermitido ? 'Liberado' : 'Bloqueado'}</span>
+              </label>`
+              : `<span class="home-modules-profile-unavailable" title="${escapeAttr(perfilLabel)}">${perfilSelecionado ? 'N/D' : '—'}</span>`}
+          </div>
+        </div>
+      ` : ''}
     </article>
   `;
 }
 
+function navegarParaConfiguracaoModulosHome() {
+  const rotaAtual = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+  const rotaConfiguracao = 'admin/modulos';
+  if (rotaAtual !== rotaConfiguracao) {
+    state.modulosHome.returnPath = window.location.pathname || montarCaminhoHub();
+  }
+  return navegarParaRota(`${montarCaminhoHub('admin')}/modulos`);
+}
+
+function voltarDaPaginaConfiguracaoModulosHome() {
+  const caminho = state.modulosHome.returnPath || montarCaminhoHub('admin');
+  state.modulosHome.returnPath = '';
+  return navegarParaRota(caminho);
+}
+
 async function abrirModalConfigurarModulosHome() {
+  return navegarParaConfiguracaoModulosHome();
+}
+
+async function abrirPaginaConfiguracaoModulosHome() {
   if (!podeConfigurarModulosHome()) {
-    alert('Seu usuário não possui permissão para configurar módulos.');
+    renderModuloIndisponivel('admin');
     return;
   }
 
+  const returnPath = state.modulosHome.returnPath || montarCaminhoHub('admin');
   state.modulosHome = {
-    aberto: true,
+    aberto: false,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
+    returnPath,
     loading: true,
     saving: false,
     message: ''
   };
-  renderDashboard();
+  document.getElementById('app').innerHTML = renderPaginaConfiguracaoModulosHome();
+  aplicarIconesLucideHub(document.getElementById('app'));
+  normalizarTooltipsGlobais(document.getElementById('app'));
+  window.scrollTo(0, 0);
 
   try {
-    const response = await chamarApi('listAdminModules');
+    const response = await chamarApi('listHomeModuleSettings');
 
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível carregar módulos.'));
     }
 
-    const modules = response.data.modules || [];
-    const original = modules.reduce((acc, modulo) => {
-      acc[modulo.id] = {
-        exibir_home: modulo.exibir_home !== false,
-        status: modulo.status === 'inativo' ? 'inativo' : 'ativo'
-      };
-      return acc;
-    }, {});
-
-    state.modulosHome.modules = modules;
-    state.modulosHome.original = original;
-    state.modulosHome.draft = { ...original };
+    aplicarSnapshotConfiguracaoModulosHome(response.data);
     state.modulosHome.loading = false;
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
   } catch (erro) {
     state.modulosHome.loading = false;
     state.modulosHome.message = erro.message || 'Erro ao carregar módulos.';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
   }
 }
 
@@ -1088,7 +2089,16 @@ function fecharModalConfigurarModulosHome() {
   state.modulosHome = {
     aberto: false,
     filtro: 'todos',
+    busca: '',
+    area: 'todas',
+    gruposRecolhidos: {},
     modules: [],
+    submodules: [],
+    profiles: [],
+    profilePermissions: [],
+    selectedProfileId: '',
+    profilePermissionOriginals: {},
+    profilePermissionDrafts: {},
     original: {},
     draft: {},
     loading: false,
@@ -1100,7 +2110,52 @@ function fecharModalConfigurarModulosHome() {
 
 function selecionarFiltroModulosHome(filtro) {
   state.modulosHome.filtro = filtro;
-  renderDashboard();
+  atualizarModalConfigurarModulosHome();
+}
+
+function selecionarPerfilModulosHome(perfilId = '') {
+  if (!pode('admin.permissoes', 'view')) return;
+  if (perfilId && !(state.modulosHome.profiles || []).some(perfil => perfil.id === perfilId)) return;
+  state.modulosHome.selectedProfileId = perfilId;
+  atualizarModalConfigurarModulosHome();
+}
+
+function obterPermissaoPerfilModuloDraft(permissionKey = '') {
+  if (!permissionKey || !state.modulosHome.selectedProfileId) return false;
+  return Boolean(state.modulosHome.profilePermissionDrafts?.[state.modulosHome.selectedProfileId]?.[permissionKey]);
+}
+
+function alterarPermissaoPerfilModulo(permissionKey = '', permitido) {
+  if (!pode('admin.permissoes', 'update') || !permissionKey || state.modulosHome.saving) return;
+  const perfilId = state.modulosHome.selectedProfileId;
+  if (!perfilId) return;
+
+  const drafts = { ...(state.modulosHome.profilePermissionDrafts || {}) };
+  const profileDraft = { ...(drafts[perfilId] || {}) };
+  if (permitido) profileDraft[permissionKey] = true;
+  else delete profileDraft[permissionKey];
+  drafts[perfilId] = profileDraft;
+  state.modulosHome.profilePermissionDrafts = drafts;
+  atualizarModalConfigurarModulosHome();
+}
+
+function alterarBuscaModuloHome(valor = '') {
+  state.modulosHome.busca = valor;
+  atualizarModalConfigurarModulosHome({ preservarBusca: true });
+}
+
+function alterarAreaModuloHome(area) {
+  state.modulosHome.area = area;
+  atualizarModalConfigurarModulosHome();
+}
+
+function alternarGrupoModulosHome(area) {
+  const gruposRecolhidos = state.modulosHome.gruposRecolhidos || {};
+  state.modulosHome.gruposRecolhidos = {
+    ...gruposRecolhidos,
+    [area]: !gruposRecolhidos[area]
+  };
+  atualizarModalConfigurarModulosHome();
 }
 
 function alterarVisibilidadeModuloHome(id, exibirHome) {
@@ -1113,7 +2168,7 @@ function alterarVisibilidadeModuloHome(id, exibirHome) {
       exibir_home: Boolean(exibirHome)
     }
   };
-  renderDashboard();
+  atualizarLinhasVisibilidadeModalModulosHome();
 }
 
 function alterarStatusModuloHome(id, status) {
@@ -1128,7 +2183,7 @@ function alterarStatusModuloHome(id, status) {
       exibir_home: obterExibicaoModuloAposStatus(atual, proximoStatus)
     }
   };
-  renderDashboard();
+  atualizarLinhasVisibilidadeModalModulosHome();
 }
 
 function obterExibicaoModuloAposStatus(moduloDraft, status) {
@@ -1147,13 +2202,32 @@ function verificarAlteracoesModulosHome() {
     ...Object.keys(draft)
   ]);
 
-  return Array.from(chaves).some(chave => {
+  const alteracaoGlobal = Array.from(chaves).some(chave => {
     const originalModulo = original[chave] || {};
     const draftModulo = draft[chave] || {};
 
     return Boolean(originalModulo.exibir_home) !== Boolean(draftModulo.exibir_home)
       || String(originalModulo.status || 'ativo') !== String(draftModulo.status || 'ativo');
   });
+
+  return alteracaoGlobal || obterAlteracoesPermissoesPerfilModulos().length > 0;
+}
+
+function obterAlteracoesPermissoesPerfilModulos() {
+  if (!pode('admin.permissoes', 'update')) return [];
+  const permissionKeys = new Set([
+    ...(state.modulosHome.modules || []).map(item => item.permissionKey),
+    ...(state.modulosHome.submodules || []).map(item => item.permissionKey)
+  ].filter(Boolean));
+
+  return (state.modulosHome.profiles || []).map(perfil => {
+    const original = state.modulosHome.profilePermissionOriginals?.[perfil.id] || {};
+    const draft = state.modulosHome.profilePermissionDrafts?.[perfil.id] || {};
+    const alteracoes = [...permissionKeys]
+      .filter(recurso_chave => Boolean(original[recurso_chave]) !== Boolean(draft[recurso_chave]))
+      .map(recurso_chave => ({ recurso_chave, acao: 'view', permitido: Boolean(draft[recurso_chave]) }));
+    return { perfil_id: perfil.id, perfil_nome: perfil.nome || perfil.slug || 'Perfil', alteracoes };
+  }).filter(item => item.alteracoes.length);
 }
 
 function obterAlteracoesModulosHome() {
@@ -1178,29 +2252,36 @@ function obterAlteracoesModulosHome() {
 async function salvarConfigModulosHome() {
   if (!podeConfigurarModulosHome()) {
     state.modulosHome.message = 'Seu usuário não possui permissão para configurar módulos.';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
     return;
   }
 
   const alteracoes = obterAlteracoesModulosHome();
+  const alteracoesPermissoesPerfil = obterAlteracoesPermissoesPerfilModulos();
 
-  if (!alteracoes.length) {
+  if (!alteracoes.length && !alteracoesPermissoesPerfil.length) {
     return;
   }
 
+  const atualizacoesAplicadas = [];
   try {
     state.modulosHome.saving = true;
     state.modulosHome.message = '';
-    renderDashboard();
+    atualizarModalConfigurarModulosHome();
 
     const alteracoesStatus = alteracoes.filter(item => {
       const original = state.modulosHome.original?.[item.id] || {};
-      return String(original.status || 'ativo') !== item.status;
+      return !state.modulosHome.submodules.some(submodule => submodule.key === item.id)
+        && String(original.status || 'ativo') !== item.status;
     });
     const alteracoesVisibilidade = alteracoes.filter(item => {
       const original = state.modulosHome.original?.[item.id] || {};
-      return Boolean(original.exibir_home) !== Boolean(item.exibir_home);
+      return !state.modulosHome.submodules.some(submodule => submodule.key === item.id)
+        && Boolean(original.exibir_home) !== Boolean(item.exibir_home);
     });
+    const alteracoesSubmodulos = alteracoes
+      .filter(item => state.modulosHome.submodules.some(submodule => submodule.key === item.id))
+      .map(item => ({ key: item.id, status: item.status, exibir_home: item.exibir_home }));
 
     for (const alteracao of alteracoesStatus) {
       const responseStatus = await chamarApi('updateAdminModuleStatus', {
@@ -1211,6 +2292,7 @@ async function salvarConfigModulosHome() {
       if (!responseStatus.ok) {
         throw new Error(obterMensagemApi(responseStatus, 'Não foi possível salvar o status dos módulos.'));
       }
+      atualizacoesAplicadas.push(`status de ${alteracao.id}`);
     }
 
     if (alteracoesVisibilidade.length) {
@@ -1221,14 +2303,57 @@ async function salvarConfigModulosHome() {
       if (!response.ok) {
         throw new Error(obterMensagemApi(response, 'Não foi possível salvar a visibilidade dos módulos.'));
       }
+      atualizacoesAplicadas.push(...alteracoesVisibilidade.map(item => `visibilidade de ${item.id}`));
     }
 
-    await carregarDadosIniciaisSilencioso();
-    fecharModalConfigurarModulosHome();
+    if (alteracoesSubmodulos.length) {
+      const response = await chamarApi('saveHomeSubmodulesBatch', { submodulos: alteracoesSubmodulos });
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, 'Não foi possível salvar os submódulos.'));
+      }
+      atualizacoesAplicadas.push(...alteracoesSubmodulos.map(item => `submódulo ${item.key}`));
+    }
+
+    for (const perfil of alteracoesPermissoesPerfil) {
+      const response = await chamarApi('saveHomeModuleProfilePermissionsBatch', {
+        perfil_id: perfil.perfil_id,
+        alteracoes: perfil.alteracoes
+      });
+
+      if (!response.ok) {
+        throw new Error(obterMensagemApi(response, `Não foi possível salvar o acesso aos módulos do perfil ${perfil.perfil_nome}.`));
+      }
+      atualizacoesAplicadas.push(`permissões do perfil ${perfil.perfil_nome}`);
+    }
+
+    const recarga = await carregarDadosIniciaisSilencioso();
+    if (!recarga.ok) {
+      throw new Error(recarga.message || 'As alterações foram salvas, mas não foi possível atualizar os dados da Home.');
+    }
+    const snapshotAtualizado = await chamarApi('listHomeModuleSettings');
+    if (!snapshotAtualizado.ok) {
+      throw new Error(obterMensagemApi(snapshotAtualizado, 'As alterações foram salvas, mas não foi possível recarregar a configuração.'));
+    }
+    aplicarSnapshotConfiguracaoModulosHome(snapshotAtualizado.data);
+    state.modulosHome.saving = false;
+    state.modulosHome.message = 'Alterações salvas.';
+    atualizarModalConfigurarModulosHome();
   } catch (erro) {
     state.modulosHome.saving = false;
-    state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
-    renderDashboard();
+    if (atualizacoesAplicadas.length) {
+      let mensagem = `Salvamento parcial: ${atualizacoesAplicadas.length} atualização(ões) aplicada(s) (${atualizacoesAplicadas.join(', ')}).`;
+      try {
+        const respostaAtual = await chamarApi('listHomeModuleSettings');
+        if (respostaAtual.ok) aplicarSnapshotConfiguracaoModulosHome(respostaAtual.data);
+      } catch {
+        // Mantém o rascunho local quando não for possível atualizar o estado confirmado.
+      }
+      state.modulosHome.message = `${mensagem} ${erro.message || 'Uma das alterações não foi salva.'}`;
+    } else {
+      state.modulosHome.message = erro.message || 'Erro ao salvar módulos.';
+    }
+    atualizarModalConfigurarModulosHome();
   }
 }
 
@@ -1251,14 +2376,6 @@ function acionarCardModulo(event, id) {
     event.preventDefault();
     abrirModulo(id);
   }
-}
-
-function obterBaseHub() {
-  const pathname = window.location.pathname || '/';
-
-  return pathname === '/hub' || pathname.startsWith('/hub/')
-    ? '/hub'
-    : '';
 }
 
 function obterCaminhoAssetHub(caminhoAsset) {
@@ -1312,6 +2429,10 @@ function montarCaminhoHub(idModulo = '') {
 }
 
 function navegarParaRota(caminho) {
+  if (window.location.pathname !== caminho && window.simsaudeCatalogoConfirmarSaida?.(caminho) === false) return false;
+  if (window.location.pathname !== caminho && window.crm2PfHasUnsavedChanges?.()) {
+    if (!protegerNavegacaoFormularioPfHub(() => navegarParaRota(caminho))) return;
+  }
   if (window.location.pathname !== caminho) {
     window.history.pushState({}, '', caminho);
   }
@@ -1319,23 +2440,13 @@ function navegarParaRota(caminho) {
   return renderizarRotaAtual();
 }
 
+function protegerNavegacaoFormularioPfHub(onConfirm) {
+  if (!window.crm2PfHasUnsavedChanges?.()) return true;
+  return window.crm2PfRequestLeave?.(onConfirm) === true;
+}
+
 function navegarHome() {
   return navegarParaRota(montarCaminhoHub());
-}
-
-async function renderizarRotaAtual() {
-  const idModulo = normalizarIdModuloRota(obterModuloDaRotaAtual());
-
-  if (!idModulo) {
-    renderDashboard();
-    return;
-  }
-
-  await abrirModuloDireto(idModulo);
-}
-
-function navegarParaModulo(idModulo) {
-  return navegarParaRota(montarCaminhoHub(idModulo));
 }
 
 function normalizarIdModuloRota(idModulo = '') {
@@ -1360,19 +2471,40 @@ function normalizarSlugModulo(valor = '') {
 
 function moduloEstaAtivo(idModulo) {
   const idNormalizado = normalizarIdModuloRota(idModulo);
-  if (idNormalizado === 'financeiro' || idNormalizado === 'rh-dp') {
-    return canAccessModule(state.permissions, idNormalizado);
+  if (['operacoes', 'operacoes-corretora'].includes(idNormalizado)) return true;
+  const configuracao = (state.homeModuleSettings?.modules || []).find(item => item.slug === idNormalizado);
+  if (configuracao && configuracao.status === 'inativo') return false;
+
+  if (idNormalizado === 'central-senhas') {
+    return canAccessModule(state.permissions, idNormalizado) || podeAcessarGerenciamentoLinks();
   }
 
-  return (state.cards || []).some(card => card.id === idNormalizado)
-    && canAccessModule(state.permissions, idNormalizado);
+  const cadastrado = Boolean(configuracao)
+    || (state.cards || []).some(card => card.id === idNormalizado);
+  return cadastrado && canAccessModule(state.permissions, idNormalizado);
 }
 
 function pode(recurso, acao = 'view') {
   return hasPermission(state.permissions, recurso, acao);
 }
 
+function podeAcessarGerenciamentoLinks() {
+  return LINK_RESOURCES.some(recurso => pode(recurso, 'view'));
+}
+
 function podeAcessarAbaAdmin(aba) {
+  const submoduloPorAba = {
+    limites: 'admin.limites',
+    categorias: 'admin.categorias',
+    grupos: 'admin.grupos',
+    usuarios: 'admin.usuarios',
+    perfis: 'admin.perfis',
+    'parceiros-indicacao': 'admin.parceiros_indicacao',
+    'logs-integracoes': 'admin.logs_integracoes'
+  };
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloPorAba[aba]);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return false;
+
   const permissoesPorAba = {
     usuarios: ['admin.usuarios', 'view'],
     perfis: ['admin.perfis', 'view'],
@@ -1391,7 +2523,16 @@ function podeAcessarAbaAr(aba) {
     produtos: ['painel_ar.gerar_links', 'view'],
     validacoes: ['painel_ar.validacoes', 'view'],
     historico: ['painel_ar.validacoes', 'view'],
-    crm: ['painel_ar.crm', 'view']
+    crm: ['painel_ar', 'view'],
+    crm2: ['painel_ar', 'view'],
+    'crm2-cadastro': ['painel_ar', 'view'],
+    'crm2-pf': ['painel_ar', 'view'],
+    'crm2-pj': ['painel_ar', 'view'],
+    'crm2-vinculos': ['painel_ar', 'view'],
+    'crm2-pedidos': ['painel_ar', 'view'],
+    'crm2-oportunidades': ['painel_ar', 'view'],
+    'crm2-comunicacao': ['painel_ar', 'view'],
+    'crm2-automacoes': ['painel_ar', 'view']
   };
   const regra = permissoesPorAba[aba];
 
@@ -1442,6 +2583,8 @@ async function obterRhDpController() {
     rhDpController = criarRhDpController({
       renderShell: renderHubShell,
       pode,
+      submoduleEnabled: chave => submoduloHomeEstaAtivoPorChave(chave),
+      renderUnavailable: renderModuloIndisponivel,
       escapeHtml,
       escapeAttr,
       obterPartesRota: obterPartesDaRotaAtual,
@@ -1459,6 +2602,8 @@ async function obterFinanceiroController() {
     financeiroController = criarFinanceiroController({
       renderShell: renderHubShell,
       pode,
+      submoduleEnabled: chave => submoduloHomeEstaAtivoPorChave(chave),
+      renderUnavailable: renderModuloIndisponivel,
       escapeHtml,
       escapeAttr,
       obterPartesRota: obterPartesDaRotaAtual,
@@ -1524,6 +2669,14 @@ function abrirModulo(id) {
 async function abrirModuloDireto(id) {
   const idModulo = normalizarIdModuloRota(id);
 
+  if (['links-corretora', 'links-ar', 'links-gestao'].includes(idModulo)) {
+    const meta = obterMetaLinks(idModulo);
+    state.passwords.aba = 'links';
+    state.links.escopo = meta.escopo;
+    state.links.titulo = meta.titulo;
+    return navegarParaRota(`${montarCaminhoHub('central-senhas')}/links/${meta.escopo}`);
+  }
+
   if (!moduloEstaAtivo(idModulo)) {
     renderModuloIndisponivel(idModulo);
     return;
@@ -1531,11 +2684,6 @@ async function abrirModuloDireto(id) {
 
   if (idModulo === 'administracao') {
     await abrirAdministracao();
-    return;
-  }
-
-  if (['links-corretora', 'links-ar', 'links-gestao'].indexOf(idModulo) >= 0) {
-    await abrirLinksUteis(idModulo);
     return;
   }
 
@@ -1564,12 +2712,44 @@ async function abrirModuloDireto(id) {
   alert(`Módulo ainda não implementado: ${idModulo}`);
 }
 
+function sincronizarPaginaUsuarioAdminPelaRota() {
+  const partes = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  if (partes[0] !== 'admin' || partes[1] !== 'cadastros' || partes[2] !== 'usuarios') return false;
+
+  state.admin.aba = 'usuarios';
+  const sufixo = partes.slice(3);
+  if (!sufixo.length) {
+    state.admin.modalNovo = '';
+    state.admin.editando.usuarios = '';
+    state.admin.usuarioModalEtapa = 'dados';
+    return false;
+  }
+
+  if (sufixo[0] === 'novo') {
+    state.admin.modalNovo = 'usuarios';
+    state.admin.editando.usuarios = '';
+    state.admin.usuarioModalEtapa = 'dados';
+    return true;
+  }
+
+  if (sufixo.length < 2) return false;
+  let id = sufixo[0];
+  try { id = decodeURIComponent(id); } catch {}
+  if (!id) return false;
+
+  state.admin.modalNovo = 'usuarios';
+  state.admin.editando.usuarios = id;
+  state.admin.usuarioModalEtapa = sufixo[1] === 'permissoes' ? 'permissoes' : 'dados';
+  return true;
+}
+
 async function abrirAdministracao(preservarMensagem = false) {
   if (!hasPermission(state.permissions, 'admin', 'view')) {
     renderModuloIndisponivel('administracao');
     return;
   }
 
+  const paginaUsuarioSolicitada = sincronizarPaginaUsuarioAdminPelaRota();
   state.admin.loading = true;
   if (!preservarMensagem) {
     state.admin.message = '';
@@ -1586,6 +2766,12 @@ async function abrirAdministracao(preservarMensagem = false) {
     state.admin.config = response.data.config || [];
     state.admin.loading = false;
     renderAdministracao();
+    if (state.admin.aba === 'usuarios') {
+      const usuariosCarregados = await carregarUsuariosAdmin();
+      if (usuariosCarregados && paginaUsuarioSolicitada && state.admin.usuarioModalEtapa === 'permissoes') {
+        await abrirPermissoesUsuarioAdmin(state.admin.editando.usuarios, { skipRouteUpdate: true });
+      }
+    }
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar a administração.';
@@ -1621,6 +2807,9 @@ function renderAdministracao() {
           ${renderAdminTab('aparencia', 'Aparência')}
           ${renderAdminTab('logo', 'Logo e Marca')}
           ${renderAdminTab('limites', 'Limites do Painel')}
+          ${podeConfigurarModulosHome() ? `
+            <button class="admin-tab" type="button" onclick="navegarParaConfiguracaoModulosHome()">Configurar módulos</button>
+          ` : ''}
 
           <span class="admin-nav-label">Sistema</span>
           ${pode('admin.logs_integracoes', 'view') ? renderAdminTab('logs-integracoes', 'Logs') : ''}
@@ -1643,6 +2832,18 @@ function renderAdministracao() {
 }
 
 function renderAdminTab(aba, label) {
+  const submoduloPorAba = {
+    limites: 'admin.limites',
+    categorias: 'admin.categorias',
+    grupos: 'admin.grupos',
+    usuarios: 'admin.usuarios',
+    perfis: 'admin.perfis',
+    'parceiros-indicacao': 'admin.parceiros_indicacao',
+    'logs-integracoes': 'admin.logs_integracoes'
+  };
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloPorAba[aba]);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return '';
+
   return `
     <button class="admin-tab ${state.admin.aba === aba ? 'active' : ''}" type="button" onclick="selecionarAbaAdmin('${escapeAttr(aba)}')">
       ${escapeHtml(label)}
@@ -1932,8 +3133,8 @@ function selecionarDropdownLogsAdmin(opcao) {
 }
 
 function fecharDropdownLogsAdmin(event) {
-  if (event?.target?.closest?.('.hub-filter-combobox')) return;
-  document.querySelectorAll('.hub-filter-dropdown-menu').forEach(menu => {
+  if (event?.target?.closest?.('.hub-filter-combobox, .hub-filter-dropdown-menu')) return;
+  document.querySelectorAll('.hub-filter-dropdown-menu[data-trigger-id^="admin-log-filter-"]').forEach(menu => {
     menu.hidden = true;
     const trigger = document.getElementById(menu.dataset.triggerId || '');
     trigger?.setAttribute('aria-expanded', 'false');
@@ -2343,25 +3544,22 @@ function renderParceirosIndicacaoAdmin() {
   state.admin.paginaParceirosIndicacao = paginaAtual;
 
   return `
-    <section class="admin-panel">
-      <div class="admin-panel-header admin-partners-panel-header">
+    <section class="admin-panel crm2-pessoas-page crm2-cadastro-directory-page crm2-parceiros-directory-page">
+      <div class="admin-panel-header admin-partners-panel-header crm2-pessoas-list-header">
         <div class="admin-users-header-row">
           <div>
-            <h2>Parceiros de Indicação</h2>
+            <h3>Parceiros de Indicação</h3>
             <p>Base central dos parceiros usados no Painel AR. ${resumo.total} registros · ${resumo.ativo || 0} ativos · ${(resumo.inativo || 0) + (resumo.arquivado || 0)} inativos/arquivados.</p>
           </div>
         </div>
+      </div>
 
+      <div class="crm2-parceiros-list-content">
+      <div class="crm2-cadastro-directory-toolbar crm2-parceiros-directory-toolbar">
         <div class="admin-partners-controls-row">
-          <div class="crud-filters admin-user-filters admin-partners-status-filters" role="group" aria-label="Filtro de status dos parceiros">
-            ${renderFiltroParceirosIndicacaoAdmin('todos', 'Todos', resumo.total)}
-            ${renderFiltroParceirosIndicacaoAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-            ${renderFiltroParceirosIndicacaoAdmin('inativos_arquivados', 'Inativos/Arquivados', (resumo.inativo || 0) + (resumo.arquivado || 0))}
-          </div>
-
-          <div class="action-toolbar admin-users-toolbar admin-partners-main-actions">
-            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Incluir</button>' : ''}
-            <label class="action-toolbar-field admin-users-search" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
+          <div class="action-toolbar admin-users-toolbar admin-partners-main-actions crm2-cadastro-directory-toolbar-actions">
+            <label class="action-toolbar-field admin-users-search crm2-cadastro-directory-search-control" for="admin_parceiro_indicacao_busca" aria-label="Filtrar parceiros">
+              <i data-lucide="search" aria-hidden="true"></i>
               <input
                 id="admin_parceiro_indicacao_busca"
                 class="config-input action-toolbar-input admin-users-search-input"
@@ -2373,14 +3571,13 @@ function renderParceirosIndicacaoAdmin() {
                 onblur="aplicarBuscaParceirosIndicacaoAdmin()"
               >
             </label>
-            <button
-              class="secondary-btn action-toolbar-btn admin-partners-actions-btn hub-quick-actions-trigger"
-              type="button"
-              onclick="alternarMenuAcoesParceirosIndicacaoAdmin()"
-              onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)"
-              aria-haspopup="menu"
-              aria-expanded="${state.admin.acoesParceirosAberto ? 'true' : 'false'}"
-            >⋮</button>
+            ${podeCriar ? '<button class="add-small-btn action-toolbar-btn admin-users-add-btn" type="button" onclick="abrirModalParceiroIndicacaoAdmin()">+ Incluir</button>' : ''}
+            <details class="hub-row-actions-menu crm2-pf-list-more crm2-parceiros-filter-menu" data-hub-action-menu data-hub-action-min-width="190" data-hub-action-max-width="240" data-hub-action-gap="6" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="selected">
+              <summary class="icon-btn ${state.admin.filtros.parceirosIndicacao !== 'todos' ? 'is-active' : ''}" aria-haspopup="menu" aria-label="Filtros${state.admin.filtros.parceirosIndicacao !== 'todos' ? ': ' + (state.admin.filtros.parceirosIndicacao === 'ativo' ? 'Ativos' : 'Inativos/Arquivados') : ''}" title="Filtros"><i data-lucide="filter" aria-hidden="true"></i></summary>
+              <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Filtrar parceiros por status">
+                ${[['todos', 'Todos'], ['ativo', 'Ativos'], ['inativos_arquivados', 'Inativos/Arquivados']].map(([filtro, label]) => `<button type="button" role="menuitem" aria-pressed="${state.admin.filtros.parceirosIndicacao === filtro ? 'true' : 'false'}" onclick="selecionarFiltroParceirosIndicacaoAdmin('${filtro}')">${escapeHtml(label)}${state.admin.filtros.parceirosIndicacao === filtro ? '<i data-lucide="check" aria-hidden="true"></i>' : ''}</button>`).join('')}
+              </div>
+            </details>
             ${renderMenuAcoesParceirosIndicacaoAdmin()}
           </div>
         </div>
@@ -2390,7 +3587,8 @@ function renderParceirosIndicacaoAdmin() {
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${renderBarraLoteParceirosIndicacaoAdmin()}
       ${state.admin.loading ? renderHubLoading('Carregando parceiros...') : renderListaParceirosIndicacaoAdmin(recordsPagina)}
-      ${state.admin.loading ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual)}
+      ${state.admin.loading || !filtrados.length ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, filtrados.length)}
+      </div>
       ${renderModalParceiroIndicacaoAdmin()}
     </section>
   `;
@@ -2410,7 +3608,11 @@ function garantirColunasParceirosIndicacaoAdmin() {
   try {
     const salvo = window.localStorage?.getItem(ADMIN_PARTNER_COLUMNS_STORAGE_KEY);
     const parseado = salvo ? JSON.parse(salvo) : null;
-    const colunasSalvas = Array.isArray(parseado) ? parseado.filter(id => validas.has(id)) : [];
+    const colunasSalvas = Array.isArray(parseado)
+      ? parseado
+        .map(id => id === 'atualizado' ? 'email_cadastro_certificado' : id)
+        .filter(id => validas.has(id))
+      : [];
     state.admin.colunasParceirosIndicacao = garantirColunasObrigatoriasParceirosIndicacao(
       colunasSalvas.length ? colunasSalvas : ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS
     );
@@ -2498,22 +3700,6 @@ function renderSeletorColunasParceirosIndicacaoAdmin() {
   `;
 }
 
-function renderFiltroParceirosIndicacaoAdmin(filtro, label, total) {
-  const ativo = state.admin.filtros.parceirosIndicacao === filtro;
-  const classes = [
-    'filter-btn',
-    filtro === 'ativo' ? 'filter-status-ativo' : '',
-    filtro === 'inativos_arquivados' ? 'filter-status-bloqueados-inativos' : '',
-    ativo ? 'active' : ''
-  ].filter(Boolean).join(' ');
-
-  return `
-    <button class="${classes}" type="button" onclick="selecionarFiltroParceirosIndicacaoAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
-      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
-    </button>
-  `;
-}
-
 function renderListaParceirosIndicacaoAdmin(records) {
   if (!records.length) {
     return '<p class="quick-link-empty">Nenhum parceiro encontrado.</p>';
@@ -2527,7 +3713,7 @@ function renderListaParceirosIndicacaoAdmin(records) {
   const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
 
   return `
-    <div class="crud-list admin-partners-list" role="table" aria-label="Parceiros de indicação">
+    <div class="crud-list admin-partners-list crm2-pessoas-table-wrap crm2-parceiros-table-wrap" role="table" aria-label="Parceiros de indicação">
       <div class="crud-header" role="row" style="${escapeAttr(style)}">
         ${modoLote ? `
           <label class="admin-partner-select-cell" role="columnheader" aria-label="Selecionar todos os parceiros visíveis">
@@ -2559,7 +3745,7 @@ function obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao = fa
 function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas), { selecao = false } = {}) {
   const nome = parceiro.nome_completo || parceiro.nome || 'Sem nome';
   const empresa = parceiro.nome_empresa || parceiro.vinculo_empresa || '';
-  const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.email_cadastro_certificado || parceiro.email || '-';
+  const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.whatsapp_pessoal || parceiro.email_comercial || parceiro.email || '-';
   const status = parceiro.status || 'ativo';
   const remunerado = parceiro.remunerado === true ? ' · Remunerado' : '';
   const selecionado = (state.admin.loteParceirosSelecionados || []).includes(parceiro.id);
@@ -2582,23 +3768,12 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
 
 function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   const { nome, empresa, contato, status, remunerado } = contexto;
-  const podeEditar = pode('admin.parceiros_indicacao', 'update')
-    && (status !== 'arquivado' || pode('admin.parceiros_indicacao', 'archive'));
-
-  if (colunaId === 'acoes') {
-    return `
-      <div class="admin-partner-cell crud-actions admin-partner-actions" role="cell">
-        <button class="icon-btn" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Visualizar parceiro" aria-label="Visualizar ${escapeAttr(nome)}">🔍</button>
-        ${podeEditar ? `<button class="icon-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" title="Editar parceiro" aria-label="Editar ${escapeAttr(nome)}">✎</button>` : ''}
-      </div>
-    `;
-  }
 
   if (colunaId === 'parceiro') {
     return `
       <div class="admin-partner-cell admin-user-main" role="cell">
         <div class="admin-user-identity">
-          <strong>${escapeHtml(nome)}</strong>
+          <button class="crm2-parceiro-name-link" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" aria-label="Abrir cadastro de ${escapeAttr(nome)}">${escapeHtml(nome)}</button>
           ${empresa ? `<small>${escapeHtml(empresa)}</small>` : ''}
         </div>
       </div>
@@ -2609,9 +3784,9 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
     codigo_revendedor: parceiro.codigo_revendedor || '-',
     ac: parceiro.ac || '-',
     contato,
+    email_cadastro_certificado: parceiro.email_cadastro_certificado || '-',
     empresa: empresa || '-',
     remunerado: parceiro.remunerado === true ? 'Sim' : 'Não',
-    atualizado: formatarDataCurtaAr(parceiro.updated_at || parceiro.created_at)
   };
 
   if (colunaId === 'status') {
@@ -2709,7 +3884,6 @@ function iniciarLoteParceirosIndicacaoAdmin(modo) {
   state.admin.loteParceirosModo = modo;
   state.admin.loteParceirosSelecionados = [];
   state.admin.loteParceirosProcessando = false;
-  state.admin.acoesParceirosAberto = false;
   state.admin.seletorColunasParceirosAberto = false;
   state.admin.message = '';
   renderAdministracao();
@@ -2930,54 +4104,23 @@ async function exportarParceirosIndicacaoAdmin() {
 }
 
 function renderMenuAcoesParceirosIndicacaoAdmin() {
-  if (!state.admin.acoesParceirosAberto) {
-    return '';
-  }
-
   const podeAtualizar = pode('admin.parceiros_indicacao', 'update');
   const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
 
   return `
-    <div class="admin-partners-actions-menu" role="menu" aria-label="Ações de parceiros" onkeydown="navegarMenuAcoesParceirosIndicacaoAdmin(event)">
-      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('colunas')">Editar colunas</button>
-      ${podeAtualizar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'status\')">Ativar/Inativar em lote</button>' : ''}
-      ${podeArquivar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'arquivar\')">Arquivar em lote</button>' : ''}
-      <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('exportar')">Exportar para Excel</button>
-    </div>
+    <details class="hub-row-actions-menu crm2-pf-list-more crm2-parceiros-action-menu" data-hub-action-menu data-hub-action-min-width="220" data-hub-action-max-width="320" data-hub-action-gap="10" data-hub-action-flip-vertical="true" data-hub-action-keyboard="true" data-hub-action-focus="first">
+      <summary class="icon-btn admin-partners-actions-btn" aria-haspopup="menu" aria-label="Mais ações" title="Mais ações"><i data-lucide="more-vertical" aria-hidden="true"></i></summary>
+      <div class="hub-row-actions-popover" data-hub-action-popover role="menu" aria-label="Ações de parceiros">
+        <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('colunas')">Editar colunas</button>
+        ${podeAtualizar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'status\')">Ativar/Inativar em lote</button>' : ''}
+        ${podeArquivar ? '<button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin(\'arquivar\')">Arquivar em lote</button>' : ''}
+        <button type="button" role="menuitem" onclick="executarAcaoParceirosIndicacaoAdmin('exportar')">Exportar para Excel</button>
+      </div>
+    </details>
   `;
 }
 
-function alternarMenuAcoesParceirosIndicacaoAdmin() {
-  state.admin.acoesParceirosAberto = !state.admin.acoesParceirosAberto;
-  renderAdministracao();
-
-  if (state.admin.acoesParceirosAberto) {
-    const trigger = document.querySelector('.admin-partners-actions-btn');
-    const menu = document.querySelector('.admin-partners-actions-menu');
-    abrirMenuAcaoGlobal(trigger, menu, {
-      minWidth: 220,
-      maxWidth: 320,
-      gap: 10
-    });
-    window.setTimeout(() => {
-      document.querySelector('.admin-partners-actions-menu [role="menuitem"]')?.focus();
-    }, 0);
-  }
-}
-
-function fecharMenuAcoesParceirosIndicacaoAdmin({ renderizar = true } = {}) {
-  if (!state.admin.acoesParceirosAberto) return;
-
-  state.admin.acoesParceirosAberto = false;
-
-  if (renderizar) {
-    renderAdministracao();
-  }
-}
-
 function executarAcaoParceirosIndicacaoAdmin(acao) {
-  state.admin.acoesParceirosAberto = false;
-
   if (acao === 'colunas') {
     abrirSeletorColunasParceirosIndicacaoAdmin();
     renderAdministracao();
@@ -3001,31 +4144,6 @@ function executarAcaoParceirosIndicacaoAdmin(acao) {
 
   state.admin.message = '';
   renderAdministracao();
-}
-
-function navegarMenuAcoesParceirosIndicacaoAdmin(event) {
-  const teclas = ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'];
-  if (!teclas.includes(event.key)) return;
-
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    fecharMenuAcoesParceirosIndicacaoAdmin();
-    return;
-  }
-
-  const itens = Array.from(document.querySelectorAll('.admin-partners-actions-menu [role="menuitem"]'));
-  if (!itens.length) return;
-
-  event.preventDefault();
-  const atual = itens.indexOf(document.activeElement);
-  let proximo = atual;
-
-  if (event.key === 'ArrowDown') proximo = atual < 0 ? 0 : (atual + 1) % itens.length;
-  if (event.key === 'ArrowUp') proximo = atual < 0 ? itens.length - 1 : (atual - 1 + itens.length) % itens.length;
-  if (event.key === 'Home') proximo = 0;
-  if (event.key === 'End') proximo = itens.length - 1;
-
-  itens[proximo]?.focus();
 }
 
 function abrirSeletorColunasParceirosIndicacaoAdmin() {
@@ -3134,29 +4252,16 @@ function selecionarPaginaParceirosIndicacaoAdmin(pagina) {
   renderAdministracao();
 }
 
-function renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual) {
-  if (totalPaginas <= 1) {
-    return '';
-  }
-
-  return `
-    <nav class="admin-users-pagination" aria-label="Paginação de parceiros">
-      ${Array.from({ length: totalPaginas }, (_, index) => {
-        const pagina = index + 1;
-        const classes = ['admin-users-page-btn', pagina === paginaAtual ? 'active' : ''].filter(Boolean).join(' ');
-        return `
-          <button
-            class="${classes}"
-            type="button"
-            onclick="selecionarPaginaParceirosIndicacaoAdmin(${pagina})"
-            aria-current="${pagina === paginaAtual ? 'page' : 'false'}"
-          >
-            ${pagina}
-          </button>
-        `;
-      }).join('')}
-    </nav>
-  `;
+function renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, totalResultados) {
+  return renderCrm2CadastroPagination({
+    label: 'parceiros de indicação',
+    page: paginaAtual,
+    totalPages: totalPaginas,
+    totalItems: totalResultados,
+    previousAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual - 1})`,
+    nextAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual + 1})`,
+    hidePreviousOnFirstPage: true
+  });
 }
 
 function renderModalParceiroIndicacaoAdmin() {
@@ -3171,6 +4276,8 @@ function renderModalParceiroIndicacaoAdmin() {
   const somenteLeitura = modo === 'view';
   const podeVerSensiveis = pode('admin.parceiros_indicacao', 'view_sensitive');
   const podeArquivar = pode('admin.parceiros_indicacao', 'archive');
+  const podeEditar = pode('admin.parceiros_indicacao', 'update')
+    && ((item.status || 'ativo') !== 'arquivado' || podeArquivar);
   const titulo = modo === 'view' ? 'Visualizar parceiro' : (modo === 'edit' ? 'Editar parceiro' : 'Adicionar parceiro');
   const botaoTexto = state.admin.parceiroModal.salvo
     ? 'Salvo'
@@ -3180,7 +4287,10 @@ function renderModalParceiroIndicacaoAdmin() {
     <section id="parceiro_modal_dialog" class="hub-form-screen partner-form-screen" role="region" aria-labelledby="parceiro_modal_title" tabindex="-1" data-partner-modal>
         <div class="hub-form-screen-header">
           <h3 id="parceiro_modal_title">${escapeHtml(titulo)}</h3>
-          <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
+          <div class="partner-modal-header-actions">
+            ${somenteLeitura && podeEditar ? `<button class="secondary-btn partner-modal-edit-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(state.admin.parceiroModal.id || item.id || '')}')"><i data-lucide="pencil" aria-hidden="true"></i>Editar</button>` : ''}
+            <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
+          </div>
         </div>
 
         <div class="hub-form-screen-steps partner-modal-tabs" role="tablist" aria-label="Seções do parceiro">
@@ -3291,16 +4401,7 @@ function formatarMascaraParceiro(valor = '', mascara = '') {
   }
 
   if (mascara === 'telefone') {
-    if (digitos.startsWith('55') && digitos.length > 11) digitos = digitos.slice(2);
-    digitos = digitos.slice(0, 11);
-    if (digitos.length <= 10) {
-      return digitos
-        .replace(/(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{4})(\d{1,4})$/, '$1-$2');
-    }
-    return digitos
-      .replace(/(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+    return formatarTelefoneHub(valor);
   }
 
   return valor;
@@ -3546,6 +4647,36 @@ async function salvarParceiroIndicacaoAdmin() {
 }
 
 function renderUsuariosAdmin() {
+  if (state.admin.modalNovo === 'usuarios' || state.admin.editando.usuarios) {
+    const mensagem = state.admin.message ? `<p class="admin-message" role="status">${escapeHtml(state.admin.message)}</p>` : '';
+    if (state.admin.loading) {
+      const id = state.admin.editando.usuarios || '';
+      const usuario = (state.admin.usuarios || []).find(item => item.id === id) || {};
+      const emPermissoes = state.admin.usuarioModalEtapa === 'permissoes' && Boolean(id);
+      const classeEtapaPagina = emPermissoes ? 'is-permissions-stage' : 'is-form-stage';
+      const titulo = emPermissoes ? 'Permissões Adicionais' : id ? (pode('admin.usuarios', 'update') ? 'Editar usuário' : 'Visualizar usuário') : 'Adicionar usuário';
+      return `
+        <section class="admin-user-page-shell ${classeEtapaPagina}">
+          ${mensagem}
+          <section class="admin-user-page admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}" aria-label="${escapeAttr(titulo)}">
+            <header class="small-modal-header admin-user-modal-header">
+              <div>
+                <h3>${escapeHtml(titulo)}</h3>
+                <p class="admin-user-page-description">${emPermissoes ? `Gerencie as permissões específicas de ${escapeHtml(usuario.nome || usuario.email || 'este usuário')}.` : 'Carregando os dados desta página.'}</p>
+              </div>
+              <button class="secondary-btn admin-user-back-btn" type="button" onclick="fecharModalNovoRegistro()">Voltar para usuários</button>
+            </header>
+            ${renderHubLoading(emPermissoes ? 'Carregando permissões do usuário...' : 'Carregando dados do usuário...')}
+          </section>
+        </section>
+      `;
+    }
+    const classeEtapaPagina = state.admin.usuarioModalEtapa === 'permissoes' && state.admin.editando.usuarios
+      ? 'is-permissions-stage'
+      : 'is-form-stage';
+    return `<section class="admin-user-page-shell ${classeEtapaPagina}">${mensagem}${renderModalUsuarioAdmin()}</section>`;
+  }
+
   const records = state.admin.usuarios || [];
   const recordsFiltrados = obterUsuariosFiltradosAdmin(records);
   const limite = Math.max(1, Number(state.admin.limiteUsuarios) || 15);
@@ -3553,12 +4684,6 @@ function renderUsuariosAdmin() {
   const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaUsuarios) || 1), totalPaginas);
   const inicio = (paginaAtual - 1) * limite;
   const recordsPagina = recordsFiltrados.slice(inicio, inicio + limite);
-  const resumo = records.reduce((acc, usuario) => {
-    acc.total += 1;
-    acc[usuario.status] = (acc[usuario.status] || 0) + 1;
-    return acc;
-  }, { total: 0 });
-
   state.admin.paginaUsuarios = paginaAtual;
 
   return `
@@ -3581,22 +4706,21 @@ function renderUsuariosAdmin() {
           </div>
         </div>
         <div class="crud-filters admin-user-filters" role="group" aria-label="Filtro de status dos usuários">
-          ${renderFiltroUsuariosAdmin('todos', 'Todos', resumo.total)}
-          ${renderFiltroUsuariosAdmin('ativo', 'Ativos', resumo.ativo || 0)}
-          ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos', (resumo.bloqueado || 0) + (resumo.inativo || 0))}
+          ${renderFiltroUsuariosAdmin('todos', 'Todos')}
+          ${renderFiltroUsuariosAdmin('ativo', 'Ativos')}
+          ${renderFiltroUsuariosAdmin('bloqueados_inativos', 'Bloqueados/Inativos')}
         </div>
       </div>
 
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${state.admin.loading ? renderHubLoading('Carregando usuários...') : renderListaUsuariosAdmin(recordsPagina)}
       ${state.admin.loading ? '' : renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual)}
-      ${renderModalUsuarioAdmin()}
-      ${renderPermissoesUsuarioAdmin()}
+      ${state.admin.loading ? '' : renderLegendaStatusUsuariosAdmin()}
     </section>
   `;
 }
 
-function renderFiltroUsuariosAdmin(filtro, label, total) {
+function renderFiltroUsuariosAdmin(filtro, label) {
   const ativo = state.admin.filtros.usuarios === filtro;
   const classes = [
     'filter-btn',
@@ -3607,7 +4731,7 @@ function renderFiltroUsuariosAdmin(filtro, label, total) {
 
   return `
     <button class="${classes}" type="button" onclick="selecionarFiltroUsuariosAdmin('${filtro}')" aria-pressed="${ativo ? 'true' : 'false'}">
-      ${escapeHtml(label)} <span>${escapeHtml(String(total))}</span>
+      ${escapeHtml(label)}
     </button>
   `;
 }
@@ -3642,7 +4766,6 @@ function renderListaUsuariosAdmin(records) {
   return `
     <div class="crud-list admin-users-list">
       <div class="crud-header">
-        <span>Ações</span>
         <span>Usuário</span>
         <span>Perfil</span>
         <span>Permissões adicionais</span>
@@ -3656,22 +4779,18 @@ function renderListaUsuariosAdmin(records) {
 
 function renderUsuarioAdmin(usuario) {
   const id = escapeAttr(usuario.id || '');
-  const podeEditar = pode('admin.usuarios', 'update');
   const status = usuario.status || 'pendente';
-  const rotuloStatus = obterRotuloStatusUsuario(status);
   const perfil = (state.admin.perfis || []).find(item => item.id === usuario.perfil_id);
   const perfilNome = perfil?.nome || perfil?.slug || usuario.perfil_nome || 'Sem perfil';
   const resumoPermissoes = obterResumoPermissoesEspecificasUsuario(usuario);
 
   return `
     <article class="crud-row admin-user-row">
-      <div class="crud-actions admin-user-actions">
-        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do usuário: ${escapeAttr(rotuloStatus)}"></span>
-        <button class="icon-btn" type="button" onclick="editarUsuarioAdmin('${id}')" title="Editar usuário" aria-label="Editar usuário" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
-      </div>
       <div class="admin-user-main">
+        ${renderHubStatusDot(status, 'do usuário')}
         <div class="admin-user-identity">
-          <strong>${escapeHtml(usuario.nome || 'Sem nome')}</strong>
+          <button class="admin-user-name-link" type="button" onclick="editarUsuarioAdmin('${id}')" aria-label="Visualizar cadastro de ${escapeAttr(usuario.nome || 'usuário')}">${escapeHtml(usuario.nome || 'Sem nome')}</button>
+          ${usuario.nome_usuario ? `<small>@${escapeHtml(usuario.nome_usuario)}</small>` : ''}
           ${usuario.email ? `<small>${escapeHtml(usuario.email)}</small>` : ''}
         </div>
       </div>
@@ -3682,9 +4801,10 @@ function renderUsuarioAdmin(usuario) {
 }
 
 function renderOptionsPerfisAdmin(valorAtual) {
-  return (state.admin.perfis || []).map(perfil => `
+  const perfisAtivos = (state.admin.perfis || []).filter(perfil => String(perfil.status || '').trim().toLowerCase() === 'ativo');
+  return `<option value="">Selecione um perfil ativo</option>${perfisAtivos.map(perfil => `
     <option value="${escapeAttr(perfil.id || '')}" ${perfil.id === valorAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || '')}</option>
-  `).join('');
+  `).join('')}`;
 }
 
 function obterRotuloStatusUsuario(status) {
@@ -3719,6 +4839,7 @@ function obterUsuariosFiltradosAdmin(records) {
   return filtrados.filter(usuario => {
     const baseBusca = normalizarBuscaAr([
       usuario.nome,
+      usuario.nome_usuario,
       usuario.email
     ].filter(Boolean).join(' '));
 
@@ -3779,6 +4900,15 @@ function renderPaginacaoUsuariosAdmin(totalPaginas, paginaAtual) {
       }).join('')}
     </nav>
   `;
+}
+
+function renderLegendaStatusUsuariosAdmin() {
+  return renderHubStatusLegend([
+    { status: 'ativo', rotulo: 'Ativo' },
+    { status: 'pendente', rotulo: 'Pendente' },
+    { status: 'bloqueado', rotulo: 'Bloqueado' },
+    { status: 'inativo', rotulo: 'Inativo' }
+  ], 'Legenda de status dos usuários');
 }
 
 function resetarFluxoModalUsuarioAdmin(render = true) {
@@ -3865,6 +4995,97 @@ function formatarResumoPermissoesEspecificasUsuario(permitidas, bloqueadas) {
   return `${bloqueadas} bloqueada${bloqueadas > 1 ? 's' : ''}`;
 }
 
+const OPCOES_PERMISSAO_PERFIL = Object.freeze([
+  { id: 'view', label: 'Visualizar' },
+  { id: 'edit', label: 'Editar' },
+  { id: 'delete', label: 'Excluir' }
+]);
+
+const ACOES_TECNICAS_PERMISSAO_PERFIL = Object.freeze({
+  links_corretora: { view: ['view'] },
+  links_ar: { view: ['view'] },
+  links_gestao: { view: ['view'] },
+  painel_ar: { view: ['view'], edit: ['update'], delete: ['delete'] },
+  'painel_ar.produtos': { view: ['view'], edit: ['update'] },
+  'painel_ar.gerar_links': { view: ['view'], edit: ['execute'] },
+  'painel_ar.validacoes': { view: ['view'], edit: ['importar', 'emitir_recibo'], delete: ['excluir_importacao', 'cancelar_recibo'] },
+  'painel_ar.validacoes.importacao': { view: ['view'], edit: ['importar'], delete: ['excluir_importacao'] },
+  'painel_ar.validacoes.recibos': { view: ['view'], edit: ['emitir_recibo'], delete: ['cancelar_recibo'] },
+  central_senhas: { view: ['view', 'view_secret'], edit: ['create', 'update'], delete: ['delete'] },
+  simulador_saude: { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'simulador_saude.catalogo': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  admin: { view: ['view'] },
+  'admin.usuarios': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
+  'admin.perfis': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'admin.modulos': { view: ['view'], edit: ['create', 'update', 'manage_permissions'], delete: ['delete'] },
+  'admin.logs_integracoes': { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  'admin.permissoes': { view: ['view'], edit: ['update'] },
+  'admin.parceiros_indicacao': { view: ['view', 'view_sensitive'], edit: ['create', 'update'], delete: ['archive'] },
+  consultoria_360: { view: ['view'], edit: ['create', 'update'], delete: ['delete'] },
+  financeiro: { view: ['view'] },
+  'financeiro.dashboard': { view: ['view'] },
+  'financeiro.lancamentos': { view: ['view', 'export'], edit: ['create', 'update', 'edit', 'settle'], delete: ['cancel'] },
+  'financeiro.conciliacao': { view: ['view'], edit: ['edit', 'importar', 'reconcile', 'unreconcile'] },
+  'financeiro.cartoes': { view: ['view'], edit: ['create', 'update'], delete: ['cancel'] },
+  'financeiro.relatorios': { view: ['view', 'export'] },
+  'financeiro.cadastros': { view: ['view'], edit: ['create', 'update', 'edit'], delete: ['archive'] },
+  'financeiro.fechamento': { view: ['view'], edit: ['close', 'reopen'] },
+  'financeiro.auditoria': { view: ['view'] },
+  'financeiro.configuracoes': { view: ['view'], edit: ['update', 'edit'] },
+  'financeiro.complementares': { view: ['view'], edit: ['edit'] },
+  'financeiro.homologacao': { view: ['view'], edit: ['edit'] },
+  'financeiro.dados_sensiveis': { view: ['view_sensitive'] },
+  rh_dp: { view: ['view'] },
+  'rh_dp.dashboard': { view: ['view'] },
+  'rh_dp.colaboradores': { view: ['view', 'view_sensitive'], edit: ['create', 'update'], delete: ['archive'] },
+  'rh_dp.documentos': { view: ['view', 'download'], edit: ['create', 'update'], delete: ['delete'] },
+  'rh_dp.historicos': { view: ['view'] },
+  'rh_dp.ferias': { view: ['view'], edit: ['create', 'update'], delete: ['cancel'] },
+  'rh_dp.ocorrencias': { view: ['view'], edit: ['create', 'update'] },
+  'rh_dp.fechamentos': { view: ['view'], edit: ['create', 'update', 'close', 'reopen'] },
+  'rh_dp.desligamentos': { view: ['view'], edit: ['create', 'update'] },
+  'rh_dp.auditoria': { view: ['view'] },
+  'rh_dp.configuracoes': { view: ['view'], edit: ['update'] }
+});
+
+function obterAcoesTecnicasPermissaoPerfil(recursoChave, grupo) {
+  const acoesPorGrupo = ACOES_TECNICAS_PERMISSAO_PERFIL[recursoChave]
+    || { view: ['view'], edit: [], delete: [] };
+
+  return acoesPorGrupo[grupo] || [];
+}
+
+function obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, grupo) {
+  const acoesDisponiveis = obterAcoesDisponiveisRecurso(recurso);
+  const acoesMapeadas = new Set(OPCOES_PERMISSAO_PERFIL.flatMap(opcao =>
+    obterAcoesTecnicasPermissaoPerfil(recurso.chave, opcao.id)
+  ));
+  const acoesDeLeituraGenericas = new Set(['view_secret', 'view_sensitive', 'export', 'download']);
+  const acoesDoGrupo = obterAcoesTecnicasPermissaoPerfil(recurso.chave, grupo.id)
+    .filter(acao => acoesDisponiveis.includes(acao));
+
+  if (grupo.id === 'view') {
+    const acoesDeLeituraAdicionais = acoesDisponiveis.filter(acao =>
+      acoesDeLeituraGenericas.has(acao) && !acoesMapeadas.has(acao)
+    );
+    return Array.from(new Set([...acoesDoGrupo, ...acoesDeLeituraAdicionais]));
+  }
+
+  if (grupo.id !== 'edit') return acoesDoGrupo;
+
+  // Keep user-specific technical actions visible when no profile category maps them.
+  const acoesSemGrupo = acoesDisponiveis.filter(acao =>
+    !acoesMapeadas.has(acao) && !acoesDeLeituraGenericas.has(acao)
+  );
+  return Array.from(new Set([...acoesDoGrupo, ...acoesSemGrupo]));
+}
+
+function obterTodasAcoesTecnicasPermissaoPerfil(recursoChave) {
+  return Array.from(new Set(OPCOES_PERMISSAO_PERFIL.flatMap(opcao =>
+    obterAcoesTecnicasPermissaoPerfil(recursoChave, opcao.id)
+  )));
+}
+
 function obterRotuloAcaoPermissao(acao) {
   const rotulos = {
     view: 'Visualizar',
@@ -3899,18 +5120,18 @@ function obterAcoesDisponiveisRecurso(recurso) {
     links_corretora: ['view'],
     links_ar: ['view'],
     links_gestao: ['view'],
-    painel_ar: ['view'],
+    painel_ar: ['view', 'update', 'delete'],
     'painel_ar.gerar_links': ['view', 'execute'],
     'painel_ar.validacoes': ['view', 'importar', 'excluir_importacao', 'emitir_recibo', 'cancelar_recibo'],
     'painel_ar.validacoes.importacao': ['view', 'importar', 'excluir_importacao'],
     'painel_ar.validacoes.recibos': ['view', 'emitir_recibo', 'cancelar_recibo'],
-    'painel_ar.crm': ['view', 'execute'],
     central_senhas: ['view', 'view_secret', 'create', 'update', 'delete'],
     admin: ['view'],
-    'admin.usuarios': ['view', 'create', 'update', 'manage_permissions'],
+    'admin.usuarios': ['view', 'create', 'update', 'delete', 'manage_permissions'],
     'admin.perfis': ['view', 'create', 'update'],
     'admin.permissoes': ['view', 'update'],
     'admin.parceiros_indicacao': ['view', 'create', 'update', 'archive', 'view_sensitive'],
+    consultoria_360: ['view', 'create', 'update', 'delete'],
     financeiro: ['view'],
     'financeiro.dashboard': ['view'],
     'financeiro.lancamentos': ['view', 'create', 'update', 'settle', 'cancel', 'export'],
@@ -3933,6 +5154,7 @@ function obterGrupoRecursoPermissao(recurso) {
   if (chave.startsWith('admin')) return 'Administração';
   if (chave === 'central_senhas') return 'Central de Senhas';
   if (chave.startsWith('painel_ar')) return 'Painel AR';
+  if (chave === 'consultoria_360') return 'Operações';
   if (chave.startsWith('links_')) return 'Links';
   if (chave.startsWith('financeiro')) return 'Financeiro';
 
@@ -4009,38 +5231,48 @@ function construirEstruturaPermissoesUsuario(recursos) {
     return recurso?.tipo === 'modulo' ? recurso : null;
   }
 
-  function obterRotuloRecurso(recurso) {
-    const partes = [];
-    let atual = recurso;
-
-    while (atual) {
-      partes.unshift(atual.nome || atual.chave);
-      if (!atual.recurso_pai) break;
-      atual = porChave.get(atual.recurso_pai);
-    }
-
-    if (partes.length > 1) {
-      partes.shift();
-    }
-
-    return partes.join(' / ') || recurso.nome || recurso.chave;
-  }
-
   return modulos.map(modulo => {
     const itensRelacionados = (recursos || [])
       .filter(recurso => {
         if (!recurso?.chave) return false;
         if (recurso.chave === modulo.chave) return true;
         return obterModuloRaiz(recurso)?.chave === modulo.chave;
-      })
-      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));
+      });
+    const relacionadosPorChave = new Map(itensRelacionados.map(recurso => [recurso.chave, recurso]));
+    const filhosPorPai = new Map();
 
-    const recursosFuncionais = itensRelacionados.filter(recurso => recurso.chave !== modulo.chave);
-    const linhas = (recursosFuncionais.length ? recursosFuncionais : [modulo]).map(recurso => ({
+    itensRelacionados.forEach(recurso => {
+      if (!recurso.recurso_pai || !relacionadosPorChave.has(recurso.recurso_pai)) return;
+      const filhos = filhosPorPai.get(recurso.recurso_pai) || [];
+      filhos.push(recurso);
+      filhosPorPai.set(recurso.recurso_pai, filhos);
+    });
+
+    filhosPorPai.forEach(filhos => filhos.sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0)));
+
+    const linhasBase = [];
+    const visitados = new Set();
+    const visitar = (recurso, nivel) => {
+      if (!recurso?.chave || visitados.has(recurso.chave)) return;
+      visitados.add(recurso.chave);
+      const filhos = filhosPorPai.get(recurso.chave) || [];
+      linhasBase.push({ recurso, nivel, temFilhos: filhos.length > 0 });
+      filhos.forEach(filho => visitar(filho, nivel + 1));
+    };
+
+    visitar(modulo, 0);
+    itensRelacionados
+      .filter(recurso => !visitados.has(recurso.chave))
+      .sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0))
+      .forEach(recurso => visitar(recurso, 1));
+
+    const linhas = linhasBase.map(({ recurso, nivel, temFilhos }) => ({
       ...recurso,
       modulo_chave: modulo.chave,
       modulo_nome: modulo.nome || modulo.chave,
-      rotulo_recurso: obterRotuloRecurso(recurso)
+      nivel_hierarquia: nivel,
+      tem_filhos: temFilhos,
+      rotulo_recurso: recurso.nome || recurso.chave
     }));
 
     const acoes = Array.from(new Set(
@@ -4136,6 +5368,45 @@ function verificarAlteracoesPermissoesUsuario(originalEffects = {}, draftEffects
   return Array.from(chaves).some(chave => (originalEffects?.[chave] || '') !== (draftEffects?.[chave] || ''));
 }
 
+function obterQuantidadeAlteracoesPermissoesUsuario(originalEffects = {}, draftEffects = {}) {
+  const chaves = new Set([
+    ...Object.keys(originalEffects || {}),
+    ...Object.keys(draftEffects || {})
+  ]);
+
+  return Array.from(chaves).filter(chave => (originalEffects?.[chave] || '') !== (draftEffects?.[chave] || '')).length;
+}
+
+function filtrarRecursosPermissoesUsuarioAdmin(valor) {
+  const normalizar = texto => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+  const termo = normalizar(valor);
+  if (state.admin.permissionModal) state.admin.permissionModal.searchTerm = valor || '';
+
+  document.querySelectorAll('.admin-user-page.is-permissions-stage .permission-module-card').forEach(card => {
+    const titulo = normalizar(card.querySelector('.permission-module-toggle strong')?.textContent);
+    const indiceModulo = normalizar(card.dataset.search);
+    const linhas = [...card.querySelectorAll('.permission-table tbody tr')];
+    let encontrou = !termo || indiceModulo.includes(termo);
+
+    linhas.forEach(linha => {
+      const corresponde = !termo || titulo.includes(termo) || normalizar(linha.querySelector('td:first-child')?.textContent).includes(termo);
+      linha.hidden = !corresponde;
+    });
+
+    card.hidden = !encontrou;
+  });
+}
+
+function descartarAlteracoesPermissoesUsuarioAdmin() {
+  const modal = state.admin.permissionModal || {};
+  if (modal.applying || !modal.dirty) return;
+
+  const scrollTop = obterScrollPermissoesUsuarioAdmin();
+  state.admin.permissionModal.draftEffects = { ...(modal.originalEffects || {}) };
+  state.admin.permissionModal.dirty = false;
+  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+}
+
 function obterScrollPermissoesUsuarioAdmin() {
   return document.querySelector('.permission-modal-content')?.scrollTop || 0;
 }
@@ -4146,6 +5417,8 @@ function renderAdministracaoPreservandoScrollPermissoes(scrollTop) {
   if (container) {
     container.scrollTop = scrollTop;
   }
+  const termoBusca = state.admin.permissionModal?.searchTerm || '';
+  if (termoBusca) filtrarRecursosPermissoesUsuarioAdmin(termoBusca);
 }
 
 function obterUsuarioAdminEmEdicao() {
@@ -4176,6 +5449,10 @@ function renderModalUsuarioAdmin() {
   const emPermissoes = etapa === 'permissoes' && editando;
   const cpf = formatarMascaraParceiro(usuario.cpf || '', 'cpf');
   const telefone = formatarMascaraParceiro(usuario.telefone || '', 'telefone');
+  const somenteLeitura = editando && !pode('admin.usuarios', 'update');
+  const podeExcluirUsuario = editando
+    && pode('admin.usuarios', 'delete')
+    && usuarioId !== state.usuario?.id;
 
   if (state.admin.modalNovo !== 'usuarios' && !editando) {
     return '';
@@ -4191,14 +5468,37 @@ function renderModalUsuarioAdmin() {
   const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(perfilPermissoes);
   const modulos = construirEstruturaPermissoesUsuario(recursos);
   const textoBotaoSalvar = modal.applying && modal.submitMode !== 'close' ? 'Salvando...' : 'Salvar';
-  const textoBotaoSalvarFechar = modal.applying && modal.submitMode === 'close' ? 'Salvando...' : 'Salvar e fechar';
+  const quantidadeAlteracoesPendentes = obterQuantidadeAlteracoesPermissoesUsuario(modal.originalEffects, modal.draftEffects);
 
   return `
-    <div class="modal-backdrop ${emPermissoes ? 'admin-user-modal-backdrop' : ''}" role="dialog" aria-modal="true" aria-label="${editando ? 'Editar usuário' : 'Adicionar usuário'}">
-      <section class="small-modal admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}">
-        <div class="small-modal-header">
-          <h3>${emPermissoes ? 'Permissões Adicionais' : editando ? 'Editar usuário' : 'Adicionar usuário'}</h3>
-          <button class="icon-btn" type="button" onclick="fecharModalNovoRegistro()" title="Fechar" aria-label="Fechar">×</button>
+      <section class="admin-user-page admin-user-modal ${emPermissoes ? 'is-permissions-stage' : ''}" aria-label="${editando ? (somenteLeitura ? 'Visualizar usuário' : 'Editar usuário') : 'Adicionar usuário'}">
+        <div class="small-modal-header admin-user-modal-header">
+          ${emPermissoes ? `
+            <div>
+              <h3>Permissões Adicionais</h3>
+              <p class="admin-user-page-description">Gerencie as permissões específicas de ${escapeHtml(usuario.nome || usuario.email || 'este usuário')}.</p>
+            </div>
+          ` : `
+            <div class="admin-user-modal-heading">
+              <span class="admin-user-modal-heading-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 8v6m-3-3h6"/></svg>
+              </span>
+              <div>
+                <h3>${editando ? (somenteLeitura ? 'Visualizar usuário' : 'Editar usuário') : 'Adicionar usuário'}</h3>
+                <p>${editando ? (somenteLeitura ? 'Dados de acesso deste usuário.' : 'Atualize os dados de acesso ao sistema.') : 'Preencha os dados do novo usuário para conceder acesso ao sistema.'}</p>
+              </div>
+            </div>
+          `}
+          <div class="admin-user-header-controls">
+            ${emPermissoes ? '<button class="secondary-btn admin-user-back-btn" type="button" onclick="voltarEtapaModalUsuarioAdmin()">Voltar para cadastro</button>' : ''}
+            ${emPermissoes ? '' : `
+              <label class="admin-user-header-status" for="${prefixo}_status">
+                <span>Status</span>
+                <select id="${prefixo}_status" class="config-input" form="${prefixo}_form" aria-label="Status do usuário" ${somenteLeitura ? 'disabled' : ''}>${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select>
+              </label>
+            `}
+            <button class="secondary-btn admin-user-back-btn" type="button" onclick="fecharModalNovoRegistro()">Voltar para usuários</button>
+          </div>
         </div>
         ${emPermissoes
           ? `
@@ -4208,20 +5508,25 @@ function renderModalUsuarioAdmin() {
               </div>
             </div>
             <div class="small-modal-actions admin-user-permissions-actions">
-              <button class="secondary-btn" type="button" onclick="voltarEtapaModalUsuarioAdmin()">Voltar para usuário</button>
+              <div class="permission-unsaved-status" aria-live="polite">
+                <span class="permission-unsaved-count"><i data-lucide="circle" aria-hidden="true"></i> ${quantidadeAlteracoesPendentes ? `${quantidadeAlteracoesPendentes} ${quantidadeAlteracoesPendentes === 1 ? 'alteração não salva' : 'alterações não salvas'}` : 'Nenhuma alteração pendente'}</span>
+                <span>Suas alterações serão aplicadas apenas após salvar.</span>
+              </div>
               <div class="admin-user-permissions-actions-right">
-                <button class="save-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvar}</button>
-                <button class="secondary-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}', true)" ${modal.applying || !modal.dirty ? 'disabled' : ''}>${textoBotaoSalvarFechar}</button>
+                <button class="secondary-btn" type="button" onclick="descartarAlteracoesPermissoesUsuarioAdmin()" ${modal.applying || !modal.dirty ? 'disabled' : ''}>Descartar</button>
+                <button class="save-btn" type="button" onclick="salvarPermissoesUsuarioAdmin('${escapeAttr(usuarioId)}')" ${modal.applying || !modal.dirty ? 'disabled' : ''}><i data-lucide="save" aria-hidden="true"></i> ${textoBotaoSalvar === 'Salvando...' ? textoBotaoSalvar : 'Salvar alterações'}</button>
               </div>
             </div>
           `
           : `
-            <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
-            <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
-            <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="numeric" maxlength="15" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)"></label>
-            <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></label>
-            <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatusUsuario(usuario.status || 'pendente')}</select></label>
+            <form id="${prefixo}_form" class="admin-user-form ${somenteLeitura ? 'is-readonly' : ''}" onsubmit="${somenteLeitura ? 'event.preventDefault()' : `salvarUsuarioAdmin(event, '${escapeAttr(usuarioId)}')`}">
+              <fieldset class="admin-user-fields" ${somenteLeitura ? 'disabled' : ''}>
+              <label class="admin-user-field"><span>Nome <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><input id="${prefixo}_nome" class="config-input" type="text" autocomplete="name" required value="${escapeAttr(usuario.nome || '')}" placeholder="Digite o nome completo"></span></label>
+              <label class="admin-user-field"><span>Nome de usuário <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M16 8.5a4 4 0 1 0 0 7M16 8.5v4.25a2.25 2.25 0 0 0 4.5 0V12a8.5 8.5 0 1 0-2.5 6.5"/></svg><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="Ex.: joao.silva"></span></label>
+              <label class="admin-user-field"><span>E-mail <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><input id="${prefixo}_email" class="config-input" type="email" autocomplete="email" required value="${escapeAttr(usuario.email || '')}" placeholder="Digite o e-mail do usuário"></span></label>
+              <label class="admin-user-field"><span>CPF</span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M7 14h.01M11 14h.01M15 14h2"/></svg><input id="${prefixo}_cpf" class="config-input" type="text" inputmode="numeric" maxlength="14" data-partner-mask="cpf" value="${escapeAttr(cpf)}" oninput="aplicarMascaraParceiroIndicacao(this)" placeholder="Digite o CPF"></span></label>
+              <label class="admin-user-field"><span>Telefone</span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.19 18a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.09 3.18 2 2 0 0 1 4.08 1h3a2 2 0 0 1 2 1.72c.12.96.35 1.9.69 2.8a2 2 0 0 1-.45 2.11L8.05 8.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.84.57 2.8.69A2 2 0 0 1 22 16.92Z"/></svg><input id="${prefixo}_telefone" class="config-input" type="tel" inputmode="tel" maxlength="24" data-partner-mask="telefone" value="${escapeAttr(telefone)}" oninput="aplicarMascaraParceiroIndicacao(this)" placeholder="Digite o telefone"></span></label>
+              <label class="admin-user-field"><span>Perfil <b>*</b></span><span class="admin-user-input-wrap"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M19 8v6m-3-3h6"/></svg><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfisAdmin(usuario.perfil_id || '')}</select></span></label>
             ${editando ? `
               <section class="admin-user-access-panel">
                 <div class="admin-user-access-actions">
@@ -4232,24 +5537,27 @@ function renderModalUsuarioAdmin() {
                   <div class="admin-user-password-box">
                     <div class="admin-user-password-header">
                       <strong>Senha provisória</strong>
-                      <p>Esta senha ainda não está sincronizada com o Supabase.</p>
+                      <p>${state.admin.credencialModal?.sincronizando ? 'Sincronizando com o Supabase Auth…' : 'Senha sincronizada com o Supabase Auth. O usuário deverá trocá-la no próximo acesso.'}</p>
                     </div>
                     <div class="admin-user-password-value" aria-live="polite">${escapeHtml(senhaTemporaria)}</div>
                     <div class="admin-user-password-actions">
-                      <button class="secondary-btn" type="button" onclick="copiarSenhaTemporariaUsuarioAdmin()">${senhaCopiada ? 'Copiada' : 'Copiar'}</button>
-                      <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()">Gerar outra</button>
+                      <button class="secondary-btn" type="button" onclick="copiarSenhaTemporariaUsuarioAdmin()" ${state.admin.credencialModal?.sincronizando ? 'disabled' : ''}>${senhaCopiada ? 'Copiada' : 'Copiar'}</button>
+                      <button class="secondary-btn" type="button" onclick="gerarSenhaTemporariaUsuarioAdmin()" ${state.admin.credencialModal?.sincronizando ? 'disabled' : ''}>Gerar outra</button>
                     </div>
                   </div>
                 ` : ''}
               </section>
             ` : ''}
-            <div class="small-modal-actions">
-              <button class="secondary-btn" type="button" onclick="fecharModalNovoRegistro()">Cancelar</button>
-              <button class="save-btn" type="button" onclick="salvarUsuarioAdmin('${escapeAttr(usuarioId)}')">Salvar</button>
-            </div>
+              </fieldset>
+              <p class="admin-message error" data-admin-user-form-error role="alert" hidden></p>
+              <div class="small-modal-actions">
+                ${podeExcluirUsuario ? `<button class="secondary-btn admin-user-delete-btn" type="button" data-admin-user-delete onclick="excluirUsuarioAdmin('${escapeAttr(usuarioId)}')"><i data-lucide="trash-2" aria-hidden="true"></i> Excluir usuário</button>` : ''}
+                <button class="secondary-btn" type="button" data-admin-user-cancel onclick="fecharModalNovoRegistro()">Cancelar</button>
+                ${somenteLeitura ? '' : '<button class="save-btn" type="submit" data-admin-user-submit>Salvar</button>'}
+              </div>
+            </form>
           `}
       </section>
-    </div>
   `;
 }
 
@@ -4261,15 +5569,23 @@ function renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfi
   return `
     <div class="permission-module-list">
       <div class="permission-global-toolbar">
-        <div class="permission-global-toolbar-group">
-          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(true)">Expandir todos</button>
-          <button class="filter-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(false)">Recolher todos</button>
+        <label class="permission-search" aria-label="Buscar recurso">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+          <input type="search" value="${escapeAttr(modal.searchTerm || '')}" placeholder="Buscar recurso..." oninput="filtrarRecursosPermissoesUsuarioAdmin(this.value)">
+        </label>
+        <div class="permission-global-toolbar-group permission-view-actions">
+          <button class="secondary-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(true)"><i data-lucide="maximize-2" aria-hidden="true"></i> Expandir todos</button>
+          <button class="secondary-btn" type="button" onclick="alternarTodosModulosPermissoesUsuario(false)"><i data-lucide="minimize-2" aria-hidden="true"></i> Recolher todos</button>
+          <button class="secondary-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', '')" ${modal.applying ? 'disabled' : ''}><i data-lucide="rotate-ccw" aria-hidden="true"></i> Restaurar padrão</button>
         </div>
-        <div class="permission-global-toolbar-group">
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
-        </div>
+        <div class="permission-inheritance-hint"><i data-lucide="info" aria-hidden="true"></i> Permissões herdadas do perfil</div>
+        <details class="permission-global-more">
+          <summary aria-label="Mais ações"><i data-lucide="more-horizontal" aria-hidden="true"></i></summary>
+          <div class="permission-global-more-menu">
+            <button type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+            <button type="button" onclick="aplicarLoteGlobalPermissoesUsuario('${escapeAttr(usuarioId)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
+          </div>
+        </details>
       </div>
       ${modulos.map(modulo => renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal)).join('')}
     </div>
@@ -4279,19 +5595,31 @@ function renderConteudoPermissoesUsuarioAdmin(usuarioId, usuario, modulos, perfi
 function renderModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, perfilPermissoesPorChave, permissoesUsuarioPorChave, modal) {
   const expandido = modal.expandedModules?.[modulo.chave] !== false;
   const atualizando = modal.moduleUpdating === modulo.chave;
-  const controle = expandido ? '-' : '+';
+  const recursos = modulo.linhas.length;
+  const concedidas = modulo.linhas.reduce((total, recurso) => total + OPCOES_PERMISSAO_PERFIL.filter(opcao => {
+    const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+    return acoes.length > 0 && acoes.every(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao));
+  }).length, 0);
 
   return `
-    <article class="permission-module-card ${expandido ? 'is-open' : ''}">
+    <article class="permission-module-card ${expandido ? 'is-open' : ''}" data-module-key="${escapeAttr(modulo.chave)}" data-search="${escapeAttr([modulo.nome, ...modulo.linhas.map(recurso => recurso.rotulo_recurso || recurso.nome || recurso.chave)].join(' '))}">
       <div class="permission-module-header">
         <button class="permission-module-toggle" type="button" onclick="alternarModuloPermissoesUsuario('${escapeAttr(modulo.chave)}')" aria-expanded="${expandido ? 'true' : 'false'}">
-          <span class="permission-module-control" aria-hidden="true">${controle}</span>
+          <span class="permission-module-control" aria-hidden="true"><i data-lucide="chevron-${expandido ? 'down' : 'right'}"></i></span>
+          <span class="permission-module-icon" aria-hidden="true"><i data-lucide="folder"></i></span>
           <strong>${escapeHtml(modulo.nome)}</strong>
         </button>
-        <div class="permission-module-toolbar">
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Bloquear tudo</button>
-          <button class="filter-btn" type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
+        <div class="permission-module-summary">
+          <span>${recursos} ${recursos === 1 ? 'recurso' : 'recursos'}</span>
+          <span class="${concedidas ? 'has-grants' : ''}">${concedidas} ${concedidas === 1 ? 'concedida' : 'concedidas'}</span>
+          <details class="permission-module-more">
+            <summary aria-label="Ações de ${escapeAttr(modulo.nome)}"><i data-lucide="more-horizontal" aria-hidden="true"></i></summary>
+            <div class="permission-module-more-menu">
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'permitir')" ${modal.applying ? 'disabled' : ''}>Conceder tudo</button>
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', 'negar')" ${modal.applying ? 'disabled' : ''}>Remover tudo</button>
+              <button type="button" onclick="aplicarLoteModuloPermissoesUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(modulo.chave)}', '')" ${modal.applying ? 'disabled' : ''}>Restaurar padrão</button>
+            </div>
+          </details>
         </div>
       </div>
       ${atualizando ? '<p class="quick-link-empty">Aplicando alterações neste módulo...</p>' : ''}
@@ -4307,26 +5635,45 @@ function renderTabelaModuloPermissoesUsuarioAdmin(usuarioId, usuario, modulo, pe
         <thead>
           <tr>
             <th>Recurso</th>
-            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+            ${OPCOES_PERMISSAO_PERFIL.map(opcao => `<th>${escapeHtml(opcao.label)}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
           ${modulo.linhas.map(recurso => `
-            <tr>
+            <tr data-resource-key="${escapeAttr(recurso.chave)}" data-tree-level="${Number(recurso.nivel_hierarquia) || 0}" class="${recurso.tem_filhos ? 'is-tree-parent' : 'is-tree-leaf'}">
               <td>
-                <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
+                <div class="permission-tree-resource" style="--permission-tree-indent: ${Math.max(0, (Number(recurso.nivel_hierarquia) || 0) - 1) * 24}px">
+                  ${recurso.nivel_hierarquia ? '<span class="permission-tree-branch" aria-hidden="true"></span>' : ''}
+                  <strong>${escapeHtml(recurso.nivel_hierarquia ? (recurso.rotulo_recurso || recurso.nome || recurso.chave) : 'Acesso ao módulo')}</strong>
+                </div>
               </td>
-              ${modulo.acoes.map(acao => {
-                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+              ${OPCOES_PERMISSAO_PERFIL.map(opcao => {
+                const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+                if (!acoes.length) {
                   return '<td class="permission-cell permission-cell-empty">-</td>';
                 }
 
-                const marcado = obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao);
+                const resultados = acoes.map(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recurso.chave, acao));
+                const efeitos = acoes.map(acao => permissoesUsuarioPorChave[`${recurso.chave}:${acao}`] || '');
+                const marcado = resultados.every(Boolean);
+                const parcial = resultados.some(Boolean) && !marcado;
+                const herdado = efeitos.every(efeito => !efeito);
+                const fontesMistas = efeitos.some(Boolean) && efeitos.some(efeito => !efeito);
+                const estado = herdado
+                  ? parcial ? 'herdada do perfil, com resultado misto' : 'herdada do perfil'
+                  : fontesMistas
+                    ? parcial ? 'mista entre herança do perfil e ajustes individuais' : 'combina herança do perfil e ajustes individuais'
+                    : parcial ? 'personalizada com resultado misto' : 'personalizada para este usuário';
+                const classeEstado = [
+                  parcial ? 'is-mixed' : '',
+                  herdado ? 'is-inherited' : '',
+                  fontesMistas && !parcial ? 'is-source-mixed' : ''
+                ].filter(Boolean).join(' ');
                 return `
                   <td class="permission-cell">
-                    <label class="permission-checkbox">
-                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoUsuario('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
-                      <span aria-hidden="true"></span>
+                    <label class="permission-checkbox home-modules-visibility">
+                      <input type="checkbox" data-permission-group="${escapeAttr(opcao.id)}" ${marcado ? 'checked' : ''} ${classeEstado ? `class="${classeEstado}"` : ''} ${parcial ? 'aria-checked="mixed"' : ''} ${modal.applying ? 'disabled' : ''} aria-label="${escapeAttr(opcao.label)}: ${escapeAttr(recurso.rotulo_recurso || recurso.nome || recurso.chave)} — ${estado}" title="${estado}" onchange="alternarCheckboxPermissaoUsuarioGrupo('${escapeAttr(usuarioId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(opcao.id)}', this.checked)">
+                      <span class="home-modules-switch permission-toggle-switch" aria-hidden="true"></span>
                     </label>
                   </td>
                 `;
@@ -4516,7 +5863,7 @@ function renderPerfilAdmin(perfil) {
   return `
     <article class="crud-row admin-profile-row">
       <div class="crud-actions admin-profile-actions">
-        <span class="admin-user-status-dot status-${escapeAttr(status)}" title="Status: ${escapeAttr(rotuloStatus)}" aria-label="Status do perfil: ${escapeAttr(rotuloStatus)}"></span>
+        ${renderHubStatusDot(status, 'do perfil')}
         <button class="icon-btn" type="button" onclick="editarPerfilAdmin('${id}')" title="Editar perfil" aria-label="Editar perfil" ${podeEditar ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button>
       </div>
 
@@ -4704,7 +6051,7 @@ function renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPor
         <thead>
           <tr>
             <th>Recurso</th>
-            ${modulo.acoes.map(acao => `<th>${escapeHtml(obterRotuloAcaoPermissao(acao))}</th>`).join('')}
+            ${OPCOES_PERMISSAO_PERFIL.map(opcao => `<th>${escapeHtml(opcao.label)}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
@@ -4713,17 +6060,20 @@ function renderTabelaModuloPermissoesPerfilAdmin(perfilId, modulo, permissoesPor
               <td>
                 <strong>${escapeHtml(recurso.rotulo_recurso || recurso.nome || recurso.chave)}</strong>
               </td>
-              ${modulo.acoes.map(acao => {
-                if (!obterAcoesDisponiveisRecurso(recurso).includes(acao)) {
+              ${OPCOES_PERMISSAO_PERFIL.map(opcao => {
+                const acoesTecnicas = obterAcoesTecnicasPermissaoPerfil(recurso.chave, opcao.id);
+                if (!acoesTecnicas.length) {
                   return '<td class="permission-cell permission-cell-empty">-</td>';
                 }
 
-                const marcado = Boolean(permissoesPorChave[`${recurso.chave}:${acao}`]);
+                const acoesMarcadas = acoesTecnicas.filter(acao => permissoesPorChave[`${recurso.chave}:${acao}`]);
+                const marcado = acoesMarcadas.length === acoesTecnicas.length;
+                const parcial = acoesMarcadas.length > 0 && !marcado;
 
                 return `
                   <td class="permission-cell">
                     <label class="permission-checkbox">
-                      <input type="checkbox" ${marcado ? 'checked' : ''} ${modal.applying ? 'disabled' : ''} onchange="alternarCheckboxPermissaoPerfil('${escapeAttr(perfilId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(acao)}', this.checked)">
+                      <input type="checkbox" ${marcado ? 'checked' : ''} ${parcial ? 'class="is-mixed" aria-checked="mixed"' : ''} ${modal.applying ? 'disabled' : ''} aria-label="${escapeAttr(opcao.label)}: ${escapeAttr(recurso.rotulo_recurso || recurso.nome || recurso.chave)}" onchange="alternarCheckboxPermissaoPerfil('${escapeAttr(perfilId)}', '${escapeAttr(recurso.chave)}', '${escapeAttr(opcao.id)}', this.checked)">
                       <span aria-hidden="true"></span>
                     </label>
                   </td>
@@ -4944,13 +6294,13 @@ function voltarEtapaModalPerfilAdmin() {
 
 function alternarCheckboxPermissaoPerfil(perfilId, recursoChave, acao, permitido) {
   const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
-  const chave = `${recursoChave}:${acao}`;
+  const acoesTecnicas = obterAcoesTecnicasPermissaoPerfil(recursoChave, acao);
 
-  if (permitido) {
-    draftPermissions[chave] = true;
-  } else {
-    delete draftPermissions[chave];
-  }
+  acoesTecnicas.forEach(acaoTecnica => {
+    const chave = `${recursoChave}:${acaoTecnica}`;
+    if (permitido) draftPermissions[chave] = true;
+    else delete draftPermissions[chave];
+  });
 
   state.admin.permissionModal.draftProfilePermissions = draftPermissions;
   state.admin.permissionModal.dirty = verificarAlteracoesPermissoesPerfil(
@@ -4971,7 +6321,7 @@ function aplicarLoteModuloPermissoesPerfil(perfilId, moduloChave, permitido) {
   const draftPermissions = { ...(state.admin.permissionModal.draftProfilePermissions || {}) };
 
   modulo.linhas.forEach(recurso => {
-    obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+    obterTodasAcoesTecnicasPermissaoPerfil(recurso.chave).forEach(acao => {
       const chave = `${recurso.chave}:${acao}`;
 
       if (permitido) {
@@ -5007,7 +6357,7 @@ function aplicarLoteGlobalPermissoesPerfil(perfilId, permitido) {
 
   modulos.forEach(modulo => {
     modulo.linhas.forEach(recurso => {
-      obterAcoesDisponiveisRecurso(recurso).forEach(acao => {
+      obterTodasAcoesTecnicasPermissaoPerfil(recurso.chave).forEach(acao => {
         const chave = `${recurso.chave}:${acao}`;
 
         if (permitido) {
@@ -5165,7 +6515,9 @@ function atualizarRotaCadastroAdmin(entidade, id = '', modo = 'novo', { replace 
   };
   if (!rotas[entidade]) return;
 
-  const sufixo = id ? `${encodeURIComponent(id)}/${modo === 'edit' ? 'editar' : 'visualizar'}` : 'novo';
+  const sufixo = id
+    ? `${encodeURIComponent(id)}/${modo === 'permissions' ? 'permissoes' : modo === 'edit' ? 'editar' : 'visualizar'}`
+    : 'novo';
   const url = new URL(window.location.href);
   url.pathname = `${montarCaminhoHub('administracao').replace(/\/+$/g, '')}/${rotas[entidade]}/${sufixo}`;
   url.hash = '';
@@ -5317,12 +6669,14 @@ function abrirModalNovoRegistro(entidade) {
 }
 
 function fecharModalNovoRegistro() {
-  restaurarRotaCadastroAdmin(state.admin.modalNovo);
+  const entidade = state.admin.modalNovo || (state.admin.editando.usuarios ? 'usuarios' : '');
+  restaurarRotaCadastroAdmin(entidade);
   resetarFluxoModalUsuarioAdmin(true);
 }
 
 function abrirModalUsuarioAdmin(id = '') {
-  atualizarRotaCadastroAdmin('usuarios', id, id ? 'edit' : 'novo');
+  const modo = id ? (pode('admin.usuarios', 'update') ? 'edit' : 'view') : 'novo';
+  atualizarRotaCadastroAdmin('usuarios', id, modo);
   state.admin.modalNovo = 'usuarios';
   state.admin.editando.usuarios = id || '';
   state.admin.usuarioModalEtapa = 'dados';
@@ -5347,6 +6701,10 @@ function abrirModalUsuarioAdmin(id = '') {
 
 function voltarEtapaModalUsuarioAdmin() {
   state.admin.usuarioModalEtapa = 'dados';
+  const id = state.admin.editando.usuarios || '';
+  if (id) {
+    atualizarRotaCadastroAdmin('usuarios', id, pode('admin.usuarios', 'update') ? 'edit' : 'view');
+  }
   renderAdministracao();
 }
 
@@ -5357,12 +6715,29 @@ function gerarSenhaAleatoriaAdmin(tamanho = 14) {
   return Array.from(array, numero => caracteres[numero % caracteres.length]).join('');
 }
 
-function gerarSenhaTemporariaUsuarioAdmin() {
+async function gerarSenhaTemporariaUsuarioAdmin() {
+  const usuarioId = state.admin.editando.usuarios || '';
+  if (!usuarioId) return;
+
+  const senhaTemporaria = gerarSenhaAleatoriaAdmin();
   state.admin.credencialModal = {
-    senhaTemporaria: gerarSenhaAleatoriaAdmin(),
-    senhaCopiada: false
+    senhaTemporaria,
+    senhaCopiada: false,
+    sincronizando: true
   };
   renderAdministracao();
+
+  try {
+    const response = await chamarApi('setAdminUserPassword', { id: usuarioId, password: senhaTemporaria });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível sincronizar a senha com o Supabase.'));
+    state.admin.credencialModal.sincronizando = false;
+    state.admin.message = 'Senha provisória sincronizada. O usuário deverá alterá-la no próximo acesso.';
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.credencialModal = { senhaTemporaria: '', senhaCopiada: false, sincronizando: false };
+    state.admin.message = erro.message || 'Não foi possível sincronizar a senha com o Supabase.';
+    renderAdministracao();
+  }
 }
 
 async function copiarSenhaTemporariaUsuarioAdmin() {
@@ -5479,6 +6854,42 @@ async function carregarParceirosIndicacaoAdmin(preservarMensagem = false) {
   }
 }
 
+function formatarTelefoneHub(valor = '') {
+  const raw = String(valor || '').trim();
+  const internacional = raw.startsWith('+');
+  const digitos = raw.replace(/\D/g, '').slice(0, internacional ? 15 : 11);
+  const nacional = (numero) => {
+    if (numero.length <= 10) return numero.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d{1,4})$/, '$1-$2');
+    return numero.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d{1,4})$/, '$1-$2');
+  };
+  if (!internacional) return nacional(digitos);
+  if (digitos.startsWith('55')) return `+55 ${nacional(digitos.slice(2))}`.trim();
+  if (digitos.startsWith('1')) return `+1 ${digitos.length > 1 ? `(${digitos.slice(1, 4)}${digitos.length >= 4 ? ') ' : ''}${digitos.slice(4, 7)}${digitos.length >= 7 ? '-' : ''}${digitos.slice(7)}` : ''}`.trim();
+  return `+${digitos}`;
+}
+
+window.formatarTelefoneHub = formatarTelefoneHub;
+
+let parceirosIndicacaoCompartilhadoPromise = null;
+
+async function carregarParceirosIndicacaoCompartilhado() {
+  if (state.admin.parceirosIndicacao?.length) return state.admin.parceirosIndicacao;
+  if (parceirosIndicacaoCompartilhadoPromise) return parceirosIndicacaoCompartilhadoPromise;
+
+  parceirosIndicacaoCompartilhadoPromise = chamarApi('listAdminPartners')
+    .then(response => {
+      if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar parceiros.'));
+      state.admin.parceirosIndicacao = response.data.records || [];
+      window.dispatchEvent(new CustomEvent('hub-parceiros-indicacao-atualizados'));
+      return state.admin.parceirosIndicacao;
+    })
+    .finally(() => {
+      parceirosIndicacaoCompartilhadoPromise = null;
+    });
+
+  return parceirosIndicacaoCompartilhadoPromise;
+}
+
 async function carregarModulosAdmin(preservarMensagem = false) {
   state.admin.loading = true;
   state.admin.moduloAtualizando = '';
@@ -5529,10 +6940,12 @@ async function carregarUsuariosAdmin() {
     state.admin.perfis = perfisResponse.data.records || [];
     state.admin.loading = false;
     renderAdministracao();
+    return true;
   } catch (erro) {
     state.admin.loading = false;
     state.admin.message = erro.message || 'Erro ao carregar usuários.';
     renderAdministracao();
+    return false;
   }
 }
 
@@ -5550,23 +6963,69 @@ function editarUsuarioAdmin(id) {
   abrirModalUsuarioAdmin(id);
 }
 
-async function salvarUsuarioAdmin(id) {
+function definirFormularioUsuarioSalvando(form, salvando) {
+  if (!form) return;
+
+  form.setAttribute('aria-busy', salvando ? 'true' : 'false');
+  const controles = Array.from(form.querySelectorAll('input, select, button'));
+  const selectStatus = document.getElementById(form.id.replace(/_form$/, '_status'));
+  if (selectStatus && !form.contains(selectStatus)) controles.push(selectStatus);
+
+  controles.forEach(controle => {
+    if (salvando) {
+      controle.dataset.adminUserDisabledBeforeSave = String(controle.disabled);
+      controle.disabled = true;
+    } else if (controle.dataset.adminUserDisabledBeforeSave !== undefined) {
+      controle.disabled = controle.dataset.adminUserDisabledBeforeSave === 'true';
+      delete controle.dataset.adminUserDisabledBeforeSave;
+    }
+  });
+
+  const botaoSalvar = form.querySelector('[data-admin-user-submit]');
+  if (botaoSalvar) botaoSalvar.textContent = salvando ? 'Salvando...' : 'Salvar';
+
+  const botaoFechar = form.closest('.admin-user-page')?.querySelector('.admin-user-back-btn');
+  if (botaoFechar) {
+    if (salvando) {
+      botaoFechar.dataset.adminUserDisabledBeforeSave = String(botaoFechar.disabled);
+      botaoFechar.disabled = true;
+    } else if (botaoFechar.dataset.adminUserDisabledBeforeSave !== undefined) {
+      botaoFechar.disabled = botaoFechar.dataset.adminUserDisabledBeforeSave === 'true';
+      delete botaoFechar.dataset.adminUserDisabledBeforeSave;
+    }
+  }
+}
+
+async function salvarUsuarioAdmin(event, id) {
+  event?.preventDefault?.();
   const prefixo = id ? `usuario_${id}` : 'usuario_novo';
+  const form = document.getElementById(`${prefixo}_form`);
+  if (!form?.reportValidity()) return;
+
+  const mensagemErro = form.querySelector('[data-admin-user-form-error]');
+  if (mensagemErro) {
+    mensagemErro.textContent = '';
+    mensagemErro.hidden = true;
+  }
+
   const payload = {
     id,
     nome: document.getElementById(`${prefixo}_nome`)?.value || '',
+    nome_usuario: document.getElementById(`${prefixo}_nome_usuario`)?.value || '',
     email: document.getElementById(`${prefixo}_email`)?.value || '',
     cpf: document.getElementById(`${prefixo}_cpf`)?.value || '',
     telefone: document.getElementById(`${prefixo}_telefone`)?.value || '',
     perfil_id: document.getElementById(`${prefixo}_perfil`)?.value || '',
     status: document.getElementById(`${prefixo}_status`)?.value || 'pendente',
-    password: document.querySelector('.admin-user-password-value')?.textContent?.trim() || ''
+    password: document.getElementById(`${prefixo}_senha_admin`)?.value?.trim()
+      || document.querySelector('.admin-user-password-value')?.textContent?.trim()
+      || ''
   };
 
   try {
     state.admin.loading = true;
     state.admin.message = '';
-    renderAdministracao();
+    definirFormularioUsuarioSalvando(form, true);
 
     const response = await chamarApi('saveAdminUser', payload);
 
@@ -5574,6 +7033,7 @@ async function salvarUsuarioAdmin(id) {
       throw new Error(obterMensagemApi(response, 'Não foi possível salvar o usuário.'));
     }
 
+    restaurarRotaCadastroAdmin('usuarios');
     state.admin.editando.usuarios = '';
     state.admin.modalNovo = '';
     state.admin.usuarioModalEtapa = 'dados';
@@ -5584,14 +7044,115 @@ async function salvarUsuarioAdmin(id) {
       senhaCopiada: false
     };
     const senhaProvisoria = response.data?.temporary_password || '';
+    const usuariosCarregados = await carregarUsuariosAdmin();
+    if (!usuariosCarregados) return;
+
     state.admin.message = senhaProvisoria
       ? `Usuário salvo. Senha provisória: ${senhaProvisoria}`
       : 'Usuário salvo e sincronizado com o Supabase Auth.';
-    await carregarUsuariosAdmin();
+    renderAdministracao();
   } catch (erro) {
     state.admin.loading = false;
-    state.admin.message = erro.message || 'Erro ao salvar usuário.';
+    const mensagem = erro.message || 'Erro ao salvar usuário.';
+    if (mensagemErro && form.isConnected) {
+      mensagemErro.textContent = mensagem;
+      mensagemErro.hidden = false;
+      definirFormularioUsuarioSalvando(form, false);
+    } else {
+      state.admin.message = mensagem;
+      renderAdministracao();
+    }
+  }
+}
+
+async function excluirUsuarioAdmin(id) {
+  if (!pode('admin.usuarios', 'delete')) {
+    state.admin.message = 'Seu usuário não possui permissão para excluir usuários.';
     renderAdministracao();
+    return;
+  }
+
+  const usuario = (state.admin.usuarios || []).find(item => item.id === id);
+  if (!usuario) {
+    state.admin.message = 'Usuário não encontrado na lista atual.';
+    renderAdministracao();
+    return;
+  }
+
+  if (usuario.id === state.usuario?.id) {
+    state.admin.message = 'Não é possível excluir o próprio usuário.';
+    renderAdministracao();
+    return;
+  }
+
+  const identificacao = [usuario.nome, usuario.email].filter(Boolean).join(' · ');
+  if (!window.confirm(`Excluir definitivamente ${identificacao}? A conta do Supabase Auth e o cadastro do Hub serão removidos. Registros históricos vinculados podem impedir a exclusão.`)) {
+    return;
+  }
+
+  const formularioUsuario = document.getElementById(`usuario_${id}_form`);
+  const botaoExcluir = formularioUsuario?.querySelector('[data-admin-user-delete]');
+  const selectStatus = formularioUsuario
+    ? document.getElementById(formularioUsuario.id.replace(/_form$/, '_status'))
+    : null;
+
+  try {
+    state.admin.loading = true;
+    state.admin.message = '';
+    if (formularioUsuario) {
+      formularioUsuario.setAttribute('aria-busy', 'true');
+      const controles = Array.from(formularioUsuario.querySelectorAll('input, select, button'));
+      if (selectStatus && !formularioUsuario.contains(selectStatus)) controles.push(selectStatus);
+      controles.forEach(controle => {
+        controle.dataset.adminUserDisabledBeforeDelete = String(controle.disabled);
+        controle.disabled = true;
+      });
+      if (botaoExcluir) botaoExcluir.textContent = 'Excluindo...';
+    } else {
+      renderAdministracao();
+    }
+
+    const response = await chamarApi('deleteAdminUser', { id });
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível excluir o usuário.'));
+    }
+
+    if (formularioUsuario?.isConnected) {
+      fecharModalNovoRegistro();
+    }
+
+    const usuariosCarregados = await carregarUsuariosAdmin();
+    if (!usuariosCarregados) return;
+
+    state.admin.message = response.data?.auth_deleted === false
+      ? 'Cadastro removido do Hub, mas não foi possível excluir a conta do Supabase Auth. Verifique a conta no Supabase.'
+      : response.data?.auth_deleted === true
+        ? `Usuário ${usuario.nome || usuario.email || ''} excluído do Hub e do Supabase Auth.`
+        : `Usuário ${usuario.nome || usuario.email || ''} excluído do Hub.`;
+    renderAdministracao();
+  } catch (erro) {
+    state.admin.loading = false;
+    const mensagem = erro.message || 'Erro ao excluir usuário.';
+    if (formularioUsuario?.isConnected) {
+      const mensagemErro = formularioUsuario.querySelector('[data-admin-user-form-error]');
+      if (mensagemErro) {
+        mensagemErro.textContent = mensagem;
+        mensagemErro.hidden = false;
+      }
+      formularioUsuario.removeAttribute('aria-busy');
+      formularioUsuario.querySelectorAll('[data-admin-user-disabled-before-delete]').forEach(controle => {
+        controle.disabled = controle.dataset.adminUserDisabledBeforeDelete === 'true';
+        delete controle.dataset.adminUserDisabledBeforeDelete;
+      });
+      if (selectStatus?.dataset.adminUserDisabledBeforeDelete !== undefined) {
+        selectStatus.disabled = selectStatus.dataset.adminUserDisabledBeforeDelete === 'true';
+        delete selectStatus.dataset.adminUserDisabledBeforeDelete;
+      }
+      if (botaoExcluir) botaoExcluir.textContent = 'Excluir usuário';
+    } else {
+      state.admin.message = mensagem;
+      renderAdministracao();
+    }
   }
 }
 
@@ -5600,6 +7161,13 @@ async function abrirPermissoesUsuarioAdmin(id, options = {}) {
     state.admin.message = 'Seu usuário não possui permissão para alterar permissões individuais.';
     renderAdministracao();
     return;
+  }
+
+  state.admin.modalNovo = 'usuarios';
+  state.admin.editando.usuarios = id;
+  state.admin.usuarioModalEtapa = 'permissoes';
+  if (!options.skipRouteUpdate) {
+    atualizarRotaCadastroAdmin('usuarios', id, 'permissions');
   }
 
   try {
@@ -5672,8 +7240,7 @@ async function abrirPermissoesUsuarioAdmin(id, options = {}) {
 }
 
 function fecharPermissoesUsuarioAdmin() {
-  state.admin.usuarioModalEtapa = 'dados';
-  renderAdministracao();
+  voltarEtapaModalUsuarioAdmin();
 }
 
 function alternarModuloPermissoesUsuario(moduloChave) {
@@ -5682,8 +7249,71 @@ function alternarModuloPermissoesUsuario(moduloChave) {
   renderAdministracaoPreservandoScrollPermissoes(scrollTop);
 }
 
+function atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave) {
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const recurso = (state.admin.recursos || []).find(item => item.chave === recursoChave);
+  const permissoesUsuarioPorChave = state.admin.permissionModal?.draftEffects || {};
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
+  const linha = [...document.querySelectorAll('.admin-user-page.is-permissions-stage .permission-table tr[data-resource-key]')]
+    .find(item => item.dataset.resourceKey === recursoChave);
+
+  if (recurso && linha) {
+    OPCOES_PERMISSAO_PERFIL.forEach(opcao => {
+      const input = linha.querySelector(`[data-permission-group="${opcao.id}"]`);
+      const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, opcao);
+      if (!input || !acoes.length) return;
+
+      const resultados = acoes.map(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, recursoChave, acao));
+      const efeitos = acoes.map(acao => permissoesUsuarioPorChave[`${recursoChave}:${acao}`] || '');
+      const marcado = resultados.every(Boolean);
+      const parcial = resultados.some(Boolean) && !marcado;
+      const herdado = efeitos.every(efeito => !efeito);
+      const fontesMistas = efeitos.some(Boolean) && efeitos.some(efeito => !efeito);
+      const estado = herdado
+        ? parcial ? 'herdada do perfil, com resultado misto' : 'herdada do perfil'
+        : fontesMistas
+          ? parcial ? 'mista entre herança do perfil e ajustes individuais' : 'combina herança do perfil e ajustes individuais'
+          : parcial ? 'personalizada com resultado misto' : 'personalizada para este usuário';
+
+      input.checked = marcado;
+      input.classList.toggle('is-mixed', parcial);
+      input.classList.toggle('is-inherited', herdado);
+      input.classList.toggle('is-source-mixed', fontesMistas && !parcial);
+      if (parcial) input.setAttribute('aria-checked', 'mixed');
+      else input.removeAttribute('aria-checked');
+      input.title = estado;
+      input.setAttribute('aria-label', `${opcao.label}: ${recurso.rotulo_recurso || recurso.nome || recurso.chave} — ${estado}`);
+    });
+  }
+
+  const modulo = construirEstruturaPermissoesUsuario(state.admin.recursos || [])
+    .find(item => item.linhas.some(itemRecurso => itemRecurso.chave === recursoChave));
+  const card = modulo && [...document.querySelectorAll('.admin-user-page.is-permissions-stage [data-module-key]')]
+    .find(item => item.dataset.moduleKey === modulo.chave);
+  if (modulo && card) {
+    const concedidas = modulo.linhas.reduce((total, itemRecurso) => total + OPCOES_PERMISSAO_PERFIL.filter(opcao => {
+      const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(itemRecurso, opcao);
+      return acoes.length > 0 && acoes.every(acao => obterResultadoFinalPermissaoUsuario(usuario, perfilPermissoesPorChave, permissoesUsuarioPorChave, itemRecurso.chave, acao));
+    }).length, 0);
+    const resumo = card.querySelector('.permission-module-summary > span:nth-child(2)');
+    if (resumo) {
+      resumo.classList.toggle('has-grants', concedidas > 0);
+      resumo.textContent = `${concedidas} ${concedidas === 1 ? 'concedida' : 'concedidas'}`;
+    }
+  }
+
+  const modal = state.admin.permissionModal || {};
+  const quantidade = obterQuantidadeAlteracoesPermissoesUsuario(modal.originalEffects, modal.draftEffects);
+  const contador = document.querySelector('.admin-user-page.is-permissions-stage .permission-unsaved-count');
+  if (contador?.lastChild) {
+    contador.lastChild.nodeValue = ` ${quantidade ? `${quantidade} ${quantidade === 1 ? 'alteração não salva' : 'alterações não salvas'}` : 'Nenhuma alteração pendente'}`;
+  }
+  document.querySelectorAll('.admin-user-page.is-permissions-stage .admin-user-permissions-actions-right button').forEach(botao => {
+    botao.disabled = Boolean(modal.applying || !modal.dirty);
+  });
+}
+
 function alternarCheckboxPermissaoUsuario(usuarioId, recursoChave, acao, marcado) {
-  const scrollTop = obterScrollPermissoesUsuarioAdmin();
   const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
   const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
   const modal = state.admin.permissionModal || {};
@@ -5704,7 +7334,39 @@ function alternarCheckboxPermissaoUsuario(usuarioId, recursoChave, acao, marcado
     state.admin.permissionModal.originalEffects,
     permissoesUsuarioPorChave
   );
-  renderAdministracaoPreservandoScrollPermissoes(scrollTop);
+  atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave);
+}
+
+function alternarCheckboxPermissaoUsuarioGrupo(usuarioId, recursoChave, grupoId, marcado) {
+  const usuario = (state.admin.usuarios || []).find(item => item.id === usuarioId) || {};
+  const grupo = OPCOES_PERMISSAO_PERFIL.find(opcao => opcao.id === grupoId);
+  const recurso = (state.admin.recursos || []).find(item => item.chave === recursoChave);
+
+  if (!grupo || !recurso) return;
+
+  const perfilPermissoesPorChave = obterPermissoesPerfilPorChave(state.admin.perfilPermissoes || []);
+  const modal = state.admin.permissionModal || {};
+  const permissoesUsuarioPorChave = { ...(modal.draftEffects || {}) };
+  const acoes = obterAcoesTecnicasPermissaoUsuarioAgrupadas(recurso, grupo);
+
+  acoes.forEach(acao => {
+    const efeito = obterEfeitoAoAlternarPermissaoUsuario(
+      usuario,
+      perfilPermissoesPorChave,
+      permissoesUsuarioPorChave,
+      recursoChave,
+      acao,
+      marcado
+    );
+    permissoesUsuarioPorChave[`${recursoChave}:${acao}`] = efeito;
+  });
+
+  state.admin.permissionModal.draftEffects = permissoesUsuarioPorChave;
+  state.admin.permissionModal.dirty = verificarAlteracoesPermissoesUsuario(
+    state.admin.permissionModal.originalEffects,
+    permissoesUsuarioPorChave
+  );
+  atualizarInterfacePermissoesUsuarioAdmin(usuarioId, recursoChave);
 }
 
 function aplicarLoteModuloPermissoesUsuario(usuarioId, moduloChave, efeito) {
@@ -5810,6 +7472,7 @@ async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
     await atualizarResumoUsuariosAdmin();
     if (fecharAoSalvar) {
       state.admin.message = 'Permissões adicionais atualizadas.';
+      restaurarRotaCadastroAdmin('usuarios');
       resetarFluxoModalUsuarioAdmin(false);
       renderAdministracao();
       return;
@@ -5817,6 +7480,7 @@ async function salvarPermissoesUsuarioAdmin(usuarioId, fecharAoSalvar = false) {
 
     await abrirPermissoesUsuarioAdmin(usuarioId, {
       manterMensagem: true,
+      skipRouteUpdate: true,
       messageSuccess: 'Permissões adicionais atualizadas.'
     });
   } catch (erro) {
@@ -6302,72 +7966,27 @@ async function carregarLinksUteis() {
 }
 
 function renderLinksUteis() {
-  const gestor = state.usuario?.perfil === 'gestor';
-  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
-  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
-
-  document.getElementById('app').innerHTML = `
-    <main class="dashboard">
-      <header class="topbar">
-        ${renderHeaderLogo()}
-        <div class="brand">
-          <h1>${escapeHtml(nomeSistema)}</h1>
-          <p>${escapeHtml(subtitulo)}</p>
-        </div>
-
-        <div class="user-box">
-          <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
-          ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
-        </div>
-      </header>
-
-      <section class="admin-panel">
-        <div class="admin-panel-header">
-          <div>
-            <h2>${escapeHtml(state.links.titulo || 'Links Úteis')}</h2>
-            <p>${gestor ? 'Listagem e cadastro de links.' : 'Consulte os links disponíveis.'}</p>
-          </div>
-        </div>
-
-        <div class="links-toolbar">
-          <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
-            <option value="">Todas as categorias</option>
-            ${state.links.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-          </select>
-
-          <select class="config-input" onchange="alterarFiltroLinks('grupo', this.value)">
-            <option value="">Todos os grupos</option>
-            ${state.links.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-          </select>
-
-          ${gestor ? `
-            <select class="config-input" onchange="alterarFiltroLinks('status', this.value)">
-              <option value="">Todos os status</option>
-              <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
-              <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
-            </select>
-            <button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>
-          ` : ''}
-        </div>
-
-        <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
-        ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
-        ${state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(gestor)}
-        ${renderModalNovoLink()}
-      </section>
-    </main>
-  `;
+  renderCentralSenhas();
 }
 
-function renderListaLinksUteis(gestor) {
-  if (!state.links.items.length) {
+function renderListaLinksUteis(gestor, podeEditar = gestor) {
+  const chavePorEscopo = {
+    corretora: 'central_senhas.links_corretora',
+    ar: 'central_senhas.links_ar',
+    gestao: 'central_senhas.links_gestao'
+  };
+  const items = state.links.items.filter(item => {
+    if (state.links.escopo !== 'todos' && item.escopo !== state.links.escopo) return false;
+    const recurso = HOME_SUBMODULES.find(submodule => submodule.key === chavePorEscopo[item.escopo]);
+    return !recurso || submoduloHomeEstaAtivo(recurso);
+  });
+  if (!items.length) {
     return '<p class="quick-link-empty">Nenhum link cadastrado.</p>';
   }
 
   return `
     <div class="links-list">
-      ${state.links.items.map(item => renderLinkItem(item, gestor)).join('')}
+      ${items.map(item => renderLinkItem(item, podeEditar)).join('')}
     </div>
   `;
 }
@@ -6376,7 +7995,7 @@ function renderLinkItem(item, gestor) {
   return `
     <article class="link-row status-line-${escapeAttr(item.status || 'inativo')}">
       <div class="link-main">
-        <span class="card-taxonomy">${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
+        <span class="card-taxonomy">${escapeHtml(obterRotuloEscopoLink(item.escopo))} · ${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
         <h3>${escapeHtml(item.titulo || 'Link')}</h3>
         <p>${escapeHtml(item.descricao || '')}</p>
           <div class="link-buttons">
@@ -6415,6 +8034,11 @@ function renderModalNovoLink() {
         <label><span>Título</span><input id="novo_link_titulo" class="config-input" type="text" value="${escapeAttr(item.titulo || '')}">${renderErroCampo(erros.titulo)}</label>
         <label><span>Descrição</span><input id="novo_link_descricao" class="config-input" type="text" value="${escapeAttr(item.descricao || '')}"></label>
         <label><span>URL</span><input id="novo_link_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}">${renderErroCampo(erros.url)}</label>
+        <label><span>Área</span><select id="novo_link_escopo" class="config-input">
+          <option value="corretora" ${(item.escopo || state.links.escopo) === 'corretora' ? 'selected' : ''}>Corretora</option>
+          <option value="ar" ${(item.escopo || state.links.escopo) === 'ar' ? 'selected' : ''}>AR / Certificação</option>
+          <option value="gestao" ${(item.escopo || state.links.escopo) === 'gestao' ? 'selected' : ''}>Gestão</option>
+        </select></label>
         <label><span>Categoria</span><select id="novo_link_categoria" class="config-input"><option value="">Sem categoria</option>${state.links.categorias.map(categoria => `<option value="${escapeAttr(categoria.nome)}" ${item.categoria === categoria.nome ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`).join('')}</select></label>
         <label><span>Grupo</span><select id="novo_link_grupo" class="config-input"><option value="">Sem grupo</option>${state.links.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></label>
         <label><span>Status</span><select id="novo_link_status" class="config-input"><option value="ativo" ${item.status !== 'inativo' ? 'selected' : ''}>ativo</option><option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option></select></label>
@@ -6441,11 +8065,33 @@ function renderErroCampo(mensagem) {
 }
 
 function alterarFiltroLinks(chave, valor) {
+  const chavePorEscopo = {
+    corretora: 'central_senhas.links_corretora',
+    ar: 'central_senhas.links_ar',
+    gestao: 'central_senhas.links_gestao'
+  };
+  const item = HOME_SUBMODULES.find(submodule => submodule.key === chavePorEscopo[valor]);
+  if (chave === 'escopo' && item && !submoduloHomeEstaAtivo(item)) {
+    state.links.message = 'Este escopo de links está inativo.';
+    renderCentralSenhas();
+    return;
+  }
+
+  if (chave === 'escopo') state.links.escopo = valor;
   state.links.filtros[chave] = valor;
   carregarLinksUteis();
 }
 
+function obterRotuloEscopoLink(escopo) {
+  return { corretora: 'Corretora', ar: 'AR', gestao: 'Gestão' }[escopo] || 'Link';
+}
+
 function editarLinkItem(id) {
+  if (!pode('central_senhas', 'update')) {
+    state.links.message = 'Seu perfil não tem permissão para editar links.';
+    renderCentralSenhas();
+    return;
+  }
   state.links.modalNovo = true;
   state.links.modalLinkId = id;
   state.links.erros = {};
@@ -6455,6 +8101,11 @@ function editarLinkItem(id) {
 }
 
 function abrirModalNovoLink() {
+  if (!pode('central_senhas', 'create')) {
+    state.links.message = 'Seu perfil não tem permissão para cadastrar links. Solicite a permissão “Central de Senhas: criar” ao administrador.';
+    renderCentralSenhas();
+    return;
+  }
   state.links.modalNovo = true;
   state.links.modalLinkId = '';
   state.links.erros = {};
@@ -6473,9 +8124,15 @@ function fecharModalNovoLink() {
 }
 
 async function salvarLinkItem(id) {
+  const acaoNecessaria = id ? 'update' : 'create';
+  if (!pode('central_senhas', acaoNecessaria)) {
+    state.links.message = `Seu perfil não tem permissão para ${id ? 'editar' : 'cadastrar'} links. Solicite a permissão “Central de Senhas: ${id ? 'editar' : 'criar'}” ao administrador.`;
+    renderCentralSenhas();
+    return;
+  }
   const payload = {
     id,
-    escopo: state.links.escopo,
+    escopo: document.getElementById('novo_link_escopo')?.value || state.links.escopo,
     titulo: document.getElementById('novo_link_titulo')?.value || '',
     descricao: document.getElementById('novo_link_descricao')?.value || '',
     url: document.getElementById('novo_link_url')?.value || '',
@@ -6518,7 +8175,10 @@ async function salvarLinkItem(id) {
     state.links.salvando = false;
     state.links.salvo = false;
     atualizarBotaoSalvarLink('Salvar', false, '');
-    state.links.message = erro.message || 'Erro ao salvar link.';
+    const mensagem = erro.message || 'Erro ao salvar link.';
+    state.links.message = /row-level security|permission denied|not authorized/i.test(mensagem)
+      ? 'O banco recusou o cadastro por falta da permissão “Central de Senhas: criar”. Solicite essa permissão ao administrador.'
+      : mensagem;
     renderLinksUteis();
   }
 }
@@ -6598,11 +8258,12 @@ async function carregarDadosIniciaisSilencioso({ usuarioEsperadoId = '' } = {}) 
   state.usuario = response.data.usuario;
   state.config = response.data.config;
   state.cards = response.data.cards || [];
+  state.homeModuleSettings = response.data.homeModuleSettings || { modules: [], submodules: [] };
   state.avisos = response.data.avisos || [];
   state.aniversariantes = response.data.aniversariantes || [];
   state.favoritos = response.data.favoritos || [];
   state.meta = response.data.meta || null;
-  state.permissions = response.data.permissions || normalizarPermissoes([]);
+  state.permissions = normalizarPermissoes(response.data.permissions || []);
   sincronizarContextoInicialHub();
   return { ok: true };
 }
@@ -6645,7 +8306,25 @@ async function abrirCentralSenhas() {
   state.passwords.message = '';
   state.passwords.modalAberto = false;
   state.passwords.modalId = '';
-  await carregarCentralSenhas();
+  state.passwords.cadastroSeguradoraAberto = false;
+  state.passwords.seguradoraCadastroId = '';
+  state.passwords.senhasVisiveis = {};
+  if (state.passwords.aba === 'links' && !pode('central_senhas', 'view')) {
+    state.passwords.loading = false;
+    renderCentralSenhas();
+  } else {
+    await carregarCentralSenhas();
+  }
+  if (state.passwords.aba === 'links') {
+    const escopoAtual = ['corretora', 'ar', 'gestao'].includes(state.links.escopo)
+      ? state.links.escopo
+      : 'todos';
+    state.links.escopo = escopoAtual;
+    state.links.titulo = escopoAtual === 'todos'
+      ? 'Gerenciamento de Links'
+      : obterMetaLinks(`links-${escopoAtual}`).titulo;
+    await carregarLinksUteis();
+  }
 }
 
 async function carregarCentralSenhas() {
@@ -6654,9 +8333,10 @@ async function carregarCentralSenhas() {
 
   try {
     const response = await chamarApi('getPasswordsData', {
-      categoria: state.passwords.filtros.categoria,
+      seguradoraId: state.passwords.filtros.seguradoraId,
       grupo: state.passwords.filtros.grupo,
-      status: state.passwords.filtros.status
+      status: state.passwords.filtros.status,
+      statusSeguradora: state.passwords.filtros.statusSeguradora
     });
 
     if (!response.ok) {
@@ -6666,6 +8346,7 @@ async function carregarCentralSenhas() {
     state.passwords.categorias = response.data.categorias || [];
     state.passwords.grupos = response.data.grupos || [];
     state.passwords.items = response.data.acessos || [];
+    state.passwords.seguradoras = response.data.seguradoras || [];
     state.passwords.resumo = response.data.resumo || { total: 0, ativos: 0, inativos: 0 };
     state.passwords.historico = response.data.historico || [];
     state.passwords.loading = false;
@@ -6679,7 +8360,11 @@ async function carregarCentralSenhas() {
 
 function renderCentralSenhas() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeCriarLink = pode('central_senhas', 'create');
+  const podeEditarLink = pode('central_senhas', 'update');
   const podeVerSenha = pode('central_senhas', 'view_secret');
+  const podeLinks = podeAcessarGerenciamentoLinks();
+  const podeNavegarAbas = podeGerenciar || podeLinks;
   const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
   const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
 
@@ -6699,68 +8384,80 @@ function renderCentralSenhas() {
         </div>
       </header>
 
-      <section class="admin-panel">
+      <section class="admin-panel password-manager">
         <div class="admin-panel-header">
           <div>
             <h2>Central de Senhas</h2>
             <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
           </div>
-          ${podeGerenciar ? `
+          ${pode('central_senhas', 'view') || podeGerenciar || podeLinks ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
-              <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
-              <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
+              <button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>
+              <button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>
             </div>
           ` : ''}
         </div>
 
-        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : ''}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
-        ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
+        ${state.passwords.aba === 'links'
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
+          : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
+        ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
+        ${state.passwords.aba === 'acessos' ? `${renderModalSenha()}${renderModalCadastroSeguradora()}` : ''}
       </section>
     </main>
   `;
 }
 
-function renderResumoSenhas(gestor) {
-  if (!gestor) {
-    return '';
-  }
-
-  const resumo = state.passwords.resumo || {};
-
-  return `
-    <div class="module-stats" aria-label="Resumo da Central de Senhas">
-      <span><strong>${Number(resumo.total || 0)}</strong> cadastrados</span>
-      <span><strong>${Number(resumo.ativos || 0)}</strong> ativos</span>
-      <span><strong>${Number(resumo.inativos || 0)}</strong> inativos</span>
-    </div>
-  `;
-}
-
 function renderToolbarSenhas(gestor) {
+  const filtros = state.passwords.filtros;
+  const totalFiltrosAtivos = [
+    filtros.seguradoraId,
+    filtros.grupo,
+    gestor && filtros.status !== 'ativo' ? 'status' : '',
+    pode('central_senhas', 'update') && filtros.statusSeguradora !== 'ativo' ? filtros.statusSeguradora : ''
+  ].filter(Boolean).length;
   return `
-    <div class="links-toolbar">
-      <select class="config-input" onchange="alterarFiltroSenha('categoria', this.value)">
-        <option value="">Todas as categorias</option>
-        ${state.passwords.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.passwords.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-      </select>
-
-      <select class="config-input" onchange="alterarFiltroSenha('grupo', this.value)">
-        <option value="">Todos os grupos</option>
-        ${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.passwords.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
-      </select>
-
-      ${gestor ? `
-        <select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
-          <option value="">Todos os status</option>
-          <option value="ativo" ${state.passwords.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
-          <option value="inativo" ${state.passwords.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
-        </select>
-        <button class="add-small-btn" type="button" onclick="abrirModalSenha('')">+ Adicionar</button>
-      ` : ''}
+    <div class="links-toolbar password-manager-toolbar ${gestor ? 'is-manager' : ''}">
+      <label class="password-manager-search">
+        <i data-lucide="search" aria-hidden="true"></i>
+        <input type="search" value="${escapeAttr(state.passwords.busca || '')}" placeholder="Buscar por seguradora, título, login ou descrição..." aria-label="Buscar acessos" oninput="alterarBuscaSenha(this.value)">
+      </label>
+      <div class="password-manager-filter-menu">
+        <button class="icon-btn password-manager-filter-button ${totalFiltrosAtivos ? 'is-active' : ''}" type="button" onclick="alternarFiltrosSenhas()" aria-haspopup="dialog" aria-expanded="${state.passwords.filtrosAbertos ? 'true' : 'false'}" aria-label="Filtros${totalFiltrosAtivos ? `: ${totalFiltrosAtivos} ativos` : ''}" title="Filtros${totalFiltrosAtivos ? ` (${totalFiltrosAtivos})` : ''}">
+          <i data-lucide="filter" aria-hidden="true"></i>${totalFiltrosAtivos ? `<span>${totalFiltrosAtivos}</span>` : ''}
+        </button>
+        ${state.passwords.filtrosAbertos ? `
+          <div class="password-manager-filter-popover" role="dialog" aria-label="Filtros dos acessos">
+            <label><span>Seguradora</span><select class="config-input" onchange="alterarFiltroSenha('seguradoraId', this.value)">
+              <option value="">Todas as seguradoras</option>
+              ${state.passwords.seguradoras.map(item => `<option value="${escapeAttr(item.id)}" ${filtros.seguradoraId === item.id ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+            </select></label>
+            <label><span>Grupo</span><select class="config-input" onchange="alterarFiltroSenha('grupo', this.value)">
+              <option value="">Todos os grupos</option>
+              ${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+            </select></label>
+            ${gestor ? `<label><span>Status dos acessos</span><select class="config-input" onchange="alterarFiltroSenha('status', this.value)">
+              <option value="ativo" ${filtros.status === 'ativo' ? 'selected' : ''}>Ativos</option>
+              <option value="" ${filtros.status === '' ? 'selected' : ''}>Todos os status</option>
+              <option value="inativo" ${filtros.status === 'inativo' ? 'selected' : ''}>Inativos</option>
+            </select></label>` : ''}
+            ${pode('central_senhas', 'update') ? `<label><span>Status das seguradoras</span><select class="config-input" onchange="alterarFiltroSenha('statusSeguradora', this.value)">
+              <option value="ativo" ${filtros.statusSeguradora === 'ativo' ? 'selected' : ''}>Ativas</option>
+              <option value="todos" ${filtros.statusSeguradora === 'todos' ? 'selected' : ''}>Todas</option>
+              <option value="inativo" ${filtros.statusSeguradora === 'inativo' ? 'selected' : ''}>Inativas</option>
+            </select></label>` : ''}
+            <div class="password-manager-filter-actions">
+              <button class="secondary-btn" type="button" onclick="limparFiltrosSenhas()" ${totalFiltrosAtivos ? '' : 'disabled'}>Limpar filtros</button>
+              <button class="save-btn" type="button" onclick="alternarFiltrosSenhas(false)">Fechar</button>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+      ${pode('central_senhas', 'create') ? '<button class="add-small-btn password-manager-add" type="button" onclick="abrirCadastroSeguradora(\'\')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar acesso</button>' : ''}
     </div>
   `;
 }
@@ -6774,47 +8471,180 @@ function renderConteudoSenhas(gestor, podeVerSenha) {
 }
 
 function renderListaSenhas(gestor, podeVerSenha) {
-  if (!state.passwords.items.length) {
+  if (!state.passwords.items.length && !state.passwords.seguradoras.length) {
     return '<p class="quick-link-empty">Nenhum acesso cadastrado.</p>';
   }
 
-  return `<div class="password-list">${state.passwords.items.map(item => renderSenhaItem(item, gestor, podeVerSenha)).join('')}</div>`;
-}
+  const busca = normalizarTextoBuscaSenha(state.passwords.busca || '');
+  const statusSeguradora = state.passwords.filtros.statusSeguradora || 'ativo';
+  const seguradorasVisiveis = (state.passwords.seguradoras || []).filter(seguradora =>
+    statusSeguradora === 'todos' || seguradora.status === statusSeguradora
+  );
+  const grupos = new Map(seguradorasVisiveis.map(seguradora => [seguradora.id, { seguradora, acessos: [] }]));
+  state.passwords.items.forEach(item => {
+    if (item.seguradoraId && !grupos.has(item.seguradoraId)) return;
+    const id = item.seguradoraId || `legacy:${item.categoria || ''}`;
+    if (!grupos.has(id)) grupos.set(id, { seguradora: { id, nome: item.seguradoraNome || item.categoria || 'Sem seguradora' }, acessos: [] });
+    grupos.get(id).acessos.push(item);
+  });
 
-function renderSenhaItem(item, gestor, podeVerSenha) {
-  const podeEditar = pode('central_senhas', 'update');
-  const podeExcluir = pode('central_senhas', 'delete');
-  const senhaTexto = podeVerSenha ? escapeHtml(item.senha || '-') : 'Senha oculta por permissão';
-  const senhaAjuda = podeVerSenha ? '' : '<small>Seu acesso permite consultar este item, mas não visualizar a senha.</small>';
+  const linhas = [...grupos.entries()].map(([id, grupo]) => {
+    const { seguradora, acessos } = grupo;
+    const termoSeguradora = normalizarTextoBuscaSenha(seguradora.nome);
+    const seguradoraCorresponde = busca && termoSeguradora.includes(busca);
+    const acessosVisiveis = seguradoraCorresponde ? acessos : acessos.filter(item => correspondeBuscaSenha(item, busca));
+    if (busca && !acessosVisiveis.length && !seguradoraCorresponde) return '';
+    if (state.passwords.filtros.seguradoraId && seguradora.id !== state.passwords.filtros.seguradoraId) return '';
+    const chaveGrupo = id;
+    const recolhido = !seguradoraCorresponde && !busca && Boolean(state.passwords.categoriasRecolhidas?.[chaveGrupo]);
+    const nomeCategoria = seguradora.nome;
+    const seguradoraAtiva = seguradora.status !== 'inativo';
+    const acoesSeguradora = `
+      ${pode('central_senhas', 'create') && seguradoraAtiva ? `<button class="password-manager-icon-button" type="button" onclick="abrirCadastroSeguradora('${escapeAttr(seguradora.id)}')" title="Adicionar acesso" aria-label="Adicionar acesso"><i data-lucide="plus" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'update') ? `<button class="password-manager-icon-button" type="button" onclick="renomearSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Renomear seguradora" aria-label="Renomear seguradora"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'update') ? `<button class="password-manager-icon-button ${seguradoraAtiva ? 'is-danger' : ''}" type="button" onclick="alterarStatusSeguradoraUI('${escapeAttr(seguradora.id)}')" title="${seguradoraAtiva ? 'Inativar seguradora' : 'Reativar seguradora'}" aria-label="${seguradoraAtiva ? 'Inativar seguradora' : 'Reativar seguradora'}"><i data-lucide="${seguradoraAtiva ? 'x' : 'rotate-ccw'}" aria-hidden="true"></i></button>` : ''}
+      ${pode('central_senhas', 'delete') && !acessos.length ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSeguradoraUI('${escapeAttr(seguradora.id)}')" title="Excluir seguradora" aria-label="Excluir seguradora"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+    `;
+
+    return `
+      <tr class="password-manager-category-row" data-password-category-row data-category-key="${escapeAttr(chaveGrupo)}" data-search-category="${escapeAttr(termoSeguradora)}">
+        <th colspan="5">
+          <button class="password-manager-category-toggle" type="button" onclick="alternarCategoriaSenhas(this.closest('tr').dataset.categoryKey)" aria-expanded="${!recolhido}">
+            <i data-lucide="${recolhido ? 'chevron-right' : 'chevron-down'}" aria-hidden="true"></i>
+            <strong>${escapeHtml(nomeCategoria)}</strong>
+            <span class="password-manager-status ${seguradoraAtiva ? 'is-active' : 'is-inactive'}">${seguradoraAtiva ? 'Ativa' : 'Inativa'}</span>
+            <span>${acessos.length} ${acessos.length === 1 ? 'acesso' : 'acessos'}</span>
+          </button>
+          <div class="password-manager-insurer-actions">${acoesSeguradora}</div>
+        </th>
+      </tr>
+      ${acessos.map(item => renderSenhaItem(item, gestor, podeVerSenha, recolhido, chaveGrupo, Boolean(busca && !seguradoraCorresponde && !correspondeBuscaSenha(item, busca)))).join('')}
+    `;
+  }).join('');
+
+  if (!linhas.trim()) return '<p class="quick-link-empty">Nenhum acesso corresponde à busca.</p>';
 
   return `
-    <article class="password-row status-line-${escapeAttr(item.status || 'inativo')}">
-      <div>
-        <span class="card-taxonomy">${escapeHtml(item.categoria || 'Sem categoria')} | ${escapeHtml(item.grupo || 'Sem grupo')}</span>
-        <h3>${escapeHtml(item.titulo || 'Acesso')}</h3>
-        <p>${escapeHtml(item.descricao || '')}</p>
+    <div class="password-manager-table-card">
+      <div class="password-manager-table-scroll" role="region" aria-label="Tabela de acessos salvos" tabindex="0">
+        <table class="password-manager-table">
+          <thead><tr>
+            <th scope="col">Seguradora / Acesso</th>
+            <th scope="col">Login</th>
+            <th scope="col">Senha</th>
+            <th scope="col">Descrição</th>
+            <th scope="col">Ações</th>
+          </tr></thead>
+          <tbody>
+            ${linhas}
+            <tr class="password-manager-empty-row" data-password-empty-row hidden><td colspan="5">Nenhum acesso corresponde à busca.</td></tr>
+          </tbody>
+        </table>
       </div>
-
-      <div class="password-fields">
-        <span>Login: ${escapeHtml(item.login || '-')}</span>
-        <span>Senha: ${senhaTexto}</span>
-        ${senhaAjuda}
-        ${item.url ? `
-          <div class="link-buttons">
-            <a class="link-sub-btn" href="${escapeAttr(item.url)}" target="_blank" rel="noopener">Abrir</a>
-            <button id="copy_access_${escapeAttr(item.id)}" class="link-sub-btn" type="button" onclick="copiarLink('access_${escapeAttr(item.id)}', '${escapeAttr(item.url)}')">Copiar</button>
-          </div>
-        ` : ''}
-      </div>
-
-      ${gestor ? `
-        <div class="crud-actions">
-          ${podeEditar ? `<button class="icon-btn" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" title="Editar" aria-label="Editar acesso">✎</button>` : ''}
-          ${podeExcluir ? `<button class="secondary-btn danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" title="Excluir acesso" aria-label="Excluir acesso">Excluir</button>` : ''}
-        </div>
-      ` : ''}
-    </article>
+    </div>
   `;
+}
+
+function renderSenhaItem(item, gestor, podeVerSenha, recolhido = false, chaveGrupo = '', ocultoPorBusca = false) {
+  const podeEditar = pode('central_senhas', 'update');
+  const podeExcluir = pode('central_senhas', 'delete');
+  const senhaVisivel = Boolean(state.passwords.senhasVisiveis?.[item.id]);
+  const senhaTexto = item.senha || '';
+  const termoBusca = normalizarTextoBuscaSenha([item.seguradoraNome || item.categoria || 'Sem seguradora', item.titulo, item.login, item.descricao].join(' '));
+
+  return `
+    <tr class="password-manager-access-row status-line-${escapeAttr(item.status || 'inativo')}" data-password-access-row data-category-key="${escapeAttr(chaveGrupo)}" data-collapsed="${recolhido}" data-search="${escapeAttr(termoBusca)}" ${recolhido || ocultoPorBusca ? 'hidden' : ''}>
+      <td>
+        <div class="password-manager-access-title">
+          <span class="password-manager-tree-indent" aria-hidden="true"></span>
+          <i data-lucide="link-2" aria-hidden="true"></i>
+          ${item.url ? `<a href="${escapeAttr(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.titulo || 'Acesso')}<i data-lucide="external-link" aria-hidden="true"></i></a>` : `<strong>${escapeHtml(item.titulo || 'Acesso')}</strong>`}
+          ${item.grupo ? `<small>${escapeHtml(item.grupo)}</small>` : ''}
+        </div>
+      </td>
+      <td><span class="password-manager-cell-text" title="${escapeAttr(item.login || '-')}" >${escapeHtml(item.login || '-')}</span></td>
+      <td>
+        <div class="password-manager-secret">
+          <span class="password-manager-secret-value">${podeVerSenha ? (senhaVisivel ? escapeHtml(senhaTexto || '-') : (senhaTexto ? '••••••••••' : '-')) : 'Oculta por permissão'}</span>
+          ${podeVerSenha ? `
+            <button class="password-manager-icon-button" type="button" onclick="alternarVisibilidadeSenhaAcesso('${escapeAttr(item.id)}')" aria-label="${senhaVisivel ? 'Ocultar senha' : 'Visualizar senha'}" title="${senhaVisivel ? 'Ocultar senha' : 'Visualizar senha'}"><i data-lucide="${senhaVisivel ? 'eye-off' : 'eye'}" aria-hidden="true"></i></button>
+            <button class="password-manager-icon-button" type="button" onclick="copiarSenhaAcesso('${escapeAttr(item.id)}')" aria-label="Copiar senha" title="Copiar senha"><i data-lucide="copy" aria-hidden="true"></i></button>
+          ` : ''}
+        </div>
+      </td>
+      <td><span class="password-manager-cell-text password-manager-description" title="${escapeAttr(item.descricao || '-')}">${escapeHtml(item.descricao || '-')}</span></td>
+      <td><div class="password-manager-actions">
+        ${gestor && podeEditar ? `<button class="password-manager-icon-button" type="button" onclick="abrirModalSenha('${escapeAttr(item.id)}')" aria-label="Editar acesso" title="Editar"><i data-lucide="pencil" aria-hidden="true"></i></button>` : ''}
+        ${gestor && podeExcluir ? `<button class="password-manager-icon-button is-danger" type="button" onclick="excluirSenhaItem('${escapeAttr(item.id)}')" aria-label="Excluir acesso" title="Excluir"><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+      </div></td>
+    </tr>
+  `;
+}
+
+function normalizarTextoBuscaSenha(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
+}
+
+function correspondeBuscaSenha(item, busca) {
+  if (!busca) return true;
+  return normalizarTextoBuscaSenha([item.seguradoraNome || item.categoria || 'Sem seguradora', item.titulo, item.login, item.descricao].join(' ')).includes(busca);
+}
+
+function alterarBuscaSenha(valor) {
+  state.passwords.busca = valor || '';
+  const busca = normalizarTextoBuscaSenha(valor);
+  const linhas = [...document.querySelectorAll('.password-manager-access-row')];
+  const categoriasComResultado = new Set();
+
+  linhas.forEach(linha => {
+    const corresponde = !busca || normalizarTextoBuscaSenha(linha.dataset.search).includes(busca);
+    if (corresponde) categoriasComResultado.add(linha.dataset.categoryKey);
+    linha.hidden = !corresponde || (linha.dataset.collapsed === 'true' && !busca);
+  });
+
+  document.querySelectorAll('.password-manager-category-row').forEach(linha => {
+    const seguradoraCorresponde = busca && normalizarTextoBuscaSenha(linha.dataset.searchCategory).includes(busca);
+    linha.hidden = !categoriasComResultado.has(linha.dataset.categoryKey) && !seguradoraCorresponde;
+    if (seguradoraCorresponde) {
+      categoriasComResultado.add(linha.dataset.categoryKey);
+      document.querySelectorAll(`.password-manager-access-row[data-category-key="${CSS.escape(linha.dataset.categoryKey)}"]`).forEach(acesso => {
+        acesso.hidden = acesso.dataset.collapsed === 'true';
+      });
+    }
+  });
+  const linhaVazia = document.querySelector('.password-manager-empty-row');
+  if (linhaVazia) linhaVazia.hidden = categoriasComResultado.size > 0;
+}
+
+function alternarCategoriaSenhas(chaveGrupo) {
+  state.passwords.categoriasRecolhidas ||= {};
+  state.passwords.categoriasRecolhidas[chaveGrupo] = !state.passwords.categoriasRecolhidas[chaveGrupo];
+  renderCentralSenhas();
+}
+
+function alternarVisibilidadeSenhaAcesso(id) {
+  if (!pode('central_senhas', 'view_secret')) return;
+  state.passwords.senhasVisiveis ||= {};
+  state.passwords.senhasVisiveis[id] = !state.passwords.senhasVisiveis[id];
+  renderCentralSenhas();
+}
+
+async function copiarSenhaAcesso(id) {
+  if (!pode('central_senhas', 'view_secret')) return;
+  const item = state.passwords.items.find(acesso => acesso.id === id);
+  if (!item?.senha) {
+    state.passwords.message = 'Não há senha disponível para copiar.';
+    renderCentralSenhas();
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(item.senha);
+    state.passwords.message = 'Senha copiada.';
+  } catch {
+    state.passwords.message = 'Não foi possível copiar a senha.';
+  }
+  renderCentralSenhas();
 }
 
 function renderHistoricoSenhas() {
@@ -6845,34 +8675,272 @@ function renderModalSenha() {
   const item = obterSenhaModalAtual();
   const erros = state.passwords.erros || {};
   const editando = Boolean(item.id);
-  const botaoTexto = state.passwords.salvo ? 'Salvo' : (state.passwords.salvando ? 'Salvando...' : 'Salvar');
+  const botaoTexto = state.passwords.salvo ? 'Salvo' : (state.passwords.salvando ? 'Salvando...' : 'Salvar alterações');
+  const statusInativo = item.status === 'inativo';
 
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Acesso">
-      <section class="small-modal link-modal">
-        <div class="small-modal-header">
-          <h3>${editando ? 'Editar acesso' : 'Adicionar acesso'}</h3>
-          <button class="icon-btn" type="button" onclick="fecharModalSenha()" title="Fechar" aria-label="Fechar">×</button>
+    <div class="modal-backdrop password-manager-modal-backdrop" role="dialog" aria-modal="true" aria-label="${editando ? 'Editar acesso' : 'Cadastro de acesso'}">
+      <section class="small-modal link-modal password-manager-batch-modal">
+        <header class="password-manager-modal-header">
+          <div class="password-manager-modal-heading">
+            <span class="password-manager-modal-icon"><i data-lucide="pencil" aria-hidden="true"></i></span>
+            <div><h3>${editando ? 'Editar acesso' : 'Adicionar acesso'}</h3></div>
+          </div>
+          <button class="password-manager-modal-close" type="button" onclick="fecharModalSenha()" title="Fechar" aria-label="Fechar"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+
+        <div class="password-manager-modal-body">
+          <section class="password-manager-form-section" aria-labelledby="edicao_secao_seguradora">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">1</span><div><h4 id="edicao_secao_seguradora">Seguradora</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-insurer">
+              <label class="password-manager-form-field password-manager-form-full"><span>Seguradora <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="senha_seguradora" class="config-input"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.map(seguradora => `<option value="${escapeAttr(seguradora.id)}" ${item.seguradoraId === seguradora.id ? 'selected' : ''}>${escapeHtml(seguradora.nome)}${seguradora.status === 'inativo' ? ' (Inativa)' : ''}</option>`).join('')}</select></span>${renderErroCampo(erros.seguradoraId)}</label>
+            </div>
+          </section>
+
+          <section class="password-manager-form-section password-manager-access-fields" aria-labelledby="edicao_secao_acesso">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">2</span><div><h4 id="edicao_secao_acesso">Dados do acesso</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-credentials">
+              <label class="password-manager-form-field"><span>Título <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="file-text" aria-hidden="true"></i><input id="senha_titulo" class="config-input" type="text" required placeholder="Ex.: Portal Principal" value="${escapeAttr(item.titulo || '')}"></span>${renderErroCampo(erros.titulo)}</label>
+              <label class="password-manager-form-field"><span>Grupo</span><span class="password-manager-input-shell"><i data-lucide="layout-grid" aria-hidden="true"></i><select id="senha_grupo" class="config-input"><option value="">Sem grupo</option>${state.passwords.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></span></label>
+              <label class="password-manager-form-field"><span>Status</span><span class="password-manager-status-select"><i class="password-manager-status-dot ${statusInativo ? 'is-inactive' : ''}" data-status-indicator aria-hidden="true"></i><select id="senha_status" class="config-input" onchange="atualizarIndicadorStatusAcesso(this)"><option value="ativo" ${!statusInativo ? 'selected' : ''}>Ativo</option><option value="inativo" ${statusInativo ? 'selected' : ''}>Inativo</option></select></span></label>
+              <label class="password-manager-form-field password-manager-form-full"><span>Link de acesso <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="external-link" aria-hidden="true"></i><input id="senha_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}"></span>${renderErroCampo(erros.url)}</label>
+            </div>
+            <div class="password-manager-form-grid password-manager-form-grid-login">
+              <label class="password-manager-form-field"><span>Login <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="at-sign" aria-hidden="true"></i><input id="senha_login" class="config-input" type="text" required placeholder="Usuário ou e-mail" autocomplete="username" value="${escapeAttr(item.login || '')}"></span>${renderErroCampo(erros.login)}</label>
+              <label class="password-manager-form-field"><span>Senha <b>*</b></span><span class="password-manager-input-shell password-manager-input-shell-action"><i data-lucide="key-round" aria-hidden="true"></i><input id="senha_senha" class="config-input" name="senha" type="password" required placeholder="Senha" autocomplete="new-password" value="${escapeAttr(item.senha || '')}"><button class="password-manager-input-action" type="button" onclick="alternarVisibilidadeSenhaCadastro(this)" aria-label="Visualizar senha" title="Visualizar senha"><i data-lucide="eye" aria-hidden="true"></i></button></span>${renderErroCampo(erros.senha)}</label>
+            </div>
+          </section>
+
+          <section class="password-manager-form-section password-manager-access-notes" aria-labelledby="edicao_secao_observacoes">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">3</span><div><h4 id="edicao_secao_observacoes">Observações</h4></div></div>
+            <label class="password-manager-form-field"><span class="password-manager-visually-hidden">Observações adicionais</span><span class="password-manager-input-shell password-manager-textarea-shell"><i data-lucide="file-text" aria-hidden="true"></i><textarea id="senha_descricao" class="config-input" placeholder="Descreva informações adicionais, observações, etc.">${escapeHtml(item.descricao || '')}</textarea></span></label>
+          </section>
         </div>
 
-        <label><span>Título</span><input id="senha_titulo" class="config-input" type="text" value="${escapeAttr(item.titulo || '')}">${renderErroCampo(erros.titulo)}</label>
-        <label><span>Observações adicionais</span><input id="senha_descricao" class="config-input" type="text" value="${escapeAttr(item.descricao || '')}"></label>
-        <label><span>URL/Sistema</span><input id="senha_url" class="config-input" type="url" placeholder="https://" value="${escapeAttr(item.url || '')}">${renderErroCampo(erros.url)}</label>
-        <label><span>Login</span><input id="senha_login" class="config-input" type="text" value="${escapeAttr(item.login || '')}">${renderErroCampo(erros.login)}</label>
-        <label><span>Senha</span><input id="senha_senha" class="config-input" type="text" value="${escapeAttr(item.senha || '')}">${renderErroCampo(erros.senha)}</label>
-        <div class="modal-inline-grid">
-          <label><span>Categoria</span><select id="senha_categoria" class="config-input"><option value="">Sem categoria</option>${state.passwords.categorias.map(categoria => `<option value="${escapeAttr(categoria.nome)}" ${item.categoria === categoria.nome ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>`).join('')}</select></label>
-          <label><span>Grupo</span><select id="senha_grupo" class="config-input"><option value="">Sem grupo</option>${state.passwords.grupos.map(grupo => `<option value="${escapeAttr(grupo.nome)}" ${item.grupo === grupo.nome ? 'selected' : ''}>${escapeHtml(grupo.nome)}</option>`).join('')}</select></label>
-          <label><span>Status</span><select id="senha_status" class="config-input"><option value="ativo" ${item.status !== 'inativo' ? 'selected' : ''}>ativo</option><option value="inativo" ${item.status === 'inativo' ? 'selected' : ''}>inativo</option></select></label>
-        </div>
-
-        <div class="small-modal-actions">
+        <footer class="password-manager-modal-footer">
           <button class="secondary-btn" type="button" onclick="fecharModalSenha()">Cancelar</button>
-          <button id="senha_salvar" class="save-btn saving-btn ${state.passwords.salvando ? 'is-saving' : ''} ${state.passwords.salvo ? 'is-saved' : ''}" type="button" onclick="salvarSenhaItem('${escapeAttr(item.id || '')}')" ${state.passwords.salvando ? 'disabled' : ''}>${botaoTexto}</button>
-        </div>
+          <button id="senha_salvar" class="save-btn saving-btn ${state.passwords.salvando ? 'is-saving' : ''} ${state.passwords.salvo ? 'is-saved' : ''}" type="button" onclick="salvarSenhaItem('${escapeAttr(item.id || '')}')" ${state.passwords.salvando ? 'disabled' : ''}><i data-lucide="lock-keyhole" aria-hidden="true"></i>${botaoTexto}</button>
+        </footer>
       </section>
     </div>
   `;
+}
+
+function renderModalCadastroSeguradora() {
+  if (!state.passwords.cadastroSeguradoraAberto) return '';
+  const seguradoraSelecionada = state.passwords.seguradoraCadastroId || '';
+  return `
+    <div class="modal-backdrop password-manager-modal-backdrop" role="dialog" aria-modal="true" aria-label="Cadastro de acesso">
+      <section class="small-modal link-modal password-manager-batch-modal">
+        <header class="password-manager-modal-header">
+          <div class="password-manager-modal-heading">
+            <span class="password-manager-modal-icon"><i data-lucide="plus" aria-hidden="true"></i></span>
+            <div><h3>${seguradoraSelecionada ? 'Adicionar acesso' : 'Cadastrar acesso'}</h3></div>
+          </div>
+          <button class="password-manager-modal-close" type="button" onclick="fecharCadastroSeguradora()" title="Fechar" aria-label="Fechar"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+
+        <div class="password-manager-modal-body">
+          <section class="password-manager-form-section" aria-labelledby="cadastro_secao_seguradora">
+            <div class="password-manager-form-section-heading"><span class="password-manager-step-number">1</span><div><h4 id="cadastro_secao_seguradora">Seguradora</h4></div></div>
+            <div class="password-manager-form-grid password-manager-form-grid-insurer">
+              <label class="password-manager-form-field"><span>Seguradora</span><span class="password-manager-input-shell"><i data-lucide="landmark" aria-hidden="true"></i><select id="cadastro_seguradora_existente" class="config-input" onchange="alternarNovaSeguradora(this.value)"><option value="">Selecione uma seguradora</option>${state.passwords.seguradoras.filter(item => item.status !== 'inativo').map(item => `<option value="${escapeAttr(item.id)}" ${item.id === seguradoraSelecionada ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
+              <label class="password-manager-form-field"><span>Nome da seguradora (opcional)</span><input id="cadastro_seguradora_nome" class="config-input" type="text" maxlength="120" placeholder="Ex.: Alfa Seguros" ${seguradoraSelecionada ? 'disabled' : ''} oninput="digitarNomeNovaSeguradora(this.value)"></label>
+            </div>
+          </section>
+
+          <div class="password-manager-batch-heading"><strong>Acessos</strong><button class="secondary-btn" type="button" onclick="adicionarLinhaAcessoSeguradora()"><i data-lucide="plus" aria-hidden="true"></i> Adicionar acesso</button></div>
+          <div id="cadastro_acessos_lista" class="password-manager-batch-list">${renderLinhaAcessoSeguradora()}</div>
+          <template id="cadastro_acesso_template">${renderLinhaAcessoSeguradora()}</template>
+          <p id="cadastro_seguradora_erro" class="password-manager-form-error" role="alert" aria-live="polite"></p>
+        </div>
+
+        <footer class="password-manager-modal-footer">
+          <button class="secondary-btn" type="button" onclick="fecharCadastroSeguradora()">Cancelar</button>
+          <button class="save-btn" type="button" onclick="salvarCadastroSeguradora()" ${state.passwords.salvando ? 'disabled' : ''}><i data-lucide="lock-keyhole" aria-hidden="true"></i>${state.passwords.salvando ? 'Salvando...' : 'Salvar acesso'}</button>
+        </footer>
+      </section>
+    </div>
+  `;
+}
+
+function renderLinhaAcessoSeguradora() {
+  return `
+    <div class="password-manager-batch-item">
+      <section class="password-manager-form-section password-manager-access-fields">
+        <div class="password-manager-form-section-heading"><span class="password-manager-step-number">2</span><div><h4>Dados do acesso</h4></div><button class="password-manager-icon-button is-danger" type="button" onclick="removerLinhaAcessoSeguradora(this)" title="Remover acesso" aria-label="Remover acesso"><i data-lucide="trash-2" aria-hidden="true"></i></button></div>
+        <div class="password-manager-form-grid password-manager-form-grid-credentials">
+          <label class="password-manager-form-field"><span>Título <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="file-text" aria-hidden="true"></i><input class="config-input" name="titulo" type="text" required placeholder="Ex.: Portal Principal"></span></label>
+          <label class="password-manager-form-field"><span>Grupo</span><span class="password-manager-input-shell"><i data-lucide="layout-grid" aria-hidden="true"></i><select class="config-input" name="grupo"><option value="">Sem grupo</option>${state.passwords.grupos.map(item => `<option value="${escapeAttr(item.nome)}">${escapeHtml(item.nome)}</option>`).join('')}</select></span></label>
+          <label class="password-manager-form-field"><span>Status</span><span class="password-manager-status-select"><i class="password-manager-status-dot" data-status-indicator aria-hidden="true"></i><select class="config-input" name="status" onchange="atualizarIndicadorStatusAcesso(this)"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></span></label>
+          <label class="password-manager-form-field password-manager-form-full"><span>Link de acesso</span><span class="password-manager-input-shell"><i data-lucide="external-link" aria-hidden="true"></i><input class="config-input" name="url" type="url" placeholder="https://"></span></label>
+        </div>
+        <div class="password-manager-form-grid password-manager-form-grid-login">
+          <label class="password-manager-form-field"><span>Login <b>*</b></span><span class="password-manager-input-shell"><i data-lucide="at-sign" aria-hidden="true"></i><input class="config-input" name="login" type="text" required placeholder="Usuário ou e-mail" autocomplete="username"></span></label>
+          <label class="password-manager-form-field"><span>Senha <b>*</b></span><span class="password-manager-input-shell password-manager-input-shell-action"><i data-lucide="key-round" aria-hidden="true"></i><input class="config-input" name="senha" type="password" required placeholder="Senha" autocomplete="new-password"><button class="password-manager-input-action" type="button" onclick="alternarVisibilidadeSenhaCadastro(this)" aria-label="Visualizar senha" title="Visualizar senha"><i data-lucide="eye" aria-hidden="true"></i></button></span></label>
+        </div>
+      </section>
+      <section class="password-manager-form-section password-manager-access-notes" aria-label="Observações do acesso">
+        <div class="password-manager-form-section-heading"><span class="password-manager-step-number">3</span><div><h4>Observações</h4></div></div>
+        <label class="password-manager-form-field"><span class="password-manager-visually-hidden">Observações adicionais</span><span class="password-manager-input-shell password-manager-textarea-shell"><i data-lucide="file-text" aria-hidden="true"></i><textarea class="config-input" name="descricao" placeholder="Descreva informações adicionais, observações, etc."></textarea></span></label>
+      </section>
+    </div>
+  `;
+}
+
+function abrirCadastroSeguradora(seguradoraId = '') {
+  if (!pode('central_senhas', 'create')) {
+    state.passwords.message = 'Seu usuário não possui permissão para criar acessos.';
+    renderCentralSenhas();
+    return;
+  }
+  state.passwords.cadastroSeguradoraAberto = true;
+  state.passwords.seguradoraCadastroId = seguradoraId || '';
+  state.passwords.salvando = false;
+  renderCentralSenhas();
+}
+
+function fecharCadastroSeguradora() {
+  state.passwords.cadastroSeguradoraAberto = false;
+  state.passwords.seguradoraCadastroId = '';
+  state.passwords.salvando = false;
+  renderCentralSenhas();
+}
+
+function alternarNovaSeguradora(id) {
+  state.passwords.seguradoraCadastroId = id || '';
+  const campoNome = document.getElementById('cadastro_seguradora_nome');
+  if (!campoNome) return;
+  campoNome.disabled = Boolean(id);
+  if (id) campoNome.value = '';
+}
+
+function digitarNomeNovaSeguradora(nome) {
+  if (!nome) return;
+  state.passwords.seguradoraCadastroId = '';
+  const seletor = document.getElementById('cadastro_seguradora_existente');
+  if (seletor) seletor.value = '';
+}
+
+function alternarVisibilidadeSenhaCadastro(botao) {
+  const campo = botao.closest('.password-manager-input-shell')?.querySelector('input[name="senha"]');
+  if (!campo) return;
+  const revelar = campo.type === 'password';
+  campo.type = revelar ? 'text' : 'password';
+  botao.setAttribute('aria-label', revelar ? 'Ocultar senha' : 'Visualizar senha');
+  botao.title = revelar ? 'Ocultar senha' : 'Visualizar senha';
+  botao.innerHTML = `<i data-lucide="${revelar ? 'eye-off' : 'eye'}" aria-hidden="true"></i>`;
+  aplicarIconesLucideHub(botao);
+}
+
+function atualizarIndicadorStatusAcesso(seletor) {
+  const indicador = seletor.closest('.password-manager-status-select')?.querySelector('[data-status-indicator]');
+  if (indicador) indicador.classList.toggle('is-inactive', seletor.value === 'inativo');
+}
+
+function adicionarLinhaAcessoSeguradora() {
+  const template = document.getElementById('cadastro_acesso_template');
+  const lista = document.getElementById('cadastro_acessos_lista');
+  if (!template || !lista) return;
+  lista.append(template.content.cloneNode(true));
+  aplicarIconesLucideHub(document.getElementById('cadastro_acessos_lista'));
+  atualizarContagemAcessosCadastro();
+}
+
+function removerLinhaAcessoSeguradora(botao) {
+  const lista = document.getElementById('cadastro_acessos_lista');
+  if (!lista || lista.querySelectorAll('.password-manager-batch-item').length <= 1) {
+    const erro = document.getElementById('cadastro_seguradora_erro');
+    if (erro) erro.textContent = 'Mantenha pelo menos um acesso no cadastro.';
+    return;
+  }
+  botao.closest('.password-manager-batch-item')?.remove();
+  atualizarContagemAcessosCadastro();
+}
+
+function atualizarContagemAcessosCadastro() {
+  const total = document.querySelectorAll('#cadastro_acessos_lista .password-manager-batch-item').length;
+  const botao = document.querySelector('.password-manager-modal-footer .save-btn');
+  if (botao && !state.passwords.salvando) {
+    botao.innerHTML = `<i data-lucide="lock-keyhole" aria-hidden="true"></i>Salvar ${total === 1 ? 'acesso' : `${total} acessos`}`;
+    aplicarIconesLucideHub(botao);
+  }
+}
+
+async function salvarCadastroSeguradora() {
+  if (!pode('central_senhas', 'create')) return;
+  const form = document.querySelector('.password-manager-batch-modal');
+  const acessos = [...form.querySelectorAll('.password-manager-batch-item')].map(row => Object.fromEntries(
+    [...row.querySelectorAll('[name]')].map(input => [input.name, input.value.trim()])
+  ));
+  const nome = document.getElementById('cadastro_seguradora_nome')?.value.trim() || '';
+  const seguradoraId = document.getElementById('cadastro_seguradora_existente')?.value || '';
+  const erroElemento = document.getElementById('cadastro_seguradora_erro');
+  const botaoSalvar = form?.querySelector('.password-manager-modal-footer .save-btn');
+  if (erroElemento) erroElemento.textContent = '';
+  if (!seguradoraId && !nome) {
+    if (erroElemento) erroElemento.textContent = 'Informe o nome da seguradora.';
+    return;
+  }
+  if (acessos.some(item => !item.titulo || !item.login || !item.senha || (item.url && !/^https?:\/\//i.test(item.url)))) {
+    if (erroElemento) erroElemento.textContent = 'Preencha título, login e senha de cada acesso. Links devem começar com http:// ou https://.';
+    return;
+  }
+  try {
+    state.passwords.salvando = true;
+    if (botaoSalvar) {
+      botaoSalvar.disabled = true;
+      botaoSalvar.innerHTML = '<i data-lucide="lock-keyhole" aria-hidden="true"></i>Salvando...';
+      aplicarIconesLucideHub(botaoSalvar);
+    }
+    const response = await chamarApi('createInsurerAccesses', { seguradoraId, nome, acessos });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível cadastrar acessos.'));
+    state.passwords.cadastroSeguradoraAberto = false;
+    state.passwords.seguradoraCadastroId = '';
+    state.passwords.salvando = false;
+    state.passwords.message = `${acessos.length} ${acessos.length === 1 ? 'acesso cadastrado' : 'acessos cadastrados'} com sucesso.`;
+    await carregarCentralSenhas();
+  } catch (erro) {
+    state.passwords.salvando = false;
+    if (botaoSalvar) botaoSalvar.disabled = false;
+    atualizarContagemAcessosCadastro();
+    if (erroElemento) erroElemento.textContent = erro.message || 'Não foi possível cadastrar acessos.';
+  }
+}
+
+async function renomearSeguradoraUI(id) {
+  if (!pode('central_senhas', 'update')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  const nome = window.prompt('Novo nome da seguradora:', seguradora?.nome || '');
+  if (nome === null || !nome.trim()) return;
+  const response = await chamarApi('renameInsurer', { id, nome: nome.trim() });
+  if (!response.ok) state.passwords.message = obterMensagemApi(response, 'Não foi possível renomear seguradora.');
+  else state.passwords.message = 'Seguradora renomeada.';
+  await carregarCentralSenhas();
+}
+
+async function excluirSeguradoraUI(id) {
+  if (!pode('central_senhas', 'delete')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  if (!window.confirm(`Excluir a seguradora ${seguradora?.nome || ''}?`)) return;
+  const response = await chamarApi('deleteInsurer', { id });
+  if (!response.ok) state.passwords.message = obterMensagemApi(response, 'Não foi possível excluir seguradora.');
+  else state.passwords.message = 'Seguradora excluída.';
+  await carregarCentralSenhas();
+}
+
+async function alterarStatusSeguradoraUI(id) {
+  if (!pode('central_senhas', 'update')) return;
+  const seguradora = state.passwords.seguradoras.find(item => item.id === id);
+  if (!seguradora) return;
+  const status = seguradora.status === 'inativo' ? 'ativo' : 'inativo';
+  const response = await chamarApi('setInsurerStatus', { id, status });
+  if (!response.ok) {
+    state.passwords.message = obterMensagemApi(response, 'Não foi possível alterar o status da seguradora.');
+  } else {
+    state.passwords.message = `Seguradora ${status === 'ativo' ? 'reativada' : 'inativada'}.`;
+  }
+  await carregarCentralSenhas();
 }
 
 function obterSenhaModalAtual() {
@@ -6888,15 +8956,30 @@ function alterarFiltroSenha(chave, valor) {
   carregarCentralSenhas();
 }
 
-function selecionarAbaSenhas(aba) {
-  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
-    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
-    renderCentralSenhas();
-    return;
-  }
+function alternarFiltrosSenhas(aberto) {
+  state.passwords.filtrosAbertos = typeof aberto === 'boolean' ? aberto : !state.passwords.filtrosAbertos;
+  renderCentralSenhas();
+}
 
+function fecharFiltrosSenhasAoClicarFora(event) {
+  if (!state.passwords.filtrosAbertos || state.passwords.aba !== 'acessos') return;
+  if (event.target.closest('.password-manager-filter-menu')) return;
+  state.passwords.filtrosAbertos = false;
+  renderCentralSenhas();
+}
+
+function limparFiltrosSenhas() {
+  state.passwords.filtros = { seguradoraId: '', grupo: '', status: 'ativo', statusSeguradora: 'ativo' };
+  carregarCentralSenhas();
+}
+
+function selecionarAbaSenhas(aba) {
+  if (aba === 'historico') aba = 'acessos';
+
+  state.passwords.senhasVisiveis = {};
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
+  state.passwords.cadastroSeguradoraAberto = false;
   renderCentralSenhas();
 }
 
@@ -6942,7 +9025,8 @@ async function salvarSenhaItem(id) {
     url: document.getElementById('senha_url')?.value || '',
     login: document.getElementById('senha_login')?.value || '',
     senha: document.getElementById('senha_senha')?.value || '',
-    categoria: document.getElementById('senha_categoria')?.value || '',
+    seguradoraId: document.getElementById('senha_seguradora')?.value || '',
+    categoria: '',
     grupo: document.getElementById('senha_grupo')?.value || '',
     status: document.getElementById('senha_status')?.value || 'ativo'
   };
@@ -7047,11 +9131,33 @@ function validarSenhaPayload(payload) {
   return erros;
 }
 
-async function abrirPainelAr() {
-  state.ar.message = '';
+function invalidarGeracaoLinksAr() {
+  state.ar.geracaoLinksToken += 1;
+  state.ar.gerando = false;
+}
+
+function resetarEstadoGerarLinksAr() {
+  invalidarGeracaoLinksAr();
+  state.ar.produtoBusca = '';
+  state.ar.filtros = {
+    ac: '',
+    produto: '',
+    midia: '',
+    modelo: '',
+    validade: ''
+  };
+  state.ar.produtoId = '';
+  state.ar.parceiroId = '';
+  state.ar.parceiroBusca = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
   state.ar.aba = 'inicio';
+  state.ar.campoProdutoAtivo = '';
+  state.ar.message = '';
+}
+
+async function abrirPainelAr() {
+  resetarEstadoGerarLinksAr();
   await carregarPainelAr();
 }
 
@@ -7116,7 +9222,7 @@ async function carregarCrmAr(pagina = state.ar.crm.pagina) {
 }
 
 async function sincronizarCrmAr() {
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.message = 'Seu usuário não possui permissão para sincronizar o CRM AR.';
     renderPainelAr();
     return;
@@ -7169,53 +9275,123 @@ function fecharPedidosRelacionadosCrmAr() {
   renderPainelAr();
 }
 
-function renderPainelAr() {
-  fecharDropdownCrmAr();
-  const podeHistorico = podeAcessarAbaAr('historico');
-  const nomeSistema = state.config?.nome_sistema || 'PAINEL TRANSMARES';
-  const subtitulo = state.config?.subtitulo_sistema || 'Central operacional da Transmares Corretora de Seguros';
+function capturarEstadoInteracaoAr() {
+  const ativo = document.activeElement;
+  const campo = ativo?.matches?.('input, textarea, select')
+    ? ativo
+    : ativo?.closest?.('.ar-autocomplete-field')?.querySelector('input');
 
-  document.getElementById('app').innerHTML = `
-    <main class="dashboard">
-      <header class="topbar">
-        ${renderHeaderLogo()}
-        <div class="brand">
-          <h1>${escapeHtml(nomeSistema)}</h1>
-          <p>${escapeHtml(subtitulo)}</p>
-        </div>
-
-        <div class="user-box">
-          <strong>${escapeHtml(state.usuario.nome || '')}</strong><br>
-          ${escapeHtml(state.usuario.email || '')}<br>
-          <button class="secondary-btn" type="button" onclick="navegarHome()">Voltar</button>
-        </div>
-      </header>
-
-      <section class="admin-panel">
-        <div class="admin-panel-header ar-panel-header">
-          <div class="ar-panel-title">
-            <button type="button" onclick="selecionarAbaAr('inicio')" title="Ir para o início do Painel AR">
-              <h2>Painel AR Transmares</h2>
-            </button>
-            <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
-          </div>
-          <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
-            <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-              <i data-lucide="house" aria-hidden="true"></i>
-            </button>
-            ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-            ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
-            ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
-            ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
-          </div>
-        </div>
-
-        ${state.ar.message ? `<p class="admin-message">${escapeHtml(state.ar.message)}</p>` : ''}
-        ${state.ar.loading ? renderHubLoading('Carregando produtos e parceiros...') : renderConteudoAr()}
-      </section>
-    </main>
-  `;
+  return {
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    campoId: campo?.id || '',
+    selecaoInicio: typeof campo?.selectionStart === 'number' ? campo.selectionStart : null,
+    selecaoFim: typeof campo?.selectionEnd === 'number' ? campo.selectionEnd : null
+  };
 }
+
+function restaurarEstadoInteracaoAr(snapshot) {
+  if (!snapshot) return;
+
+  requestAnimationFrame(() => {
+    window.scrollTo(snapshot.scrollX, snapshot.scrollY);
+
+    if (!snapshot.campoId) return;
+
+    const campo = document.getElementById(snapshot.campoId);
+    if (!campo) return;
+
+    campo.focus({ preventScroll: true });
+    if (snapshot.selecaoInicio !== null && typeof campo.setSelectionRange === 'function') {
+      campo.setSelectionRange(snapshot.selecaoInicio, snapshot.selecaoFim);
+    }
+  });
+}
+
+let menuMaisArAberto = null;
+
+function obterFaixaMenuAr() {
+  const largura = typeof window === 'undefined' ? 1280 : window.innerWidth;
+  if (largura <= 480) return 'compact';
+  if (largura <= 760) return 'mobile';
+  if (largura <= 1000) return 'tablet';
+  return 'desktop';
+}
+
+let faixaMenuArAtual = obterFaixaMenuAr();
+
+function fecharMenuMaisAr() {
+  if (!menuMaisArAberto) return;
+  limparMenusAcoesGlobais();
+  menuMaisArAberto.menu.hidden = true;
+  menuMaisArAberto.trigger.setAttribute('aria-expanded', 'false');
+  menuMaisArAberto = null;
+}
+
+function renderMenuPrincipalAr({ podeHistorico, incluirCrm = false, incluirCrm2 = false }) {
+  const itens = [
+    ['inicio', 'Início', true],
+    ['gerar', 'Gerar links', podeAcessarAbaAr('gerar')],
+    ['crm2', 'CRM 2.0', incluirCrm2 && podeAcessarAbaAr('crm2')],
+    ['produtos', 'Lista de produtos', podeAcessarAbaAr('produtos')],
+    ['validacoes', 'Validações', podeAcessarAbaAr('validacoes')],
+    ['historico', 'Histórico', podeHistorico],
+    ['crm', 'CRM', incluirCrm && podeAcessarAbaAr('crm')],
+  ].filter(([id, , permitido]) => {
+    const item = obterSubmoduloArPorAba(id);
+    return permitido && (!item || submoduloHomeEstaAtivo(item));
+  });
+  const faixa = obterFaixaMenuAr();
+  const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+  const principais = itens.slice(0, limite);
+  const secundarias = itens.slice(limite);
+  const renderItem = ([id, nome]) => `<button class="hub-module-nav-item ${id === 'inicio' ? 'ar-home-tab' : ''} ${['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'].includes(state.ar.aba) && id === 'crm2' || state.ar.aba === id ? 'active is-active' : ''}" type="button" onclick="selecionarAbaAr('${id}')" ${id === 'inicio' ? 'title="Início" aria-label="Início"' : ''}>${id === 'inicio' ? '<i data-lucide="house" aria-hidden="true"></i>' : nome}</button>`;
+
+  return `<div class="module-tabs hub-module-nav" role="group" aria-label="Visualização do Painel AR">${principais.map(renderItem).join('')}${secundarias.length ? `
+    <div class="hub-responsive-more">
+      <button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === state.ar.aba || (id === 'crm2' && ['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'].includes(state.ar.aba))) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-module-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button>
+      <div id="ar-module-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('<button ', '<button role="menuitem" ')).join('')}</div>
+    </div>` : ''}</div>`;
+}
+
+document.addEventListener('click', event => {
+  const trigger = event.target.closest?.('[data-ar-more-trigger]');
+  if (trigger) {
+    event.preventDefault();
+    event.stopPropagation();
+    const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+    if (!menu) return;
+    const abrir = menu.hidden;
+    fecharMenuMaisAr();
+    if (!abrir) return;
+    menu.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    menuMaisArAberto = { menu, trigger };
+    abrirMenuAcaoGlobal(trigger, menu, { minWidth: 190, maxWidth: 320, gap: 6, flipVertical: true });
+    return;
+  }
+  if (menuMaisArAberto && event.target.closest?.('[role="menuitem"]')) {
+    fecharMenuMaisAr();
+    return;
+  }
+  if (menuMaisArAberto && !menuMaisArAberto.menu.contains(event.target)) fecharMenuMaisAr();
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !menuMaisArAberto) return;
+  event.preventDefault();
+  const trigger = menuMaisArAberto.trigger;
+  fecharMenuMaisAr();
+  trigger.focus();
+});
+
+window.addEventListener('resize', () => {
+  const faixaAtual = obterFaixaMenuAr();
+  if (faixaAtual === faixaMenuArAtual || !document.querySelector('.ar-panel-header .hub-module-nav')) return;
+  faixaMenuArAtual = faixaAtual;
+  fecharMenuMaisAr();
+  renderPainelAr();
+});
 
 function renderConteudoAr() {
   if (!podeAcessarAbaAr(state.ar.aba)) {
@@ -7242,7 +9418,110 @@ function renderConteudoAr() {
     return renderCrmArPhase1();
   }
 
+  if (state.ar.aba === 'crm2') {
+    return typeof window.crm2OportunidadesRender === 'function'
+      ? window.crm2OportunidadesRender()
+      : '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page"><div class="hub-loading" role="status">Carregando Oportunidades...</div></section>';
+  }
+
+  if (['crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos'].includes(state.ar.aba)) {
+    return renderCrm2CadastroUnificado();
+  }
+
+  if (state.ar.aba === 'crm2-pedidos') {
+    return typeof window.crm2PedidosRender === 'function' ? window.crm2PedidosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pedidos...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-oportunidades') {
+    return typeof window.crm2OportunidadesRender === 'function' ? window.crm2OportunidadesRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Oportunidades...</div></section>';
+  }
+
+  if (state.ar.aba === 'crm2-comunicacao') {
+    const configuracaoRoute = obterContextoRotaHub();
+    if (configuracaoRoute.principal === '207' || configuracaoRoute.secundaria === 'automacoes') {
+      return typeof window.crm2AutomacoesRender === 'function' ? window.crm2AutomacoesRender() : '<section class="admin-panel crm2-automacoes-page"><div class="hub-loading" role="status">Carregando Automações...</div></section>';
+    }
+    return typeof window.crm2ComunicacaoRender === 'function' ? window.crm2ComunicacaoRender() : '<section class="admin-panel crm2-comunicacao-page"><div class="hub-loading" role="status">Carregando Comunicação...</div></section>';
+  }
+
   return renderGeradorLinksAr();
+}
+
+function renderCrm2CadastroUnificado() {
+  const { principal } = obterContextoRotaHub();
+  const tipo = resolveCrm2CadastroTab(principal);
+  const tabs = [
+    ['pf', 'Pessoas físicas'],
+    ['pj', 'Pessoas jurídicas'],
+    ['vinculos', 'Vínculos']
+  ];
+  const content = tipo === 'pj'
+    ? (typeof window.crm2PjRender === 'function' ? window.crm2PjRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Pessoas jurídicas...</div></section>')
+    : tipo === 'vinculos'
+      ? (typeof window.crm2VinculosRender === 'function' ? window.crm2VinculosRender() : '<section class="admin-panel crm2-pessoas-page"><div class="hub-loading" role="status">Carregando Vínculos...</div></section>')
+      : renderCrm2PessoasFisicasPhase2();
+  return `<div class="crm2-cadastro-module"><nav class="crm2-cadastro-tabs" role="tablist" aria-label="Tipos de cadastro CRM 2.0">${tabs.map(([key, label]) => `<button id="crm2-cadastro-tab-${key}" class="crm2-cadastro-tab${tipo === key ? ' is-active' : ''}" type="button" role="tab" aria-selected="${tipo === key}" aria-controls="crm2-cadastro-tabpanel" onclick="navegarParaCrm2Cadastro('${key}')" onkeydown="if(['ArrowRight','ArrowLeft'].includes(event.key)){event.preventDefault();const tabs=[...this.parentElement.querySelectorAll('[role=tab]')];const direction=event.key==='ArrowRight'?1:-1;const next=tabs[(tabs.indexOf(this)+direction+tabs.length)%tabs.length];next.focus();next.click();}">${label}</button>`).join('')}</nav><div id="crm2-cadastro-tabpanel" role="tabpanel" aria-labelledby="crm2-cadastro-tab-${tipo}">${content}</div></div>`;
+}
+
+function navegarParaCrm2Cadastro(tipo) {
+  if (!['pf', 'pj', 'vinculos'].includes(tipo)) return;
+  const route = obterContextoRotaHub().principal;
+  const currentType = ['200', '205'].includes(route) ? 'oportunidades' : route === '202' ? 'pj' : route === '203' ? 'vinculos' : 'pf';
+  if (tipo === currentType) return;
+  const navigate = () => {
+    if (tipo === 'pj') return window.navegarParaCrm2PjRota?.();
+    if (tipo === 'vinculos') return window.navegarParaCrm2VinculosRota?.();
+    return window.navegarParaCrm2Rota?.('201');
+  };
+  if (currentType === 'pf' && !protegerNavegacaoFormularioPfHub(navigate)) return;
+  if (currentType === 'pj' && window.crm2PjRequestLeave && !window.crm2PjRequestLeave(navigate)) return;
+  return navigate();
+}
+
+function renderCrm2PessoasFisicasPhase2() {
+  if (typeof window !== 'undefined' && typeof window.crm2PfRender === 'function') {
+    return window.crm2PfRender();
+  }
+
+  return `
+    <section class="admin-panel crm2-pessoas-page" data-crm2-phase2-enhanced="true" aria-labelledby="crm2-pessoas-title">
+      <div class="hub-loading" role="status">Carregando Pessoas físicas...</div>
+    </section>
+  `;
+}
+
+function renderToolbarLinks(gestor, podeCriar = gestor) {
+  const areas = [
+    ['corretora', 'Corretora', 'central_senhas.links_corretora'],
+    ['ar', 'AR / Certificação', 'central_senhas.links_ar'],
+    ['gestao', 'Gestão', 'central_senhas.links_gestao']
+  ].filter(([, , key]) => submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === key)));
+  return `
+    <div class="links-toolbar">
+      <select class="config-input" onchange="alterarFiltroLinks('escopo', this.value)" aria-label="Área dos links">
+        <option value="todos" ${state.links.escopo === 'todos' ? 'selected' : ''}>Todas as áreas</option>
+        ${areas.map(([id, label]) => `<option value="${id}" ${state.links.escopo === id ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+      <select class="config-input" onchange="alterarFiltroLinks('categoria', this.value)">
+        <option value="">Todas as categorias</option>
+        ${state.links.categorias.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.categoria === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+      </select>
+      <select class="config-input" onchange="alterarFiltroLinks('grupo', this.value)">
+        <option value="">Todos os grupos</option>
+        ${state.links.grupos.map(item => `<option value="${escapeAttr(item.nome)}" ${state.links.filtros.grupo === item.nome ? 'selected' : ''}>${escapeHtml(item.nome)}</option>`).join('')}
+      </select>
+      ${gestor ? `
+        <select class="config-input" onchange="alterarFiltroLinks('status', this.value)">
+          <option value="">Todos os status</option>
+          <option value="ativo" ${state.links.filtros.status === 'ativo' ? 'selected' : ''}>ativos</option>
+          <option value="inativo" ${state.links.filtros.status === 'inativo' ? 'selected' : ''}>inativos</option>
+        </select>
+      ` : ''}
+      ${podeCriar ? '<button class="add-small-btn" type="button" onclick="abrirModalNovoLink()">+ Adicionar</button>' : ''}
+    </div>
+    <p class="quick-link-empty">Favoritos: ${contarFavoritosLinks()} de ${state.links.limiteFavoritos}</p>
+    ${state.links.message ? `<p class="admin-message">${escapeHtml(state.links.message)}</p>` : ''}
+  `;
 }
 
 function formatarDataHoraCrmAr(valor = '') {
@@ -7286,7 +9565,7 @@ function renderCrmArPhase1() {
   const crm = state.ar.crm;
   if (crm.cadastro?.aberto) return renderCadastroClienteCrmAr();
   if (crm.detalhe) return renderDetalheCrmAr(crm.detalhe);
-  const podeSincronizar = pode('painel_ar.crm', 'execute');
+  const podeSincronizar = pode('painel_ar', 'update');
   const items = crm.items || [];
   const totalItens = crm.totalItens || 0;
   const totalPaginas = Math.max(1, Math.ceil(totalItens / crm.itensPorPagina));
@@ -7416,7 +9695,7 @@ function limparFiltrosCrmAr() {
 }
 
 function abrirCadastroClienteCrmAr() {
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.message = 'Seu usuario nao possui permissao para adicionar clientes no CRM AR.';
     renderPainelAr();
     return;
@@ -7596,7 +9875,7 @@ function renderCadastroClienteCrmAr() {
             </label>
             <label class="ar-crm-edit-field">
               <span>Telefone</span>
-              <input id="ar-crm-new-telefone" class="config-input" type="tel" inputmode="numeric" autocomplete="tel" maxlength="15" data-crm-mask="telefone" value="${valorMascarado('telefone', 'telefone')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
+              <input id="ar-crm-new-telefone" class="config-input" type="tel" inputmode="tel" autocomplete="tel" maxlength="24" data-crm-mask="telefone" value="${valorMascarado('telefone', 'telefone')}" oninput="aplicarMascaraCrmAr(this)" ${salvando ? 'disabled' : ''}>
             </label>
             <label class="ar-crm-edit-field">
               <span>Nascimento</span>
@@ -7771,7 +10050,7 @@ function abrirDetalheCrmAr(item) {
   state.ar.crm.edicaoAlterada = false;
   state.ar.crm.salvandoEdicao = false;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], message: '' };
+  state.ar.crm.atividade = { loading: true, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId, comments: [], attachments: [], attachmentView: 'list', message: '' };
   renderPainelAr();
   carregarAtividadeDetalheCrmAr(item, requestId);
 }
@@ -7779,7 +10058,7 @@ function abrirDetalheCrmAr(item) {
 async function sincronizarCadastroCrmAr(itemId = state.ar.crm.detalhe?.id) {
   const item = state.ar.crm.detalhe;
   if (!itemId || state.ar.crm.sincronizandoCadastro) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuario nao possui permissao para sincronizar o CRM AR.';
     renderPainelAr();
     return;
@@ -7850,7 +10129,7 @@ function fecharVisualizacaoCrmAr() {
   state.ar.crm.edicaoAlterada = false;
   state.ar.crm.salvandoEdicao = false;
   state.ar.crm.sincronizandoCadastro = false;
-  state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], message: '' };
+  state.ar.crm.atividade = { loading: false, saving: false, savingAction: '', respondingTo: '', repliesCollapsed: {}, reactionMenuFor: '', activeUsers: [], viewerId: '', mentionMenu: { campoId: '', query: '', index: 0 }, requestId: '', comments: [], attachments: [], attachmentView: 'list', message: '' };
   renderPainelAr();
 }
 
@@ -8322,7 +10601,7 @@ function renderDetalheCrmAr(item) {
   }
   const outros = campos.filter((campo) => !usados.has(campo) && obterValorCampoCrmAr(campo) !== '—');
   const cpf = campoCpf ? formatarCampoCrmAr('cpf', obterValorCampoCrmAr(campoCpf)) : '';
-  const podeEditar = pode('painel_ar.crm', 'execute');
+  const podeEditar = pode('painel_ar', 'update');
   const taskId = dados.clickup_task_id || '';
   const cadastroPendente = !taskId || item.sync_status !== 'synced' || dados.cadastro_pendente_clickup;
 
@@ -8479,12 +10758,44 @@ function renderAtividadeCrmAr() {
   </aside>`;
 }
 
+function alternarVisualizacaoAnexosCrmAr(view) {
+  state.ar.crm.atividade.attachmentView = view === 'grid' ? 'grid' : 'list';
+  renderPainelAr();
+}
+
+function renderAnexoPreviewCrmAr(anexo, index) {
+  const url = anexo.url || anexo.thumbnail || '';
+  const previewUrl = anexo.thumbnail || ((anexo.type || anexo.content_type || anexo.mime_type || '').startsWith('image/') ? anexo.url || '' : '');
+  const nome = anexo.title || anexo.filename || `Anexo ${index + 1}`;
+  const kind = getHubAttachmentPreviewKind({ nome, tipo: anexo.type || anexo.content_type || anexo.mime_type || '' });
+  const previewSource = kind === 'pdf' ? anexo.thumbnail || '' : previewUrl;
+  const openAttrs = url
+    ? `role="button" tabindex="0" data-attachment-url="${escapeAttr(url)}" aria-label="Visualizar ${escapeAttr(nome)}" onclick="window.open(this.dataset.attachmentUrl, '_blank', 'noopener,noreferrer')" onkeydown="if(event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.open(this.dataset.attachmentUrl, '_blank', 'noopener,noreferrer'); }"`
+    : 'aria-disabled="true"';
+  if ((kind === 'image' || kind === 'pdf') && previewSource) return `<div class="hub-attachment-preview is-${kind}" ${openAttrs}><img src="${escapeAttr(previewSource)}" alt="Prévia de ${escapeAttr(nome)}" loading="lazy"></div>`;
+  return `<div class="hub-attachment-preview is-unavailable" ${openAttrs}><i data-lucide="file" aria-hidden="true"></i><span>Prévia indisponível</span></div>`;
+}
+
 function renderAnexosCrmAr() {
   const anexos = state.ar.crm.atividade.attachments || [];
   const taskId = state.ar.crm.detalhe?.dados?.clickup_task_id || '';
-  return `<section class="ar-crm-attachments-fixed" aria-label="Anexos">
-    <div><span>Anexos</span>${anexos.length ? `<div class="ar-crm-attachments-list">${anexos.map((anexo) => { const url = anexo.url || anexo.thumbnail || ''; const nome = anexo.title || anexo.filename || 'Anexo sem nome'; return url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`; }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}</div>
-    ${taskId ? '<label class="secondary-btn ar-crm-attachment-upload">Adicionar anexo<input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>' : '<span class="ar-crm-detail-muted">Disponível após a sincronização</span>'}
+  const view = state.ar.crm.atividade.attachmentView === 'grid' ? 'grid' : 'list';
+  return `<section class="hub-attachment-manager ar-crm-attachments-fixed" aria-label="Anexos" data-attachment-manager="HubAttachmentManager">
+    <header class="hub-attachment-manager-header">
+      <strong>Anexos</strong>
+      <div class="hub-attachment-manager-toolbar" role="toolbar" aria-label="Ações dos anexos">
+        <button class="icon-btn ${view === 'list' ? 'is-active' : ''}" type="button" onclick="window.alternarVisualizacaoAnexosCrmAr('list')" aria-label="Exibir anexos em lista" title="Exibir em lista" aria-pressed="${view === 'list' ? 'true' : 'false'}"><i data-lucide="list" aria-hidden="true"></i></button>
+        <button class="icon-btn ${view === 'grid' ? 'is-active' : ''}" type="button" onclick="window.alternarVisualizacaoAnexosCrmAr('grid')" aria-label="Exibir anexos em miniaturas" title="Exibir em miniaturas" aria-pressed="${view === 'grid' ? 'true' : 'false'}"><i data-lucide="layout-grid" aria-hidden="true"></i></button>
+        ${taskId ? '<label class="icon-btn hub-attachment-manager-include" aria-label="Incluir anexo" title="Incluir anexo"><i data-lucide="file-plus-2" aria-hidden="true"></i><input type="file" onchange="adicionarAnexoDetalheCrmAr(this)" hidden></label>' : ''}
+      </div>
+    </header>
+    ${anexos.length ? `<div class="hub-attachment-manager-list ${view === 'grid' ? 'is-grid-view' : ''}" aria-label="Arquivos anexados">${anexos.map((anexo, index) => {
+      const url = anexo.url || anexo.thumbnail || '';
+      const nome = anexo.title || anexo.filename || `Anexo ${index + 1}`;
+      return view === 'grid'
+        ? `<article class="hub-attachment-manager-item is-grid-item">${renderAnexoPreviewCrmAr(anexo, index)}<a class="hub-attachment-manager-name" href="${url ? escapeAttr(url) : '#'}" ${url ? 'target="_blank" rel="noopener"' : 'aria-disabled="true"'}>${escapeHtml(nome)}</a></article>`
+        : `<article class="hub-attachment-manager-item"><i data-lucide="archive" aria-hidden="true"></i>${url ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener">${escapeHtml(nome)}</a>` : `<span class="ar-crm-attachment-unavailable">${escapeHtml(nome)} — link indisponível</span>`}</article>`;
+    }).join('')}</div>` : '<p>Nenhum anexo encontrado.</p>'}
   </section>`;
 }
 
@@ -8755,7 +11066,7 @@ function editarCamposCrmAr() {
   const item = state.ar.crm.detalhe;
   const taskId = item?.dados?.clickup_task_id;
   if (!item || !taskId) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
     renderPainelAr();
     return;
@@ -8808,7 +11119,7 @@ async function salvarCamposCrmAr() {
   const nome = document.getElementById('ar-crm-edit-name')?.value?.trim();
   const descricao = document.getElementById('ar-crm-edit-description')?.value ?? '';
   if (!item || !taskId || !nome || state.ar.crm.salvandoEdicao) return;
-  if (!pode('painel_ar.crm', 'execute')) {
+  if (!pode('painel_ar', 'update')) {
     state.ar.crm.atividade.message = 'Seu usuário não possui permissão para editar o CRM AR.';
     renderPainelAr();
     return;
@@ -9024,12 +11335,21 @@ function renderSubnavValidacoesAr() {
   const validacoes = state.ar.validacoes;
   const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
   const podeImportar = pode('painel_ar.validacoes', 'importar');
+  const itens = [
+    ['emitir', 'Emitir recibo', podeEmitir],
+    ['consultar', 'Consultar recibos', true],
+    ['importacao', 'Importar recibos', podeImportar]
+  ].filter(([, , permitido]) => permitido);
+  const faixa = obterFaixaMenuAr();
+  const limite = faixa === 'compact' ? 2 : faixa === 'mobile' ? 3 : faixa === 'tablet' ? 4 : itens.length;
+  const principais = itens.slice(0, limite);
+  const secundarias = itens.slice(limite);
+  const renderItem = ([id, nome]) => `<button class="hub-subnav-item ${validacoes.aba === id ? 'active is-active' : ''}" role="tab" aria-selected="${validacoes.aba === id}" type="button" onclick="selecionarSubabaValidacoesAr('${id}')">${nome}</button>`;
 
   return `
-    <div class="ar-validacoes-subnav" role="tablist" aria-label="Paginas internas de Validacoes">
-      ${podeEmitir ? `<button class="${validacoes.aba === 'emitir' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'emitir'}" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Emitir recibo</button>` : ''}
-      <button class="${validacoes.aba === 'consultar' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'consultar'}" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Consultar recibos</button>
-      ${podeImportar ? `<button class="${validacoes.aba === 'importacao' ? 'active' : ''}" role="tab" aria-selected="${validacoes.aba === 'importacao'}" type="button" onclick="selecionarSubabaValidacoesAr('importacao')">Importar recibos</button>` : ''}
+    <div class="hub-subnav hub-responsive-subnav" role="tablist" aria-label="Paginas internas de Validacoes">
+      ${principais.map(renderItem).join('')}
+      ${secundarias.length ? `<div class="hub-responsive-more"><button class="hub-responsive-more-trigger ${secundarias.some(([id]) => id === validacoes.aba) ? 'is-active' : ''}" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="ar-validacoes-more-menu" data-ar-more-trigger><span>Mais</span><span aria-hidden="true">⌄</span></button><div id="ar-validacoes-more-menu" class="hub-responsive-more-menu" role="menu" aria-label="Mais opções" hidden>${secundarias.map(([id, nome]) => renderItem([id, nome]).replace('role="tab"', 'role="menuitem"')).join('')}</div></div>` : ''}
     </div>
   `;
 }
@@ -9459,7 +11779,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderPainelProdutoMvpAr()}
+    <div class="ar-flow-card-body">
+      ${renderPainelProdutoMvpAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-partner">
@@ -9471,7 +11793,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderPainelParceiroMvpAr()}
+    <div class="ar-flow-card-body">
+      ${renderPainelParceiroMvpAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-budget">
@@ -9483,7 +11807,9 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderOrcamentoAr()}
+    <div class="ar-flow-card-body">
+      ${renderOrcamentoAr()}
+    </div>
   </section>
 
   <section class="ar-flow-card ar-flow-links">
@@ -9494,10 +11820,11 @@ function renderGeradorLinksAr() {
       </div>
     </div>
 
-    ${renderResultadoAr()}
+    <div class="ar-flow-card-body">
+      ${renderResultadoAr()}
+    </div>
   </section>
 </div>
-  </div>
     </section>
   `;
 }
@@ -9555,9 +11882,8 @@ function renderParceiroSelecionadoCardAr(parceiro) {
   const status = parceiro.status || 'não informado';
   const codigo = parceiro.codigo_revendedor || parceiro.codigo || 'sem código';
   const email = parceiro.email_cadastro_certificado || parceiro.email_comercial || parceiro.email || '';
-  const whatsappPessoal = parceiro.whatsapp_pessoal || parceiro.whatsapp || '';
-  const whatsappComercial = parceiro.whatsapp_comercial || '';
-  const contatos = [email, whatsappPessoal, whatsappComercial].filter(Boolean).join(' · ') || 'Sem contatos informados';
+  const whatsapps = [parceiro.whatsapp_pessoal || parceiro.whatsapp, parceiro.whatsapp_comercial].filter(Boolean);
+  const contatos = [email, ...whatsapps].filter(Boolean).join(' · ') || 'Sem contatos informados';
 
   return `
     <article class="ar-compact-selection-summary" aria-label="Resumo do parceiro selecionado">
@@ -9567,7 +11893,9 @@ function renderParceiroSelecionadoCardAr(parceiro) {
         <span>Status: ${escapeHtml(obterRotuloStatusHub(status, 'Não informado'))}</span>
       </div>
       <div class="ar-compact-summary-line ar-compact-summary-secondary" title="${escapeAttr(contatos)}">
-        ${escapeHtml(contatos)}
+        ${email ? `<button class="ar-partner-email-copy" type="button" onclick="copiarEmailParceiroAr('${escapeAttr(email)}', this)" title="Copiar e-mail">${escapeHtml(email)}</button>` : ''}
+        ${whatsapps.length ? `<span>${escapeHtml(whatsapps.join(' · '))}</span>` : ''}
+        ${email || whatsapps.length ? '' : 'Sem contatos informados'}
       </div>
     </div>
   `;
@@ -9681,13 +12009,14 @@ function renderProdutoSelecionadoResumoAr(produto) {
 function alterarBuscaProdutoAr(valor) {
   const tinhaProdutoSelecionado = Boolean(state.ar.produtoId);
 
+  invalidarGeracaoLinksAr();
   state.ar.produtoBusca = valor;
   state.ar.produtoId = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
 
   if (tinhaProdutoSelecionado) {
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     requestAnimationFrame(() => {
       const input = document.getElementById('ar_produto_busca');
@@ -9703,7 +12032,6 @@ function alterarBuscaProdutoAr(valor) {
     return;
   }
 
-  atualizarEstadoBotaoGerarAr();
   atualizarSugestoesProdutoUnicoDomAr();
 }
 function atualizarSugestoesProdutoUnicoDomAr() {
@@ -9771,6 +12099,7 @@ function selecionarProdutoCompletoAr(id) {
 
   if (!produto) return;
 
+  invalidarGeracaoLinksAr();
   state.ar.produtoId = id;
   state.ar.produtoBusca = [
     produto.descricao_comercial || produto.produto,
@@ -9781,7 +12110,7 @@ function selecionarProdutoCompletoAr(id) {
   state.ar.resultado = null;
   state.ar.alertas = [];
 
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
 }
 
@@ -9812,6 +12141,8 @@ function renderResumoProdutoMvpAr(produto) {
 }
 
 function renderListaProdutosAr() {
+  carregarOrdenacaoGruposProdutosAr();
+  const larguraContainerLista = obterLargurasColunasProdutosAr().reduce((total, largura) => total + largura, 2);
   const totalFiltrosAtivos = contarFiltrosListaProdutosAr();
   const rotuloBotaoFiltros = totalFiltrosAtivos
     ? `Filtros: ${totalFiltrosAtivos} ativo${totalFiltrosAtivos === 1 ? '' : 's'}`
@@ -9819,27 +12150,44 @@ function renderListaProdutosAr() {
 
   return `
     <section>
-      <div class="ar-toolbar">
-        <input class="config-input" type="search" value="${escapeAttr(state.ar.busca)}" placeholder="Buscar por descrição, AC, modelo, validade" oninput="alterarBuscaAr(this.value)">
-        <div class="ar-products-toolbar-actions">
-          <div class="ar-products-filter-menu">
-            <button
-              class="secondary-btn ar-products-filter-btn ${totalFiltrosAtivos ? 'has-active-filters' : ''}"
-              type="button"
-              onclick="alternarFiltrosListaProdutosAr()"
-              aria-label="${escapeAttr(rotuloBotaoFiltros)}"
-              aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
-              title="${escapeAttr(rotuloBotaoFiltros)}"
-            >
-              <i class="ar-products-filter-icon" data-lucide="filter" aria-hidden="true"></i>
+      <div class="ar-products-content-shell" style="--ar-products-content-width: ${larguraContainerLista}px">
+        <div class="ar-toolbar">
+          <label class="ar-products-search-control">
+            <i data-lucide="search" aria-hidden="true"></i>
+            <input type="search" value="${escapeAttr(state.ar.busca)}" placeholder="Buscar por descrição, AC, modelo, validade ou SKU..." oninput="alterarBuscaAr(this.value)">
+          </label>
+          <div class="ar-products-toolbar-actions">
+            <div class="ar-products-filter-menu">
+              <button
+                class="secondary-btn ar-products-filter-btn ${totalFiltrosAtivos ? 'has-active-filters' : ''}"
+                type="button"
+                onclick="alternarFiltrosListaProdutosAr()"
+                aria-label="${escapeAttr(rotuloBotaoFiltros)}"
+                aria-expanded="${state.ar.filtrosListaAberto ? 'true' : 'false'}"
+                title="${escapeAttr(rotuloBotaoFiltros)}"
+              >
+                <i class="ar-products-filter-icon" data-lucide="filter" aria-hidden="true"></i>
+              </button>
+              ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
+            </div>
+            <details class="ar-products-sort-menu">
+              <summary class="secondary-btn ar-products-settings-btn" aria-label="Configurações de exibição" title="Configurações de exibição">
+                <i data-lucide="settings-2" aria-hidden="true"></i>
+              </summary>
+              <div class="ar-products-sort-dropdown" role="group" aria-label="Ordenar grupos de produtos">
+                <span>Ordem dos grupos</span>
+                <button type="button" class="${state.ar.ordenacaoGruposProdutos === 'asc' ? 'is-selected' : ''}" aria-pressed="${state.ar.ordenacaoGruposProdutos === 'asc'}" onclick="definirOrdenacaoGruposProdutosAr('asc')">A–Z</button>
+                <button type="button" class="${state.ar.ordenacaoGruposProdutos === 'desc' ? 'is-selected' : ''}" aria-pressed="${state.ar.ordenacaoGruposProdutos === 'desc'}" onclick="definirOrdenacaoGruposProdutosAr('desc')">Z–A</button>
+              </div>
+            </details>
+            <button class="secondary-btn ar-products-toggle-btn" type="button" onclick="alternarTodosGruposProdutosAr()">
+              <i data-lucide="chevron-down" aria-hidden="true"></i><span>Expandir todos</span>
             </button>
-            ${state.ar.filtrosListaAberto ? renderDropdownFiltrosListaProdutosAr() : ''}
           </div>
-          <button class="secondary-btn ar-products-toggle-btn" type="button" onclick="alternarTodosGruposProdutosAr()">Recolher todos</button>
         </div>
-      </div>
       <div id="ar_produtos_lista_resultado">
-        ${renderTabelaProdutosAr()}
+          ${renderTabelaProdutosAr()}
+        </div>
       </div>
       ${renderBarraProdutosSelecionadosAr()}
       ${renderModalVisualizacaoProdutosAr()}
@@ -9849,13 +12197,14 @@ function renderListaProdutosAr() {
 
 function produtosFiltradosAr() {
   if (state.ar.aba === 'produtos') {
+    const produtosLista = obterProdutosBaseListaProdutosAr();
     const termos = normalizarBuscaAr(state.ar.busca).split(' ').filter(Boolean);
     const gruposFiltro = new Set(
       (state.ar.listaGrupos || []).map(grupo => normalizarBuscaAr(grupo))
     );
     const acFiltro = normalizarBuscaAr(state.ar.listaAc);
 
-    return state.ar.produtos.filter(produto => {
+    return produtosLista.filter(produto => {
       const texto = normalizarBuscaAr([
         produto.descricao_comercial,
         produto.product_id,
@@ -9891,6 +12240,10 @@ function produtosFiltradosAr() {
 }
 
 function renderTabelaProdutosAr() {
+  if (state.ar.listaStatusProdutos === 'inativo' && state.ar.produtosInativosCarregando) {
+    return renderHubLoading('Carregando produtos inativos...');
+  }
+
   const produtos = produtosFiltradosAr();
 
   if (!produtos.length) {
@@ -9901,7 +12254,7 @@ function renderTabelaProdutosAr() {
   }
 
   const grupos = agruparProdutosListaAr(produtos);
-  const podeEditarProdutos = pode('painel_ar.produtos', 'update');
+  const podeEditarProdutos = state.ar.listaStatusProdutos === 'ativo' && pode('painel_ar.produtos', 'update');
 
   return `
     ${renderMensagemListaProdutosAr()}
@@ -9914,18 +12267,19 @@ function renderTabelaProdutosAr() {
           <details
             class="ar-products-group ${obterClasseGrupoProdutosAr(grupo.nome)}"
             data-group="${escapeAttr(grupo.nome)}"
-            open
+            ${state.ar.gruposProdutosExpandidos?.[grupo.nome] ? 'open' : ''}
+            ontoggle="registrarEstadoGrupoProdutosAr(this); atualizarBotaoToggleTodosProdutosAr()"
           >
             <summary><span>${escapeHtml(grupo.nome)}</span></summary>
-            <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}">
+            <div class="ar-products-table" role="table" aria-label="Produtos ${escapeAttr(grupo.nome)}" style="${obterEstiloLargurasColunasProdutosAr()}">
               <div class="ar-products-row ar-products-head" role="row">
-                <span></span>
-                <span>Descrição do produto</span>
-                <span>$ Com Desconto</span>
-                <span>$ Padrão</span>
-                <span>SKU</span>
+                ${renderCabecalhoColunaProdutosAr('', 0)}
+                ${renderCabecalhoColunaProdutosAr('Descrição do produto', 1)}
+                ${renderCabecalhoColunaProdutosAr('$ Com Desconto', 2)}
+                ${renderCabecalhoColunaProdutosAr('$ Padrão', 3)}
+                ${renderCabecalhoColunaProdutosAr('SKU', 4)}
               </div>
-              ${grupo.produtos.map(produto => {
+      ${grupo.produtos.map(produto => {
                 const temPrecoComDesconto = parseMoedaAr(produto.preco_com_desconto) != null;
                 const selecionado = state.ar.produtosListaSelecionados.includes(produto.id);
                 const rascunho = state.ar.edicaoProdutosGrupo?.rascunho?.[produto.id];
@@ -9956,10 +12310,24 @@ function renderTabelaProdutosAr() {
                   </article>
                 `;
               }).join('')}
+              ${state.ar.novoProdutoGrupo?.grupo === grupo.nome ? renderLinhaNovoProdutoGrupoAr(grupo) : ''}
             </div>
           </details>
           <div class="ar-products-group-actions" data-group="${escapeAttr(grupo.nome)}">
-            ${emEdicao ? `
+            ${state.ar.novoProdutoGrupo?.grupo === grupo.nome ? `
+              <button
+                class="ar-products-group-action-btn ar-products-group-cancel-btn"
+                type="button"
+                onclick="cancelarNovoProdutoGrupoAr()"
+                ${state.ar.novoProdutoGrupo.salvando ? 'disabled' : ''}
+              >Cancelar</button>
+              <button
+                class="ar-products-group-action-btn ar-products-group-save-btn"
+                type="button"
+                onclick="salvarNovoProdutoGrupoAr()"
+                ${state.ar.novoProdutoGrupo.salvando ? 'disabled' : ''}
+              >${state.ar.novoProdutoGrupo.salvando ? 'Salvando...' : 'Salvar'}</button>
+            ` : emEdicao ? `
               <button
                 class="ar-products-group-action-btn ar-products-group-cancel-btn"
                 type="button"
@@ -9974,11 +12342,20 @@ function renderTabelaProdutosAr() {
               >${state.ar.edicaoProdutosGrupo.salvando ? 'Salvando...' : 'Salvar'}</button>
             ` : podeEditarProdutos ? `
               <button
+                class="ar-products-group-action-btn ar-products-group-add-btn"
+                type="button"
+                data-group="${escapeAttr(grupo.nome)}"
+                aria-label="Adicionar produto ao grupo ${escapeAttr(grupo.nome)}"
+                onclick="iniciarNovoProdutoGrupoAr(this.dataset.group)"
+                ${state.ar.novoProdutoGrupo || state.ar.edicaoProdutosGrupo?.nome ? 'disabled' : ''}
+              ><i data-lucide="plus" aria-hidden="true"></i><span>Adicionar</span></button>
+              <button
                 class="ar-products-group-action-btn ar-products-group-edit-btn"
                 type="button"
                 data-group="${escapeAttr(grupo.nome)}"
                 aria-label="Editar produtos do grupo ${escapeAttr(grupo.nome)}"
                 onclick="iniciarEdicaoGrupoProdutosAr(this.dataset.group)"
+                ${state.ar.novoProdutoGrupo ? 'disabled' : ''}
               >Editar</button>
             ` : ''}
           </div>
@@ -9988,6 +12365,108 @@ function renderTabelaProdutosAr() {
     </div>
   `;
 }
+
+const LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR = [74, 760, 150, 150, 220];
+const LARGURA_MINIMA_COLUNAS_PRODUTOS_AR = [56, 300, 120, 120, 180];
+const LARGURA_MAXIMA_COLUNA_PRODUTOS_AR = 900;
+const CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR = 'hub-ar-produtos-larguras-colunas-v2';
+
+function obterLargurasColunasProdutosAr() {
+  if (Array.isArray(state.ar.largurasColunasProdutos)) return state.ar.largurasColunasProdutos;
+
+  try {
+    const salvas = JSON.parse(window.localStorage.getItem(CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR) || 'null');
+    if (Array.isArray(salvas) && salvas.length === LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR.length) {
+      state.ar.largurasColunasProdutos = salvas.map((largura, indice) => Math.min(
+        LARGURA_MAXIMA_COLUNA_PRODUTOS_AR,
+        Math.max(LARGURA_MINIMA_COLUNAS_PRODUTOS_AR[indice], Number(largura) || LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR[indice])
+      ));
+      return state.ar.largurasColunasProdutos;
+    }
+  } catch { /* preferências locais podem estar indisponíveis */ }
+
+  state.ar.largurasColunasProdutos = [...LARGURAS_PADRAO_COLUNAS_PRODUTOS_AR];
+  return state.ar.largurasColunasProdutos;
+}
+
+function obterEstiloLargurasColunasProdutosAr() {
+  return `--ar-products-columns: ${obterLargurasColunasProdutosAr().map(largura => `${largura}px`).join(' ')};`;
+}
+
+function renderCabecalhoColunaProdutosAr(rotulo, indice) {
+  return `<span>${rotulo}<button class="ar-products-column-resizer" type="button" data-column-index="${indice}" aria-label="Redimensionar coluna${rotulo ? ` ${escapeAttr(rotulo)}` : ''}" title="Arraste para redimensionar a coluna"></button></span>`;
+}
+
+function salvarLargurasColunasProdutosAr() {
+  try {
+    window.localStorage.setItem(CHAVE_LARGURAS_COLUNAS_PRODUTOS_AR, JSON.stringify(obterLargurasColunasProdutosAr()));
+  } catch { /* preferências locais podem estar indisponíveis */ }
+}
+
+function aplicarLargurasColunasProdutosAr() {
+  const estilo = obterEstiloLargurasColunasProdutosAr();
+  document.querySelectorAll('.ar-products-table').forEach(tabela => tabela.setAttribute('style', estilo));
+}
+
+function ajustarLarguraColunaProdutosAr(indice, largura) {
+  const larguras = obterLargurasColunasProdutosAr();
+  larguras[indice] = Math.min(
+    LARGURA_MAXIMA_COLUNA_PRODUTOS_AR,
+    Math.max(LARGURA_MINIMA_COLUNAS_PRODUTOS_AR[indice], largura)
+  );
+  aplicarLargurasColunasProdutosAr();
+  const containerLista = document.querySelector('.ar-products-content-shell');
+  if (containerLista) {
+    containerLista.style.setProperty('--ar-products-content-width', `${larguras.reduce((total, valor) => total + valor, 2)}px`);
+  }
+}
+
+function iniciarRedimensionamentoColunaProdutosAr(event) {
+  const alca = event.target.closest?.('.ar-products-column-resizer');
+  if (!alca || !alca.closest('.ar-products-table')) return;
+
+  const indice = Number(alca.dataset.columnIndex);
+  const celula = alca.closest('.ar-products-head > span');
+  if (!Number.isInteger(indice) || !celula) return;
+
+  event.preventDefault();
+  state.ar.redimensionamentoColunaProdutos = {
+    indice,
+    inicioX: event.clientX,
+    inicioLargura: celula.getBoundingClientRect().width
+  };
+  document.body.classList.add('is-resizing-ar-products-column');
+  alca.setPointerCapture?.(event.pointerId);
+}
+
+function moverRedimensionamentoColunaProdutosAr(event) {
+  const redimensionamento = state.ar.redimensionamentoColunaProdutos;
+  if (!redimensionamento) return;
+  ajustarLarguraColunaProdutosAr(
+    redimensionamento.indice,
+    redimensionamento.inicioLargura + event.clientX - redimensionamento.inicioX
+  );
+}
+
+function finalizarRedimensionamentoColunaProdutosAr() {
+  if (!state.ar.redimensionamentoColunaProdutos) return;
+  salvarLargurasColunasProdutosAr();
+  state.ar.redimensionamentoColunaProdutos = null;
+  document.body.classList.remove('is-resizing-ar-products-column');
+}
+
+function ajustarColunaProdutosComTecladoAr(event) {
+  const alca = event.target.closest?.('.ar-products-column-resizer');
+  if (!alca || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  const indice = Number(alca.dataset.columnIndex);
+  ajustarLarguraColunaProdutosAr(indice, obterLargurasColunasProdutosAr()[indice] + (event.key === 'ArrowRight' ? 12 : -12));
+  salvarLargurasColunasProdutosAr();
+}
+
+document.addEventListener('pointermove', moverRedimensionamentoColunaProdutosAr);
+document.addEventListener('pointerup', finalizarRedimensionamentoColunaProdutosAr);
+document.addEventListener('pointercancel', finalizarRedimensionamentoColunaProdutosAr);
 
 function renderMensagemListaProdutosAr() {
   if (!state.ar.mensagemProdutosLista) return '';
@@ -10340,9 +12819,10 @@ function renderDropdownFiltrosListaProdutosAr() {
 
   return `
     <div class="ar-products-filter-dropdown">
-      <fieldset class="ar-products-filter-group">
+      <div class="ar-products-filter-content">
+       <fieldset class="ar-products-filter-group">
         <legend>Grupo do produto</legend>
-        <small>Sem seleção, todos os grupos são exibidos.</small>
+        <small>Selecione um ou mais grupos para filtrar.</small>
         <div class="ar-products-filter-group-options">
           ${grupos.map(grupo => {
             const selecionado = (state.ar.listaGrupos || []).includes(grupo);
@@ -10360,18 +12840,31 @@ function renderDropdownFiltrosListaProdutosAr() {
             `;
           }).join('')}
         </div>
-      </fieldset>
+       </fieldset>
 
-      <label>
+      <label class="ar-products-filter-ac">
+        <span>Status do produto</span>
+        <select onchange="alterarStatusListaProdutosAr(this.value)">
+          <option value="ativo" ${state.ar.listaStatusProdutos === 'ativo' ? 'selected' : ''}>Ativos</option>
+          <option value="inativo" ${state.ar.listaStatusProdutos === 'inativo' ? 'selected' : ''}>Inativos</option>
+        </select>
+      </label>
+
+      <label class="ar-products-filter-ac">
         <span>AC</span>
         <select onchange="alterarFiltroListaProdutosAr('ac', this.value)">
           <option value="">Todas</option>
           ${acs.map(ac => `<option value="${escapeAttr(ac)}" ${state.ar.listaAc === ac ? 'selected' : ''}>${escapeHtml(ac)}</option>`).join('')}
         </select>
       </label>
+      </div>
 
-      <button class="secondary-btn ar-products-clear-filters" type="button" onclick="limparFiltrosListaProdutosAr()">Limpar filtros</button>
-    </div>
+      <div class="ar-products-filter-footer">
+        <button class="secondary-btn ar-products-clear-filters" type="button" onclick="limparFiltrosListaProdutosAr()">Limpar filtros</button>
+        <button class="save-btn ar-products-apply-filters" type="button" onclick="aplicarFiltrosListaProdutosAr()">Aplicar</button>
+      </div>
+      </div>
+    </details>
   `;
 }
 
@@ -10384,9 +12877,163 @@ function renderBarraProdutosSelecionadosAr() {
     <div class="ar-products-selection-bar" role="status">
       <strong>${total} produto${total === 1 ? '' : 's'} selecionado${total === 1 ? '' : 's'}</strong>
       <button class="secondary-btn" type="button" onclick="limparProdutosListaSelecionadosAr()">Limpar</button>
-      <button class="save-btn" type="button" onclick="abrirVisualizacaoProdutosClienteAr()">Visualizar para cliente</button>
+      ${state.ar.listaStatusProdutos === 'ativo' ? `
+        ${pode('painel_ar.produtos', 'update') ? `<button class="secondary-btn ar-products-status-action" type="button" onclick="alterarStatusProdutosSelecionadosAr('inativo')" ${state.ar.alterandoStatusProdutos ? 'disabled' : ''}>Inativar produto${total === 1 ? '' : 's'}</button>` : ''}
+        <button class="save-btn" type="button" onclick="abrirVisualizacaoProdutosClienteAr()">Visualizar para cliente</button>
+      ` : `
+        ${pode('painel_ar.produtos', 'update') ? `<button class="save-btn ar-products-status-action" type="button" onclick="alterarStatusProdutosSelecionadosAr('ativo')" ${state.ar.alterandoStatusProdutos ? 'disabled' : ''}>Reativar produto${total === 1 ? '' : 's'}</button>` : ''}
+      `}
     </div>
   `;
+}
+
+function obterOpcoesAcProdutoGrupoAr(nomeGrupo) {
+  return [...new Set(
+    state.ar.produtos
+      .filter(produto => obterGrupoProdutoListaAr(produto) === nomeGrupo)
+      .map(produto => String(produto.ac || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function renderLinhaNovoProdutoGrupoAr(grupo) {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.grupo !== grupo.nome) return '';
+
+  const acs = obterOpcoesAcProdutoGrupoAr(grupo.nome);
+  const opcoesAc = acs.length
+    ? acs.map(ac => `<option value="${escapeAttr(ac)}" ${draft.ac === ac ? 'selected' : ''}>${escapeHtml(ac)}</option>`).join('')
+    : '<option value="">Sem AC definida neste grupo</option>';
+
+  return `
+    <article class="ar-products-row ar-products-new-row" role="row" aria-label="Novo produto">
+      <span class="ar-products-select-cell" aria-hidden="true"></span>
+      <span class="ar-products-edit-cell ar-products-new-description-cell">
+        <input class="ar-products-edit-input ar-products-new-input" type="text" maxlength="300" placeholder="Descrição do produto *" aria-label="Descrição do produto" value="${escapeAttr(draft.descricao)}" oninput="alterarRascunhoNovoProdutoGrupoAr('descricao', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off">
+        <select class="ar-products-edit-input ar-products-new-ac-select" aria-label="Autoridade certificadora" onchange="alterarRascunhoNovoProdutoGrupoAr('ac', this.value)" ${draft.salvando || acs.length < 2 ? 'disabled' : ''}>
+          ${acs.length > 1 ? '<option value="">Selecione a AC</option>' : ''}
+          ${opcoesAc}
+        </select>
+      </span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" inputmode="decimal" placeholder="Com desconto" aria-label="Valor com desconto" value="${escapeAttr(draft.precoComDesconto)}" oninput="alterarRascunhoNovoProdutoGrupoAr('precoComDesconto', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" inputmode="decimal" placeholder="Valor padrão" aria-label="Valor padrão" value="${escapeAttr(draft.precoSemDesconto)}" oninput="alterarRascunhoNovoProdutoGrupoAr('precoSemDesconto', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+      <span class="ar-products-edit-cell"><input class="ar-products-edit-input ar-products-new-input" type="text" maxlength="100" placeholder="SKU *" aria-label="SKU" value="${escapeAttr(draft.sku)}" oninput="alterarRascunhoNovoProdutoGrupoAr('sku', this.value)" ${draft.salvando ? 'disabled' : ''} autocomplete="off"></span>
+    </article>
+  `;
+}
+
+function iniciarNovoProdutoGrupoAr(grupo) {
+  if (!pode('painel_ar.produtos', 'update') || state.ar.listaStatusProdutos !== 'ativo') return;
+  if (state.ar.edicaoProdutosGrupo?.nome || state.ar.novoProdutoGrupo) return;
+
+  const acs = obterOpcoesAcProdutoGrupoAr(grupo);
+  state.ar.novoProdutoGrupo = {
+    grupo,
+    descricao: '',
+    sku: '',
+    precoComDesconto: '',
+    precoSemDesconto: '',
+    ac: acs.length === 1 ? acs[0] : '',
+    acs,
+    salvando: false,
+    erro: ''
+  };
+  state.ar.gruposProdutosExpandidos[grupo] = true;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+
+  const details = Array.from(document.querySelectorAll('.ar-products-group[data-group]'))
+    .find(elemento => elemento.dataset.group === grupo);
+  if (details) details.open = true;
+  window.requestAnimationFrame(() => {
+    const campo = details?.closest('.ar-products-group-shell')?.querySelector('.ar-products-new-input');
+    campo?.focus();
+  });
+}
+
+function alterarRascunhoNovoProdutoGrupoAr(campo, valor) {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.salvando || !['descricao', 'sku', 'precoComDesconto', 'precoSemDesconto', 'ac'].includes(campo)) return;
+  draft[campo] = valor;
+  draft.erro = '';
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+}
+
+function cancelarNovoProdutoGrupoAr() {
+  if (state.ar.novoProdutoGrupo?.salvando) return;
+  state.ar.novoProdutoGrupo = null;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  atualizarListaProdutosDomAr();
+}
+
+async function salvarNovoProdutoGrupoAr() {
+  const draft = state.ar.novoProdutoGrupo;
+  if (!draft || draft.salvando) return;
+
+  const descricao = String(draft.descricao || '').trim();
+  const sku = String(draft.sku || '').trim();
+  const precoComDesconto = parseValorEdicaoProdutoGrupoAr(draft.precoComDesconto);
+  const precoSemDesconto = parseValorEdicaoProdutoGrupoAr(draft.precoSemDesconto);
+
+  if (!descricao || descricao.length > 300) state.ar.mensagemProdutosLista = 'Informe uma descrição com até 300 caracteres.';
+  else if (!sku || sku.length > 100) state.ar.mensagemProdutosLista = 'Informe um SKU com até 100 caracteres.';
+  else if (Number.isNaN(precoComDesconto) || Number.isNaN(precoSemDesconto)) state.ar.mensagemProdutosLista = 'Informe valores válidos para os preços.';
+  else if ((precoComDesconto != null && precoComDesconto < 0) || (precoSemDesconto != null && precoSemDesconto < 0)) state.ar.mensagemProdutosLista = 'Os preços não podem ser negativos.';
+  else if (precoComDesconto != null && precoSemDesconto != null && precoComDesconto > precoSemDesconto) state.ar.mensagemProdutosLista = 'O valor com desconto não pode superar o valor padrão.';
+  else if (draft.acs.length > 0 && !draft.acs.includes(draft.ac)) state.ar.mensagemProdutosLista = 'Selecione uma AC já definida para este grupo.';
+
+  if (state.ar.mensagemProdutosLista) {
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    const details = Array.from(document.querySelectorAll('.ar-products-group[data-group]'))
+      .find(elemento => elemento.dataset.group === draft.grupo);
+    if (details) details.open = true;
+    return;
+  }
+
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para adicionar produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    atualizarListaProdutosDomAr();
+    return;
+  }
+
+  draft.salvando = true;
+  draft.erro = '';
+  atualizarListaProdutosDomAr();
+
+  try {
+    const response = await chamarApi('createArProduct', {
+      grupo: draft.grupo,
+      descricao_comercial: descricao,
+      product_id: sku,
+      preco_com_desconto: precoComDesconto,
+      preco_sem_desconto: precoSemDesconto,
+      ac: String(draft.ac || '').trim() || null
+    });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível adicionar o produto.'));
+
+    const produto = response.data?.produto;
+    if (!produto?.id) throw new Error('O produto foi salvo, mas não foi possível atualizar a lista. Recarregue a tela.');
+    state.ar.produtos = [...state.ar.produtos, produto]
+      .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+    state.ar.gruposProdutosExpandidos[draft.grupo] = true;
+    state.ar.novoProdutoGrupo = null;
+    state.ar.mensagemProdutosLista = 'Produto adicionado com sucesso.';
+    state.ar.tipoMensagemProdutosLista = 'sucesso';
+  } catch (erro) {
+    if (state.ar.novoProdutoGrupo) {
+      state.ar.novoProdutoGrupo.salvando = false;
+      state.ar.novoProdutoGrupo.erro = erro.message || 'Não foi possível adicionar o produto.';
+      state.ar.mensagemProdutosLista = state.ar.novoProdutoGrupo.erro;
+      state.ar.tipoMensagemProdutosLista = 'erro';
+    }
+  }
+
+  atualizarListaProdutosDomAr();
 }
 
 function renderModalVisualizacaoProdutosAr() {
@@ -10433,7 +13080,7 @@ function renderModalVisualizacaoProdutosAr() {
 }
 
 function obterOpcoesFiltroListaProdutosAr(tipo) {
-  const valores = state.ar.produtos.map(produto => {
+  const valores = obterProdutosBaseListaProdutosAr().map(produto => {
     if (tipo === 'grupo') return obterGrupoProdutoListaAr(produto);
     return produto.ac || '';
   }).filter(Boolean);
@@ -10442,7 +13089,14 @@ function obterOpcoesFiltroListaProdutosAr(tipo) {
 }
 
 function contarFiltrosListaProdutosAr() {
-  return (state.ar.listaGrupos || []).length + (state.ar.listaAc ? 1 : 0);
+  return (state.ar.listaGrupos || []).length + (state.ar.listaAc ? 1 : 0)
+    + (state.ar.listaStatusProdutos === 'inativo' ? 1 : 0);
+}
+
+function obterProdutosBaseListaProdutosAr() {
+  return state.ar.listaStatusProdutos === 'inativo'
+    ? state.ar.produtosInativos
+    : state.ar.produtos;
 }
 
 function atualizarIndicadorFiltrosListaProdutosAr() {
@@ -10469,6 +13123,8 @@ function obterClasseGrupoProdutosAr(nome) {
 }
 
 function agruparProdutosListaAr(produtos) {
+  carregarOrdenacaoGruposProdutosAr();
+
   const grupos = new Map();
 
   produtos.forEach(produto => {
@@ -10481,10 +13137,22 @@ function agruparProdutosListaAr(produtos) {
     grupos.get(nomeGrupo).push(produto);
   });
 
-  return Array.from(grupos.entries()).map(([nome, itens]) => ({
+  const gruposOrdenados = Array.from(grupos.entries()).map(([nome, itens]) => ({
     nome,
     produtos: itens
   }));
+
+  const ordem = state.ar.ordenacaoGruposProdutos === 'desc' ? -1 : 1;
+  return gruposOrdenados.sort((a, b) => ordem * a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+}
+
+function carregarOrdenacaoGruposProdutosAr() {
+  if (state.ar.ordenacaoGruposProdutosInicializada) return;
+  try {
+    const preferencia = window.localStorage.getItem('hub-ar-produtos-ordenacao-grupos-v1');
+    if (preferencia === 'asc' || preferencia === 'desc') state.ar.ordenacaoGruposProdutos = preferencia;
+  } catch { /* usa a ordem padrão */ }
+  state.ar.ordenacaoGruposProdutosInicializada = true;
 }
 
 function renderOpcoesProdutosAr() {
@@ -10656,16 +13324,6 @@ function atualizarSugestoesParceiroDomAr() {
     : '<p>Nenhum parceiro encontrado.</p>';
 }
 
-function atualizarEstadoBotaoGerarAr() {
-  const botao = document.getElementById('ar_gerar_btn');
-
-  if (!botao) {
-    return;
-  }
-
-  botao.disabled = state.ar.gerando || !state.ar.produtoId || !state.ar.parceiroId;
-}
-
 function renderOpcoesParceirosAr() {
   const parceiros = parceirosFiltradosAr();
 
@@ -10717,10 +13375,30 @@ function renderDetalhesParceiroAr(parceiro) {
   return `
     <dl class="ar-partner-details">
       ${linhas.filter(([, valor]) => valor).map(([rotulo, valor]) => `
-        <div><dt>${escapeHtml(rotulo)}</dt><dd>${escapeHtml(valor)}</dd></div>
+        <div><dt>${escapeHtml(rotulo)}</dt><dd>${rotulo === 'E-mail para cadastro' || rotulo === 'E-mail comercial'
+          ? `<button class="ar-partner-email-copy" type="button" onclick="copiarEmailParceiroAr('${escapeAttr(valor)}', this)" title="Copiar e-mail">${escapeHtml(valor)}</button>`
+          : escapeHtml(valor)}</dd></div>
       `).join('')}
     </dl>
   `;
+}
+
+async function copiarEmailParceiroAr(email, botao) {
+  try {
+    await navigator.clipboard.writeText(email);
+    const textoOriginal = botao.textContent;
+    botao.textContent = 'E-mail copiado';
+    botao.classList.add('copied');
+    window.setTimeout(() => {
+      botao.textContent = textoOriginal;
+      botao.classList.remove('copied');
+    }, 1600);
+  } catch (erro) {
+    botao.textContent = 'Não foi possível copiar';
+    window.setTimeout(() => {
+      botao.textContent = email;
+    }, 1600);
+  }
 }
 
 function renderOrcamentoAr() {
@@ -10962,6 +13640,8 @@ function atualizarListaProdutosDomAr() {
       grupo.open = expansaoGrupos.get(grupo.dataset.group);
     }
   });
+  atualizarBotaoToggleTodosProdutosAr();
+  aplicarIconesLucideHub(resultado);
 }
 
 function fecharFiltrosListaAoClicarForaAr(event) {
@@ -10977,12 +13657,47 @@ function alternarFiltrosListaProdutosAr() {
   renderPainelAr();
 }
 
+function aplicarFiltrosListaProdutosAr() {
+  state.ar.filtrosListaAberto = false;
+  renderPainelAr();
+}
+
 function alterarFiltroListaProdutosAr(tipo, valor) {
   if (tipo === 'ac') {
     state.ar.listaAc = valor;
   }
 
   renderPainelAr();
+}
+
+async function alterarStatusListaProdutosAr(status) {
+  if (!['ativo', 'inativo'].includes(status) || state.ar.listaStatusProdutos === status) return;
+
+  state.ar.listaStatusProdutos = status;
+  state.ar.produtosListaSelecionados = [];
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+
+  if (status !== 'inativo' || state.ar.produtosInativosCarregados) {
+    renderPainelAr();
+    return;
+  }
+
+  state.ar.produtosInativosCarregando = true;
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('getArProductsByStatus', { status: 'inativo' });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os produtos inativos.'));
+    state.ar.produtosInativos = Array.isArray(response.data?.produtos) ? response.data.produtos : [];
+    state.ar.produtosInativosCarregados = true;
+  } catch (erro) {
+    state.ar.mensagemProdutosLista = erro.message || 'Não foi possível carregar os produtos inativos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+  } finally {
+    state.ar.produtosInativosCarregando = false;
+    renderPainelAr();
+  }
 }
 
 function alternarFiltroGrupoListaProdutosAr(grupo, selecionado) {
@@ -11002,7 +13717,64 @@ function alternarFiltroGrupoListaProdutosAr(grupo, selecionado) {
 function limparFiltrosListaProdutosAr() {
   state.ar.listaGrupos = [];
   state.ar.listaAc = '';
+  state.ar.listaStatusProdutos = 'ativo';
   renderPainelAr();
+}
+
+async function alterarStatusProdutosSelecionadosAr(status) {
+  const produtoIds = [...new Set(state.ar.produtosListaSelecionados)];
+  if (!produtoIds.length || !['ativo', 'inativo'].includes(status) || state.ar.alterandoStatusProdutos) return;
+
+  if (!pode('painel_ar.produtos', 'update')) {
+    state.ar.mensagemProdutosLista = 'Seu usuário não possui permissão para alterar o status dos produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+    renderPainelAr();
+    return;
+  }
+
+  const acao = status === 'inativo' ? 'inativar' : 'reativar';
+  const descricaoImpacto = status === 'inativo'
+    ? 'Eles deixarão de aparecer na lista ativa e não poderão ser usados para gerar novos links.'
+    : 'Eles voltarão a aparecer na lista ativa e poderão ser usados para gerar links.';
+  if (!window.confirm(`Deseja ${acao} ${produtoIds.length} produto${produtoIds.length === 1 ? '' : 's'}? ${descricaoImpacto}`)) return;
+
+  state.ar.alterandoStatusProdutos = true;
+  state.ar.mensagemProdutosLista = '';
+  state.ar.tipoMensagemProdutosLista = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('updateArProductsStatus', { produtoIds, status });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível alterar o status dos produtos.'));
+
+    const atualizados = Array.isArray(response.data?.produtos) ? response.data.produtos : [];
+    const idsAtualizados = new Set(atualizados.map(produto => produto.id));
+
+    if (status === 'inativo') {
+      state.ar.produtos = state.ar.produtos.filter(produto => !idsAtualizados.has(produto.id));
+      const inativosPorId = new Map(state.ar.produtosInativos.map(produto => [produto.id, produto]));
+      atualizados.forEach(produto => inativosPorId.set(produto.id, produto));
+      state.ar.produtosInativos = Array.from(inativosPorId.values())
+        .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+      state.ar.produtosInativosCarregados = true;
+    } else {
+      state.ar.produtosInativos = state.ar.produtosInativos.filter(produto => !idsAtualizados.has(produto.id));
+      const ativosPorId = new Map(state.ar.produtos.map(produto => [produto.id, produto]));
+      atualizados.forEach(produto => ativosPorId.set(produto.id, produto));
+      state.ar.produtos = Array.from(ativosPorId.values())
+        .sort((a, b) => String(a.descricao_comercial || '').localeCompare(String(b.descricao_comercial || ''), 'pt-BR'));
+    }
+
+    state.ar.produtosListaSelecionados = [];
+    state.ar.mensagemProdutosLista = `${atualizados.length} produto${atualizados.length === 1 ? '' : 's'} ${status === 'inativo' ? 'inativado' : 'reativado'}${atualizados.length === 1 ? '' : 's'} com sucesso.`;
+    state.ar.tipoMensagemProdutosLista = 'sucesso';
+  } catch (erro) {
+    state.ar.mensagemProdutosLista = erro.message || 'Não foi possível alterar o status dos produtos.';
+    state.ar.tipoMensagemProdutosLista = 'erro';
+  } finally {
+    state.ar.alterandoStatusProdutos = false;
+    renderPainelAr();
+  }
 }
 
 function alternarProdutoListaSelecionadoAr(id) {
@@ -11081,19 +13853,49 @@ async function copiarVisualizacaoProdutosClienteAr() {
   }
 }
 
-function alternarTodosGruposProdutosAr() {
-  const grupos = Array.from(document.querySelectorAll('.ar-products-group'));
-  const deveFechar = grupos.some(grupo => grupo.open);
-
-  grupos.forEach(grupo => {
-    grupo.open = !deveFechar;
-  });
-
+function atualizarBotaoToggleTodosProdutosAr() {
+  const grupos = Array.from(document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group'));
+  const todosRecolhidos = grupos.length > 0 && grupos.every(grupo => !grupo.open);
   const botao = document.querySelector('.ar-products-toggle-btn');
+  if (!botao) return;
 
-  if (botao) {
-    botao.textContent = deveFechar ? 'Expandir todos' : 'Recolher todos';
+  const rotulo = todosRecolhidos ? 'Expandir todos' : 'Recolher todos';
+  botao.querySelector('span').textContent = rotulo;
+  const icone = botao.querySelector('[data-lucide]');
+  if (icone) {
+    icone.setAttribute('data-lucide', todosRecolhidos ? 'chevron-down' : 'chevron-up');
+    aplicarIconesLucideHub(icone.parentElement);
   }
+}
+
+function registrarEstadoGrupoProdutosAr(grupo) {
+  const nome = grupo?.dataset?.group;
+  if (!nome) return;
+  state.ar.gruposProdutosExpandidos ||= {};
+  state.ar.gruposProdutosExpandidos[nome] = grupo.open;
+}
+
+function alternarTodosGruposProdutosAr() {
+  const grupos = Array.from(document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group'));
+  const deveExpandir = grupos.length > 0 && grupos.every(grupo => !grupo.open);
+
+  grupos.forEach(grupo => { grupo.open = deveExpandir; });
+  atualizarBotaoToggleTodosProdutosAr();
+}
+
+function definirOrdenacaoGruposProdutosAr(ordem) {
+  if (!['asc', 'desc'].includes(ordem)) return;
+  state.ar.ordenacaoGruposProdutos = ordem;
+  try {
+    window.localStorage.setItem('hub-ar-produtos-ordenacao-grupos-v1', ordem);
+  } catch { /* preferência local é opcional */ }
+  document.querySelector('.ar-products-sort-menu')?.removeAttribute('open');
+  document.querySelectorAll('.ar-products-sort-dropdown button').forEach(botao => {
+    const selecionado = botao.textContent.trim() === (ordem === 'asc' ? 'A–Z' : 'Z–A');
+    botao.classList.toggle('is-selected', selecionado);
+    botao.setAttribute('aria-pressed', String(selecionado));
+  });
+  atualizarListaProdutosDomAr();
 }
 
 function campoProdutoCombinaAr(valor, filtro) {
@@ -11114,7 +13916,6 @@ function alterarFiltroProdutoAr(chave, valor) {
   state.ar.alertas = [];
 
   atualizarSugestoesProdutoDomAr(chave);
-  atualizarEstadoBotaoGerarAr();
 }
 
 function ativarCampoProdutoAr(chave) {
@@ -11140,24 +13941,24 @@ function selecionarSugestaoProdutoAr(chave, valor) {
       box.hidden = false;
       box.innerHTML = '<p>Complete os outros campos para identificar o produto.</p>';
     }
-    atualizarEstadoBotaoGerarAr();
     return;
   }
 
   state.ar.campoProdutoAtivo = '';
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function alterarBuscaParceiroAr(valor) {
   const tinhaParceiroSelecionado = Boolean(state.ar.parceiroId || state.ar.resultado);
 
+  invalidarGeracaoLinksAr();
   state.ar.parceiroBusca = valor;
   state.ar.parceiroId = '';
   state.ar.resultado = null;
   state.ar.alertas = [];
 
   if (tinhaParceiroSelecionado) {
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     requestAnimationFrame(() => {
       const input = document.getElementById('ar_parceiro_busca');
@@ -11173,18 +13974,17 @@ function alterarBuscaParceiroAr(valor) {
     return;
   }
 
-  atualizarEstadoBotaoGerarAr();
   atualizarSugestoesParceiroDomAr();
 }
 
 function confirmarParceiroDigitadoAr(valor) {
   selecionarParceiroPorTextoAr(valor);
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function confirmarProdutoDigitadoAr() {
   selecionarProdutoPorFiltrosAr();
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
 }
 
 function selecionarParceiroPorTextoAr(valor) {
@@ -11224,37 +14024,50 @@ function agendarRenderPainelAr() {
   }, 220);
 }
 
+function atualizarGeradorLinksDomAr() {
+  const fluxo = document.querySelector('.ar-flow-grid');
+
+  if (!fluxo) {
+    renderPainelAr();
+    return;
+  }
+
+  const produto = fluxo.querySelector('.ar-flow-product .ar-flow-card-body');
+  const parceiro = fluxo.querySelector('.ar-flow-partner .ar-flow-card-body');
+  const resumo = fluxo.querySelector('.ar-flow-budget .ar-flow-card-body');
+  const links = fluxo.querySelector('.ar-flow-links .ar-flow-card-body');
+  const acaoLinks = fluxo.querySelector('.ar-links-header-action');
+
+  if (!produto || !parceiro || !resumo || !links || !acaoLinks) {
+    renderPainelAr();
+    return;
+  }
+
+  produto.innerHTML = renderPainelProdutoMvpAr();
+  parceiro.innerHTML = renderPainelParceiroMvpAr();
+  resumo.innerHTML = renderOrcamentoAr();
+  acaoLinks.innerHTML = renderAcaoGerarLinksAr();
+  links.innerHTML = renderResultadoAr();
+}
+
 function selecionarProdutoAr(id) {
+  invalidarGeracaoLinksAr();
   state.ar.produtoId = id;
   state.ar.resultado = null;
   state.ar.alertas = [];
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
 }
 
 function selecionarParceiroAr(id) {
+  invalidarGeracaoLinksAr();
   state.ar.parceiroId = id;
   const parceiro = obterParceiroSelecionadoAr();
   state.ar.parceiroBusca = parceiro ? (parceiro.nome_completo || parceiro.nome) : state.ar.parceiroBusca;
   state.ar.resultado = null;
   state.ar.alertas = [];
-  renderPainelAr();
+  atualizarGeradorLinksDomAr();
   tentarGerarLinksAutomaticamenteAr();
-}
-
-function selecionarAbaAr(aba) {
-  if (!podeAcessarAbaAr(aba)) {
-    state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
-    renderPainelAr();
-    return;
-  }
-
-  state.ar.aba = aba;
-  renderPainelAr();
-
-  if (aba === 'validacoes' && !state.ar.validacoes.loading) {
-    carregarValidacoesAr();
-  }
 }
 
 function selecionarSubabaValidacoesAr(aba) {
@@ -11727,15 +14540,26 @@ async function gerarLinksAr() {
     return;
   }
 
+  const geracaoLinksToken = state.ar.geracaoLinksToken;
+  const produtoId = state.ar.produtoId;
+  const parceiroId = state.ar.parceiroId;
+  const requisicaoAindaAtual = () => (
+    state.ar.geracaoLinksToken === geracaoLinksToken
+    && state.ar.produtoId === produtoId
+    && state.ar.parceiroId === parceiroId
+  );
+
   try {
     state.ar.message = '';
     state.ar.gerando = true;
-    renderPainelAr();
+    atualizarGeradorLinksDomAr();
 
     const response = await chamarApi('generateArLinks', {
-      produto_id: state.ar.produtoId,
-      parceiro_id: state.ar.parceiroId
+      produto_id: produtoId,
+      parceiro_id: parceiroId
     });
+
+    if (!requisicaoAindaAtual()) return;
 
     if (!response.ok) {
       throw new Error(obterMensagemApi(response, 'Não foi possível gerar os links.'));
@@ -11745,26 +14569,14 @@ async function gerarLinksAr() {
     state.ar.resultado = response.data;
     state.ar.alertas = response.data.alertas || [];
     await esperar(500);
-    renderPainelAr();
+    if (!requisicaoAindaAtual()) return;
+    atualizarGeradorLinksDomAr();
   } catch (erro) {
+    if (!requisicaoAindaAtual()) return;
     state.ar.gerando = false;
     state.ar.resultado = null;
     state.ar.message = erro.message || 'Erro ao gerar links.';
-    renderPainelAr();
-  }
-}
-
-function atualizarBotaoAr(texto, disabled, classe) {
-  const botao = document.getElementById('ar_gerar_btn');
-
-  if (!botao) return;
-
-  botao.textContent = texto;
-  botao.disabled = disabled;
-  botao.classList.remove('is-saving', 'is-saved');
-
-  if (classe) {
-    botao.classList.add(classe);
+    atualizarGeradorLinksDomAr();
   }
 }
 
@@ -12190,21 +15002,7 @@ function atualizarHashHub(hash = '', { replace = false } = {}) {
 }
 
 function atualizarRotaAdminHub(aba = '', { replace = false } = {}) {
-  const rotasPorAba = {
-    categorias: 'cadastros/categorias',
-    grupos: 'cadastros/grupos',
-    usuarios: 'cadastros/usuarios',
-    perfis: 'cadastros/perfis',
-    'parceiros-indicacao': 'cadastros/parceiros-indicacao',
-    'logs-integracoes': 'sistema/logs-integracoes',
-    auditoria: 'sistema/logs-integracoes/auditoria',
-    limites: 'parametros/limites',
-    identidade: 'identidade',
-    aparencia: 'aparencia',
-    logo: 'logo',
-    'home-exibicao': 'home-exibicao'
-  };
-  const rotaAba = rotasPorAba[aba] || aba;
+  const rotaAba = obterRotaAdminPorAba(aba);
   const baseAdmin = montarCaminhoHub('administracao').replace(/\/+$/g, '');
   const url = new URL(window.location.href);
   url.pathname = rotaAba ? `${baseAdmin}/${rotaAba}` : baseAdmin;
@@ -12222,6 +15020,9 @@ const HUB_BREADCRUMB_LABELS = {
   administracao: 'Administração',
   'central-senhas': 'Central de Senhas',
   'painel-ar': 'Painel AR',
+  operacoes: 'Operações',
+  corretora: 'Corretora',
+  'consultoria-360': 'Consultoria 360°',
   crm: 'CRM',
   'links-corretora': 'Links Corretora',
   'links-ar': 'Links AR',
@@ -12251,33 +15052,32 @@ const HUB_BREADCRUMB_LABELS = {
   aparencia: 'Aparência',
   logo: 'Logo',
   'home-exibicao': 'Home e Exibição',
-  acessos: 'Acessos',
+  acessos: 'Senhas Salvas',
   historico: 'Histórico',
+  links: 'Links Úteis',
   inicio: 'Início',
   gerar: 'Gerar Links',
   produtos: 'Lista Produtos',
   validacoes: 'Validações',
   emitir: 'Emitir Recibo',
   consultar: 'Consultar Recibos',
-  importacao: 'Importação'
+  importacao: 'Importação',
+  cadastro: 'Cadastro sequencial'
 };
 
 const HUB_BREADCRUMB_ADMIN_ROUTES = {
-  categorias: 'cadastros/categorias',
-  grupos: 'cadastros/grupos',
-  usuarios: 'cadastros/usuarios',
-  perfis: 'cadastros/perfis',
-  'parceiros-indicacao': 'cadastros/parceiros-indicacao',
-  'logs-integracoes': 'sistema/logs-integracoes',
-  auditoria: 'sistema/logs-integracoes/auditoria',
-  limites: 'parametros/limites',
-  identidade: 'identidade',
-  aparencia: 'aparencia',
-  logo: 'logo',
-  'home-exibicao': 'home-exibicao'
+  ...HUB_ADMIN_ROUTE_TABS
 };
 
 function obterLabelBreadcrumbHub(chave = '') {
+  if (String(chave) === '200') return 'CRM 2.0';
+  if (['201', '202', '203'].includes(String(chave))) return 'Cadastro';
+  if (String(chave) === '204') return 'Pedidos';
+  if (String(chave) === '205') return 'Oportunidades';
+  if (String(chave) === '206') return 'Configurações';
+  if (String(chave) === '207') return 'Configurações';
+  if (String(chave) === 'comunicacao') return 'Comunicação';
+  if (String(chave) === 'automacoes') return 'Automações';
   return HUB_BREADCRUMB_LABELS[chave] || String(chave || '')
     .split('-')
     .filter(Boolean)
@@ -12286,6 +15086,14 @@ function obterLabelBreadcrumbHub(chave = '') {
 }
 
 function obterBreadcrumbHub() {
+  if (['admin/modulos', 'configuracoes/modulos'].includes(obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, ''))) {
+    return [
+      { label: 'Hub', path: montarCaminhoHub() },
+      { label: 'Administração', path: montarCaminhoHub('admin') },
+      { label: 'Configurar módulos', path: `${montarCaminhoHub('admin')}/modulos` }
+    ];
+  }
+
   const contexto = obterContextoRotaHub();
   const itens = [
     {
@@ -12309,6 +15117,15 @@ function obterBreadcrumbHub() {
     itens.push({
       label: obterLabelBreadcrumbHub(contexto.principal),
       path: `${pathModulo.replace(/\/+$/g, '')}/${rotaAdmin}`
+    });
+  } else if (contexto.modulo === 'painel-ar' && ['201', '202', '203', '204', '205', '206'].includes(contexto.principal)) {
+    itens.push({
+      label: 'CRM 2.0',
+      path: `${pathModulo.replace(/\/+$/g, '')}/200`
+    });
+    itens.push({
+      label: ['201', '202', '203'].includes(contexto.principal) ? 'Cadastro' : contexto.principal === '204' ? 'Pedidos' : contexto.principal === '205' ? 'Oportunidades' : contexto.principal === '206' ? 'Comunicação' : 'Automações',
+      path: `${pathModulo.replace(/\/+$/g, '')}/${contexto.principal}`
     });
   } else if (contexto.principal) {
     itens.push({
@@ -12360,7 +15177,12 @@ function obterContextoRotaHub() {
   const modulo = normalizarIdModuloRota(partesRota[0] || '') || 'inicio';
   const hash = normalizarHashHub(obterHashHubAtual());
   const partes = hash ? hash.split('/') : partesRota.slice(1);
-  const principal = partes.length > 1 && ['cadastros', 'parametros', 'sistema'].includes(partes[0])
+  const rotaDetalheUsuario = modulo === 'administracao'
+    && partes[0] === 'cadastros'
+    && partes[1] === 'usuarios';
+  const principal = rotaDetalheUsuario
+    ? 'usuarios'
+    : partes.length > 1 && ['cadastros', 'parametros', 'sistema'].includes(partes[0])
     ? partes[partes.length - 1]
     : partes[0];
 
@@ -12368,7 +15190,7 @@ function obterContextoRotaHub() {
     modulo,
     hash,
     principal: principal || '',
-    secundaria: partes[1] || ''
+    secundaria: rotaDetalheUsuario ? '' : partes[1] || ''
   };
 }
 
@@ -12383,19 +15205,100 @@ function sincronizarContextoAdminPelaRota() {
 }
 
 function sincronizarContextoSenhasPelaRota() {
-  const { modulo, principal } = obterContextoRotaHub();
-  if (modulo !== 'central-senhas' || !principal) return;
+  const { modulo, principal, secundaria } = obterContextoRotaHub();
+  if (modulo !== 'central-senhas') return;
 
-  if (principal === 'acessos' || principal === 'historico') {
-    state.passwords.aba = principal;
+  if (!principal) {
+    normalizarAbaCentralSenhasPorStatus();
+    return;
   }
+
+  if (principal === 'links') {
+    state.passwords.aba = 'links';
+    const escopo = ['corretora', 'ar', 'gestao', 'todos'].includes(secundaria) ? secundaria : 'todos';
+    state.links.escopo = escopo;
+    state.links.titulo = escopo === 'todos'
+      ? 'Gerenciamento de Links'
+      : obterMetaLinks(`links-${escopo}`).titulo;
+  } else if (principal === 'acessos' || principal === 'historico') {
+    if (pode('central_senhas', 'view') || pode('central_senhas', 'create')) {
+      state.passwords.aba = 'acessos';
+    } else if (podeAcessarGerenciamentoLinks()) {
+      state.passwords.aba = 'links';
+      state.links.escopo = 'todos';
+      state.links.titulo = 'Gerenciamento de Links';
+    }
+  }
+}
+
+function normalizarAbaCentralSenhasPorStatus() {
+  const podeAcessos = (pode('central_senhas', 'view') || pode('central_senhas', 'create')
+    || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))
+    && submoduloHomeEstaAtivoPorChave('central_senhas.acessos');
+  const podeLinks = (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks())
+    && submoduloHomeEstaAtivoPorChave('central_senhas.links');
+  const atualEstaAtiva = state.passwords.aba === 'links' ? podeLinks : podeAcessos;
+
+  if (atualEstaAtiva) return true;
+  if (podeAcessos) {
+    state.passwords.aba = 'acessos';
+    return true;
+  }
+  if (podeLinks) {
+    state.passwords.aba = 'links';
+    state.links.escopo = 'todos';
+    state.links.titulo = 'Gerenciamento de Links';
+    return true;
+  }
+  return false;
 }
 
 function sincronizarContextoArPelaRota() {
   const { modulo, principal, secundaria } = obterContextoRotaHub();
   if (modulo !== 'painel-ar') return;
 
-  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm'];
+  if (principal === 'crm2' || (principal === '200' && secundaria === 'cadastro')) {
+    const url = new URL(window.location.href);
+    url.pathname = `${montarCaminhoHub('painel-ar').replace(/\/+$/g, '')}/200`;
+    url.hash = '';
+    window.history.replaceState({}, '', url);
+    state.ar.aba = 'crm2';
+    return;
+  }
+
+  const abasValidas = ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
+  if (principal === '200') {
+    state.ar.aba = 'crm2';
+    return;
+  }
+  if (principal === '201') {
+    state.ar.aba = 'crm2-cadastro';
+    return;
+  }
+  if (principal === '202') {
+    state.ar.aba = 'crm2-cadastro';
+    return;
+  }
+  if (principal === '203') {
+    state.ar.aba = 'crm2-cadastro';
+    return;
+  }
+  if (principal === '204') {
+    state.ar.aba = 'crm2-pedidos';
+    return;
+  }
+  if (principal === '205') {
+    state.ar.aba = 'crm2-oportunidades';
+    return;
+  }
+  if (principal === '206') {
+    state.ar.aba = 'crm2-comunicacao';
+    return;
+  }
+  if (principal === '207') {
+    state.ar.aba = 'crm2-automacoes';
+    return;
+  }
   if (principal && abasValidas.includes(principal)) {
     state.ar.aba = principal;
   }
@@ -12454,9 +15357,23 @@ function renderHubTopbar() {
         <p>${escapeHtml(subtitulo)}</p>
       </div>
 
-      ${renderHubNotificationBell()}
+      <div class="hub-header-notification-actions">
+        ${renderHubNotificationBell()}
+        ${renderHubInternalNoticesBell()}
+      </div>
       ${renderHubUserBox()}
     </header>
+  `;
+}
+
+function renderHubInternalNoticesBell() {
+  const naoLidos = MOCK_CENTRAL_AVISOS.filter(aviso => !aviso.lido).length;
+
+  return `
+    <button class="hub-notification-bell hub-internal-notices-bell" type="button" onclick="abrirPainelAvisosInternosHub()" aria-label="Avisos internos" title="Avisos internos">
+      <span aria-hidden="true">📣</span>
+      <span class="hub-notification-count" data-hub-internal-notice-count ${naoLidos ? '' : 'hidden'}>${naoLidos}</span>
+    </button>
   `;
 }
 
@@ -12486,6 +15403,118 @@ function normalizarRotaComparacaoHub(rota = '') {
   return `${normalizada}${hash ? `#${hash}` : ''}`;
 }
 
+function normalizarRotaSubmoduloHome(rota = '') {
+  const [pathname = '/', hash = ''] = String(rota || '/').split('#');
+  let caminho = pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+  const aliasesFinanceiro = {
+    'financeiro/lancamentos/contas-pagar': 'financeiro/lancamentos/pagar',
+    'financeiro/lancamentos/contas-receber': 'financeiro/lancamentos/receber',
+    'financeiro/lancamentos/recorrencias': 'financeiro/lancamentos/recorrentes'
+  };
+  caminho = aliasesFinanceiro[caminho] || caminho;
+  const hashInformado = normalizarHashHub(hash);
+  if (caminho === 'central-senhas' && ['acessos', 'links', 'links/corretora', 'links/ar', 'links/gestao'].includes(hashInformado)) {
+    return `/central-senhas/${hashInformado}`;
+  }
+  const alias = HUB_ROUTE_ALIASES[caminho];
+  const alvo = alias || caminho;
+  const [caminhoFinal = '', hashFinal = ''] = String(alvo).split('#');
+  const hashNormalizado = normalizarHashHub(hash || hashFinal);
+  return `/${caminhoFinal.replace(/^\/+|\/+$/g, '')}${hashNormalizado ? `#${hashNormalizado}` : ''}`;
+}
+
+function obterAliasCanonicoRotaHub() {
+  const base = obterBaseHub();
+  const pathname = window.location.pathname || '/';
+  const caminhoRelativo = (base ? pathname.slice(base.length) : pathname)
+    .replace(/^\/+|\/+$/g, '')
+    .toLowerCase();
+  const alias = HUB_ROUTE_ALIASES[caminhoRelativo];
+  if (!alias || alias === caminhoRelativo) return '';
+
+  const [caminhoDestino = '', hashDestino = ''] = String(alias).split('#');
+  const hash = normalizarHashHub(window.location.hash || hashDestino);
+  const destino = `${base}${caminhoDestino ? `/${caminhoDestino.replace(/^\/+|\/+$/g, '')}` : '/'}${hash ? `#${hash}` : ''}`;
+  const atual = `${window.location.pathname}${window.location.hash || ''}`;
+  return destino === atual ? '' : destino;
+}
+
+function rotaSubmoduloCorresponde(item, rota = obterRotaRelativaAtualHub()) {
+  const rotaAtual = normalizarRotaSubmoduloHome(rota);
+  const rotaConfigurada = normalizarRotaSubmoduloHome(item.route);
+  const [caminhoAtual = '/', hashAtual = ''] = rotaAtual.split('#');
+  const [caminhoConfigurado = '/', hashConfigurado = ''] = rotaConfigurada.split('#');
+
+  if (item.matchHash) {
+    const hashBase = normalizarHashHub(item.matchHash);
+    return caminhoAtual === caminhoConfigurado
+      && (hashAtual === hashBase || hashAtual.startsWith(`${hashBase}/`));
+  }
+
+  if (caminhoAtual !== caminhoConfigurado
+    && !caminhoAtual.startsWith(`${caminhoConfigurado.replace(/\/$/, '')}/`)) {
+    return false;
+  }
+
+  if (!hashConfigurado) return true;
+  return hashAtual === hashConfigurado || hashAtual.startsWith(`${hashConfigurado}/`);
+}
+
+function obterSubmoduloHomePelaRota(rota = obterRotaRelativaAtualHub()) {
+  return [...HOME_SUBMODULES]
+    .sort((a, b) => normalizarRotaSubmoduloHome(b.route).length - normalizarRotaSubmoduloHome(a.route).length)
+    .find(item => rotaSubmoduloCorresponde(item, rota)) || null;
+}
+
+function submoduloHomeEstaAtivo(item) {
+  if (!item) return true;
+  const configuracao = state.homeModuleSettings || {};
+  const submodules = new Map((configuracao.submodules || []).map(submodule => [submodule.key, submodule]));
+  const module = (configuracao.modules || []).find(candidate => candidate.slug === item.parent);
+  const recurso = submodules.get(item.key);
+  const grupo = item.group ? submodules.get(item.group) : null;
+  return module?.status !== 'inativo'
+    && recurso?.status !== 'inativo'
+    && grupo?.status !== 'inativo';
+}
+
+function submoduloHomeEstaAtivoPorChave(chave) {
+  return submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === chave));
+}
+
+function obterSubmoduloArPorAba(aba) {
+  const chavePorAba = {
+    inicio: 'painel_ar.inicio',
+    gerar: 'painel_ar.gerar_links',
+    produtos: 'painel_ar.produtos',
+    validacoes: 'painel_ar.validacoes',
+    historico: 'painel_ar.historico',
+    crm: 'painel_ar.crm',
+    crm2: 'painel_ar.crm_2',
+    'crm2-cadastro': 'painel_ar.crm2.cadastro_pf',
+    'crm2-pf': 'painel_ar.crm2.cadastro_pf',
+    'crm2-pj': 'painel_ar.crm2.cadastro_pj',
+    'crm2-vinculos': 'painel_ar.crm2.vinculos',
+    'crm2-pedidos': 'painel_ar.crm2.pedidos',
+    'crm2-oportunidades': 'painel_ar.crm2.oportunidades',
+    'crm2-comunicacao': 'painel_ar.crm2.comunicacao',
+    'crm2-automacoes': 'painel_ar.crm2.automacoes'
+  };
+  return HOME_SUBMODULES.find(item => item.key === chavePorAba[aba]) || null;
+}
+
+function submoduloHomeEstaVisivel(item) {
+  if (!item || !submoduloHomeEstaAtivo(item)) return false;
+  const recurso = (state.homeModuleSettings?.submodules || []).find(submodule => submodule.key === item.key);
+  const modulo = (state.homeModuleSettings?.modules || []).find(candidate => candidate.slug === item.parent);
+  const grupo = item.group
+    ? (state.homeModuleSettings?.submodules || []).find(submodule => submodule.key === item.group)
+    : null;
+  return recurso?.exibir_home !== false
+    && modulo?.exibir_home !== false
+    && grupo?.exibir_home !== false;
+}
+
 function itemMenuEstaAtivoHub(item = {}) {
   const atual = obterRotaRelativaAtualHub();
   return [item.route, item.legacyRoute]
@@ -12495,13 +15524,19 @@ function itemMenuEstaAtivoHub(item = {}) {
 }
 
 function itemMenuPodeAparecerHub(item = {}) {
+  const acessoCentralSenhas = item.id === 'central-senhas'
+    && (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks());
+
   if (item.permission && !pode(item.permission.resource, item.permission.action || 'view')) {
-    return false;
+    if (!acessoCentralSenhas) return false;
   }
 
   if (item.moduleId && !canAccessModule(state.permissions, item.moduleId)) {
-    return false;
+    if (!acessoCentralSenhas) return false;
   }
+
+  const submodulo = obterSubmoduloHomePelaRota(item.route || '');
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) return false;
 
   return true;
 }
@@ -12841,9 +15876,11 @@ function fecharPainelFlutuanteSidebarHub() {
 
 let tooltipGlobalElemento = null;
 let tooltipGlobalAlvo = null;
+let tooltipGlobalPonto = null;
 
 function esconderTooltipGlobal() {
   tooltipGlobalAlvo = null;
+  tooltipGlobalPonto = null;
   tooltipGlobalElemento?.classList.remove('is-visible');
 }
 
@@ -12864,27 +15901,36 @@ function posicionarTooltipGlobal() {
   const altura = tooltip.offsetHeight;
 
   let left;
-  if (viewportLargura - rect.right >= largura + margem + limite) {
-    left = rect.right + margem;
-  } else if (rect.left >= largura + margem + limite) {
-    left = rect.left - largura - margem;
+  let top;
+  if (alvo.getAttribute('data-tooltip-anchor') === 'pointer' && tooltipGlobalPonto) {
+    left = tooltipGlobalPonto.x + margem;
+    if (left + largura > viewportLargura - limite) left = tooltipGlobalPonto.x - largura - margem;
+    top = tooltipGlobalPonto.y + margem;
+    if (top + altura > viewportAltura - limite) top = tooltipGlobalPonto.y - altura - margem;
   } else {
-    left = Math.max(limite, Math.min(rect.left, viewportLargura - largura - limite));
+    if (viewportLargura - rect.right >= largura + margem + limite) {
+      left = rect.right + margem;
+    } else if (rect.left >= largura + margem + limite) {
+      left = rect.left - largura - margem;
+    } else {
+      left = Math.max(limite, Math.min(rect.left, viewportLargura - largura - limite));
+    }
+
+    top = rect.top + (rect.height - altura) / 2;
+    if (top < limite) {
+      top = rect.bottom + margem;
+    } else if (top + altura > viewportAltura - limite) {
+      top = rect.top - altura - margem;
+    }
   }
 
-  let top = rect.top + (rect.height - altura) / 2;
-  if (top < limite) {
-    top = rect.bottom + margem;
-  } else if (top + altura > viewportAltura - limite) {
-    top = rect.top - altura - margem;
-  }
-
+  left = Math.max(limite, Math.min(left, viewportLargura - largura - limite));
   top = Math.max(limite, Math.min(top, viewportAltura - altura - limite));
   tooltip.style.left = `${Math.round(left)}px`;
   tooltip.style.top = `${Math.round(top)}px`;
 }
 
-function mostrarTooltipGlobal(alvo) {
+function mostrarTooltipGlobal(alvo, event = null) {
   if (alvo?.closest?.('.hub-sidebar:not(.is-collapsed)')) {
     esconderTooltipGlobal();
     return;
@@ -12901,6 +15947,9 @@ function mostrarTooltipGlobal(alvo) {
   }
 
   tooltipGlobalAlvo = alvo;
+  tooltipGlobalPonto = alvo.getAttribute('data-tooltip-anchor') === 'pointer' && Number.isFinite(event?.clientX) && Number.isFinite(event?.clientY)
+    ? { x: event.clientX, y: event.clientY }
+    : null;
   tooltipGlobalElemento.textContent = texto;
   tooltipGlobalElemento.classList.add('is-visible');
   posicionarTooltipGlobal();
@@ -12914,7 +15963,14 @@ function iniciarTooltipVisualGlobal() {
   document.addEventListener('pointerover', event => {
     const alvo = obterAlvoTooltipGlobal(event);
     if (!alvo || (event.relatedTarget && alvo.contains(event.relatedTarget))) return;
-    mostrarTooltipGlobal(alvo);
+    mostrarTooltipGlobal(alvo, event);
+  });
+
+  document.addEventListener('pointermove', event => {
+    const alvo = obterAlvoTooltipGlobal(event);
+    if (alvo !== tooltipGlobalAlvo || alvo?.getAttribute('data-tooltip-anchor') !== 'pointer') return;
+    tooltipGlobalPonto = { x: event.clientX, y: event.clientY };
+    posicionarTooltipGlobal();
   });
 
   document.addEventListener('pointerout', event => {
@@ -12977,6 +16033,7 @@ function aplicarIconesDataHub(root = document) {
   ];
 
   campos.forEach(campo => {
+    if (campo.classList.contains('crm2-opp-next-action-native-date') || campo.classList.contains('crm2-opp-filter-native-date')) return;
     if (campo.closest('.hub-date-input')) return;
 
     const wrapper = document.createElement('span');
@@ -13149,7 +16206,90 @@ const renderDashboardHubPhase1 = function() {
 };
 
 const renderizarRotaAtualHubPhase2 = async function() {
+  limparMenusAcoesGlobais();
+  hubLimparDropdowns({ remover: true });
+  window.hubRemoveFormFooterPortals?.();
+
+  const aliasCanonico = obterAliasCanonicoRotaHub();
+  if (aliasCanonico) {
+    window.history.replaceState({}, '', aliasCanonico);
+    return renderizarRotaAtualHubPhase2();
+  }
+
   const rotaRelativa = obterRotaRelativaAtualHub().split('#')[0].replace(/^\/+|\/+$/g, '');
+  if (['admin/modulos', 'configuracoes/modulos'].includes(rotaRelativa)) {
+    await abrirPaginaConfiguracaoModulosHome();
+    return;
+  }
+
+  if (rotaRelativa === 'painel-ar' && !window.location.hash) {
+    const abaAtual = obterSubmoduloArPorAba(state.ar.aba);
+    const abasDisponiveis = ['gerar', 'inicio', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes'];
+    if (!abaAtual || !submoduloHomeEstaAtivo(abaAtual) || !podeAcessarAbaAr(state.ar.aba)) {
+      const primeiraAbaDisponivel = abasDisponiveis.find(aba => {
+        const item = obterSubmoduloArPorAba(aba);
+        return item && submoduloHomeEstaAtivo(item) && podeAcessarAbaAr(aba);
+      });
+      if (primeiraAbaDisponivel) state.ar.aba = primeiraAbaDisponivel;
+    }
+  }
+  if (rotaRelativa === 'central-senhas' && !normalizarAbaCentralSenhasPorStatus()) {
+    renderModuloIndisponivel('central-senhas');
+    return;
+  }
+  const submoduloSolicitado = obterSubmoduloHomePelaRota(`${rotaRelativa}${window.location.hash || ''}`)
+    || (rotaRelativa === 'painel-ar' && !window.location.hash
+      ? obterSubmoduloArPorAba(state.ar.aba)
+      : null);
+
+  if (submoduloSolicitado && !submoduloHomeEstaAtivo(submoduloSolicitado)) {
+    renderModuloIndisponivel(submoduloSolicitado.parent);
+    return;
+  }
+
+  if (rotaRelativa === CONSULTORIA360_ROUTE) {
+    await mountConsultoria360Page({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_ROUTE) {
+    await mountSimuladorSaudeHomePage({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_COTACAO_ROUTE) {
+    await mountSimuladorSaudeQuotePage({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === SIMULADOR_SAUDE_CATALOGO_ROUTE || rotaRelativa.startsWith(`${SIMULADOR_SAUDE_CATALOGO_ROUTE}/`)) {
+    await mountSimuladorSaudeCatalogPage({
+      renderShell: renderHubShell,
+      pode,
+      navegarParaRota
+    });
+    return;
+  }
+
+  if (rotaRelativa === 'operacoes/corretora') {
+    document.getElementById('app').innerHTML = renderCorretoraOperationalPage({
+      renderShell: renderHubShell,
+      navegarParaRota
+    });
+    return;
+  }
 
   if (rotaRelativa === 'notificacoes') {
     await renderizarPaginaNotificacoesHub();
@@ -13266,6 +16406,10 @@ const renderAdministracaoHubPhase1 = function() {
 };
 
 const renderLinksUteisHubPhase1 = function() {
+  if (obterContextoRotaHub().modulo === 'central-senhas') {
+    renderCentralSenhas();
+    return;
+  }
   const gestor = state.usuario?.perfil === 'gestor';
 
   document.getElementById('app').innerHTML = renderHubShell({
@@ -13312,38 +16456,61 @@ const renderLinksUteisHubPhase1 = function() {
 
 const renderCentralSenhasHubPhase1 = function() {
   const podeGerenciar = pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete');
+  const podeCriarLink = pode('central_senhas', 'create');
+  const podeEditarLink = pode('central_senhas', 'update');
   const podeVerSenha = pode('central_senhas', 'view_secret');
+  const podeAcessos = (pode('central_senhas', 'view') || podeGerenciar)
+    && submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === 'central_senhas.acessos'));
+  const podeLinks = (pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks())
+    && submoduloHomeEstaAtivo(HOME_SUBMODULES.find(item => item.key === 'central_senhas.links'));
+  const titulo = state.passwords.aba === 'links'
+    ? (state.links.titulo || 'Central de Links')
+    : 'Central de Senhas';
 
   document.getElementById('app').innerHTML = renderHubShell({
-    tituloPagina: 'Central de Senhas',
-    descricaoPagina: podeGerenciar ? 'Gestao de acessos e historico operacional.' : 'Consulta dos acessos liberados ao seu perfil.',
+    tituloPagina: titulo,
+    descricaoPagina: state.passwords.aba === 'links'
+      ? 'Links úteis por área, com acesso conforme as permissões do seu perfil.'
+      : (podeGerenciar ? 'Gestao de acessos e historico operacional.' : 'Consulta dos acessos liberados ao seu perfil.'),
     conteudo: `
-      <section class="admin-panel">
+      <section class="admin-panel password-manager">
         <div class="admin-panel-header">
           <div>
-            <h2>Central de Senhas</h2>
-            <p>${podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.'}</p>
+            <h2>${escapeHtml(titulo)}</h2>
+            <p>${state.passwords.aba === 'links'
+              ? 'Consulte links úteis da área selecionada.'
+              : (podeGerenciar ? 'Listagem e cadastro de acessos.' : 'Consulte os acessos disponíveis.')}</p>
           </div>
-          ${podeGerenciar ? `
+          ${podeAcessos || podeLinks ? `
             <div class="module-tabs" role="group" aria-label="Visualização da Central de Senhas">
-              <button class="${state.passwords.aba === 'acessos' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Acessos</button>
-              <button class="${state.passwords.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('historico')">Histórico</button>
+              ${podeAcessos ? `<button class="${state.passwords.aba !== 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('acessos')">Senhas Salvas</button>` : ''}
+              ${podeLinks ? `<button class="${state.passwords.aba === 'links' ? 'active' : ''}" type="button" onclick="selecionarAbaSenhas('links')">Links Úteis</button>` : ''}
             </div>
           ` : ''}
         </div>
 
-        ${renderResumoSenhas(podeGerenciar)}
+        ${state.passwords.aba === 'links' ? renderToolbarLinks(podeGerenciar, podeCriarLink) : ''}
         ${state.passwords.aba === 'acessos' ? renderToolbarSenhas(podeGerenciar) : ''}
 
         ${state.passwords.message ? `<p class="admin-message">${escapeHtml(state.passwords.message)}</p>` : ''}
-        ${state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha)}
-        ${state.passwords.aba === 'acessos' ? renderModalSenha() : ''}
+        ${state.passwords.aba === 'links'
+          ? (state.links.loading ? renderHubLoading('Carregando links...') : renderListaLinksUteis(podeGerenciar, podeEditarLink))
+          : (state.passwords.loading ? renderHubLoading('Carregando acessos...') : renderConteudoSenhas(podeGerenciar, podeVerSenha))}
+        ${state.passwords.aba === 'links' ? renderModalNovoLink() : ''}
+        ${state.passwords.aba === 'acessos' ? `${renderModalSenha()}${renderModalCadastroSeguradora()}` : ''}
       </section>
     `
   });
 };
 
 const renderPainelArHubPhase1 = function() {
+  if (state.ar.aba === 'produtos') {
+    document.querySelectorAll('#ar_produtos_lista_resultado .ar-products-group[data-group]').forEach(registrarEstadoGrupoProdutosAr);
+  }
+  const crm2CadastroRoute = obterContextoRotaHub().principal;
+  window.crm2PfArActive = state.ar.aba === 'crm2-pf' || (state.ar.aba === 'crm2-cadastro' && crm2CadastroRoute === '201');
+  window.hubRemoveFormFooterPortals?.();
+  fecharMenuMaisAr();
   const podeHistorico = podeAcessarAbaAr('historico');
   const podeGerenciarParceiros = pode('admin', 'view') && pode('admin.parceiros_indicacao', 'view');
 
@@ -13360,16 +16527,7 @@ const renderPainelArHubPhase1 = function() {
             <p>Consulte produtos, selecione o parceiro e gere links comerciais.</p>
           </div>
           <div class="ar-panel-actions">
-            <div class="module-tabs" role="group" aria-label="Visualização do Painel AR">
-              <button class="ar-home-tab ${state.ar.aba === 'inicio' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('inicio')" title="Início" aria-label="Início">
-                <i data-lucide="house" aria-hidden="true"></i>
-              </button>
-              ${podeAcessarAbaAr('gerar') ? `<button class="${state.ar.aba === 'gerar' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('gerar')">Gerar links</button>` : ''}
-              ${podeAcessarAbaAr('produtos') ? `<button class="${state.ar.aba === 'produtos' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('produtos')">Lista de produtos</button>` : ''}
-              ${podeAcessarAbaAr('validacoes') ? `<button class="${state.ar.aba === 'validacoes' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('validacoes')">Validações</button>` : ''}
-              ${podeHistorico ? `<button class="${state.ar.aba === 'historico' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('historico')">Histórico</button>` : ''}
-              ${podeAcessarAbaAr('crm') ? `<button class="${state.ar.aba === 'crm' ? 'active' : ''}" type="button" onclick="selecionarAbaAr('crm')">CRM</button>` : ''}
-            </div>
+            ${renderMenuPrincipalAr({ podeHistorico, incluirCrm: true, incluirCrm2: true })}
             ${podeGerenciarParceiros ? `<button class="secondary-btn ar-manage-partners-btn" type="button" onclick="navegarParaModulo('administracao', 'parceiros-indicacao')">Gerenciar parceiros</button>` : ''}
           </div>
         </div>
@@ -13422,22 +16580,75 @@ const selecionarAbaAdminHubPhase2 = async function(aba) {
 };
 
 const selecionarAbaSenhasHubPhase2 = function(aba) {
-  if (aba === 'historico' && !(pode('central_senhas', 'create') || pode('central_senhas', 'update') || pode('central_senhas', 'delete'))) {
-    state.passwords.message = 'Seu usuário não possui acesso ao histórico.';
+  if (aba === 'historico') aba = 'acessos';
+
+  const submoduloKey = aba === 'links' ? 'central_senhas.links' : 'central_senhas.acessos';
+  const submodulo = HOME_SUBMODULES.find(item => item.key === submoduloKey);
+  if (submodulo && !submoduloHomeEstaAtivo(submodulo)) {
+    state.passwords.message = 'Esta área da Central de Senhas está inativa.';
     renderCentralSenhas();
     return;
   }
 
-  atualizarHashHub(aba, { replace: true });
+  const podeAcessos = pode('central_senhas', 'view')
+    || pode('central_senhas', 'create')
+    || pode('central_senhas', 'update')
+    || pode('central_senhas', 'delete');
+  const podeLinks = pode('central_senhas', 'view') || podeAcessarGerenciamentoLinks();
+  if ((aba === 'acessos' && !podeAcessos) || (aba === 'links' && !podeLinks)) {
+    return;
+  }
+
+  const caminho = `${montarCaminhoHub('central-senhas').replace(/\/+$/g, '')}/${aba}`;
+  const url = new URL(window.location.href);
+  url.pathname = caminho;
+  url.hash = '';
+  window.history.replaceState({}, '', url);
   state.passwords.aba = aba;
   state.passwords.modalAberto = false;
   renderCentralSenhas();
+
+  if (aba === 'links') {
+    state.links.escopo = 'todos';
+    state.links.titulo = 'Gerenciamento de Links';
+    carregarLinksUteis();
+  }
 };
 
 const selecionarAbaArHubPhase2 = function(aba) {
-  if (!podeAcessarAbaAr(aba)) {
+  const submodulo = obterSubmoduloArPorAba(aba);
+  if (!podeAcessarAbaAr(aba) || (submodulo && !submoduloHomeEstaAtivo(submodulo))) {
     state.ar.message = 'Seu usuário não possui acesso a esta área do Painel AR.';
     renderPainelAr();
+    return;
+  }
+
+  if (['crm2', 'crm2-cadastro', 'crm2-pf', 'crm2-pj', 'crm2-vinculos'].includes(state.ar.aba) && aba !== state.ar.aba) {
+    if (!protegerNavegacaoFormularioPfHub(() => selecionarAbaArHubPhase2(aba))) return;
+  }
+
+  if (state.ar.aba === 'gerar' && aba !== 'gerar') {
+    resetarEstadoGerarLinksAr();
+  }
+
+  if (aba === 'crm2') {
+    const caminho = `${montarCaminhoHub('painel-ar').replace(/\/+$/g, '')}/200`;
+    const url = new URL(window.location.href);
+    url.pathname = caminho;
+    url.hash = '';
+    window.history.pushState({}, '', url);
+    state.ar.aba = 'crm2';
+    renderPainelAr();
+    return;
+  }
+
+  if (aba === 'crm2-cadastro') {
+    navegarParaCrm2Cadastro('pf');
+    return;
+  }
+
+  if (aba === 'crm2-pf' || aba === 'crm2-pj' || aba === 'crm2-vinculos') {
+    navegarParaCrm2Cadastro(aba === 'crm2-pj' ? 'pj' : aba === 'crm2-vinculos' ? 'vinculos' : 'pf');
     return;
   }
 
@@ -13493,10 +16704,15 @@ const abrirCentralSenhasHubPhase2 = async function() {
 };
 
 const abrirPainelArHubPhase2 = async function() {
+  const contextoRota = obterContextoRotaHub();
   sincronizarContextoArPelaRota();
-  state.ar.message = '';
-  state.ar.resultado = null;
-  state.ar.alertas = [];
+  const abaDaRota = contextoRota.modulo === 'painel-ar'
+    && ['inicio', 'gerar', 'produtos', 'validacoes', 'historico', 'crm', 'crm2', 'crm2-pf', 'crm2-pj', 'crm2-vinculos', 'crm2-pedidos', 'crm2-oportunidades', 'crm2-comunicacao', 'crm2-automacoes', '200', '201', '202', '203', '204', '205', '206', '207'].includes(contextoRota.principal)
+    ? state.ar.aba
+    : 'inicio';
+
+  resetarEstadoGerarLinksAr();
+  state.ar.aba = abaDaRota;
   await carregarPainelAr();
 
   if (state.ar.aba === 'crm' && !state.ar.crm.carregado) {
@@ -13537,6 +16753,164 @@ function escapeAttr(texto) {
   return escapeHtml(texto).replace(/`/g, '&#096;');
 }
 
+function renderCentralAvisosMock() {
+  const naoLidos = MOCK_CENTRAL_AVISOS.filter(aviso => !aviso.lido).length;
+
+  return `
+    <section class="hub-internal-notices" aria-labelledby="hub-internal-notices-title">
+      <div class="hub-internal-notices-header">
+        <div class="hub-internal-notices-heading">
+          <span class="hub-internal-notices-icon" aria-hidden="true">📣</span>
+          <div>
+            <span class="hub-page-kicker">Central de comunicação</span>
+            <h2 id="hub-internal-notices-title">Avisos internos</h2>
+            <p>Comunicados importantes para a equipe.</p>
+          </div>
+        </div>
+        <span class="hub-internal-notices-counter">${naoLidos} não lido${naoLidos === 1 ? '' : 's'}</span>
+      </div>
+
+      <div class="hub-internal-notices-filters" role="tablist" aria-label="Filtros de avisos internos">
+        <span class="is-active" role="tab" aria-selected="true">Todos</span>
+        <span role="tab" aria-selected="false">Não lidos</span>
+        <span role="tab" aria-selected="false">Comunicados</span>
+      </div>
+
+      <div class="hub-internal-notices-list">
+        ${MOCK_CENTRAL_AVISOS.map(aviso => `
+          <article class="hub-internal-notice ${aviso.lido ? 'is-read' : 'is-unread'}" data-notice-id="${escapeAttr(aviso.id)}">
+            <span class="hub-internal-notice-marker" aria-hidden="true"></span>
+            <div class="hub-internal-notice-copy">
+              <div class="hub-internal-notice-meta">
+                <span>${escapeHtml(aviso.categoria)}</span>
+                <span>${escapeHtml(aviso.quando)}</span>
+              </div>
+              <strong>${escapeHtml(aviso.titulo)}</strong>
+              <p>${escapeHtml(aviso.descricao)}</p>
+            </div>
+            <span class="hub-internal-notice-priority is-${aviso.prioridade === 'Alta' ? 'high' : 'normal'}">${escapeHtml(aviso.prioridade)}</span>
+          </article>
+        `).join('')}
+      </div>
+
+      <div class="hub-internal-notices-footer">
+        <span>Prévia demonstrativa</span>
+        <button type="button" class="text-btn" disabled>Ver todos os avisos</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderPainelAvisosInternosMock() {
+  return `
+    <div class="hub-notification-backdrop hub-internal-notices-backdrop" id="hub-internal-notices-backdrop" onclick="fecharPainelAvisosInternosHub()"></div>
+    <aside class="hub-notifications-popover hub-internal-notices-popover" id="hub-internal-notices-popover" role="dialog" aria-modal="false" aria-labelledby="hub-internal-notices-title">
+      <div class="hub-notifications-popover-head">
+        <div><strong id="hub-internal-notices-title">Avisos internos</strong></div>
+        <button type="button" class="hub-notification-close" onclick="fecharPainelAvisosInternosHub()" aria-label="Fechar avisos internos">×</button>
+      </div>
+      <div class="hub-notification-tabs" role="tablist" aria-label="Filtro de avisos internos">
+        <button type="button" role="tab" aria-selected="true" class="is-active">Todos</button>
+        <button type="button" role="tab" aria-selected="false">Não lidos</button>
+        <button type="button" role="tab" aria-selected="false">Comunicados</button>
+      </div>
+      <div class="hub-notifications-popover-list hub-internal-notices-popover-list">
+        ${MOCK_CENTRAL_AVISOS.map(aviso => `
+          <article class="hub-internal-notice ${aviso.lido ? 'is-read' : 'is-unread'}">
+            <span class="hub-internal-notice-marker" aria-hidden="true"></span>
+            <div class="hub-internal-notice-copy">
+              <div class="hub-internal-notice-meta"><span>${escapeHtml(aviso.categoria)}</span><span>${escapeHtml(aviso.quando)}</span></div>
+              <strong>${escapeHtml(aviso.titulo)}</strong>
+              <p>${escapeHtml(aviso.descricao)}</p>
+            </div>
+          </article>
+        `).join('')}
+      </div>
+      <div class="hub-notifications-popover-footer"><span class="hub-internal-notices-mock-label">Prévia demonstrativa</span></div>
+    </aside>
+  `;
+}
+
+function posicionarPainelAvisosInternosHub() {
+  const botao = document.querySelector('.hub-internal-notices-bell');
+  const painel = document.getElementById('hub-internal-notices-popover');
+  if (!painel) return;
+
+  if (!botao) {
+    painel.style.setProperty('--hub-notification-panel-top', '76px');
+    painel.style.setProperty('--hub-notification-panel-left', 'auto');
+    painel.style.setProperty('--hub-notification-panel-width', 'min(340px, calc(100vw - 24px))');
+    painel.style.right = '12px';
+    return;
+  }
+
+  if (window.innerWidth <= 800) {
+    painel.style.setProperty('--hub-notification-panel-top', '68px');
+    painel.style.setProperty('--hub-notification-panel-left', '12px');
+    painel.style.setProperty('--hub-notification-panel-width', 'auto');
+    painel.style.right = '12px';
+    return;
+  }
+
+  const margem = 12;
+  const rect = botao.getBoundingClientRect();
+  const largura = Math.min(340, window.innerWidth - margem * 2);
+  const esquerda = Math.min(Math.max(margem, rect.right - largura), window.innerWidth - largura - margem);
+  painel.style.setProperty('--hub-notification-panel-top', `${rect.bottom + 10}px`);
+  painel.style.setProperty('--hub-notification-panel-left', `${esquerda}px`);
+  painel.style.setProperty('--hub-notification-panel-width', `${largura}px`);
+  painel.style.right = 'auto';
+}
+
+function tratarTecladoPainelAvisosInternosHub(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    fecharPainelAvisosInternosHub();
+  }
+}
+
+function abrirPainelAvisosInternosHub() {
+  if (document.getElementById('hub-internal-notices-popover')) return;
+  document.body.insertAdjacentHTML('beforeend', renderPainelAvisosInternosMock());
+  posicionarPainelAvisosInternosHub();
+  window.addEventListener('resize', posicionarPainelAvisosInternosHub);
+  window.addEventListener('keydown', tratarTecladoPainelAvisosInternosHub);
+}
+
+function fecharPainelAvisosInternosHub() {
+  document.getElementById('hub-internal-notices-backdrop')?.remove();
+  document.getElementById('hub-internal-notices-popover')?.remove();
+  window.removeEventListener('resize', posicionarPainelAvisosInternosHub);
+  window.removeEventListener('keydown', tratarTecladoPainelAvisosInternosHub);
+}
+
+function hubAtualizarBuscaAoDigitar(input, atualizarValor, rerenderizar, localizarInput) {
+  if (!input || typeof atualizarValor !== 'function' || typeof rerenderizar !== 'function') return;
+  atualizarValor(String(input.value || ''));
+  window.clearTimeout(input.__hubSearchTimer);
+  const cursor = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+  input.__hubSearchTimer = window.setTimeout(() => {
+    rerenderizar();
+    window.requestAnimationFrame(() => {
+      const campo = typeof localizarInput === 'function' ? localizarInput() : input;
+      if (!campo) return;
+      campo.focus({ preventScroll: true });
+      campo.setSelectionRange(cursor, cursor);
+    });
+  }, 180);
+}
+
+function hubLimparDropdowns({ remover = false } = {}) {
+  document.querySelectorAll('body > .hub-filter-dropdown-menu[data-dropdown-input-id]').forEach((menu) => {
+    const trigger = document.getElementById(menu.dataset.dropdownInputId || '');
+    const combo = trigger?.closest('.crm2-pf-select');
+    menu.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (remover || !trigger || !combo) menu.remove();
+    else combo.appendChild(menu);
+  });
+}
+
 function obterMensagemApi(response, fallback) {
   const code = response?.error?.code;
   const mensagens = {
@@ -13575,9 +16949,17 @@ Object.assign(window, {
   hubRenderLoading: renderHubLoading,
   navegarLogoParaHomeHub,
   hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
+  hubInicializarTabelasRedimensionaveis: initializeHubResizableTables,
   hubObterClassesLayoutPadrao: () => `${state.sidebar.collapsed ? 'is-sidebar-collapsed' : ''} ${state.sidebar.pinned ? 'is-sidebar-pinned' : ''}`.trim(),
+  hubObterParceirosIndicacao: () => state.admin.parceirosIndicacao || [],
+  hubCarregarParceirosIndicacao: carregarParceirosIndicacaoCompartilhado,
   hubPodeVerConfiguracoes: () => pode('admin', 'view') || pode('admin.modulos', 'view'),
   hubAtualizarContextoAcesso: atualizarContextoAcessoHub,
+  hubPode: pode,
+  hubAtualizarBuscaAoDigitar,
+  hubLimparDropdowns,
+  abrirPainelAvisosInternosHub,
+  fecharPainelAvisosInternosHub,
   iniciarApp,
   abrirLink,
   abrirModalNovoLink,
@@ -13585,8 +16967,18 @@ Object.assign(window, {
   abrirModalParceiroIndicacaoAdmin,
   abrirModalUsuarioAdmin,
   abrirModalSenha,
+  abrirCadastroSeguradora,
+  alterarStatusSeguradoraUI,
+  adicionarLinhaAcessoSeguradora,
+  alternarNovaSeguradora,
+  alternarVisibilidadeSenhaCadastro,
+  atualizarIndicadorStatusAcesso,
+  digitarNomeNovaSeguradora,
+  excluirSeguradoraUI,
   abrirModulo,
   abrirModalConfigurarModulosHome,
+  navegarParaConfiguracaoModulosHome,
+  voltarDaPaginaConfiguracaoModulosHome,
   abrirPermissoesPeloModalUsuario,
   abrirPermissoesUsuarioAdmin,
   abrirPermissoesPerfilAdmin,
@@ -13603,10 +16995,15 @@ Object.assign(window, {
   alterarBuscaPerfisAdmin,
   alterarBuscaParceirosIndicacaoAdmin,
   aplicarMascaraParceiroIndicacao,
-  alternarMenuAcoesParceirosIndicacaoAdmin,
   alternarParceiroIndicacaoSelecionadoAdmin,
   alterarStatusModuloHome,
   alterarVisibilidadeModuloHome,
+  alterarPermissaoPerfilModulo,
+  alterarBuscaModuloHome,
+  alterarAreaModuloHome,
+  alternarGrupoModulosHome,
+  aplicarAcaoLoteAreaModulosHome,
+  navegarParaSubmoduloHome,
   alternarColunaParceirosIndicacaoAdmin,
   alternarSeletorColunasParceirosIndicacaoAdmin,
   alternarTodosParceirosIndicacaoAdmin,
@@ -13615,6 +17012,7 @@ Object.assign(window, {
   selecionarFiltroPerfisAdmin,
   selecionarFiltroParceirosIndicacaoAdmin,
   selecionarFiltroModulosHome,
+  selecionarPerfilModulosHome,
   selecionarPaginaPerfisAdmin,
   selecionarPaginaParceirosIndicacaoAdmin,
   alternarTodosModulosPermissoesPerfil,
@@ -13622,17 +17020,29 @@ Object.assign(window, {
   salvarPermissoesPerfilAdmin,
   alterarFiltroListaProdutosAr,
   alternarFiltroGrupoListaProdutosAr,
+  alterarStatusListaProdutosAr,
+  alterarStatusProdutosSelecionadosAr,
   alterarRascunhoProdutoGrupoAr,
+  iniciarNovoProdutoGrupoAr,
+  alterarRascunhoNovoProdutoGrupoAr,
+  cancelarNovoProdutoGrupoAr,
+  salvarNovoProdutoGrupoAr,
   executarAcaoParceirosIndicacaoAdmin,
   alterarBuscaParceiroAr,
   alterarBuscaProdutoAr,
   alterarFiltroLinks,
+  alterarBuscaSenha,
+  alternarCategoriaSenhas,
+  alternarVisibilidadeSenhaAcesso,
+  copiarSenhaAcesso,
   alterarFiltroValidacoesAr,
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
+  alternarFiltrosSenhas,
+  limparFiltrosSenhas,
   alternarFiltrosListaProdutosAr,
+  aplicarFiltrosListaProdutosAr,
   aplicarBuscaParceirosIndicacaoAdmin,
-  navegarMenuAcoesParceirosIndicacaoAdmin,
   navegarMenuSidebarHub,
   alternarFavoritoLink,
   alternarGrupoSidebarHub,
@@ -13646,14 +17056,20 @@ Object.assign(window, {
   alternarProdutoListaSelecionadoAr,
   alternarTema,
   alternarTodosGruposProdutosAr,
+  atualizarBotaoToggleTodosProdutosAr,
+  registrarEstadoGrupoProdutosAr,
+  definirOrdenacaoGruposProdutosAr,
   abrirVisualizacaoProdutosClienteAr,
   alternarCheckboxPermissaoUsuario,
   alternarTodosModulosPermissoesUsuario,
+  filtrarRecursosPermissoesUsuarioAdmin,
+  descartarAlteracoesPermissoesUsuarioAdmin,
   arquivarParceiroIndicacaoAdmin,
   cancelarReciboValidacoesAr,
   carregarValidacoesAr,
   alterarMesBaseRepasseAr,
   copiarLink,
+  copiarEmailParceiroAr,
   copiarLinkResultadoAr,
   copiarOrcamentoAr,
   copiarSenhaTemporariaUsuarioAdmin,
@@ -13663,6 +17079,7 @@ Object.assign(window, {
   editarParceiroIndicacaoAdmin,
   editarPerfilAdmin,
   excluirPerfilAdmin,
+  excluirUsuarioAdmin,
   editarRegistroAdmin,
   editarUsuarioAdmin,
   emitirReciboValidacoesAr,
@@ -13673,10 +17090,12 @@ Object.assign(window, {
   fecharModalNovoRegistro,
   fecharModalParceiroIndicacaoAdmin,
   fecharModalSenha,
+  fecharCadastroSeguradora,
   fecharPermissoesUsuarioAdmin,
   fecharReciboValidacoesAr,
   filtrarAdmin,
   entrarNoHub,
+  concluirTrocaSenhaObrigatoria,
   iniciarEdicaoGrupoProdutosAr,
   gerarSenhaTemporariaUsuarioAdmin,
   gerarLinksAr,
@@ -13708,6 +17127,9 @@ Object.assign(window, {
   salvarNovoPerfilComPermissoesAdmin,
   salvarRegistroAdmin,
   salvarSenhaItem,
+  salvarCadastroSeguradora,
+  removerLinhaAcessoSeguradora,
+  renomearSeguradoraUI,
   salvarUsuarioAdmin,
   carregarLogsIntegracoesAdmin,
   alterarFiltroLogsIntegracoesAdmin,
@@ -13726,6 +17148,7 @@ Object.assign(window, {
   selecionarPaginaUsuariosAdmin,
   selecionarAbaAdmin,
   selecionarAbaAr,
+  navegarParaCrm2Cadastro,
   selecionarPaginaCrmAr,
   sincronizarCrmAr,
   sincronizarCadastroCrmAr,
@@ -13746,6 +17169,7 @@ Object.assign(window, {
   editarComentarioDetalheCrmAr,
   excluirComentarioDetalheCrmAr,
   adicionarAnexoDetalheCrmAr,
+  alternarVisualizacaoAnexosCrmAr,
   editarCamposCrmAr,
   marcarAlteracaoCamposCrmAr,
   avancarStatusCrmAr,
@@ -13770,13 +17194,6 @@ Object.assign(window, {
   voltarEtapaModalPerfilAdmin,
   visualizarReciboValidacoesAr
 });
-
-document.addEventListener('pointerdown', event => {
-  if (!state.admin.acoesParceirosAberto) return;
-  if (event.target?.closest?.('.admin-partners-actions-btn, .admin-partners-actions-menu')) return;
-
-  fecharMenuAcoesParceirosIndicacaoAdmin();
-}, true);
 
 document.addEventListener('click', event => {
   if (!state.sidebar.floatingGroupId) return;
@@ -13818,13 +17235,6 @@ document.addEventListener('click', event => {
   if (state.admin.parceiroModal?.aberto) {
     state.admin.parceiroModal.aba = aba;
   }
-});
-
-document.addEventListener('keydown', event => {
-  if (!state.admin.acoesParceirosAberto || event.key !== 'Escape') return;
-
-  event.preventDefault();
-  fecharMenuAcoesParceirosIndicacaoAdmin();
 });
 
 document.addEventListener('keydown', event => {
@@ -13886,4 +17296,33 @@ document.addEventListener('keydown', event => {
     renderizarRotaAtual();
     window.requestAnimationFrame(() => document.querySelector('.hub-mobile-menu-toggle')?.focus());
   }
+});
+
+document.addEventListener('keydown', event => {
+  if (!event.ctrlKey || event.altKey || event.metaKey) return;
+  const match = window.location.pathname.match(/\/painel-ar\/(201|202|203|204|205|206)(?:\/|$)/);
+  if (!match) return;
+  const target = event.target;
+  const isTextEntry = target?.matches?.('input, textarea, select, [contenteditable="true"]');
+  const key = String(event.key || '').toLowerCase();
+  if (key === 'e') {
+    if (isTextEntry) return;
+    const editButtons = Array.from(document.querySelectorAll('button:not([disabled])')).filter((button) => {
+      if (button.offsetParent === null) return false;
+      const label = String(button.textContent || '').trim().toLowerCase();
+      return ['editar', 'editar cadastro', 'nova versão'].includes(label);
+    });
+    if (editButtons.length !== 1) return;
+    event.preventDefault();
+    editButtons[0].click();
+    return;
+  }
+  if (key !== 's') return;
+  const saveButtons = Array.from(document.querySelectorAll('button[type="submit"]:not([disabled]), button.save-btn:not([disabled])')).filter((button) => {
+    if (button.offsetParent === null) return false;
+    return String(button.textContent || '').trim().toLowerCase().startsWith('salvar');
+  });
+  if (saveButtons.length !== 1) return;
+  event.preventDefault();
+  saveButtons[0].click();
 });

@@ -17,11 +17,7 @@ export async function entrarComSenha(identificador, password) {
   let sessao = null;
 
   if (valor.includes('@')) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: valor.toLowerCase(),
-      password
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email: valor.toLowerCase(), password });
     if (error) throw new Error('Usuário ou senha inválidos.');
     sessao = data.session || null;
   } else {
@@ -51,5 +47,22 @@ export async function sairDoHub() {
 
   if (error) {
     throw new Error(error.message || 'Não foi possível sair.');
+  }
+}
+
+export async function trocarSenhaProvisoria(novaSenha) {
+  const supabase = exigirSupabaseConfigurado();
+  const { error: passwordError } = await supabase.auth.updateUser({ password: novaSenha });
+
+  if (passwordError) {
+    throw new Error(passwordError.message || 'Não foi possível alterar a senha.');
+  }
+
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'completeFirstPasswordChange' }
+  });
+
+  if (error || data?.ok === false) {
+    throw new Error(data?.message || error?.message || 'A senha foi alterada, mas não foi possível concluir o primeiro acesso. Tente salvar novamente.');
   }
 }

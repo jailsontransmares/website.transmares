@@ -183,7 +183,7 @@ async function requirePermission(client: ReturnType<typeof createClient>, user: 
     .from("usuario_permissoes")
     .select("efeito")
     .eq("usuario_id", user.id)
-    .eq("recurso_chave", "painel_ar.crm")
+    .eq("recurso_chave", "painel_ar")
     .eq("acao", action)
     .maybeSingle();
 
@@ -196,7 +196,7 @@ async function requirePermission(client: ReturnType<typeof createClient>, user: 
     .from("perfil_permissoes")
     .select("permitido")
     .eq("perfil_id", user.perfil_id)
-    .eq("recurso_chave", "painel_ar.crm")
+    .eq("recurso_chave", "painel_ar")
     .eq("acao", action)
     .maybeSingle();
 

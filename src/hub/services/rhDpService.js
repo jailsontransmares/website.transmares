@@ -264,9 +264,10 @@ function normalizarDependentes(dependentes = []) {
       id: limparTexto(item.id),
       nome_completo: limparTexto(item.nome_completo),
       data_nascimento: limparTexto(item.data_nascimento),
-      parentesco: limparTexto(item.parentesco)
+      parentesco: limparTexto(item.parentesco),
+      cpf: limparDigitos(item.cpf) || null
     }))
-    .filter(item => item.id || item.nome_completo || item.data_nascimento || item.parentesco);
+    .filter(item => item.id || item.nome_completo || item.data_nascimento || item.parentesco || item.cpf);
 }
 
 function normalizarUrl(valor) {
@@ -408,7 +409,7 @@ function mensagemErroRh(error, fallback) {
   return texto || fallback;
 }
 
-export async function listarColaboradoresRhDp() {
+export async function listarColaboradoresRhDp({ incluirSensiveis = false } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('rh_colaboradores')
@@ -419,7 +420,64 @@ export async function listarColaboradoresRhDp() {
     throw new Error(mensagemErroRh(error, 'Não foi possível carregar os colaboradores.'));
   }
 
-  return data || [];
+  const colaboradores = data || [];
+  if (!incluirSensiveis || !colaboradores.length) return colaboradores;
+
+  const ids = colaboradores.map(item => item.id).filter(Boolean);
+  const [documentosResponse, dependentesResponse] = await Promise.all([
+    supabase
+      .from('rh_documentos_cadastrais')
+      .select('colaborador_id, cpf')
+      .in('colaborador_id', ids),
+    supabase
+      .from('rh_dependentes')
+      .select('colaborador_id, nome_completo')
+      .in('colaborador_id', ids)
+      .eq('ativo', true)
+  ]);
+
+  if (documentosResponse.error) {
+    throw new Error(mensagemErroRh(documentosResponse.error, 'Não foi possível carregar os CPFs para a busca.'));
+  }
+  if (dependentesResponse.error) {
+    throw new Error(mensagemErroRh(dependentesResponse.error, 'Não foi possível carregar os nomes dos dependentes para a busca.'));
+  }
+
+  const cpfsPorColaborador = new Map((documentosResponse.data || []).map(item => [item.colaborador_id, item.cpf || '']));
+  const dependentesPorColaborador = new Map();
+  for (const dependente of dependentesResponse.data || []) {
+    const nomes = dependentesPorColaborador.get(dependente.colaborador_id) || [];
+    nomes.push(dependente.nome_completo);
+    dependentesPorColaborador.set(dependente.colaborador_id, nomes);
+  }
+
+  return colaboradores.map(item => ({
+    ...item,
+    cpf_busca: cpfsPorColaborador.get(item.id) || '',
+    dependentes_busca: dependentesPorColaborador.get(item.id) || []
+  }));
+}
+
+export async function sincronizarPlanilhaRhDp({ importar = false } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('rh-google-sheets-sync', {
+    body: importar ? { action: 'import_from_sheet' } : {},
+    headers: { 'X-Manual-Sync': 'true' }
+  });
+
+  if (error) {
+    let mensagemDetalhada = '';
+    if (error.context instanceof Response) {
+      const resposta = await error.context.clone().json().catch(() => null);
+      mensagemDetalhada = resposta?.message || resposta?.error || '';
+    }
+    throw new Error(mensagemDetalhada || error.message || 'Não foi possível iniciar a sincronização com a planilha.');
+  }
+  if (!data?.ok) {
+    throw new Error(data?.message || 'A sincronização com a planilha não foi concluída.');
+  }
+
+  return data;
 }
 
 export async function listarArquivosColaboradorRhDp({ colaboradorId } = {}) {
@@ -480,13 +538,13 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
   const dependentesPromise = incluirSensiveis
     ? supabase
       .from('rh_dependentes')
-      .select('id, colaborador_id, nome_completo, data_nascimento, parentesco, ativo, created_at, updated_at')
+      .select('id, colaborador_id, nome_completo, data_nascimento, parentesco, cpf, ativo, created_at, updated_at')
       .eq('colaborador_id', colaboradorId)
       .eq('ativo', true)
       .order('nome_completo', { ascending: true })
     : Promise.resolve({ data: [], error: null });
 
-  const beneficiosPromise = incluirSensiveis ? supabase.from('rh_beneficios_colaboradores').select(COLUNAS_BENEFICIO).eq('colaborador_id', colaboradorId).order('status').order('nome') : Promise.resolve({ data: [], error: null });
+  const beneficiosPromise = incluirSensiveis ? supabase.from('rh_beneficios_colaboradores').select(COLUNAS_BENEFICIO).eq('colaborador_id', colaboradorId).neq('status', 'encerrado').order('status').order('nome') : Promise.resolve({ data: [], error: null });
   const bancariosPromise = incluirSensiveis ? supabase.from('rh_dados_bancarios_colaboradores').select(COLUNAS_BANCARIOS).eq('colaborador_id', colaboradorId).maybeSingle() : Promise.resolve({ data: null, error: null });
   const movimentacoesPromise = incluirSensiveis ? supabase.from('rh_movimentacoes_colaboradores').select(COLUNAS_MOVIMENTACAO).eq('colaborador_id', colaboradorId).order('data_efetivacao', { ascending: false }).order('created_at', { ascending: false }) : Promise.resolve({ data: [], error: null });
   const checklistPromise = incluirSensiveis ? supabase.from('rh_checklist_admissional').select(COLUNAS_CHECKLIST).eq('colaborador_id', colaboradorId).order('item_chave') : Promise.resolve({ data: [], error: null });
@@ -516,6 +574,26 @@ export async function obterCadastroPessoalRhDp({ id, incluirSensiveis = false } 
   };
 }
 
+export async function obterFichaPdfRhDp({ id, versao = 'simplificada' } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('rh-export', {
+    body: { action: 'ficha_pdf', colaborador_id: id, versao }
+  });
+
+  if (error) {
+    let detalhe = '';
+    if (error.context instanceof Response) {
+      const resposta = await error.context.clone().json().catch(() => null);
+      detalhe = resposta?.message || resposta?.error || '';
+    }
+    throw new Error(detalhe || error.message || 'Não foi possível carregar os dados para a ficha.');
+  }
+  if (!data?.ok || !data.ficha) {
+    throw new Error(data?.message || 'Não foi possível carregar os dados para a ficha.');
+  }
+  return data.ficha;
+}
+
 export async function salvarBeneficioRhDp({ id = null, beneficio = {} } = {}) {
   const supabase = exigirSupabaseConfigurado();
   const payload = normalizarBeneficio(beneficio);
@@ -524,6 +602,29 @@ export async function salvarBeneficioRhDp({ id = null, beneficio = {} } = {}) {
     : await supabase.from('rh_beneficios_colaboradores').insert(payload).select('id').single();
   if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o benefício.'));
   return { id: data?.id || id };
+}
+
+export async function salvarDependenteRhDp({ dependente = {} } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const payload = {
+    colaborador_id: limparTexto(dependente.colaborador_id),
+    nome_completo: limparTexto(dependente.nome_completo),
+    data_nascimento: limparTexto(dependente.data_nascimento),
+    parentesco: limparTexto(dependente.parentesco),
+    cpf: limparDigitos(dependente.cpf) || null,
+    ativo: true
+  };
+  if (!payload.colaborador_id) throw new Error('Colaborador não identificado.');
+  if (Array.from(payload.nome_completo || '').length < 3) {
+    throw new Error('O nome completo do dependente deve ter pelo menos 3 caracteres.');
+  }
+  const { data, error } = await supabase
+    .from('rh_dependentes')
+    .insert(payload)
+    .select('id, colaborador_id, nome_completo, data_nascimento, parentesco, cpf, ativo, created_at, updated_at')
+    .single();
+  if (error) throw new Error(mensagemErroRh(error, 'Não foi possível salvar o dependente.'));
+  return data;
 }
 
 export async function salvarDadosBancariosRhDp({ id = null, dados = {} } = {}) {
@@ -564,12 +665,16 @@ export async function salvarCadastroPessoalRhDp({
   dependentes = null
 } = {}) {
   const supabase = exigirSupabaseConfigurado();
+  const dependentesNormalizados = dependentes == null ? null : normalizarDependentes(dependentes);
+  if (dependentesNormalizados?.some(item => Array.from(item.nome_completo || '').length < 3)) {
+    throw new Error('O nome completo do dependente deve ter pelo menos 3 caracteres.');
+  }
   const { data, error } = await supabase.rpc('rh_salvar_cadastro_pessoal', {
     p_colaborador_id: id || null,
     p_colaborador: normalizarColaborador(colaborador),
     p_documentos: documentos == null ? null : normalizarDocumentos(documentos),
     p_vinculo: vinculo == null ? null : normalizarVinculo(vinculo),
-    p_dependentes: dependentes == null ? null : normalizarDependentes(dependentes)
+    p_dependentes: dependentesNormalizados
   });
 
   if (error) {

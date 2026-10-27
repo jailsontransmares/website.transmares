@@ -1,0 +1,1341 @@
+// CRM 2.0 — Rota 205 / Oportunidades e negociações.
+// Fase 9: estado mockado, sem conversão ou integração externa.
+import { obterContextoAcessoHub, observarContextoAcessoHub } from './services/hubAccessContext.js';
+import { hasPermission } from './services/permissionService.js';
+import { getHubAttachmentPreviewSource, renderHubAttachmentManager } from './hubAttachmentManager.js';
+import { isSupabaseConfigured } from './supabaseClient.js';
+import { abrirConsultaCnpj } from './cnpjLookupModal.js';
+import { renderCrm2CpfSearchField } from './crm2CpfSearchField.js';
+import { formatCrm2DateForInput, isValidCrm2Date, maskCrm2Date, normalizeCrm2Date, renderCrm2MaskedDateField } from './crm2DateMask.js';
+import { carregarCnpjTemporarios, normalizarCnpjLocal, salvarCnpjTemporario } from './services/cnpjService.js';
+import { findCrm2Product, getCrm2ProductPrice, normalizeCrm2ProductCatalog, parseCrm2Money, searchCrm2Products } from './crm2ProductCatalog.js';
+import { loadCrm2ProductCatalog } from './crm2ProductCatalogService.js';
+import { carregarParceirosAtivos } from './services/arService.js';
+import { listarResponsaveisAtivosCrm2 } from './services/crm2UsersService.js';
+import { resolveCrm2OpportunityRoute } from './crm2OpportunityRoute.js';
+import { CRM2_ORIGIN_OPTIONS, normalizarOrigemCrm2 } from './crm2OriginOptions.js';
+import { renderHubRecordHeader, renderHubRecordEditButton, renderHubRecordFormFooter, removeHubRecordWorkflowFooter } from './recordWorkflow.js';
+import './formFooterPortal.js';
+
+const OPPORTUNITY_STAGES = ['Novo', 'Em qualificação', 'Em Negociação', 'Aguardando pagamento', 'Aguardando validação', 'Pedido validado'];
+const OPPORTUNITY_STATUSES = ['Aberta', 'Ganha', 'Perdido', 'Arquivado'];
+const OPPORTUNITY_ORIGINS = CRM2_ORIGIN_OPTIONS;
+const OPPORTUNITY_LOSS_REASONS = ['Preço', 'Concorrente (já renovado)', 'Sem retorno', 'Não vai renovar', 'Empresa baixada'];
+const KANBAN_CARD_FIELD_OPTIONS = [
+  { key: 'pfName', label: 'Nome PF' },
+  { key: 'nextContact', label: 'Próximo contato' },
+  { key: 'responsible', label: 'Responsável' },
+  { key: 'number', label: 'Número da oportunidade' },
+  { key: 'stage', label: 'Etapa' },
+  { key: 'status', label: 'Status' },
+  { key: 'value', label: 'Valor estimado' },
+  { key: 'origin', label: 'Origem da oportunidade' },
+  { key: 'createdAt', label: 'Data de cadastro' }
+];
+const TABLE_COLUMN_OPTIONS = [
+  { key: 'name', label: 'Nome' },
+  { key: 'nextAction', label: 'Próxima ação' },
+  { key: 'stage', label: 'Etapa' },
+  { key: 'document', label: 'Documento' },
+  { key: 'order', label: 'Número do pedido' },
+  { key: 'partner', label: 'Parceiro de indicação' }
+];
+
+const CRM2_OPPORTUNITY_ITEMS = [
+  { id: 'opp-001', numero: 'OPP-001', pfId: 'pf-004', pjId: '', status: 'Aberta', etapa: 'Em qualificação', responsavel: 'Ana Martins', origem: 'Site', probabilidade: 35, valorEstimado: '1.280,00', previsaoFechamento: '2026-09-15', itens: [{ id: 'item-001', produto: 'e-CNPJ A3', quantidade: 1, valorUnitario: '890,00' }, { id: 'item-002', produto: 'e-CPF A3', quantidade: 1, valorUnitario: '390,00' }], motivoPerda: '', observacoes: 'Primeiro contato realizado.', criadoEm: '2026-08-01T09:40:00', atualizadoEm: '2026-08-04T10:20:00', historico: [{ data: '2026-08-01T09:40:00', tipo: 'Criação', usuario: 'Ana Martins', descricao: 'Oportunidade criada.', alteracoes: 'Etapa: — → Novo' }, { data: '2026-08-04T10:20:00', tipo: 'Etapa', usuario: 'Ana Martins', descricao: 'Oportunidade avançou para qualificação.', alteracoes: 'Etapa: Novo → Em qualificação' }] },
+  { id: 'opp-002', numero: 'OPP-002', pfId: '', pjId: 'pj-003', status: 'Aberta', etapa: 'Em Negociação', responsavel: 'Carlos Oliveira', origem: 'Parceiro', probabilidade: 60, valorEstimado: '1.780,00', previsaoFechamento: '2026-08-30', itens: [{ id: 'item-003', produto: 'e-CNPJ A3', quantidade: 2, valorUnitario: '890,00' }], motivoPerda: '', observacoes: 'Proposta enviada para análise.', criadoEm: '2026-07-28T14:30:00', atualizadoEm: '2026-08-03T16:45:00', historico: [{ data: '2026-07-28T14:30:00', tipo: 'Criação', usuario: 'Carlos Oliveira', descricao: 'Oportunidade criada.', alteracoes: 'Etapa: — → Novo' }] },
+  { id: 'opp-003', numero: 'OPP-003', pfId: 'pf-002', pjId: 'pj-001', status: 'Aberta', etapa: 'Em Negociação', responsavel: 'Fernanda Lima', origem: 'Indicação', probabilidade: 80, valorEstimado: '540,00', previsaoFechamento: '2026-08-20', itens: [{ id: 'item-004', produto: 'e-CNPJ A1', quantidade: 1, valorUnitario: '540,00' }], motivoPerda: '', observacoes: '', criadoEm: '2026-07-10T10:00:00', atualizadoEm: '2026-08-05T13:15:00', historico: [{ data: '2026-08-05T13:15:00', tipo: 'Etapa', usuario: 'Fernanda Lima', descricao: 'Negociação em andamento.', alteracoes: 'Etapa: Proposta → Em Negociação' }] },
+  { id: 'opp-004', numero: 'OPP-004', pfId: '', pjId: '', pfNome: 'Grupo Nova Rota', pfEmail: 'compras@novarota.example.com', status: 'Perdido', etapa: 'Em Negociação', responsavel: 'Fernanda Lima', origem: 'Atendimento interno', probabilidade: 0, valorEstimado: '390,00', previsaoFechamento: '2026-08-01', itens: [{ id: 'item-005', produto: 'e-CPF A3', quantidade: 1, valorUnitario: '390,00' }], motivoPerda: 'Sem retorno', observacoes: '', criadoEm: '2026-07-05T11:00:00', atualizadoEm: '2026-07-25T15:20:00', historico: [{ data: '2026-07-25T15:20:00', tipo: 'Perda', usuario: 'Fernanda Lima', descricao: 'Oportunidade marcada como perdida.', alteracoes: 'Motivo: — → Sem retorno' }] }
+];
+
+// Cache em memória da página: mantém alterações durante a sessão e volta aos mocks após recarregar.
+const CRM2_OPPORTUNITY_MEMORY_CACHE_KEY = '__crm2OportunidadesMemoryCache';
+const crm2OportunidadesMemoryCache = window[CRM2_OPPORTUNITY_MEMORY_CACHE_KEY] ||= {
+  opportunities: structuredClone(CRM2_OPPORTUNITY_ITEMS)
+};
+
+const crm2OportunidadesState = {
+  canView: false, canCreate: false, canEdit: false, canDelete: false, canComment: false,
+  responsibleUsers: [], responsibleUsersLoaded: false, responsibleUsersLoading: false, responsibleUsersError: '',
+  opportunities: crm2OportunidadesMemoryCache.opportunities, pjTemporarios: [], tempLoadedForId: '', tempLoading: false, produtos: [], produtosLoaded: false, produtosLoading: false, partners: [], partnersLoaded: false, partnersLoading: false, partnerSelectionRequired: false,
+  viewMode: 'table', tableColumnFields: TABLE_COLUMN_OPTIONS.map((option) => option.key), tableColumnSettingsOpen: false, tableColumnSettingsDraft: [], kanbanCollapsedStages: {}, kanbanCardFields: ['pfName', 'nextContact', 'responsible'], kanbanCardSettingsOpen: false, kanbanCardSettingsDraft: [], kanbanSettingsMessage: '', search: '', searchExpanded: false, filterModalOpen: false, filterDraft: {}, nextActionDrafts: {}, timelineDetailsExpanded: false, timelineCommentDraft: '', stageFilter: '', statusFilter: '', responsibleFilter: '', sourceFilter: [], lossReasonFilter: '', productFilter: [], nextContactFilter: '', nextContactFrom: '', nextContactTo: '', dateFrom: '', dateTo: '', updatedFrom: '', updatedTo: '', page: 1, perPage: 20, sortLevels: [], listState: 'normal', detailId: '', detailTab: 'timeline', formMode: '', inlineEditingId: '', draft: {}, errors: {}, message: '', saving: false, saveError: '', attachmentDraft: [], attachmentSelectionDraft: [], attachmentSelectionMode: false, selectedAttachmentKeys: [], attachmentView: 'list', collapsedAttachmentTargets: {}, attachmentInlineEditKey: '', attachmentInlineDraft: null
+};
+
+crm2OportunidadesState.orderGeneration = { open: false, status: 'editing', mode: 'total', selectedItemIds: [], pfId: '', pjId: '', newPfNome: '', newPfCpf: '', newPjRazaoSocial: '', newPjCnpj: '', vinculoTipo: 'Representante legal', responsavel: 'Ana Martins', informarDataEmissao: false, dataEmissaoPorItem: {}, lossMode: false, motivoPerda: '', observacoes: '', errors: {}, result: null };
+
+function escapeOpp(value = '') { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
+function upperOpp(value = '') { return String(value ?? '').trim().toLocaleUpperCase('pt-BR'); }
+function attrOpp(value = '') { return escapeOpp(value).replaceAll('`', '&#096;'); }
+function normOpp(value = '') { return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+function digitsOpp(value = '') { return String(value ?? '').replace(/\D/g, ''); }
+function partnerLabelOpp(partner = {}) { if (!partner) return ''; return String(partner.nome_completo || partner.nome || partner.nome_empresa || partner.empresa || '').trim(); }
+function partnerByIdOpp(id = '') { return crm2OportunidadesState.partners.find((partner) => String(partner.id) === String(id)) || null; }
+function partnerByNameOpp(name = '') { const normalized = normOpp(name); return normalized ? crm2OportunidadesState.partners.find((partner) => normOpp(partnerLabelOpp(partner)) === normalized || normOpp(partner.codigo_revendedor || partner.codigo) === normalized) || null : null; }
+function dateOpp(value = '') { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(d); }
+function dateTimeOpp(value = '') { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(d); }
+function moneyValueOpp(value = '') { return parseCrm2Money(value) || 0; }
+function moneyOpp(value = '') { return escapeOpp(new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(moneyValueOpp(value))); }
+function permissionsOpp() { const permissions = obterContextoAcessoHub()?.permissions || {}; const resolve = (action) => hasPermission(permissions, 'painel_ar', action); crm2OportunidadesState.canView = resolve('view'); crm2OportunidadesState.canCreate = resolve('create') || resolve('update'); crm2OportunidadesState.canEdit = resolve('update'); crm2OportunidadesState.canDelete = resolve('delete'); crm2OportunidadesState.canComment = ['view', 'update', 'delete'].some(resolve); }
+async function loadResponsibleUsersOpp() {
+  if (crm2OportunidadesState.responsibleUsersLoaded || crm2OportunidadesState.responsibleUsersLoading) return;
+  crm2OportunidadesState.responsibleUsersLoading = true;
+  crm2OportunidadesState.responsibleUsersError = '';
+  try {
+    if (isSupabaseConfigured) {
+      crm2OportunidadesState.responsibleUsers = await listarResponsaveisAtivosCrm2();
+    } else {
+      crm2OportunidadesState.responsibleUsers = [...new Set(CRM2_OPPORTUNITY_ITEMS.map((item) => item.responsavel).filter(Boolean))].map((nome) => ({ id: nome, nome }));
+    }
+  } catch (error) {
+    crm2OportunidadesState.responsibleUsers = [];
+    crm2OportunidadesState.responsibleUsersError = error?.message || 'Não foi possível carregar usuários ativos.';
+    console.error('Não foi possível carregar os responsáveis ativos do CRM 2.', error);
+  } finally {
+    crm2OportunidadesState.responsibleUsersLoaded = true;
+    crm2OportunidadesState.responsibleUsersLoading = false;
+    if (currentOppRoute().active && document.querySelector('[data-crm2-oportunidades="true"]')) rerenderOpp();
+  }
+}
+async function loadPartnersOpp() {
+  if (crm2OportunidadesState.partnersLoaded || crm2OportunidadesState.partnersLoading) return;
+  crm2OportunidadesState.partnersLoading = true;
+  try {
+    crm2OportunidadesState.partners = isSupabaseConfigured ? await carregarParceirosAtivos() : [];
+  } catch (error) {
+    crm2OportunidadesState.partners = [];
+    console.error('Não foi possível carregar parceiros ativos para a oportunidade.', error);
+  } finally {
+    crm2OportunidadesState.partnersLoaded = true;
+    crm2OportunidadesState.partnersLoading = false;
+    if (currentOppRoute().active && document.querySelector('[data-crm2-oportunidades="true"]')) rerenderOpp();
+  }
+}
+function currentOppRoute() { return resolveCrm2OpportunityRoute(window.location.pathname); }
+function oppPath(suffix = '') { const hasHub = window.location.pathname.split('/').filter(Boolean)[0] === 'hub'; return `${hasHub ? '/hub' : ''}/painel-ar/205${suffix ? `/${suffix}` : ''}`; }
+function navigateOpp(suffix = '') { crm2OportunidadesState.filterModalOpen = false; crm2OportunidadesState.filterDraft = {}; crm2OportunidadesState.nextActionDrafts = {}; crm2OportunidadesState.timelineDetailsExpanded = false; crm2OportunidadesState.timelineCommentDraft = ''; window.history.pushState({}, '', oppPath(suffix)); window.dispatchEvent(new PopStateEvent('popstate')); window.setTimeout(() => window.crm2OportunidadesMount?.(), 0); }
+function opportunityById(id) { return crm2OportunidadesState.opportunities.find((opp) => opp.id === id) || null; }
+function orderGenerationOpportunityOpp() {
+  const route = currentOppRoute();
+  if (route.view === 'opp-new') {
+    crm2OportunidadesState.draft.id ||= 'opp-draft';
+    crm2OportunidadesState.draft.numero ||= 'Nova oportunidade';
+    crm2OportunidadesState.draft.anexos ||= [];
+    return crm2OportunidadesState.draft;
+  }
+  return opportunityById(route.id) || opportunityById(crm2OportunidadesState.detailId) || null;
+}
+function relatedPfOpp(id) { const records = window.crm2PfGetMockItems?.() || []; return records.find((item) => item.id === id) || null; }
+function relatedPjOpp(id) { const records = window.crm2PjGetMockItems?.() || []; return records.find((item) => item.id === id) || null; }
+function findPjByCnpjOpp(cnpj = '') { const normalized = normalizarCnpjLocal(cnpj); return normalized.length === 14 ? (window.crm2PjGetMockItems?.() || []).find((item) => normalizarCnpjLocal(item.cnpj) === normalized) || null : null; }
+function temporaryForItemOpp(item = {}) { const cnpj = normalizarCnpjLocal(item.cnpj); const exact = cnpj ? crm2OportunidadesState.pjTemporarios.find((temporary) => normalizarCnpjLocal(temporary.cnpj) === cnpj) : null; return exact || crm2OportunidadesState.pjTemporarios.find((temporary) => temporary.produtoIds?.includes(item.produto)) || item.pjTemporario || null; }
+function pjCnpjDataOpp(pj, temporary) { const cityState = String(pj?.cidadeEstado || '').split('/'); return { cnpj: temporary?.cnpj || pj?.cnpj || '', razaoSocial: temporary?.razaoSocial || pj?.razaoSocial || '', situacao: temporary?.situacao || pj?.status || '', porte: temporary?.porte || pj?.porte || '', endereco: temporary?.endereco || pj?.logradouro || pj?.endereco || '', numero: temporary?.numero || pj?.numero || '', complemento: temporary?.complemento || pj?.complemento || '', cep: temporary?.cep || pj?.cep || '', bairro: temporary?.bairro || pj?.bairro || '', municipio: temporary?.municipio || pj?.municipio || cityState[0]?.trim() || '', uf: temporary?.uf || pj?.uf || cityState[1]?.trim() || '' }; }
+function applyCnpjTemporariosOpp(items = []) { return items.map((item) => { const temporary = temporaryForItemOpp(item); return temporary ? { ...item, cnpj: temporary.cnpj, pjTemporarioId: temporary.id, pjTemporario: { ...temporary } } : item; }); }
+async function loadCnpjTemporariosOpp(oportunidadeId) { if (!oportunidadeId || !isSupabaseConfigured || crm2OportunidadesState.tempLoadedForId === oportunidadeId || crm2OportunidadesState.tempLoading) return; crm2OportunidadesState.tempLoading = true; try { crm2OportunidadesState.pjTemporarios = await carregarCnpjTemporarios(oportunidadeId); crm2OportunidadesState.draft.itens = applyCnpjTemporariosOpp(crm2OportunidadesState.draft.itens || []); } catch (error) { console.warn('Não foi possível carregar os PJs temporários da oportunidade.', error); crm2OportunidadesState.pjTemporarios = []; } finally { crm2OportunidadesState.tempLoadedForId = oportunidadeId; crm2OportunidadesState.tempLoading = false; if (currentOppRoute().id === oportunidadeId && !crm2OportunidadesState.orderGeneration.open) rerenderOpp(); } }
+async function persistCnpjTemporariosOpp(oportunidade, items = []) { if (!isSupabaseConfigured || !oportunidade?.id || String(oportunidade.id).startsWith('opp-')) return; for (const item of items) { const temporary = item.pjTemporario || temporaryForItemOpp(item); const cnpj = normalizarCnpjLocal(temporary?.cnpj || item.cnpj); if (!temporary || !item.produto || cnpj.length !== 14) continue; await salvarCnpjTemporario({ oportunidadeId: oportunidade.id, produtoId: item.produto, dados: { ...temporary, cnpj }, fonte: temporary.fonte || 'manual', reconsultar: Boolean(item.pjTemporarioReconsultar) }); } }
+async function persistCnpjTemporariosSafeOpp(oportunidade, items = []) { try { await persistCnpjTemporariosOpp(oportunidade, items); return true; } catch (error) { console.error('Falha ao persistir os PJs temporários da oportunidade.', error); crm2OportunidadesState.saveError = 'Não foi possível salvar os dados temporários da PJ. Revise sua conexão e tente novamente.'; return false; } }
+function opportunityAttachmentTargetsOpp(opp) {
+  const targets = [];
+  const pfId = resolvePfIdOpp(opp);
+  const pf = relatedPfOpp(pfId);
+  if (pf) targets.push({ type: 'pf', id: pf.id, label: `PF · ${pf.nome}`, record: pf });
+  const pjIds = [...new Set((opp?.itens || []).map((item) => item.pjId || opp.pjId).filter(Boolean))];
+  pjIds.forEach((id) => { const pj = relatedPjOpp(id); if (pj) targets.push({ type: 'pj', id: pj.id, label: `PJ · ${pj.razaoSocial}`, record: pj }); });
+  return targets;
+}
+function opportunityAttachmentSourceOpp(target) { if (target.type === 'opportunity') return 'opportunity'; return target.type === 'pf' ? 'pf' : `pj-${target.id}`; }
+function opportunityAttachmentTargetOpp(source, opp) { return [...opportunityAttachmentTargetsOpp(opp), ...(source === 'opportunity' ? [{ type: 'opportunity', id: opp.id, label: `Oportunidade · ${opp.numero}`, record: opp }] : [])].find((target) => opportunityAttachmentSourceOpp(target) === source) || null; }
+function opportunityAttachmentsOpp(opp) {
+  return opportunityAttachmentTargetsOpp(opp).flatMap((target) => (target.record.anexos || []).map((attachment, index) => ({ ...attachment, source: opportunityAttachmentSourceOpp(target), index, targetLabel: target.label })));
+}
+function rerenderOpportunityAttachmentsOpp() { window.crm2OportunidadesMount?.(); }
+function attachmentDateOpp(value = '') { return value ? new Intl.DateTimeFormat('pt-BR').format(new Date(`${value}T00:00:00`)) : 'Sem validade'; }
+function normalizeOpportunityAttachmentOpp(file) { return { nome: file?.name || 'Arquivo selecionado', tipo: file?.type || 'application/octet-stream', validade: '', incluidoEm: new Date().toISOString(), arquivo: file || null, previewUrl: file && typeof URL !== 'undefined' ? URL.createObjectURL(file) : '' }; }
+function storedOpportunityAttachmentOpp(attachment = {}) { const { targetSource, removeKey, ...stored } = attachment; return stored; }
+function commitOpportunityAttachmentSelectionOpp() {
+  const pending = crm2OportunidadesState.attachmentSelectionDraft.filter((attachment) => attachment.targetSource === 'opportunity');
+  if (!pending.length) return;
+  crm2OportunidadesState.draft.anexos = [
+    ...(crm2OportunidadesState.draft.anexos || []),
+    ...pending.map(storedOpportunityAttachmentOpp)
+  ];
+  crm2OportunidadesState.attachmentSelectionDraft = crm2OportunidadesState.attachmentSelectionDraft.filter((attachment) => attachment.targetSource !== 'opportunity');
+}
+function renderOpportunityAttachmentGridOpp(opp = {}) {
+  const baseTargets = opportunityAttachmentTargetsOpp(opp);
+  const targets = [...baseTargets, ...(opp.anexos?.length || !baseTargets.length ? [{ type: 'opportunity', id: opp.id, label: `Oportunidade · ${opp.numero}`, record: opp }] : [])];
+  const block = targets.map((target) => {
+    const source = opportunityAttachmentSourceOpp(target);
+    const attachments = (target.record.anexos || []).map((attachment, index) => ({ ...attachment, source, index }));
+    const drafts = crm2OportunidadesState.attachmentSelectionDraft.filter((draft) => draft.targetSource === source);
+    const collapsed = Boolean(crm2OportunidadesState.collapsedAttachmentTargets[source]);
+    return `<article class="crm2-opp-attachment-target"><div class="hub-form-section-title crm2-opp-attachment-target-header"><button class="crm2-opp-attachment-target-toggle is-${collapsed ? 'collapsed' : 'expanded'}" type="button" aria-expanded="${collapsed ? 'false' : 'true'}" aria-controls="crm2-opp-attachments-${escapeOpp(source)}" aria-label="${collapsed ? 'Expandir' : 'Recolher'} bloco de anexos de ${escapeOpp(target.label)}" onclick="crm2OportunidadesToggleAttachmentTarget('${escapeOpp(source)}')"><span><strong>${escapeOpp(target.label)}</strong><small>${attachments.length} anexo(s)</small></span><span class="crm2-opp-attachment-target-state">${collapsed ? 'Recolhido' : 'Expandido'}</span><i data-lucide="${collapsed ? 'chevron-down' : 'chevron-up'}" aria-hidden="true"></i></button></div>${collapsed ? '' : renderHubAttachmentManager({
+      id: `crm2-opp-attachments-${source}`,
+      className: 'crm2-opp-attachments-manager crm2-pf-attachments-container',
+      attachments,
+      drafts,
+      editing: true,
+      canView: true,
+      canInclude: crm2OportunidadesState.canEdit || (crm2OportunidadesState.formMode === 'opportunity' && !crm2OportunidadesState.detailId && crm2OportunidadesState.canCreate),
+      canEdit: crm2OportunidadesState.canEdit,
+      canDelete: crm2OportunidadesState.canEdit,
+      showBatchActions: true,
+      selectionMode: crm2OportunidadesState.attachmentSelectionMode,
+      selectedKeys: crm2OportunidadesState.selectedAttachmentKeys,
+      viewMode: crm2OportunidadesState.attachmentView,
+      inlineEditKey: crm2OportunidadesState.attachmentInlineEditKey,
+      inlineDraft: crm2OportunidadesState.attachmentInlineDraft,
+      formatDate: attachmentDateOpp,
+      handlers: {
+        selectFiles: () => `crm2OportunidadesSelectAttachments(this, '${escapeOpp(source)}')`,
+        cancelDraft: () => 'crm2OportunidadesCancelAttachmentDraft()',
+        confirmDraft: () => 'crm2OportunidadesConfirmAttachmentDraft()',
+        updateDraftName: (index) => `crm2OportunidadesUpdateAttachmentDraft('${escapeOpp(source)}', ${index}, this.value)`,
+        maskDraftDate: (index) => `crm2OportunidadesUpdateAttachmentDraftDate('${escapeOpp(source)}', ${index}, this.value)`,
+        pickDraftDate: (index) => `crm2OportunidadesUpdateAttachmentDraftDate('${escapeOpp(source)}', ${index}, this.value)`,
+        toggleSelection: () => 'crm2OportunidadesToggleAttachmentSelection()',
+        toggleSelected: (currentSource, index) => `crm2OportunidadesToggleAttachmentSelected('${escapeOpp(source)}', ${index}, this.checked)`,
+        downloadAll: () => `crm2OportunidadesDownloadAllAttachments('${escapeOpp(source)}')`,
+        downloadSelected: () => `crm2OportunidadesDownloadSelectedAttachments('${escapeOpp(source)}')`,
+        deleteSelected: () => `crm2OportunidadesDeleteSelectedAttachments('${escapeOpp(source)}')`,
+        setView: (view) => `crm2OportunidadesSetAttachmentView('${escapeOpp(view)}')`,
+        view: (currentSource, index) => `crm2OportunidadesViewAttachment('${escapeOpp(source)}', ${index})`,
+        editInline: (currentSource, index) => `crm2OportunidadesEditAttachment('${escapeOpp(source)}', ${index})`,
+        updateInlineName: () => "crm2OportunidadesUpdateInlineAttachment('nome', this.value)",
+        maskDate: () => "crm2OportunidadesUpdateInlineAttachment('validade', this.value)",
+        pickDate: () => "crm2OportunidadesUpdateInlineAttachment('validade', this.value)",
+        saveInlineEdit: () => 'crm2OportunidadesSaveInlineAttachment()',
+        cancelInlineEdit: () => 'crm2OportunidadesCancelInlineAttachment()',
+        download: (currentSource, index) => `crm2OportunidadesDownloadAttachment('${escapeOpp(source)}', ${index})`,
+        delete: (currentSource, index) => `crm2OportunidadesRemoveAttachment('${escapeOpp(source)}', ${index})`
+      }
+    })}</article>`;
+  }).join('');
+  return `<section class="hub-form-section crm2-opp-attachments-section"><div class="hub-form-section-title"><strong>Anexos espelhados</strong><span>${targets.length ? 'Sincronizados com os cadastros PF/PJ vinculados.' : 'Nenhum cadastro PF/PJ vinculado.'}</span></div>${targets.length ? block : '<div class="crm2-pessoas-state is-compact"><strong>Cadastro ainda não localizado.</strong><span>Ao gerar o pedido, os cadastros poderão ser criados automaticamente.</span></div>'}</section>`;
+}
+function renderOpportunityAttachmentsOpp(opp = {}) { return renderOpportunityAttachmentGridOpp(opp); }
+function openRelatedCrm2RecordOpp(code, id) {
+  const isPj = String(code) === '202';
+  const record = isPj ? relatedPjOpp(id) : relatedPfOpp(id);
+  if (!record) return;
+  document.querySelector('[data-crm2-related-view-modal]')?.remove();
+  const value = (key, fallback = '') => record[key] ?? fallback;
+  const title = isPj ? value('razaoSocial', 'Cadastro PJ') : value('nome', 'Cadastro PF');
+  const data = isPj
+    ? { cnpj: maskCnpjOpp(value('cnpj')), razaoSocial: value('razaoSocial'), situacao: value('situacao', value('status')), cep: value('cep'), endereco: value('logradouro', value('endereco')), numero: value('numero'), complemento: value('complemento'), bairro: value('bairro'), municipio: value('municipio', value('cidade')), uf: value('uf') }
+    : { cnpj: maskCpfOpp(value('cpf')), razaoSocial: value('nome'), situacao: dateLabelOpp(value('nascimento')), cep: value('cei'), endereco: maskPhoneOpp(value('telefone')), numero: value('email'), complemento: value('origem'), bairro: value('parceiro'), municipio: value('observacoes') };
+  const labels = isPj
+    ? { cnpj: 'CNPJ', razaoSocial: 'Razão social', situacao: 'Situação na RFB', cep: 'CEP', endereco: 'Logradouro', numero: 'Número', complemento: 'Complemento', bairro: 'Bairro', municipio: 'Cidade', uf: 'UF' }
+    : { cnpj: 'CPF', razaoSocial: 'Nome', situacao: 'Data de nascimento', cep: 'CEI/CAEPF', endereco: 'Telefone', numero: 'E-mail', complemento: 'Origem', bairro: 'Parceiro de indicação', municipio: 'Observações' };
+  const fields = Object.keys(labels).map((key) => `<label class="cnpj-lookup-field cnpj-lookup-field-${key}"><span>${labels[key]}</span><input class="config-input" value="${attrOpp(data[key] || '')}" readonly aria-readonly="true"${['razaoSocial', 'endereco'].includes(key) ? ' data-cnpj-auto-fit="true"' : ''}></label>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `<div class="cnpj-lookup-backdrop crm2-opp-related-view-backdrop" data-crm2-related-view-modal role="presentation" onclick="crm2OportunidadesCloseRelatedView(event)"><section class="cnpj-lookup-modal crm2-opp-related-view-modal is-${isPj ? 'pj' : 'pf'}" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-related-view-title" onclick="event.stopPropagation()"><header><div><span class="ar-crm-phase1-kicker">CADASTRO ${isPj ? 'PJ' : 'PF'}</span><h3 id="crm2-opp-related-view-title">${escapeOpp(title)}</h3></div><span class="cnpj-lookup-source">Visualização do cadastro</span><button class="icon-btn" type="button" aria-label="Fechar" title="Fechar" onclick="crm2OportunidadesCloseRelatedView()">×</button></header><section class="cnpj-lookup-section" aria-labelledby="crm2-opp-related-view-data-title"><h4 id="crm2-opp-related-view-data-title">Dados cadastrais</h4><div class="cnpj-lookup-grid">${fields}</div></section><footer><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseRelatedView()">Fechar</button></footer></section></div>`);
+  window.requestAnimationFrame(() => {
+    const modal = document.querySelector('[data-crm2-related-view-modal]');
+    modal?.querySelectorAll('[data-cnpj-auto-fit="true"]').forEach((input) => {
+      input.style.fontSize = '';
+      let size = 11;
+      while (input.scrollWidth > input.clientWidth + 1 && size > 9) {
+        size -= 0.25;
+        input.style.fontSize = `${size}px`;
+      }
+    });
+    modal?.querySelector('.icon-btn')?.focus();
+  });
+}
+function closeRelatedCrm2RecordOpp(event) { if (event && event.target !== event.currentTarget) return; document.querySelector('[data-crm2-related-view-modal]')?.remove(); }
+function updateItemPjRowOpp(row, pj) { if (!row) return; const cnpjPill = row.querySelector('[data-pj-cnpj]'); const cnpjInput = row.querySelector('[name^="itemCnpj-"]'); const cnpj = maskCnpjOpp(pj?.cnpj); if (pj && cnpjInput) { cnpjInput.value = cnpj === '—' ? '' : cnpj; const lookup = row.querySelector('.crm2-opp-cnpj-search'); if (lookup) lookup.disabled = normalizarCnpjLocal(cnpj).length !== 14; } if (cnpjPill) { cnpjPill.textContent = pj?.razaoSocial || ''; cnpjPill.hidden = !pj?.razaoSocial; } }
+function opportunityLabel(opp) { const pf = relatedPfOpp(opp.pfId); const pj = relatedPjOpp(opp.pjId); return upperOpp(pf?.nome || opp.pfNome || pj?.razaoSocial || opp.pjRazaoSocial || 'Registro relacionado'); }
+function totalOpp(opp) { return (opp.itens || []).reduce((total, item) => total + (Number(item.quantidade || 1) * catalogUnitPriceOpp(item)), 0); }
+function statusClassOpp(value = '') { return normOpp(value).replace(/\s+/g, '-'); }
+function statusStatusClassOpp(value = '') { return statusClassOpp(value); }
+function stageClassOpp(value) {
+  const stageClasses = { novo: 'novo', 'em qualificacao': 'qualificacao', 'em negociacao': 'negociacao', 'aguardando pagamento': 'aguardando-pagamento', 'aguardando validacao': 'aguardando-validacao', 'pedido validado': 'pedido-validado', 'pedido emitido': 'pedido-emitido' };
+  return stageClasses[normOpp(value)] || '';
+}
+function stagePillOpp(value) { const stageClass = stageClassOpp(value); return `<span class="crm2-opp-pill${stageClass ? ` crm2-opp-stage-pill is-stage-${attrOpp(stageClass)}` : ''} is-${attrOpp(statusClassOpp(value))}">${escapeOpp(value)}</span>`; }
+function opportunityStatusOpp(values = {}) { if (values.motivoPerda === 'Empresa baixada') return 'Arquivado'; if (values.motivoPerda) return 'Perdido'; return values.etapa === 'Pedido Emitido' || values.etapa === 'Pedido emitido' || values.conversaoStatus === 'Total' ? 'Ganha' : 'Aberta'; }
+function maskCpfOpp(value = '') { const digits = digitsOpp(value); return digits.length === 11 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}` : value || '—'; }
+function maskCnpjOpp(value = '') { const digits = digitsOpp(value); return digits.length === 14 ? `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}` : value || '—'; }
+function maskPhoneOpp(value = '') { const digits = digitsOpp(value).slice(0, 11); if (digits.length <= 2) return digits ? `(${digits}` : ''; if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`; const prefix = digits.length === 11 ? digits.slice(2, 7) : digits.slice(2, 6); const suffix = digits.length === 11 ? digits.slice(7) : digits.slice(6); return `(${digits.slice(0, 2)}) ${prefix}-${suffix}`; }
+function maskDocumentOpp(value = '', type = '') { return normOpp(type) === 'pj' || digitsOpp(value).length > 11 ? maskCnpjOpp(value) : maskCpfOpp(value); }
+function parseOppDate(value = '') { if (!value) return null; const raw = String(value); const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw); const date = dateOnly ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])) : new Date(raw); return Number.isNaN(date.getTime()) ? null : date; }
+function dateLabelOpp(value = '') { const date = parseOppDate(value); return date ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date) : '—'; }
+function createdDatePillOpp(value = '') { return value ? `<span class="crm2-opp-created-date-pill" title="Data de cadastro">Cadastro: ${escapeOpp(dateLabelOpp(value))}</span>` : ''; }
+function detailValueOpp(value = '') { const text = String(value ?? '').trim(); return `<span class="config-input crm2-opp-view-field${!text || text === '—' ? ' is-placeholder' : ''}">${!text || text === '—' ? '—' : escapeOpp(text)}</span>`; }
+function dateTimeLabelOpp(value = '') { const dateLabel = dateLabelOpp(value); const time = timeInputValueOpp(value); return time ? `${dateLabel} ${time}` : dateLabel; }
+function dateStatusOpp(value = '') { const date = parseOppDate(value); if (!date) return 'is-none'; const today = new Date(); const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime(); const targetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(); const hasTime = /[T ]\d{2}:\d{2}/.test(String(value || '')); if (hasTime && date.getTime() < Date.now()) return 'is-overdue'; return targetDay < startToday ? 'is-overdue' : targetDay === startToday ? 'is-today' : 'is-upcoming'; }
+function dateInputValueOpp(value = '') { const date = parseOppDate(value); if (!date) return ''; return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+function timeInputValueOpp(value = '') { const raw = String(value || ''); const date = parseOppDate(value); if (!date || !/[T ]\d{2}:\d{2}/.test(raw)) return ''; return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`; }
+function dateDisplayValueOpp(value = '') { const iso = dateInputValueOpp(value); return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : ''; }
+function orderGenerationEmissionDateTextOpp(value = '') { const iso = dateInputValueOpp(value); return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : ''; }
+function maskDateTextOpp(value = '') { const raw = String(value || ''); if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return `${raw.slice(8, 10)}/${raw.slice(5, 7)}/${raw.slice(0, 4)}`; const digits = raw.replace(/\D/g, '').slice(0, 8); return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/'); }
+function dateTextToIsoOpp(value = '') { const raw = String(value || '').trim(); const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw); if (iso) return parseOppDate(raw) ? raw : ''; const shortMatch = /^(\d{2})\/(\d{2})$/.exec(raw); if (shortMatch) { const candidate = `${new Date().getFullYear()}-${shortMatch[2]}-${shortMatch[1]}`; return parseOppDate(candidate) ? candidate : ''; } const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw); if (!match) return ''; const candidate = `${match[3]}-${match[2]}-${match[1]}`; return parseOppDate(candidate) ? candidate : ''; }
+function nextActionValueOpp(opp = {}) { return Object.prototype.hasOwnProperty.call(opp, 'proximaAcaoEm') ? opp.proximaAcaoEm : opp.previsaoFechamento || ''; }
+function composeNextContactOpp(dateValue = '', timeValue = '') { const date = dateTextToIsoOpp(dateValue); return date ? `${date}${timeValue ? `T${String(timeValue)}` : ''}` : ''; }
+function nextActionEditorValuesOpp(opp) { const current = Object.prototype.hasOwnProperty.call(opp, 'proximaAcaoEm') ? opp.proximaAcaoEm : opp.previsaoFechamento || ''; const draft = crm2OportunidadesState.nextActionDrafts[opp.id]; return draft || { dateValue: dateInputValueOpp(current), dateText: dateDisplayValueOpp(current), timeValue: timeInputValueOpp(current) }; }
+function renderNextActionEditorOpp(opp, presentation) { const values = nextActionEditorValuesOpp(opp); const dateClass = dateStatusOpp(values.dateValue ? `${values.dateValue}${values.timeValue ? `T${values.timeValue}` : ''}` : ''); const id = attrOpp(opp.id); const label = attrOpp(presentation.legalName); return `<div class="crm2-opp-next-action-editor" onfocusout="crm2OportunidadesHandleNextActionBlur('${id}', event)"><div class="crm2-opp-next-action-date-row"><button class="icon-btn crm2-opp-next-action-calendar" type="button" title="Selecionar data" aria-label="Selecionar data" onclick="crm2OportunidadesOpenNativeDate(this)" ${crm2OportunidadesState.canEdit ? '' : 'disabled'}><i data-lucide="calendar" aria-hidden="true"></i></button><input class="crm2-opp-next-action-date-text ${dateClass}" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" value="${attrOpp(values.dateText)}" aria-label="Data da próxima ação de ${label}" oninput="crm2OportunidadesTrackNextActionPart('${id}', 'date', this.value, this)"><input class="crm2-opp-next-action-native-date" type="date" tabindex="-1" aria-hidden="true" value="${attrOpp(values.dateValue)}" onchange="crm2OportunidadesTrackNextActionPart('${id}', 'date', this.value, this)" ${crm2OportunidadesState.canEdit ? '' : 'disabled'}><input class="crm2-opp-next-action-time ${dateClass}" type="time" placeholder="hh:mm" value="${attrOpp(values.timeValue)}" aria-label="Horário da próxima ação de ${label}" oninput="crm2OportunidadesTrackNextActionPart('${id}', 'time', this.value, this)" ${crm2OportunidadesState.canEdit ? '' : 'disabled'}></div></div>`; }
+function opportunityPresentationOpp(opp) { const pf = relatedPfOpp(opp.pfId); const pj = relatedPjOpp(opp.pjId); const isPj = Boolean(pj || opp.pjId || opp.pjRazaoSocial || opp.pjCnpj); const legalPerson = pj?.pessoasVinculadas?.find((item) => normOpp(item.tipo) === 'representante legal') || pj?.pessoasVinculadas?.[0]; const legalName = upperOpp(isPj ? legalPerson?.nome || '—' : pf?.nome || opp.pfNome || opportunityLabel(opp)) || '—'; const companyName = isPj ? upperOpp(pj?.razaoSocial || opp.pjRazaoSocial || '—') || '—' : ''; const cpf = maskCpfOpp(pf?.cpf || opp.pfCpf); const cnpj = maskCnpjOpp(pj?.cnpj || opp.pjCnpj); const selectedPartner = partnerByIdOpp(opp.parceiroId) || partnerByNameOpp(opp.parceiroNome); const partner = partnerLabelOpp(selectedPartner) || opp.parceiroNome || pf?.parceiro || opp.pfParceiro || opp.parceiro || '—'; const nextAction = Object.prototype.hasOwnProperty.call(opp, 'proximaAcaoEm') ? opp.proximaAcaoEm : opp.previsaoFechamento || ''; return { isPj, legalName, companyName, cpf, cnpj, partner, nextAction }; }
+
+function schedulingDataOpp(opp = {}) {
+  const pf = relatedPfOpp(opp.pfId);
+  const orderItem = (opp.itens || []).find((item) => item && [item.numeroPedido, item.pedido, item.orderId, item.numero_pedido].some((value) => String(value || '').trim()));
+  const orderId = String(orderItem?.numeroPedido || orderItem?.pedido || orderItem?.orderId || orderItem?.numero_pedido || '').trim();
+  const cpf = digitsOpp(pf?.cpf || opp.pfCpf || opp.cpf);
+  return { orderId, cpf };
+}
+function schedulingUrlOpp(opp = {}) { const { orderId, cpf } = schedulingDataOpp(opp); if (!orderId || cpf.length !== 11) return ''; const params = new URLSearchParams({ orderId, CPF: cpf }); return `https://gestaoar.certisign.com.br/AgendamentoOnLine/cliente/actionPedido.action?${params.toString()}`; }
+function renderSchedulingButtonOpp(opp = {}, className = '') {
+  const url = schedulingUrlOpp(opp);
+  const state = url ? `href="${attrOpp(url)}" target="_blank" rel="noopener noreferrer"` : 'aria-disabled="true" title="Disponível após informar o número do pedido e um CPF válido"';
+  return `<a class="secondary-btn crm2-opp-scheduling-btn ${className}${url ? '' : ' is-disabled'}" ${state}>Agendar</a>`;
+}
+function opportunityOriginFilterValueOpp(opp = {}) { return normalizarOrigemCrm2(opp.origemOportunidade || opp.origem); }
+function opportunityOriginFilterOptionsOpp() { return [...OPPORTUNITY_ORIGINS]; }
+function opportunityProductFilterOptionsOpp() { return [...new Set([...productCatalogOpp().map((item) => item.value), ...crm2OportunidadesState.opportunities.flatMap((opp) => (opp.itens || []).map((item) => item.produto)).filter(Boolean)])]; }
+function opportunityHasProductOpp(opp, product) { return (opp.itens || []).some((item) => normOpp(item.produto) === normOpp(product)); }
+function opportunityNextContactMatchesOpp(opp, filter) { if (!filter) return true; const value = nextActionValueOpp(opp); const date = parseOppDate(value); if (filter === 'none') return !date; if (!date) return false; const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime(); const today = new Date(); const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime(); if (filter === 'overdue') return target < startToday; if (filter === 'today') return target === startToday; if (filter === 'next7') return target >= startToday && target <= startToday + 7 * 86400000; if (filter === 'custom') { const from = crm2OportunidadesState.nextContactFrom ? parseOppDate(crm2OportunidadesState.nextContactFrom)?.getTime() : null; const to = crm2OportunidadesState.nextContactTo ? parseOppDate(crm2OportunidadesState.nextContactTo)?.getTime() : null; return (!from || target >= from) && (!to || target <= to); } return true; }
+function filteredOpps() { const search = normOpp(crm2OportunidadesState.search); const sourceFilters = filterValuesOpp(crm2OportunidadesState.sourceFilter); const productFilters = filterValuesOpp(crm2OportunidadesState.productFilter); return crm2OportunidadesState.opportunities.filter((opp) => { const origin = opportunityOriginFilterValueOpp(opp); const values = [opp.numero, opportunityLabel(opp), opp.responsavel, opp.etapa, opp.status, origin, opp.motivoPerda, ...(opp.itens || []).map((item) => item.produto)].map(normOpp); return (!search || values.some((value) => value.includes(search))) && (!crm2OportunidadesState.stageFilter || opp.etapa === crm2OportunidadesState.stageFilter) && (!crm2OportunidadesState.statusFilter || opp.status === crm2OportunidadesState.statusFilter) && (!crm2OportunidadesState.responsibleFilter || opp.responsavel === crm2OportunidadesState.responsibleFilter) && (!sourceFilters.length || sourceFilters.some((value) => normOpp(value) === normOpp(origin))) && (!crm2OportunidadesState.lossReasonFilter || opp.motivoPerda === crm2OportunidadesState.lossReasonFilter) && (!productFilters.length || productFilters.some((value) => opportunityHasProductOpp(opp, value))) && opportunityNextContactMatchesOpp(opp, crm2OportunidadesState.nextContactFilter) && (!crm2OportunidadesState.dateFrom || String(opp.criadoEm).slice(0, 10) >= crm2OportunidadesState.dateFrom) && (!crm2OportunidadesState.dateTo || String(opp.criadoEm).slice(0, 10) <= crm2OportunidadesState.dateTo) && (!crm2OportunidadesState.updatedFrom || String(opp.atualizadoEm).slice(0, 10) >= crm2OportunidadesState.updatedFrom) && (!crm2OportunidadesState.updatedTo || String(opp.atualizadoEm).slice(0, 10) <= crm2OportunidadesState.updatedTo); }); }
+function oppSortValue(opp, key) { const presentation = opportunityPresentationOpp(opp); if (key === 'name') return presentation.legalName || ''; if (key === 'nextAction') return nextActionValueOpp(opp); if (key === 'stage') { const index = OPPORTUNITY_STAGES.indexOf(opp.etapa); return index < 0 ? OPPORTUNITY_STAGES.length : index; } if (key === 'document') return presentation.cpf !== '—' ? presentation.cpf : presentation.cnpj; if (key === 'order') return opp.numero || ''; if (key === 'partner') return presentation.partner || ''; return ''; }
+function sortedOpps(items) { const sortLevels = crm2OportunidadesState.sortLevels || []; if (!sortLevels.length) return items; const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' }); return [...items].sort((left, right) => { for (const level of sortLevels) { const leftValue = oppSortValue(left, level.key); const rightValue = oppSortValue(right, level.key); const leftEmpty = leftValue === '' || leftValue === '—' || leftValue == null; const rightEmpty = rightValue === '' || rightValue === '—' || rightValue == null; if (leftEmpty || rightEmpty) { if (leftEmpty && rightEmpty) continue; return leftEmpty ? 1 : -1; } let result = 0; if (level.key === 'stage') result = Number(leftValue) - Number(rightValue); else if (level.key === 'nextAction') { const leftDate = parseOppDate(leftValue)?.getTime() ?? 0; const rightDate = parseOppDate(rightValue)?.getTime() ?? 0; result = leftDate - rightDate; } else result = collator.compare(String(leftValue), String(rightValue)); if (result) return result * (level.direction === 'desc' ? -1 : 1); } return 0; }); }
+function renderOppSortHeader(label, key) { const levelIndex = (crm2OportunidadesState.sortLevels || []).findIndex((level) => level.key === key); const active = levelIndex >= 0; const level = active ? crm2OportunidadesState.sortLevels[levelIndex] : null; const direction = level?.direction || 'asc'; const indicator = active ? `${levelIndex + 1}${direction === 'asc' ? '↑' : '↓'}` : '↕'; const ariaSort = active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'; const title = active ? `${levelIndex + 1}º nível · ${direction === 'asc' ? 'crescente' : 'decrescente'}` : 'Ordenar'; const hint = active ? 'Clique novamente para alternar a direção' : 'Clique para adicionar um nível'; return `<th data-column="${attrOpp(key)}" aria-sort="${ariaSort}"><button class="crm2-opp-sort-button${active ? ' is-active' : ''}" type="button" title="${escapeOpp(title)} · ${escapeOpp(hint)}" aria-label="Ordenar por ${escapeOpp(label)}. ${escapeOpp(title)}" onclick="crm2OportunidadesSortBy('${attrOpp(key)}')"><span>${escapeOpp(label)}</span><span class="crm2-opp-sort-indicator" aria-hidden="true">${indicator}</span></button></th>`; }
+function resolvePfIdOpp(opp = {}) { return opp.pfId || ''; }
+function formDefaultsOpp(opp = {}) { const nextContact = nextActionValueOpp(opp); const etapa = OPPORTUNITY_STAGES.includes(opp.etapa) ? opp.etapa : 'Novo'; return { pfId: resolvePfIdOpp(opp), pjId: opp.pjId || '', pfNome: opp.pfNome || '', pfCpf: opp.pfCpf || '', pfCei: opp.pfCei || '', pfNascimento: opp.pfNascimento || '', pfEmail: opp.pfEmail || '', pfTelefone: opp.pfTelefone || '', pfParceiro: opp.pfParceiro || '', parceiroId: opp.parceiroId || '', parceiroNome: opp.parceiroNome || '', pjRazaoSocial: opp.pjRazaoSocial || '', pjCnpj: opp.pjCnpj || '', status: opportunityStatusOpp({ etapa, conversaoStatus: opp.conversaoStatus, motivoPerda: opp.motivoPerda || '' }), etapa, conversaoStatus: opp.conversaoStatus || '', responsavel: opp.responsavel || '', origem: normalizarOrigemCrm2(opp.origem) || 'Outros', origemOportunidade: normalizarOrigemCrm2(opp.origemOportunidade) || 'Outros', probabilidade: String(opp.probabilidade ?? 10), previsaoFechamento: opp.previsaoFechamento || '', proximoContatoData: dateInputValueOpp(nextContact), proximoContatoHora: timeInputValueOpp(opp.proximaAcaoEm || ''), motivoPerda: opp.motivoPerda || '', observacoes: opp.observacoes || '', itens: Array.isArray(opp.itens) && opp.itens.length ? opp.itens.map((item) => ({ ...item })) : [{ id: `item-${Date.now()}`, produto: '', quantidade: 1, valorUnitario: '' }] }; }
+function pfOppFormData(pfId = '', fallback = {}) { const pf = relatedPfOpp(pfId); if (!pf) return { pfNome: upperOpp(fallback.pfNome), pfCpf: fallback.pfCpf ? maskCpfOpp(fallback.pfCpf) : '', pfCei: fallback.pfCei || '', pfNascimento: fallback.pfNascimento || '', pfEmail: fallback.pfEmail || '', pfTelefone: fallback.pfTelefone ? maskPhoneOpp(fallback.pfTelefone) : '', pfParceiro: fallback.pfParceiro || '', pfOrigem: fallback.pfOrigem || '' }; return { pfNome: upperOpp(pf.nome), pfCpf: pf.cpf ? maskCpfOpp(pf.cpf) : '', pfCei: pf.cei || '', pfNascimento: pf.nascimento || '', pfEmail: pf.email || '', pfTelefone: pf.telefone ? maskPhoneOpp(pf.telefone) : '', pfParceiro: pf.parceiro || '', pfOrigem: pf.origem || '' }; }
+function productCatalogOpp() {
+  return normalizeCrm2ProductCatalog(crm2OportunidadesState.produtos);
+}
+function productPriceOpp(product = '') { return getCrm2ProductPrice(crm2OportunidadesState.produtos, product); }
+function renderOrderPricePillOpp(price) { return `<small class="crm2-opp-order-price-pill" data-item-price>${moneyOpp(price)}</small>`; }
+function catalogUnitPriceOpp(item = {}) { return moneyValueOpp(productPriceOpp(item.produto)); }
+function productGroupOpp(item = {}) { const product = findCrm2Product(crm2OportunidadesState.produtos, item.produto); return String(item.tipo_certificado || product?.group || '').trim(); }
+function productPersonTypeOpp(item = {}) { const group = productGroupOpp(item); const groupKey = normOpp(group).replace(/[^a-z0-9]/g, ''); if (groupKey.includes('ecpf') || groupKey.includes('oab')) return 'pf'; if (group) return 'pj'; const legacyProduct = String(item.produto || ''); if (/e-CPF|OAB/i.test(legacyProduct)) return 'pf'; return 'pj'; }
+async function loadProductCatalogOpp() { if (!isSupabaseConfigured || crm2OportunidadesState.produtosLoaded || crm2OportunidadesState.produtosLoading) return; crm2OportunidadesState.produtosLoading = true; try { crm2OportunidadesState.produtos = await loadCrm2ProductCatalog(); window.crm2PedidosSetProductCatalog?.(crm2OportunidadesState.produtos); } catch (error) { console.warn('Não foi possível carregar a lista de produtos para a oportunidade.', error); } finally { crm2OportunidadesState.produtosLoaded = true; crm2OportunidadesState.produtosLoading = false; if (currentOppRoute().active && !crm2OportunidadesState.filterModalOpen) rerenderOpp(); } }
+function productSuggestionsTargetOpp(input) { const key = input?.dataset?.productKey; return (key && document.querySelector(`[data-product-suggestions][data-product-key="${key}"]`)) || input?.closest('.crm2-opp-product-cell')?.querySelector('[data-product-suggestions]'); }
+function positionSuggestionsOpp(input, target) { if (!input || !target || target.hidden) return; const rect = input.getBoundingClientRect(); const margin = 8; const gap = 6; const width = Math.min(Math.max(rect.width, 260), window.innerWidth - margin * 2); target.style.position = 'fixed'; target.style.width = `${width}px`; target.style.left = `${Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin))}px`; target.style.right = 'auto'; const height = target.offsetHeight; const below = window.innerHeight - rect.bottom - gap; const top = below >= height || rect.top < height + gap ? rect.bottom + gap : rect.top - height - gap; target.style.top = `${Math.max(margin, top)}px`; target.style.zIndex = '2200'; }
+function fitProductSuggestionTextOpp(target) { target?.querySelectorAll('.crm2-opp-product-suggestion strong, .crm2-opp-product-suggestion small').forEach((element) => { const computedSize = Number.parseFloat(window.getComputedStyle(element).fontSize) || 11; const minimumSize = element.matches('small') ? 8 : 9; let size = computedSize; element.style.fontSize = `${size}px`; while (element.scrollWidth > element.clientWidth && size > minimumSize) { size = Math.max(minimumSize, size - 0.5); element.style.fontSize = `${size}px`; } }); }
+const productTitleWidthsOpp = new WeakMap();
+let productTitleResizeObserverOpp = null;
+function fitProductTitleOpp(element, force = false) {
+  const container = element?.parentElement;
+  const width = container?.clientWidth || 0;
+  if (!element || width <= 0) return;
+  const previousWidth = productTitleWidthsOpp.get(element);
+  if (!force && previousWidth && Math.abs(previousWidth - width) < 1) return;
+  productTitleWidthsOpp.set(element, width);
+
+  const baseSize = Number.parseFloat(element.dataset.baseFontSize) || Number.parseFloat(window.getComputedStyle(element).fontSize) || 13;
+  element.dataset.baseFontSize = String(baseSize);
+  let size = baseSize;
+  element.style.display = 'block';
+  element.style.webkitLineClamp = 'unset';
+  element.style.webkitBoxOrient = 'initial';
+  element.style.overflow = 'visible';
+  element.style.whiteSpace = 'normal';
+  element.style.fontSize = `${size}px`;
+  let lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || size * 1.25;
+  while (element.scrollHeight > lineHeight * 2 + 1 && size > 8) {
+    size = Math.max(8, size - 0.5);
+    element.style.fontSize = `${size}px`;
+    lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || size * 1.25;
+  }
+
+  element.style.removeProperty('display');
+  element.style.removeProperty('-webkit-line-clamp');
+  element.style.removeProperty('-webkit-box-orient');
+  element.style.removeProperty('overflow');
+  element.style.removeProperty('white-space');
+  if (size < baseSize) element.style.fontSize = `${size}px`;
+  else element.style.removeProperty('font-size');
+}
+function fitProductTitlesOpp(root = document) {
+  const titles = [...(root?.querySelectorAll?.('.crm2-opp-product-title') || [])];
+  productTitleResizeObserverOpp?.disconnect();
+  titles.forEach((element) => fitProductTitleOpp(element, true));
+  if (typeof ResizeObserver !== 'undefined' && titles.length) {
+    productTitleResizeObserverOpp = new ResizeObserver((entries) => entries.forEach(({ target }) => fitProductTitleOpp(target)));
+    titles.forEach((element) => productTitleResizeObserverOpp.observe(element));
+  }
+}
+function restoreSuggestionsOpp(input, target) { if (!target) return; const owner = input?.closest('.crm2-opp-product-cell, .crm2-opp-pj-cell, .crm2-opp-data-partner'); if (owner && target.parentElement !== owner) owner.appendChild(target); target.dataset.suggestionPortal = 'false'; ['position', 'width', 'left', 'right', 'top', 'zIndex'].forEach((property) => target.style.removeProperty(property)); }
+function closeOppFloatingMenus() {
+  document.querySelectorAll('[data-suggestion-kind][data-suggestion-key]').forEach((target) => {
+    const selector = `[data-${target.dataset.suggestionKind}-key="${target.dataset.suggestionKey}"]`;
+    const input = document.querySelector(selector);
+    target.hidden = true;
+    restoreSuggestionsOpp(input, target);
+  });
+  closeOppFilterDropdowns();
+}
+function closeOppEditActionPortal() {
+  const removePortal = () => {
+    document.querySelectorAll('body > [data-crm2-opp-inline-footer]').forEach((footer) => footer.remove());
+    removeHubRecordWorkflowFooter('crm2-opportunity');
+  };
+  removePortal();
+  window.requestAnimationFrame(removePortal);
+}
+function repositionOpenSuggestionsOpp() { document.querySelectorAll('[data-suggestion-portal="true"]:not([hidden])').forEach((target) => { const key = target.dataset.suggestionKey; const kind = target.dataset.suggestionKind; const input = document.querySelector(`[data-${kind}-key="${key}"]`); positionSuggestionsOpp(input, target); }); }
+function pjOptionsOpp() { return (window.crm2PjGetMockItems?.() || []).map((item) => ({ value: item.id, label: `${item.id} · ${item.razaoSocial}`, cnpj: item.cnpj || '' })); }
+function oppReadonlyField({ label, name, value = '', editable = false, message = '', messageHidden = true, formId = '', className = '', inputClassName = '' }) { const readonly = editable ? '' : ' readonly aria-readonly="true"'; const event = editable && name === 'pfNome' ? ' oninput="crm2OportunidadesFormatName(this)"' : ''; const placeholder = editable ? ({ pfNome: 'Nome completo', pfNascimento: 'dd/mm/aaaa', pfCei: 'CEI/CAEPF', pfParceiro: 'Parceiro de indicação' }[name] || '') : ''; const displayValue = value || (editable ? '' : '—'); const formAttr = formId ? ` form="${formId}"` : ''; const statusMessage = message ? `<small class="crm2-opp-cpf-match-message" aria-live="polite"${messageHidden ? ' hidden' : ''}>${escapeOpp(message)}</small>` : ''; const input = name === 'pfNascimento' ? renderCrm2MaskedDateField({ id: `crm2-opp-${name}`, name, value: displayValue, onInput: 'crm2OportunidadesMaskBirthDate(this)', onPicker: 'crm2OportunidadesSetBirthDateFromPicker', onOpen: 'crm2OportunidadesOpenBirthDatePicker', readOnly: !editable, inputClassName: `${inputClassName} crm2-opp-pf-auto-field`, autoField: true }) : `<input class="config-input ${inputClassName} crm2-opp-pf-auto-field" data-pf-auto-field="true" name="${name}" value="${attrOpp(name === 'pfNome' ? upperOpp(displayValue) : displayValue)}"${placeholder ? ` placeholder="${attrOpp(placeholder)}"` : ''}${formAttr}${readonly}${event}>`; return `<label class="crm2-opp-derived-field ${className}">${statusMessage}<span>${escapeOpp(label)}</span>${input}</label>`; }
+function oppEditablePfField({ label, name, value = '', type = 'text', placeholder = '' }) { const mask = name === 'pfTelefone' ? ' oninput="crm2OportunidadesFormatPhone(this); crm2OportunidadesSyncPfContact(\'pfTelefone\', this.value)"' : ` oninput="crm2OportunidadesSyncPfContact('${name}', this.value)"`; return `<label><span>${escapeOpp(label)}</span><input class="config-input" name="${name}" type="${type}" value="${attrOpp(value)}"${placeholder ? ` placeholder="${attrOpp(placeholder)}"` : ''}${mask}></label>`; }
+function renderOppPfFields(draft) { const data = pfOppFormData(draft.pfId, draft); const manual = !draft.pfId; const isNewOpp = currentOppRoute().view === 'opp-new'; const cpfSearched = digitsOpp(data.pfCpf).length === 11; const showCpfNotFound = isNewOpp && manual && cpfSearched; return `<input type="hidden" name="pfId" value="${attrOpp(draft.pfId || '')}"><label class="crm2-opp-derived-field crm2-opp-cpf-match-field"><div class="crm2-opp-cpf-label-row"><span>CPF</span><small class="crm2-opp-cpf-match-message" aria-live="polite"${showCpfNotFound ? '' : ' hidden'}>CPF sem cadastro</small></div>${renderCrm2CpfSearchField({ value: data.pfCpf, onInput: 'crm2OportunidadesFormatPfCpf(this)', onBlur: 'crm2OportunidadesMatchPf(this.value)', onSearch: 'crm2OportunidadesMatchPf' })}</label>${oppReadonlyField({ label: 'Nome (PF Vinculada)', name: 'pfNome', value: data.pfNome, editable: manual })}${oppReadonlyField({ label: 'Nascimento', name: 'pfNascimento', value: data.pfNascimento, editable: manual, message: crm2OportunidadesState.errors.pfNascimento || '', messageHidden: false })}${oppReadonlyField({ label: 'CEI/CAEPF', name: 'pfCei', value: data.pfCei, editable: true })}${oppEditablePfField({ label: 'E-mail', name: 'pfEmail', value: data.pfEmail, type: 'email', placeholder: 'nome@empresa.com.br' })}${oppEditablePfField({ label: 'Telefone', name: 'pfTelefone', value: data.pfTelefone, placeholder: '(00) 00000-0000' })}`; }
+function syncPfContactOpp(values) { const pf = relatedPfOpp(values.pfId); if (!pf) return; if (Object.prototype.hasOwnProperty.call(values, 'pfEmail')) pf.email = String(values.pfEmail || ''); if (Object.prototype.hasOwnProperty.call(values, 'pfTelefone')) pf.telefone = String(values.pfTelefone || ''); }
+function renderOppFormHistory(opp) { if (opp) return renderOppTimelineColumn(opp); return '<section class="crm2-pf-timeline-column crm2-opp-timeline-column crm2-opp-form-history-placeholder" aria-labelledby="crm2-opp-form-history-title"><div class="hub-form-section-title crm2-pf-timeline-title"><div class="crm2-pf-timeline-heading"><strong id="crm2-opp-form-history-title">Histórico</strong></div></div><div class="crm2-pessoas-state crm2-timeline-state" role="status"><strong>Histórico disponível após o cadastro.</strong><span>As interações da oportunidade aparecerão aqui.</span></div></section>'; }
+
+function renderOppScreenHeading() {
+  const route = currentOppRoute();
+  const inlineOpp = crm2OportunidadesState.inlineEditingId
+    ? opportunityById(crm2OportunidadesState.inlineEditingId)
+    : null;
+  const editingOpp = inlineOpp || (route.view === 'opp-edit' ? opportunityById(route.id) : null);
+  const title = inlineOpp
+    ? opportunityLabel(inlineOpp)
+    : route.view === 'opp-edit'
+      ? 'Editar oportunidade'
+      : 'Nova oportunidade';
+  const identifier = editingOpp?.numero ? `Oportunidade ${editingOpp.numero}` : 'ROTA 205 · OPORTUNIDADE';
+  const showKicker = !inlineOpp && route.view !== 'opp-edit';
+
+  return renderHubRecordHeader({
+    onBack: 'crm2OportunidadesBack()',
+    backAriaLabel: 'Voltar à lista de oportunidades',
+    className: 'crm2-opp-screen-heading hub-record-header',
+    backClassName: 'icon-btn crm2-opp-screen-back hub-record-back-button',
+    contentClassName: 'hub-record-header-content crm2-opp-screen-heading-content',
+    content: `${showKicker ? '<span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span>' : ''}<h3 id="crm2-opp-form-title">${escapeOpp(title)}</h3><p>${escapeOpp(identifier)}</p>`
+  });
+}
+function renderOppItemForm(draft) {
+  const attachmentContext = orderGenerationOpportunityOpp() || { ...draft, id: draft.id || 'opp-draft', numero: draft.numero || 'Nova oportunidade', anexos: draft.anexos || [] };
+  const total = (draft.itens || []).reduce((sum, item) => sum + (Number(item.quantidade || 1) * catalogUnitPriceOpp(item)), 0);
+  const rows = (draft.itens || []).map((item, index) => {
+    const product = item.produto || '';
+    const price = productPriceOpp(product);
+    const pedido = item.numeroPedido || item.pedido || '';
+    const pjId = item.pjId || draft.pjId || '';
+    const pj = relatedPjOpp(pjId);
+    const temporary = temporaryForItemOpp(item) || item.pjTemporario || null;
+    const cnpjData = pjCnpjDataOpp(pj, temporary);
+    const cnpj = maskCnpjOpp(item.cnpj || cnpjData.cnpj);
+    const validCnpj = normalizarCnpjLocal(cnpj).length === 14;
+    const pjName = pj?.razaoSocial || temporary?.razaoSocial || '';
+    return `<tr data-item-quantity="${Math.max(1, Number(item.quantidade || 1))}">
+      <td><div class="crm2-opp-order-cell"><input class="config-input" name="itemOrder-${index}" value="${attrOpp(pedido)}" placeholder="Pedido">${renderOrderPricePillOpp(price)}</div></td>
+      <td><div class="crm2-opp-product-cell"><input class="config-input" name="itemProduct-${index}" data-product-key="${index}" value="${attrOpp(product)}" placeholder="Buscar produto" autocomplete="off" oninput="crm2OportunidadesSyncItemPrice(this); crm2OportunidadesRenderProductSuggestions(this)" onfocus="crm2OportunidadesRenderProductSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideProductSuggestions(this), 150)"><div class="crm2-opp-product-suggestions" data-product-suggestions data-product-key="${index}" data-suggestion-kind="product" data-suggestion-key="${index}" hidden></div></div></td>
+      <td><div class="crm2-opp-pj-cell"><div class="crm2-opp-cnpj-search-control"><input class="config-input" name="itemCnpj-${index}" data-cnpj-key="${index}" value="${attrOpp(cnpj === '—' ? '' : cnpj)}" placeholder="CNPJ ou razão social" inputmode="text" maxlength="80" oninput="crm2OportunidadesSyncItemCnpj(this)" onfocus="crm2OportunidadesRenderCnpjSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHideCnpjSuggestions(this), 150)"><button class="icon-btn crm2-opp-cnpj-search" type="button" title="Consultar CNPJ" aria-label="Consultar CNPJ" onclick="crm2OportunidadesLookupCnpj(this)" ${validCnpj ? '' : 'disabled'}><i data-lucide="search" aria-hidden="true"></i></button></div><div class="crm2-opp-cnpj-suggestions" data-cnpj-suggestions data-suggestion-kind="cnpj" data-suggestion-key="${index}" hidden></div><div class="crm2-opp-pj-meta-row"><small class="crm2-opp-pj-cnpj-pill" data-pj-cnpj ${pjName ? '' : 'hidden'}>${escapeOpp(pjName)}</small></div></div></td>
+      <td><button class="icon-btn crm2-opp-remove-item" type="button" title="Remover produto" aria-label="Remover produto ${index + 1}" onclick="crm2OportunidadesRemoveItem(${index})"><i data-lucide="trash-2" aria-hidden="true"></i></button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="crm2-opp-items-form crm2-opp-form-content-container"><div class="crm2-opp-items-form-header"><div><strong>Itens e pedidos</strong><small data-opportunity-estimate>${moneyOpp(total)} estimado</small></div><button class="secondary-btn" type="button" onclick="crm2OportunidadesAddItem()">Incluir item</button></div><div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-editable"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">CNPJ / PJ vinculada</th><th scope="col">Ações</th></tr></thead><tbody>${rows}</tbody></table></div></div><div class="crm2-opp-form-attachments">${renderOpportunityAttachmentsOpp(attachmentContext)}</div>`;
+}
+function resetOppForm() { crm2OportunidadesState.formMode = ''; crm2OportunidadesState.detailId = ''; crm2OportunidadesState.inlineEditingId = ''; crm2OportunidadesState.draft = {}; crm2OportunidadesState.errors = {}; crm2OportunidadesState.saveError = ''; crm2OportunidadesState.saving = false; crm2OportunidadesState.partnerSelectionRequired = false; crm2OportunidadesState.pjTemporarios = []; crm2OportunidadesState.tempLoadedForId = ''; }
+
+function renderOppState() { const copy = { loading: ['Carregando oportunidades...', 'Estado simulado para homologação.'], error: ['Não foi possível carregar oportunidades.', 'Erro simulado. Nenhuma integração externa foi acionada.'], empty: ['Nenhuma oportunidade cadastrada.', 'A lista mockada ainda não possui negociações.'] }[crm2OportunidadesState.listState]; if (!copy) return ''; return `<div class="crm2-pessoas-state crm2-opp-state ${crm2OportunidadesState.listState === 'error' ? 'is-error' : ''}" role="${crm2OportunidadesState.listState === 'error' ? 'alert' : 'status'}"><strong>${copy[0]}</strong><span>${copy[1]}</span><button class="secondary-btn" type="button" onclick="crm2OportunidadesSetState('normal')">Voltar à lista</button></div>`; }
+function filterValuesOpp(value) { return (Array.isArray(value) ? value : value ? [value] : []).map((item) => String(item || '')).filter(Boolean); }
+function currentOppFilterValues() { return { stage: crm2OportunidadesState.stageFilter, status: crm2OportunidadesState.statusFilter, responsible: crm2OportunidadesState.responsibleFilter, source: filterValuesOpp(crm2OportunidadesState.sourceFilter), lossReason: crm2OportunidadesState.lossReasonFilter, product: filterValuesOpp(crm2OportunidadesState.productFilter), nextContact: crm2OportunidadesState.nextContactFilter, nextContactFrom: crm2OportunidadesState.nextContactFrom, nextContactTo: crm2OportunidadesState.nextContactTo, dateFrom: crm2OportunidadesState.dateFrom, dateTo: crm2OportunidadesState.dateTo, updatedFrom: crm2OportunidadesState.updatedFrom, updatedTo: crm2OportunidadesState.updatedTo }; }
+function hasOppFilters() { const values = currentOppFilterValues(); return Object.values(values).some((value) => Array.isArray(value) ? value.length > 0 : Boolean(value)); }
+function renderOppFilterDateField(label, name, value = '') { const isoValue = dateInputValueOpp(value); return `<label><span>${label}</span><div class="crm2-opp-filter-date-control"><input class="config-input crm2-opp-filter-date crm2-opp-filter-date-text" name="${name}" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" value="${attrOpp(maskDateTextOpp(isoValue))}" oninput="crm2OportunidadesUpdateFilterDate(this)"><button class="icon-btn crm2-opp-filter-calendar" type="button" title="Selecionar data" aria-label="Selecionar data" onclick="crm2OportunidadesOpenFilterNativeDate(this)"><i data-lucide="calendar" aria-hidden="true"></i></button><input class="crm2-opp-filter-native-date" type="date" tabindex="-1" aria-hidden="true" value="${attrOpp(isoValue)}" onchange="crm2OportunidadesSetFilterDateNative(this)"></div></label>`; }
+function renderOppFilterModalCompact() { if (!crm2OportunidadesState.filterModalOpen) return ''; const values = crm2OportunidadesState.filterDraft || currentOppFilterValues(); const responsibles = [...new Set(crm2OportunidadesState.opportunities.map((opp) => opp.responsavel).filter(Boolean))]; const originOptions = opportunityOriginFilterOptionsOpp(); const productOptions = opportunityProductFilterOptionsOpp(); const fieldOptions = (items, emptyLabel) => [{ value: '', label: emptyLabel }, ...items.map((item) => ({ value: item.value ?? item, label: item.label ?? item }))]; const field = (label, name, options, emptyLabel) => { const allOptions = fieldOptions(options, emptyLabel); const multi = ['source', 'product'].includes(name); const selectedValues = filterValuesOpp(values[name]); const selected = allOptions.find((item) => selectedValues.includes(String(item.value))) || allOptions[0]; const selectedItems = allOptions.filter((item) => selectedValues.includes(String(item.value))); const displayValue = multi && selectedValues.length ? selectedItems.map((item) => item.label).join(', ') : selected.label; const fieldId = `crm2-opp-filter-${name}`; const anchorAttr = multi ? ' data-dropdown-anchor="start" data-multi-select="true"' : ''; return `<label><span>${label}</span><div class="hub-filter-combobox crm2-pf-select crm2-opp-filter-select-control"><input id="${fieldId}" class="config-input crm2-pf-select-trigger" type="text" name="${name}" value="${attrOpp(displayValue)}" data-filter-field="${attrOpp(name)}" data-dropdown-menu-id="${fieldId}-menu" data-selected-value="${attrOpp(selectedValues.join('|'))}"${anchorAttr} aria-label="${attrOpp(label)}" aria-controls="${fieldId}-menu" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" onclick="crm2OportunidadesToggleFilterDropdown(this, event)" oninput="crm2OportunidadesFilterDropdown(this, event)" onkeydown="crm2OportunidadesFilterDropdownKeydown(event, this)"><span class="hub-filter-chevron crm2-pf-select-chevron" aria-hidden="true">⌄</span><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${attrOpp(label)}" data-dropdown-input-id="${fieldId}"${anchorAttr}${multi ? ' aria-multiselectable="true"' : ''} hidden>${allOptions.map((item) => `<button class="hub-filter-dropdown-option ${selectedValues.includes(String(item.value)) || (!selectedValues.length && !item.value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${selectedValues.includes(String(item.value)) || (!selectedValues.length && !item.value) ? 'true' : 'false'}" data-value="${attrOpp(item.value)}" data-label="${attrOpp(item.label)}" onclick="crm2OportunidadesSelectFilterDropdown(this)" onkeydown="crm2OportunidadesFilterDropdownKeydown(event, this)">${escapeOpp(item.label)}</button>`).join('')}</div></div></label>`; }; const dateField = (label, name) => renderOppFilterDateField(label, name, values[name] || ''); const group = (title, content) => `<fieldset class="crm2-opp-filter-group"><legend>${title}</legend><div class="crm2-opp-filter-group-grid">${content}</div></fieldset>`; const nextContactOptions = [{ value: 'overdue', label: 'Atrasado' }, { value: 'today', label: 'Hoje' }, { value: 'next7', label: 'Próximos 7 dias' }, { value: 'none', label: 'Sem próxima ação' }, { value: 'custom', label: 'Período personalizado' }]; const nextContactDates = values.nextContact === 'custom' ? `${dateField('Próximo contato desde', 'nextContactFrom')}${dateField('Próximo contato até', 'nextContactTo')}` : ''; const periodsContent = `<div class="crm2-opp-filter-period-column">${field('Situação', 'nextContact', nextContactOptions, 'Todas')}${nextContactDates}</div><div class="crm2-opp-filter-period-column">${dateField('Data de cadastro — De:', 'dateFrom')}${dateField('Última atualização — De:', 'updatedFrom')}</div><div class="crm2-opp-filter-period-column">${dateField('Data de cadastro — Até:', 'dateTo')}${dateField('Última atualização — Até:', 'updatedTo')}</div>`; return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2OportunidadesCloseFilterModal(event)"><section id="crm2-opp-filter-modal" class="crm2-opp-filter-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-filter-modal-title" onclick="event.stopPropagation()"><header class="crm2-opp-filter-modal-header"><div><h3 id="crm2-opp-filter-modal-title">Filtrar oportunidades</h3></div><button id="crm2-opp-filter-modal-close" class="icon-btn" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2OportunidadesCloseFilterModal()">×</button></header><form class="crm2-opp-filter-modal-form crm2-opp-filter-modal-form-grouped" onsubmit="crm2OportunidadesApplyModalFilters(event)">${group('Pipeline', `${field('Etapa', 'stage', OPPORTUNITY_STAGES, 'Todas as etapas')}${field('Status', 'status', OPPORTUNITY_STATUSES, 'Todos os status')}${field('Responsável', 'responsible', responsibles, 'Todos')}`)}${group('Origem e produto', `${field('Origem da oportunidade', 'source', originOptions, 'Todas')}${field('Produto', 'product', productOptions, 'Todos')}${field('Motivo de perda', 'lossReason', OPPORTUNITY_LOSS_REASONS, 'Todos')}`)}${group('Períodos', periodsContent)}<div class="crm2-opp-filter-modal-actions"><button class="secondary-btn" type="button" onclick="crm2OportunidadesClearFilterDraft()">Limpar</button><div><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseFilterModal()">Cancelar</button><button class="save-btn" type="submit">Aplicar filtros</button></div></div></form></section></div>`; }
+renderOppFilterModal = renderOppFilterModalCompact;
+function renderOppFilterModalReference() {
+  if (!crm2OportunidadesState.filterModalOpen) return '';
+  const values = crm2OportunidadesState.filterDraft || currentOppFilterValues();
+  const responsibles = [...new Set(crm2OportunidadesState.opportunities.map((opp) => opp.responsavel).filter(Boolean))];
+  const originOptions = opportunityOriginFilterOptionsOpp();
+  const catalogProducts = productCatalogOpp().map((item) => ({ value: item.value, label: item.label, sku: item.sku, searchText: `${item.label} ${item.sku}` }));
+  const knownProductNames = new Set(catalogProducts.map((item) => normOpp(item.value)));
+  const productOptions = [...catalogProducts, ...opportunityProductFilterOptionsOpp().filter((name) => !knownProductNames.has(normOpp(name))).map((name) => ({ value: name, label: name, searchText: name }))];
+  const fieldOptions = (items, emptyLabel) => [{ value: '', label: emptyLabel, searchText: emptyLabel }, ...items.map((item) => ({ value: item.value ?? item, label: item.label ?? item, sku: item.sku || '', searchText: item.searchText || `${item.label ?? item} ${item.sku || ''}` }))];
+  const field = (label, name, options, emptyLabel, span = '') => {
+    const allOptions = fieldOptions(options, emptyLabel);
+    const multi = ['source', 'product'].includes(name);
+    const selectedValues = filterValuesOpp(values[name]);
+    const selected = allOptions.find((item) => selectedValues.includes(String(item.value))) || allOptions[0];
+    const selectedItems = allOptions.filter((item) => selectedValues.includes(String(item.value)));
+    const displayValue = multi && selectedValues.length ? selectedItems.map((item) => item.label).join(', ') : selected.label;
+    const fieldId = `crm2-opp-filter-${name}`;
+    const anchorAttr = multi ? ' data-dropdown-anchor="start" data-multi-select="true"' : '';
+    const productSearchIcon = name === 'product' ? '<i class="crm2-opp-filter-product-search-icon" data-lucide="search" aria-hidden="true"></i>' : '';
+    const clickHandler = name === 'product' ? '' : ' onclick="crm2OportunidadesToggleFilterDropdown(this, event)"';
+    const placeholder = name === 'product' ? ' placeholder="Buscar por nome ou código do produto"' : '';
+    const optionsMarkup = allOptions.map((item) => `<button class="hub-filter-dropdown-option ${selectedValues.includes(String(item.value)) || (!selectedValues.length && !item.value) ? 'is-selected' : ''}" type="button" role="option" aria-selected="${selectedValues.includes(String(item.value)) || (!selectedValues.length && !item.value) ? 'true' : 'false'}" data-value="${attrOpp(item.value)}" data-label="${attrOpp(item.label)}" data-search-text="${attrOpp(item.searchText)}" onclick="crm2OportunidadesSelectFilterDropdown(this)" onkeydown="crm2OportunidadesFilterDropdownKeydown(event, this)">${name === 'product' ? `<span>${escapeOpp(item.label)}</span>${item.sku ? `<small>${escapeOpp(item.sku)}</small>` : ''}` : escapeOpp(item.label)}</button>`).join('');
+    const emptyMarkup = name === 'product' ? '<div class="crm2-opp-filter-product-empty" role="status" hidden>Nenhum produto correspondente.</div>' : '';
+    return `<label class="crm2-opp-filter-field${span ? ` ${span}` : ''}"><span>${escapeOpp(label)}</span><div class="hub-filter-combobox crm2-pf-select crm2-opp-filter-select-control${name === 'product' ? ' is-product-search' : ''}">${productSearchIcon}<input id="${fieldId}" class="config-input crm2-pf-select-trigger" type="text" name="${name}" value="${attrOpp(displayValue)}"${placeholder}${name === 'product' ? ' spellcheck="false"' : ''} data-filter-field="${attrOpp(name)}" data-dropdown-menu-id="${fieldId}-menu" data-selected-value="${attrOpp(selectedValues.join('|'))}"${anchorAttr} aria-label="${attrOpp(label)}" aria-controls="${fieldId}-menu" aria-expanded="false" aria-haspopup="listbox" autocomplete="off"${clickHandler} oninput="crm2OportunidadesFilterDropdown(this, event)" onkeydown="crm2OportunidadesFilterDropdownKeydown(event, this)"><span class="hub-filter-chevron crm2-pf-select-chevron" aria-hidden="true">⌄</span><div id="${fieldId}-menu" class="hub-filter-dropdown-menu" role="listbox" aria-label="${attrOpp(label)}" data-dropdown-input-id="${fieldId}"${anchorAttr}${multi ? ' aria-multiselectable="true"' : ''} hidden>${optionsMarkup}${emptyMarkup}</div></div></label>`;
+  };
+  const dateField = (label, name) => renderOppFilterDateField(label, name, values[name] || '');
+  const dateRange = (title, fromName, toName, fromLabel = 'De', toLabel = 'Até') => `<div class="crm2-opp-filter-period-field crm2-opp-filter-span-2"><span class="crm2-opp-filter-period-title">${title}</span><div class="crm2-opp-filter-date-pair">${dateField(fromLabel, fromName)}${dateField(toLabel, toName)}</div></div>`;
+  const nextActionOptions = [{ value: 'overdue', label: 'Atrasada' }, { value: 'today', label: 'Hoje' }, { value: 'next7', label: 'Próximos 7 dias' }, { value: 'none', label: 'Sem próxima ação' }, { value: 'custom', label: 'Período personalizado' }];
+  const nextActionDates = values.nextContact === 'custom' ? `<div class="crm2-opp-filter-custom-date-pair">${dateField('De', 'nextContactFrom')}${dateField('Até', 'nextContactTo')}</div>` : '';
+  const separator = '<div class="crm2-opp-filter-separator" aria-hidden="true"></div>';
+  return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2OportunidadesCloseFilterModal(event)"><section id="crm2-opp-filter-modal" class="crm2-opp-filter-modal crm2-opp-filter-modal-reference" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-filter-modal-title" onclick="event.stopPropagation()">
+    <header class="crm2-opp-filter-modal-header"><div class="crm2-opp-filter-title-wrap"><span class="crm2-opp-filter-title-icon"><i data-lucide="filter" aria-hidden="true"></i></span><h3 id="crm2-opp-filter-modal-title">Filtrar oportunidades</h3></div><button id="crm2-opp-filter-modal-close" class="icon-btn crm2-opp-filter-close" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2OportunidadesCloseFilterModal()"><i data-lucide="x" aria-hidden="true"></i></button></header>
+    <form class="crm2-opp-filter-modal-form crm2-opp-filter-modal-grid" onsubmit="crm2OportunidadesApplyModalFilters(event)">
+      <div class="crm2-opp-filter-first-row">${field('Etapa', 'stage', OPPORTUNITY_STAGES, 'Todas as etapas')}${field('Status', 'status', OPPORTUNITY_STATUSES, 'Todos os status')}${field('Origem da oportunidade', 'source', originOptions, 'Todas')}${field('Produto', 'product', productOptions, 'Todos')}</div>
+      ${separator}
+      ${field('Responsável', 'responsible', responsibles, 'Todos', 'crm2-opp-filter-span-2')}
+      <div class="crm2-opp-filter-situation crm2-opp-filter-span-2">${field('Situação da próxima ação', 'nextContact', nextActionOptions, 'Todas')}${nextActionDates}</div>
+      ${separator}
+      ${field('Motivo de perda', 'lossReason', OPPORTUNITY_LOSS_REASONS, 'Todos', 'crm2-opp-filter-span-2')}
+      ${dateRange('Período de cadastro', 'dateFrom', 'dateTo')}
+      ${dateRange('Última atualização', 'updatedFrom', 'updatedTo')}
+      <footer class="crm2-opp-filter-modal-actions"><button class="secondary-btn crm2-opp-filter-clear" type="button" onclick="crm2OportunidadesClearFilterDraft()"><i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Limpar</span></button><div><button class="secondary-btn crm2-opp-filter-cancel" type="button" onclick="crm2OportunidadesCloseFilterModal()">Cancelar</button><button class="save-btn crm2-opp-filter-apply" type="submit"><i data-lucide="filter" aria-hidden="true"></i><span>Aplicar filtros</span></button></div></footer>
+    </form>
+  </section></div>`;
+}
+renderOppFilterModal = renderOppFilterModalReference;
+function renderOppFilterModal() { if (!crm2OportunidadesState.filterModalOpen) return ''; const values = crm2OportunidadesState.filterDraft || currentOppFilterValues(); const responsibles = [...new Set(crm2OportunidadesState.opportunities.map((opp) => opp.responsavel).filter(Boolean))]; const originOptions = opportunityOriginFilterOptionsOpp(); const optionList = (items, selected, emptyLabel) => `<option value="">${emptyLabel}</option>${items.map((item) => `<option value="${attrOpp(item)}" ${selected === item ? 'selected' : ''}>${escapeOpp(item)}</option>`).join('')}`; return `<div class="crm2-opp-filter-modal-backdrop" role="presentation" onclick="crm2OportunidadesCloseFilterModal(event)"><section id="crm2-opp-filter-modal" class="crm2-opp-filter-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-filter-modal-title" onclick="event.stopPropagation()"><header class="crm2-opp-filter-modal-header"><div><h3 id="crm2-opp-filter-modal-title">Filtrar oportunidades</h3></div><button id="crm2-opp-filter-modal-close" class="icon-btn" type="button" title="Fechar filtros" aria-label="Fechar filtros" onclick="crm2OportunidadesCloseFilterModal()">×</button></header><form class="crm2-opp-filter-modal-form" onsubmit="crm2OportunidadesApplyModalFilters(event)"><label><span>Etapa</span><select class="config-input" name="stage" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)">${optionList(OPPORTUNITY_STAGES, values.stage, 'Todas as etapas')}</select></label><label><span>Status</span><select class="config-input" name="status" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)">${optionList(OPPORTUNITY_STATUSES, values.status, 'Todos os status')}</select></label><label><span>Responsável</span><select class="config-input" name="responsible" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)">${optionList(responsibles, values.responsible, 'Todos')}</select></label><label><span>Origem da oportunidade</span><select class="config-input" name="source" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)">${optionList(originOptions, values.source, 'Todas')}</select></label><label><span>Motivo de perda</span><select class="config-input" name="lossReason" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)">${optionList(OPPORTUNITY_LOSS_REASONS, values.lossReason, 'Todos')}</select></label><label><span>Criada desde</span><input class="config-input" name="dateFrom" type="date" value="${attrOpp(values.dateFrom)}" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)"></label><label><span>Criada até</span><input class="config-input" name="dateTo" type="date" value="${attrOpp(values.dateTo)}" onchange="crm2OportunidadesSetFilterDraft(this.name, this.value)"></label><div class="crm2-opp-filter-modal-actions"><button class="secondary-btn" type="button" onclick="crm2OportunidadesClearFilterDraft()">Limpar</button><div><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseFilterModal()">Cancelar</button><button class="save-btn" type="submit">Aplicar filtros</button></div></div></form></section></div>`; }
+function renderOppFilters() { const active = Boolean(crm2OportunidadesState.search || hasOppFilters()); const searchExpanded = Boolean(crm2OportunidadesState.searchExpanded); return `<form class="crm2-opp-filter-bar" role="search" onsubmit="event.preventDefault()" aria-label="Buscar e filtrar oportunidades"><div class="crm2-opp-view-toggle"><button class="secondary-btn ${crm2OportunidadesState.viewMode === 'table' ? 'active' : ''}" type="button" onclick="crm2OportunidadesSetView('table')">Tabela</button><button class="secondary-btn ${crm2OportunidadesState.viewMode === 'kanban' ? 'active' : ''}" type="button" onclick="crm2OportunidadesSetView('kanban')">Kanban</button></div><div class="crm2-opp-filter-actions"><button id="crm2-opp-filter-trigger" class="icon-btn ${hasOppFilters() ? 'is-active' : ''}" type="button" aria-haspopup="dialog" aria-expanded="${crm2OportunidadesState.filterModalOpen ? 'true' : 'false'}" aria-controls="crm2-opp-filter-modal" title="Filtrar oportunidades" aria-label="Filtrar oportunidades" onclick="crm2OportunidadesToggleFilterModal()"><i data-lucide="filter" aria-hidden="true"></i></button><div class="crm2-opp-search-control ${searchExpanded ? 'is-expanded' : ''}"><input class="config-input" type="search" aria-label="Buscar oportunidades" placeholder="Número, PF/PJ ou responsável" value="${attrOpp(crm2OportunidadesState.search)}" ${searchExpanded ? '' : 'hidden'} oninput="crm2OportunidadesSetSearch(this.value, this)" onfocusout="crm2OportunidadesHandleSearchBlur(event)" onkeydown="if (event.key === 'Enter') event.preventDefault()"><button class="icon-btn" type="button" title="Buscar" aria-label="Buscar" aria-expanded="${searchExpanded ? 'true' : 'false'}" onclick="crm2OportunidadesToggleSearch(this)"><i data-lucide="search" aria-hidden="true"></i></button></div>${active ? '<button class="icon-btn crm2-opp-clear-filter" type="button" onclick="crm2OportunidadesClearFilters()" title="Limpar filtros" aria-label="Limpar filtros">×</button>' : ''}</div></form>${renderOppFilterModal()}`; }
+renderOppFilters = function renderOppFiltersReference() {
+  const active = Boolean(crm2OportunidadesState.search || hasOppFilters());
+  const sortKey = crm2OportunidadesState.sortLevels?.[0]?.key || '';
+  const sortOptions = TABLE_COLUMN_OPTIONS.map((column) => `<option value="${attrOpp(column.key)}" ${sortKey === column.key ? 'selected' : ''}>${escapeOpp(column.label)}</option>`).join('');
+  return `<form class="crm2-opp-filter-bar" role="search" onsubmit="event.preventDefault()" aria-label="Buscar e filtrar oportunidades">
+    <label class="crm2-opp-search-control is-expanded"><i data-lucide="search" aria-hidden="true"></i><input class="config-input" type="search" aria-label="Buscar oportunidades" placeholder="Buscar por nome, documento ou pedido..." value="${attrOpp(crm2OportunidadesState.search)}" oninput="crm2OportunidadesSetSearch(this.value, this)" onkeydown="if (event.key === 'Enter') event.preventDefault()"></label>
+    <div class="crm2-opp-view-toggle" role="group" aria-label="Modo de visualização"><button class="secondary-btn ${crm2OportunidadesState.viewMode === 'table' ? 'active' : ''}" type="button" onclick="crm2OportunidadesSetView('table')"><i data-lucide="list" aria-hidden="true"></i><span>Tabela</span></button><button class="secondary-btn ${crm2OportunidadesState.viewMode === 'kanban' ? 'active' : ''}" type="button" onclick="crm2OportunidadesSetView('kanban')"><i data-lucide="layout-grid" aria-hidden="true"></i><span>Kanban</span></button></div>
+    <div class="crm2-opp-filter-actions"><button id="crm2-opp-filter-trigger" class="secondary-btn crm2-opp-toolbar-filter ${hasOppFilters() ? 'is-active' : ''}" type="button" aria-haspopup="dialog" aria-expanded="${crm2OportunidadesState.filterModalOpen ? 'true' : 'false'}" aria-controls="crm2-opp-filter-modal" onclick="crm2OportunidadesToggleFilterModal()"><i data-lucide="filter" aria-hidden="true"></i><span>Filtrar</span><i data-lucide="chevron-down" aria-hidden="true"></i></button><label class="crm2-opp-sort-control"><i data-lucide="list-ordered" aria-hidden="true"></i><select aria-label="Ordenar por" onchange="crm2OportunidadesSetToolbarSort(this.value)"><option value="">Ordenar por</option>${sortOptions}</select><i data-lucide="chevron-down" aria-hidden="true"></i></label>${active ? '<button class="crm2-opp-clear-filter-text" type="button" onclick="crm2OportunidadesClearFilters()">Limpar filtros</button>' : ''}</div>
+  </form>${renderOppFilterModal()}`;
+};
+function renderOppTableCellLegacy(opp, key) { const presentation = opportunityPresentationOpp(opp); if (key === 'name') return `<td><button class="crm2-opp-link crm2-opp-primary-value" type="button" onclick="crm2OportunidadesOpenDetail('${attrOpp(opp.id)}')" aria-label="Visualizar oportunidade de ${attrOpp(presentation.legalName)}">${escapeOpp(presentation.legalName)}</button>${presentation.isPj ? `<small class="crm2-opp-meta-pill">${escapeOpp(presentation.companyName)}</small>` : ''}</td>`; if (key === 'nextAction') return `<td>${renderNextActionEditorOpp(opp, presentation)}</td>`; if (key === 'stage') return `<td>${stagePillOpp(opp.etapa)}</td>`; if (key === 'document') return `<td><strong class="crm2-opp-primary-value">${escapeOpp(presentation.cpf)}</strong>${presentation.cnpj !== '—' ? `<small class="crm2-opp-meta-pill">${escapeOpp(presentation.cnpj)}</small>` : ''}</td>`; if (key === 'order') return `<td><small class="crm2-opp-meta-pill crm2-opp-order-number-pill">${escapeOpp(opp.numero)}</small></td>`; if (key === 'partner') return `<td>${escapeOpp(presentation.partner)}</td>`; return '<td>—</td>'; }
+function renderOppStageEditor(opp) {
+  const stageOptions = OPPORTUNITY_STAGES.map((stage) => `<option value="${attrOpp(stage)}" ${opp.etapa === stage ? 'selected' : ''}>${escapeOpp(stage)}</option>`).join('');
+  return `<select class="config-input crm2-opp-pill crm2-opp-stage-pill crm2-opp-stage-select crm2-opp-table-stage-select is-stage-${attrOpp(stageClassOpp(opp.etapa))} is-${attrOpp(statusStatusClassOpp(opp.etapa))}" aria-label="Alterar etapa da oportunidade ${attrOpp(opp.numero)}" onchange="crm2OportunidadesChangeStage('${attrOpp(opp.id)}', this.value)"${crm2OportunidadesState.canEdit ? '' : ' disabled'}>${stageOptions}</select>`;
+}
+function renderOppTableCell(opp, key) { const presentation = opportunityPresentationOpp(opp); if (key === 'name') return `<td><button class="crm2-opp-link crm2-opp-primary-value" type="button" onclick="crm2OportunidadesOpenDetail('${attrOpp(opp.id)}')" aria-label="Visualizar oportunidade de ${attrOpp(presentation.legalName)}">${escapeOpp(presentation.legalName)}</button>${presentation.isPj ? `<small class="crm2-opp-meta-pill">${escapeOpp(presentation.companyName)}</small>` : ''}</td>`; if (key === 'nextAction') return `<td>${renderNextActionEditorOpp(opp, presentation)}</td>`; if (key === 'stage') return `<td>${renderOppStageEditor(opp)}</td>`; if (key === 'document') return `<td><strong class="crm2-opp-primary-value">${escapeOpp(presentation.cpf)}</strong>${presentation.cnpj !== '—' ? `<small class="crm2-opp-meta-pill">${escapeOpp(presentation.cnpj)}</small>` : ''}</td>`; if (key === 'order') return `<td><small class="crm2-opp-meta-pill crm2-opp-order-number-pill">${escapeOpp(opp.numero)}</small></td>`; if (key === 'partner') return `<td>${escapeOpp(presentation.partner)}</td>`; return '<td>—</td>'; }
+function renderOppTable(items) { const columns = crm2OportunidadesState.tableColumnFields.map((key) => TABLE_COLUMN_OPTIONS.find((column) => column.key === key)).filter(Boolean); return `<div class="ar-crm-phase1-table-wrap crm2-opp-table-wrap"><table class="ar-crm-phase1-table crm2-opp-table" data-resizable-table data-resizable-editable="true" data-resize-key="crm2-oportunidades"><thead><tr>${columns.map((column) => renderOppSortHeader(column.label, column.key)).join('')}</tr></thead><tbody>${items.map((opp) => `<tr>${columns.map((column) => renderOppTableCell(opp, column.key)).join('')}</tr>`).join('')}</tbody></table></div>`; }
+function opportunityPfNameOpp(opp = {}) { const pf = relatedPfOpp(opp.pfId); return upperOpp(pf?.nome || opp.pfNome || 'PF não vinculada'); }
+function renderOppKanbanCardField(opp, field) { const pfName = opportunityPfNameOpp(opp); const nextContact = dateDisplayValueOpp(nextActionValueOpp(opp)) || '—'; const values = { pfName: `<button class="crm2-opp-link crm2-opp-card-field crm2-opp-card-pf-name" type="button" onclick="crm2OportunidadesOpenDetail('${attrOpp(opp.id)}')" aria-label="Visualizar oportunidade de ${attrOpp(pfName)}">${escapeOpp(pfName)}</button>`, nextContact: `<span class="crm2-opp-card-field crm2-opp-card-next-action">${escapeOpp(nextContact)}</span>`, responsible: `<small class="crm2-opp-card-field crm2-opp-card-responsible">${escapeOpp(opp.responsavel || '—')}</small>`, number: `<span class="crm2-opp-card-field crm2-opp-card-number">${escapeOpp(opp.numero || '—')}</span>`, stage: `<span class="crm2-opp-card-field">${escapeOpp(opp.etapa || '—')}</span>`, status: `<span class="crm2-opp-card-field">${escapeOpp(opp.status || opportunityStatusOpp(opp) || '—')}</span>`, value: `<span class="crm2-opp-card-field">${moneyOpp(totalOpp(opp))}</span>`, origin: `<span class="crm2-opp-card-field">${escapeOpp(opp.origemOportunidade || '—')}</span>`, createdAt: `<span class="crm2-opp-card-field">${escapeOpp(dateLabelOpp(opp.criadoEm))}</span>` }; return values[field] || ''; }
+function renderOppKanbanSettingsModal() {
+  if (crm2OportunidadesState.viewMode !== 'kanban' || !crm2OportunidadesState.kanbanCardSettingsOpen) return '';
+
+  const selected = crm2OportunidadesState.kanbanCardSettingsDraft;
+  const selectedOptions = selected.map((key) => KANBAN_CARD_FIELD_OPTIONS.find((option) => option.key === key)).filter(Boolean);
+  const inactiveOptions = KANBAN_CARD_FIELD_OPTIONS.filter((option) => !selected.includes(option.key));
+  const renderOption = (option, isActive) => {
+    const position = selected.indexOf(option.key) + 1;
+    const targetHandlers = isActive
+      ? `ondragover="crm2OportunidadesKanbanSettingsDragOver(event)" ondragleave="crm2OportunidadesKanbanSettingsDragLeave(event)" ondrop="crm2OportunidadesKanbanSettingsDrop(event, '${attrOpp(option.key)}')"`
+      : '';
+    return `<div class="crm2-opp-kanban-settings-option-row${isActive ? ' is-active' : ''}" draggable="true" ondragstart="crm2OportunidadesKanbanSettingsDragStart(event, '${attrOpp(option.key)}')" ondragend="crm2OportunidadesKanbanSettingsDragEnd(event)" ${targetHandlers}>
+      <span class="crm2-opp-kanban-settings-drag-icon" aria-hidden="true"><i data-lucide="grip-vertical"></i></span>
+      <span class="crm2-opp-kanban-settings-option-label">${escapeOpp(option.label)}</span>
+      ${isActive ? `<small class="crm2-opp-kanban-settings-position" aria-label="Posição ${position}">${position}</small>` : ''}
+    </div>`;
+  };
+  const renderSectionHeader = (title, count, isActive) => `<header class="crm2-opp-kanban-settings-section-header">
+    <div><strong>${title}</strong></div>
+    <span class="crm2-opp-kanban-settings-count${isActive ? ' is-active' : ''}" aria-label="${count} campos">${count}</span>
+  </header>`;
+
+  return `<div class="modal-backdrop crm2-opp-kanban-settings-backdrop" role="presentation" onclick="crm2OportunidadesCloseKanbanCardSettings(event)">
+    <section class="small-modal crm2-opp-kanban-settings-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-kanban-settings-title" tabindex="-1" onclick="event.stopPropagation()">
+      <header class="crm2-opp-kanban-settings-header">
+        <div class="crm2-opp-kanban-settings-title-wrap">
+          <span class="crm2-opp-kanban-settings-title-icon" aria-hidden="true"><i data-lucide="list"></i></span>
+          <div><h3 id="crm2-opp-kanban-settings-title">Informações dos cards</h3><p class="crm2-opp-kanban-settings-instruction">Arraste para ordenar, ativar ou desativar um item</p></div>
+        </div>
+        <button id="crm2-opp-kanban-settings-close" class="icon-btn crm2-opp-kanban-settings-close" type="button" title="Fechar configurações" aria-label="Fechar configurações" onclick="crm2OportunidadesCloseKanbanCardSettings()"><i data-lucide="x" aria-hidden="true"></i></button>
+      </header>
+      <div class="crm2-opp-kanban-settings-content">
+        <div class="crm2-opp-kanban-settings-sections">
+          <section class="crm2-opp-kanban-settings-section crm2-opp-kanban-settings-zone is-active" ondragover="crm2OportunidadesKanbanSettingsDragOver(event)" ondragleave="crm2OportunidadesKanbanSettingsDragLeave(event)" ondrop="crm2OportunidadesKanbanSettingsDropZone(event, 'active')">
+            ${renderSectionHeader('Exibidos nos cards', selectedOptions.length, true)}
+            <div class="crm2-opp-kanban-settings-list crm2-opp-kanban-settings-active-list">${selectedOptions.map((option) => renderOption(option, true)).join('')}</div>
+          </section>
+          <section class="crm2-opp-kanban-settings-section crm2-opp-kanban-settings-zone is-inactive" ondragover="crm2OportunidadesKanbanSettingsDragOver(event)" ondragleave="crm2OportunidadesKanbanSettingsDragLeave(event)" ondrop="crm2OportunidadesKanbanSettingsDropZone(event, 'inactive')">
+            ${renderSectionHeader('Não exibidos', inactiveOptions.length, false)}
+            <div class="crm2-opp-kanban-settings-list crm2-opp-kanban-settings-inactive-list">${inactiveOptions.length ? inactiveOptions.map((option) => renderOption(option, false)).join('') : '<small class="crm2-opp-kanban-settings-empty">Todos os campos estão ativos.</small>'}</div>
+          </section>
+        </div>
+        ${crm2OportunidadesState.kanbanSettingsMessage ? `<p class="crm2-opp-kanban-settings-message" role="status">${escapeOpp(crm2OportunidadesState.kanbanSettingsMessage)}</p>` : ''}
+      </div>
+      <footer class="small-modal-actions crm2-opp-kanban-settings-footer"><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseKanbanCardSettings()">Cancelar</button><button class="save-btn" type="button" onclick="crm2OportunidadesApplyKanbanCardSettings()">Aplicar</button></footer>
+    </section>
+  </div>`;
+}
+function renderOppKanban(items) { const columns = OPPORTUNITY_STAGES.map((stage) => crm2OportunidadesState.kanbanCollapsedStages[stage] ? '48px' : 'minmax(190px, 1fr)').join(' '); const cardFields = crm2OportunidadesState.kanbanCardFields; const canDrag = crm2OportunidadesState.canEdit; return `<div class="crm2-opp-kanban" style="grid-template-columns: ${columns}">${OPPORTUNITY_STAGES.map((stage) => { const stageItems = items.filter((opp) => opp.etapa === stage); const collapsed = Boolean(crm2OportunidadesState.kanbanCollapsedStages[stage]); const stageClass = statusClassOpp(stage); return `<section class="crm2-opp-kanban-column${collapsed ? ' is-collapsed' : ''}" data-kanban-stage="${attrOpp(stage)}" aria-labelledby="crm2-opp-stage-${stageClass}" ondragover="crm2OportunidadesKanbanDragOver(event)" ondragleave="crm2OportunidadesKanbanDragLeave(event)" ondrop="crm2OportunidadesKanbanDrop(event, '${attrOpp(stage)}')"><header><strong id="crm2-opp-stage-${stageClass}">${escapeOpp(stage)}</strong><span>${stageItems.length}</span><button class="icon-btn crm2-opp-kanban-collapse" type="button" title="${collapsed ? 'Expandir coluna' : 'Recolher coluna'}" aria-label="${collapsed ? 'Expandir' : 'Recolher'} coluna ${escapeOpp(stage)}" aria-expanded="${collapsed ? 'false' : 'true'}" onclick="crm2OportunidadesToggleKanbanColumn('${attrOpp(stage)}')"><i data-lucide="${collapsed ? 'chevron-right' : 'chevron-left'}" aria-hidden="true"></i></button></header>${collapsed ? '' : `<div class="crm2-opp-kanban-column-body">${stageItems.length ? stageItems.map((opp) => { const primaryField = cardFields[0] ? renderOppKanbanCardField(opp, cardFields[0]) : ''; const secondaryFields = cardFields.slice(1).map((field) => renderOppKanbanCardField(opp, field)).join(''); return `<article class="crm2-opp-card${canDrag ? ' is-draggable' : ''}" draggable="${canDrag ? 'true' : 'false'}" ondragstart="crm2OportunidadesKanbanDragStart(event, '${attrOpp(opp.id)}')" ondragend="crm2OportunidadesKanbanDragEnd(event)">${primaryField}${secondaryFields ? `<div class="crm2-opp-card-secondary-fields">${secondaryFields}</div>` : ''}</article>`; }).join('') : '<p class="crm2-opp-kanban-empty">Nenhum registro</p>'}</div>`}</section>`; }).join('')}</div>`; }
+
+function renderOppTableSettingsModal() { if (crm2OportunidadesState.viewMode !== 'table' || !crm2OportunidadesState.tableColumnSettingsOpen) return ''; const columns = crm2OportunidadesState.tableColumnSettingsDraft.map((key) => TABLE_COLUMN_OPTIONS.find((column) => column.key === key)).filter(Boolean); return `<div class="modal-backdrop crm2-opp-table-settings-backdrop" role="presentation" onclick="crm2OportunidadesCloseTableColumnSettings(event)"><section class="small-modal crm2-opp-table-settings-modal" role="dialog" aria-modal="true" aria-labelledby="crm2-opp-table-settings-title" tabindex="-1" onclick="event.stopPropagation()"><header class="small-modal-header"><div><h3 id="crm2-opp-table-settings-title">Ordem das colunas</h3><p>Arraste para definir a ordem de exibição</p></div><button id="crm2-opp-table-settings-close" class="icon-btn" type="button" title="Fechar configuração" aria-label="Fechar configuração" onclick="crm2OportunidadesCloseTableColumnSettings()">×</button></header><div class="crm2-opp-table-settings-list">${columns.map((column, index) => `<div class="crm2-opp-table-settings-row" draggable="true" ondragstart="crm2OportunidadesTableColumnDragStart(event, '${attrOpp(column.key)}')" ondragover="crm2OportunidadesTableColumnDragOver(event)" ondragleave="crm2OportunidadesTableColumnDragLeave(event)" ondrop="crm2OportunidadesTableColumnDrop(event, '${attrOpp(column.key)}')" ondragend="crm2OportunidadesTableColumnDragEnd(event)"><span>${escapeOpp(column.label)}</span><small>${index + 1}</small></div>`).join('')}</div><footer class="small-modal-actions"><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseTableColumnSettings()">Cancelar</button><button class="save-btn" type="button" onclick="crm2OportunidadesApplyTableColumnSettings()">Aplicar</button></footer></section></div>`; }
+
+function renderNextContactFieldsOpp(draft, formId = '') { return `${oppField({ label: 'Próximo contato', name: 'proximoContatoData', value: draft.proximoContatoData, type: 'date', formId })}${oppField({ label: 'Horário do próximo contato', name: 'proximoContatoHora', value: draft.proximoContatoHora, type: 'time', formId })}`; }
+function renderHeaderNextActionOpp(draft = {}, formId = '', editable = true, opp = null) { const current = opp ? nextActionValueOpp(opp) : ''; const dateValue = draft.proximoContatoData || dateInputValueOpp(current); const timeValue = draft.proximoContatoHora || timeInputValueOpp(current); const dateText = dateDisplayValueOpp(dateValue); if (!editable) return `<div class="crm2-opp-header-next-action-field"><label><span>Data próxima ação</span><div><strong class="crm2-opp-header-stage-value crm2-opp-pill">${escapeOpp(dateText || '—')}</strong></div></label><strong class="crm2-opp-header-stage-value crm2-opp-pill crm2-opp-header-next-action-time">${escapeOpp(timeValue || '—')}</strong></div>`; return `<div class="crm2-opp-header-next-action-field"><label><span>Data próxima ação</span><div class="crm2-opp-header-next-action-date-control crm2-opp-next-action-date-row"><input class="config-input crm2-opp-pill crm2-opp-next-action-date-text" name="proximoContatoData" form="${formId}" value="${attrOpp(dateText)}" placeholder="dd/mm" inputmode="numeric" maxlength="5" oninput="crm2OportunidadesSyncHeaderNextAction(this, 'date')"><button class="icon-btn crm2-opp-next-action-calendar crm2-opp-header-next-action-calendar" type="button" title="Selecionar data" aria-label="Selecionar data" onclick="crm2OportunidadesOpenNativeDate(this)"><i data-lucide="calendar" aria-hidden="true"></i></button><input class="crm2-opp-next-action-native-date" type="date" tabindex="-1" aria-hidden="true" value="${attrOpp(dateValue)}" onchange="crm2OportunidadesSetHeaderNextActionDate(this)"></div></label><input class="config-input crm2-opp-pill crm2-opp-header-next-action-time" name="proximoContatoHora" form="${formId}" type="time" value="${attrOpp(timeValue)}" aria-label="Hora da próxima ação" oninput="crm2OportunidadesSyncHeaderNextAction(this, 'time')"></div>`; }
+function oppField({ label, name, value = '', type = 'text', options = [], required = false, wide = false, formId = '' }) { const error = crm2OportunidadesState.errors[name] || ''; const id = `crm2-opp-${name}`; const eventAttr = name === 'pfId' ? ' onchange="crm2OportunidadesSelectPf(this.value)"' : name === 'motivoPerda' ? ' onchange="crm2OportunidadesRefreshDerivedStatus()"' : name === 'documento' ? ' oninput="crm2OportunidadesFormatDocument(this)"' : name === 'telefone' ? ' oninput="crm2OportunidadesFormatPhone(this)"' : name === 'nome' ? ' oninput="crm2OportunidadesFormatName(this)"' : ''; const formAttr = formId ? ` form="${formId}"` : ''; const placeholder = { nome: 'Nome ou razão social', documento: '000.000.000-00 ou 00.000.000/0000-00', email: 'nome@empresa.com.br', telefone: '(00) 00000-0000', responsavel: 'Nome do responsável', observacoes: 'Registre uma observação sobre a oportunidade.' }[name] || ''; const placeholderAttr = placeholder && type !== 'select' ? ` placeholder="${attrOpp(placeholder)}"` : ''; const common = `id="${id}" class="config-input" name="${name}"${eventAttr}${formAttr}${placeholderAttr} ${required ? 'required' : ''} aria-invalid="${error ? 'true' : 'false'}"`; const normalizedOptions = options.map((item) => typeof item === 'string' ? { value: item, label: item } : item); const input = type === 'textarea' ? `<textarea ${common} rows="4">${escapeOpp(value)}</textarea>` : type === 'select' ? `<select ${common}><option value="">Selecione</option>${normalizedOptions.map((item) => `<option value="${attrOpp(item.value)}" ${String(item.value) === String(value) ? 'selected' : ''}>${escapeOpp(item.label)}</option>`).join('')}</select>` : `<input ${common} type="${type}" value="${attrOpp(name === 'documento' ? maskDocumentOpp(value) : name === 'telefone' ? maskPhoneOpp(value) : name === 'nome' ? upperOpp(value) : value)}">`; const field = `<label class="${wide ? 'is-wide' : ''}"><span>${escapeOpp(label)}${required ? ' *' : ''}</span>${input}${error ? `<small class="crm2-field-error">${escapeOpp(error)}</small>` : ''}</label>`; return name === 'previsaoFechamento' ? `${field}${renderNextContactFieldsOpp(crm2OportunidadesState.draft, formId)}` : field; }
+function headerResponsibleFieldOpp(value = '', formId = '', editable = false) { const error = crm2OportunidadesState.errors.responsavel || ''; const users = crm2OportunidadesState.responsibleUsers || []; const legacy = value && !users.some((user) => normOpp(user.nome) === normOpp(value)); const options = users.map((user) => `<option value="${attrOpp(user.nome)}" ${normOpp(user.nome) === normOpp(value) ? 'selected' : ''}>${escapeOpp(user.nome)}</option>`).join(''); const selectedLegacy = legacy ? `<option value="${attrOpp(value)}" selected>${escapeOpp(value)} (usuário inativo ou removido)</option>` : ''; const emptyOption = crm2OportunidadesState.responsibleUsersLoading ? 'Carregando usuários...' : crm2OportunidadesState.responsibleUsersError ? 'Não foi possível carregar usuários' : users.length ? 'Selecione um responsável' : 'Nenhum usuário ativo cadastrado'; const content = editable ? `<select class="config-input crm2-opp-pill crm2-opp-header-stage-value" name="responsavel" form="${formId}" required aria-invalid="${error ? 'true' : 'false'}"><option value="" ${value ? '' : 'selected'}>${emptyOption}</option>${selectedLegacy}${options}</select>` : `<span class="crm2-opp-header-stage-value crm2-opp-pill">${escapeOpp(value || '—')}</span>`; return `<label class="crm2-opp-header-stage-field crm2-opp-header-responsible-field"><span>Responsável${editable ? ' *' : ''}</span>${content}${error ? `<small class="crm2-field-error">${escapeOpp(error)}</small>` : ''}${editable && crm2OportunidadesState.responsibleUsersError ? `<small class="crm2-field-error">${escapeOpp(crm2OportunidadesState.responsibleUsersError)}</small>` : ''}</label>`; }
+
+
+function renderOppFormLegacy() {
+  const draft = crm2OportunidadesState.draft;
+  const editing = currentOppRoute().view === 'opp-edit';
+  const editingOpp = editing ? opportunityById(crm2OportunidadesState.detailId) : null;
+  const pfData = pfOppFormData(draft.pfId, draft);
+  const pfOptions = (window.crm2PfGetMockItems?.() || []).map((item) => ({ value: item.id, label: `${item.id} · ${item.nome}` }));
+  const stageOptions = OPPORTUNITY_STAGES.map((stage) => `<option value="${attrOpp(stage)}" ${draft.etapa === stage ? 'selected' : ''}>${escapeOpp(stage)}</option>`).join('');
+  const originOptions = OPPORTUNITY_ORIGINS.map((origin) => `<option value="${attrOpp(origin)}" ${draft.origemOportunidade === origin ? 'selected' : ''}>${escapeOpp(origin)}</option>`).join('');
+  const partnerField = oppReadonlyField({ label: 'Parceiro de indicação', name: 'pfParceiro', value: pfData.pfParceiro, editable: !draft.pfId, formId: 'crm2-opp-form', className: 'crm2-opp-header-partner-field', inputClassName: 'crm2-opp-pill' });
+  const originField = `<label class="crm2-opp-header-stage-field"><span>Origem da oportunidade</span><select class="config-input crm2-opp-pill crm2-opp-header-origin-select" name="origemOportunidade" form="crm2-opp-form" aria-label="Origem da oportunidade" required>${originOptions}</select></label>`;
+  const nextActionField = renderHeaderNextActionOpp(draft, 'crm2-opp-form', true);
+  const responsibleField = headerResponsibleFieldOpp(draft.responsavel, 'crm2-opp-form', true) + (editingOpp ? renderSchedulingButtonOpp(editingOpp) : '');
+  return `<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-form-title"><div class="admin-panel-header"><div class="crm2-opp-form-heading"><span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span><span class="crm2-opp-number-pill">${escapeOpp(editingOpp?.numero || 'Nova oportunidade')}</span><div class="crm2-opp-form-title-row"><h3 id="crm2-opp-form-title">${editing ? 'Editar oportunidade' : 'Nova oportunidade'}</h3></div><div class="crm2-opp-origin-status-row"><label class="crm2-opp-inline-pill-field"><span>Origem do cliente:</span><select class="config-input crm2-opp-origin-select" name="origem" form="crm2-opp-form" aria-label="Origem do cliente">${OPPORTUNITY_ORIGINS.map((origin) => `<option value="${attrOpp(origin)}" ${draft.origem === origin ? 'selected' : ''}>${escapeOpp(origin)}</option>`).join('')}</select></label><div class="crm2-opp-inline-pill-field"><span>Status:</span><strong class="crm2-opp-derived-status-value">${stagePillOpp(opportunityStatusOpp(draft))}</strong></div></div><div class="crm2-opp-form-stage-row">${originField}<label class="crm2-opp-header-stage-field"><span>Etapa</span><select class="config-input crm2-opp-pill crm2-opp-stage-pill crm2-opp-stage-select is-stage-${attrOpp(stageClassOpp(draft.etapa))} is-${attrOpp(statusClassOpp(draft.etapa))}" name="etapa" form="crm2-opp-form" aria-label="Etapa da oportunidade" onchange="crm2OportunidadesRefreshDerivedStatus()">${stageOptions}</select></label>${partnerField}${nextActionField}${responsibleField}</div></div></div><div class="crm2-opp-form-layout"><form id="crm2-opp-form" class="crm2-opp-form" onsubmit="crm2OportunidadesSave(event)"><input type="hidden" name="motivoPerda" value="${attrOpp(draft.motivoPerda || '')}"><div class="crm2-opp-form-grid">${renderOppPfFields(draft)}</div>${renderOppItemForm(draft)}</form><aside class="crm2-opp-form-sidebar"><label class="crm2-opp-form-observations"><span>Observações</span><textarea class="config-input" name="observacoes" form="crm2-opp-form" rows="5" placeholder="Registre uma observação">${escapeOpp(draft.observacoes)}</textarea></label>${renderOppFormHistory(editingOpp)}</aside></div>${renderOppValidationErrors()}${renderOppSaveError()}<div class="crm2-opp-form-footer"><button class="secondary-btn" type="button" onclick="crm2OportunidadesBack()">Cancelar</button><button class="save-btn" type="submit" form="crm2-opp-form" ${crm2OportunidadesState.saving ? 'disabled aria-busy="true"' : ''}>${crm2OportunidadesState.saving ? 'Salvando...' : (editing ? 'Salvar alterações' : 'Salvar oportunidade')}</button></div></section>`;
+}
+
+function renderOppInlineEditLegacy(opp) {
+  const draft = crm2OportunidadesState.draft;
+  const stageOptions = OPPORTUNITY_STAGES.map((stage) => `<option value="${attrOpp(stage)}" ${draft.etapa === stage ? 'selected' : ''}>${escapeOpp(stage)}</option>`).join('');
+  const originOptions = OPPORTUNITY_ORIGINS.map((origin) => `<option value="${attrOpp(origin)}" ${draft.origemOportunidade === origin ? 'selected' : ''}>${escapeOpp(origin)}</option>`).join('');
+  const pfData = pfOppFormData(draft.pfId, draft);
+  const partnerField = oppReadonlyField({ label: 'Parceiro de indicação', name: 'pfParceiro', value: pfData.pfParceiro, editable: !draft.pfId, formId: 'crm2-opp-inline-form', className: 'crm2-opp-header-partner-field', inputClassName: 'crm2-opp-pill' });
+  const responsibleField = headerResponsibleFieldOpp(draft.responsavel, 'crm2-opp-inline-form', true) + renderSchedulingButtonOpp(opp);
+  const nextActionField = renderHeaderNextActionOpp(draft, 'crm2-opp-inline-form', true);
+  return `<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-detail-title"><div class="admin-panel-header"><div class="crm2-opp-form-heading"><span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span><span class="crm2-opp-number-pill">${escapeOpp(opp.numero)}</span><div class="crm2-opp-form-title-row"><h3 id="crm2-opp-detail-title">${escapeOpp(opportunityLabel(opp))}</h3></div><div class="crm2-opp-origin-status-row"><div class="crm2-opp-inline-pill-field"><span>Origem do cliente:</span><strong class="crm2-opp-origin-pill-value crm2-opp-meta-pill">${escapeOpp(draft.origem || '—')}</strong></div><div class="crm2-opp-inline-pill-field"><span>Status:</span><strong class="crm2-opp-derived-status-value">${stagePillOpp(opportunityStatusOpp(draft))}</strong></div></div><div class="crm2-opp-form-stage-row"><label class="crm2-opp-header-stage-field"><span>Origem da oportunidade</span><span class="crm2-opp-header-stage-value crm2-opp-meta-pill">${escapeOpp(draft.origemOportunidade || "—")}</span></label><label class="crm2-opp-header-stage-field"><span>Etapa</span><select class="config-input crm2-opp-pill crm2-opp-stage-pill crm2-opp-stage-select is-stage-${attrOpp(stageClassOpp(draft.etapa))} is-${attrOpp(statusClassOpp(draft.etapa))}" name="etapa" form="crm2-opp-inline-form" aria-label="Etapa da oportunidade" onchange="crm2OportunidadesRefreshDerivedStatus()">${stageOptions}</select></label>${partnerField}${nextActionField}${responsibleField}</div></div></div><div class="crm2-opp-form-layout"><form id="crm2-opp-inline-form" class="crm2-opp-form" onsubmit="crm2OportunidadesSave(event)"><input type="hidden" name="motivoPerda" value="${attrOpp(draft.motivoPerda || '')}"><div class="crm2-opp-form-grid">${renderOppPfFields(draft)}</div>${renderOppItemForm(draft)}</form><aside class="crm2-opp-form-sidebar"><label class="crm2-opp-form-observations"><span>Observações</span><textarea class="config-input" name="observacoes" form="crm2-opp-inline-form" rows="5" placeholder="Registre uma observação">${escapeOpp(draft.observacoes)}</textarea></label>${renderOppFormHistory(opp)}</aside></div>${renderOppSaveError()}<div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2OportunidadesCancelEdit()">Cancelar</button><button class="save-btn" type="submit" form="crm2-opp-inline-form" ${crm2OportunidadesState.saving ? 'disabled aria-busy="true"' : ''}>${crm2OportunidadesState.saving ? 'Salvando...' : 'Salvar alterações'}</button></div></section>`;
+}
+
+function renderOppCustomerData(opp = {}) {
+  const pf = relatedPfOpp(opp.pfId);
+  const pfName = upperOpp(pf?.nome || opp.pfNome) || '—';
+  const pfCpf = maskCpfOpp(pf?.cpf || opp.pfCpf);
+  const pfBirth = pf?.nascimento ? dateLabelOpp(pf.nascimento) : dateLabelOpp(opp.pfNascimento);
+  const pfCei = pf?.cei || opp.pfCei || '—';
+  const pfEmail = pf?.email || opp.pfEmail || '—';
+  const pfPhone = maskPhoneOpp(pf?.telefone || opp.pfTelefone) || '—';
+  return '<section class="crm2-opp-customer-data" aria-labelledby="crm2-opp-customer-data-title"><div class="crm2-opp-detail-section-heading"><strong id="crm2-opp-customer-data-title">Dados Pessoais</strong></div><div class="crm2-opp-detail-grid"><div><span>CPF</span><strong>' + detailValueOpp(pfCpf) + '</strong></div><div><span>Nome</span>' + (pf ? '<button class="crm2-opp-related-link crm2-opp-detail-value" type="button" onclick="openRelatedCrm2RecordOpp(\'201\', \'' + attrOpp(pf.id) + '\')">' + detailValueOpp(pfName) + '</button>' : detailValueOpp(pfName)) + '</div><div><span>Nascimento</span><strong>' + detailValueOpp(pfBirth) + '</strong></div><div><span>CEI/CAEPF</span><strong>' + detailValueOpp(pfCei) + '</strong></div><div><span>E-mail</span><strong>' + detailValueOpp(pfEmail) + '</strong></div><div><span>Telefone</span><strong>' + detailValueOpp(pfPhone) + '</strong></div></div></section>';
+}
+
+function renderOppDataOpportunityCard(draft = {}, formId = '') {
+  const originOptions = OPPORTUNITY_ORIGINS.map((origin) => `<option value="${attrOpp(origin)}" ${draft.origem === origin ? 'selected' : ''}>${escapeOpp(origin)}</option>`).join('');
+  const stageOptions = OPPORTUNITY_STAGES.map((stage) => `<option value="${attrOpp(stage)}" ${draft.etapa === stage ? 'selected' : ''}>${escapeOpp(stage)}</option>`).join('');
+  const responsibleField = headerResponsibleFieldOpp(draft.responsavel, formId, true).replace('class="crm2-opp-header-stage-field', 'class="crm2-opp-data-field crm2-opp-data-responsible crm2-opp-header-stage-field').replace('Responsável *', 'Responsável: *');
+  const nextActionField = renderHeaderNextActionOpp(draft, formId, true).replace('class="crm2-opp-header-next-action-field"', 'class="crm2-opp-data-field crm2-opp-data-next-action crm2-opp-header-next-action-field"');
+  const selectedPartner = partnerByIdOpp(draft.parceiroId) || (!crm2OportunidadesState.partnerSelectionRequired ? partnerByNameOpp(draft.parceiroNome || draft.pfParceiro) : null);
+  const partnerValue = partnerLabelOpp(selectedPartner) || draft.parceiroNome || pfOppFormData(draft.pfId, draft).pfParceiro || '';
+  const partnerError = crm2OportunidadesState.errors.parceiroId || '';
+  const partnerField = `<label class="crm2-opp-data-field crm2-opp-data-partner"><span>Parceiro:</span><input class="config-input" data-partner-key="opportunity" name="parceiroNome" form="${formId}" value="${attrOpp(partnerValue)}" placeholder="Digite para buscar parceiro" autocomplete="off" aria-invalid="${partnerError ? 'true' : 'false'}" oninput="crm2OportunidadesPartnerInput(this)" onfocus="crm2OportunidadesRenderPartnerSuggestions(this)" onblur="window.setTimeout(() => crm2OportunidadesHidePartnerSuggestions(this), 150)"><input type="hidden" name="parceiroId" form="${formId}" value="${attrOpp(selectedPartner?.id || draft.parceiroId || '')}"><div class="crm2-opp-partner-suggestions crm2-opp-product-suggestions" data-partner-suggestions data-partner-key="opportunity" data-suggestion-kind="partner" data-suggestion-key="opportunity" hidden></div>${partnerError ? `<small class="crm2-field-error">${escapeOpp(partnerError)}</small>` : ''}</label>`;
+  const originField = `<label class="crm2-opp-data-field crm2-opp-data-origin"><span>Origem do lead: <em class="crm2-opp-required-mark">*</em></span><select class="config-input crm2-opp-origin-select" name="origemOportunidade" form="${formId}" aria-label="Origem do lead" required>${originOptions}</select></label>`;
+  const stageField = `<label class="crm2-opp-data-field crm2-opp-data-stage"><span>Etapa: <em class="crm2-opp-required-mark">*</em></span><select class="config-input crm2-opp-stage-select" name="etapa" form="${formId}" aria-label="Etapa" onchange="crm2OportunidadesRefreshDerivedStatus()">${stageOptions}</select></label>`;
+  const observations = `<label class="crm2-opp-data-field crm2-opp-data-observations"><span>Observações</span><textarea class="config-input" name="observacoes" form="${formId}" rows="2" maxlength="500" placeholder="Ex.: detalhes do primeiro contato, interesses do cliente...">${escapeOpp(draft.observacoes || '')}</textarea><small>${Math.min(500, String(draft.observacoes || '').length)}/500</small></label>`;
+  return `<div class="admin-panel-header crm2-opp-edit-opportunity-card crm2-opp-form-content-container"><div class="crm2-opp-edit-section-title"><i data-lucide="user-round" aria-hidden="true"></i><strong>Dados da oportunidade</strong></div><div class="crm2-opp-data-grid">${originField}${stageField}${partnerField}${responsibleField}${nextActionField}${observations}</div><input type="hidden" name="origem" form="${formId}" value="${attrOpp(draft.origem || '')}"></div>`;
+}
+
+function organizeOppFormMarkup(markup, draft = {}, formId = '') {
+  const linkedTitle = '<div class="crm2-opp-edit-section-title"><i data-lucide="user-round" aria-hidden="true"></i><strong>Dados Pessoais</strong></div>';
+  const headerStart = markup.indexOf('<div class="admin-panel-header">');
+  const layoutStart = markup.indexOf('<div class="crm2-opp-form-layout">', headerStart);
+  let output = markup;
+  if (headerStart >= 0 && layoutStart > headerStart) {
+    output = output.slice(0, headerStart) + output.slice(layoutStart);
+    output = output.replace('aria-labelledby="crm2-opp-detail-title"', 'aria-labelledby="crm2-opp-form-title"');
+    output = output.replace('<div class="crm2-opp-form-layout">', renderOppScreenHeading() + '<div class="crm2-opp-form-layout">');
+    output = output.replace('<div class="crm2-opp-form-layout"><form', '<div class="crm2-opp-form-layout"><div class="crm2-opp-form-main-column"><form');
+    const formOpen = new RegExp(`(<form id="${formId}"[^>]*>)`);
+    output = output.replace(formOpen, `$1${renderOppDataOpportunityCard(draft, formId)}`);
+  }
+  output = output.replace(/<label class="crm2-opp-form-observations">[\s\S]*?<\/label>/, '');
+  output = output.replace('<div class="crm2-opp-form-grid">', '<div class="crm2-opp-linked-section crm2-opp-form-content-container">' + linkedTitle + '<div class="crm2-opp-form-grid">');
+  output = output.replace('</div><div class="crm2-opp-items-form crm2-opp-form-content-container">', '</div></div><div class="crm2-opp-items-form crm2-opp-form-content-container">');
+  output = output.replace('</form><aside class="crm2-opp-form-sidebar">', '</form></div><aside class="crm2-opp-form-sidebar">');
+  output = output.replace(/<div class="crm2-opp-form-footer">[\s\S]*?<\/div><\/section>$/, '</section>');
+  output = output.replace(/<div class="hub-form-screen-actions" data-hub-form-footer>[\s\S]*?<\/div><\/section>$/, '</section>');
+  const inline = formId === 'crm2-opp-inline-form';
+  const footer = renderHubRecordFormFooter({
+    flow: 'crm2-opportunity',
+    cancelLabel: 'Cancelar',
+    cancelOnClick: inline ? 'crm2OportunidadesCancelEdit()' : 'crm2OportunidadesBack()',
+    saveLabel: inline ? 'Salvar alterações' : (currentOppRoute().view === 'opp-edit' ? 'Salvar alterações' : 'Salvar oportunidade'),
+    saveForm: formId,
+    saving: crm2OportunidadesState.saving,
+    className: inline ? 'crm2-opp-inline-footer' : 'crm2-opp-form-footer'
+  });
+  output = output.replace(/<\/section>$/, `${footer}</section>`);
+  return output;
+}
+
+function renderOppForm() { return organizeOppFormMarkup(renderOppFormLegacy(), crm2OportunidadesState.draft, 'crm2-opp-form'); }
+function renderOppInlineEdit(opp) { return organizeOppFormMarkup(renderOppInlineEditLegacy(opp), crm2OportunidadesState.draft, 'crm2-opp-inline-form'); }
+
+function renderOppDetailLegacy(opp) {
+  if (crm2OportunidadesState.inlineEditingId === opp.id) return renderOppInlineEdit(opp);
+  const pf = relatedPfOpp(opp.pfId);
+  const pfPartner = opportunityPresentationOpp(opp).partner || '—';
+  const dataContent = renderOppCustomerData(opp);
+  const nextActionHeaderField = renderHeaderNextActionOpp({}, '', false, opp) + renderSchedulingButtonOpp(opp);
+  const partnerHeaderField = '<label class="crm2-opp-header-stage-field crm2-opp-header-partner-field"><span>Parceiro de indicação</span><span class="crm2-opp-header-stage-value crm2-opp-pill">' + escapeOpp(pfPartner) + '</span></label>' + nextActionHeaderField + headerResponsibleFieldOpp(opp.responsavel) + '<button class="secondary-btn crm2-opp-conversion-inline-btn" type="button" onclick="crm2OportunidadesOpenConversion(\'' + attrOpp(opp.id) + '\')">Gerar pedido(s)</button>';
+  const observations = '<section class="crm2-opp-sidebar-observations" aria-labelledby="crm2-opp-observations-title"><label class="crm2-opp-form-observations"><span id="crm2-opp-observations-title">Observações</span><textarea class="config-input" readonly aria-readonly="true" rows="5">' + escapeOpp(opp.observacoes || 'Nenhuma observação registrada.') + '</textarea></label></section>';
+  const itemsContent = renderOppItemsColumn(opp);
+  return '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-detail-title"><div class="admin-panel-header"><div class="crm2-opp-form-heading"><span class="ar-crm-phase1-kicker">ROTA 205 · OPORTUNIDADE</span><span class="crm2-opp-number-pill">' + escapeOpp(opp.numero) + '</span><div class="crm2-opp-form-title-row"><h3 id="crm2-opp-detail-title">' + escapeOpp(opportunityLabel(opp)) + '</h3><div class="crm2-opp-detail-responsible"><span>Responsável</span>' + detailValueOpp(opp.responsavel) + '</div></div><div class="crm2-opp-origin-status-row"><div class="crm2-opp-inline-pill-field"><span>Origem do cliente:</span><strong class="crm2-opp-origin-pill-value crm2-opp-meta-pill">' + escapeOpp(opp.origem || '—') + '</strong></div><div class="crm2-opp-inline-pill-field"><span>Status:</span><strong class="crm2-opp-derived-status-value">' + stagePillOpp(opportunityStatusOpp(opp)) + '</strong></div></div>' + '<div class="crm2-opp-form-stage-row"><label class="crm2-opp-header-stage-field"><span>Origem da oportunidade</span><strong class="crm2-opp-header-stage-value crm2-opp-meta-pill">' + escapeOpp(opp.origemOportunidade || '—') + '</strong></label><div class="crm2-opp-header-stage-field"><span>Etapa</span>' + stagePillOpp(opp.etapa) + '</div>' + partnerHeaderField + '</div></div></div><div class="crm2-opp-detail-layout"><main class="crm2-opp-detail-main">' + dataContent + itemsContent + renderOpportunityAttachmentsOpp(opp) + '</main><aside class="crm2-opp-detail-sidebar">' + observations + renderOppTimelineColumn(opp) + '</aside></div><div class="hub-form-screen-actions" data-hub-form-footer><button class="secondary-btn" type="button" onclick="crm2OportunidadesBack()">Voltar</button>' + (crm2OportunidadesState.canEdit ? '<button class="save-btn" type="button" onclick="crm2OportunidadesOpenEdit(\'' + attrOpp(opp.id) + '\')">Editar</button>' : '') + '</div></section>';
+}
+
+function renderOppDetail(opp) {
+  if (crm2OportunidadesState.inlineEditingId === opp.id) return renderOppInlineEdit(opp);
+  const presentation = opportunityPresentationOpp(opp);
+  const pf = relatedPfOpp(opp.pfId);
+  const dataContent = renderOppCustomerData(opp);
+  const nextAction = nextActionValueOpp(opp);
+  const partner = presentation.partner || '—';
+  const phone = maskPhoneOpp(pf?.telefone || opp.pfTelefone) || '—';
+  const email = pf?.email || opp.pfEmail || '—';
+  const birth = dateLabelOpp(pf?.nascimento || opp.pfNascimento);
+  const observations = '<section class="crm2-opp-sidebar-observations" aria-labelledby="crm2-opp-observations-title"><label class="crm2-opp-form-observations"><span id="crm2-opp-observations-title">Observações</span><textarea class="config-input" data-opportunity-observations="' + attrOpp(opp.id) + '" maxlength="500" ' + (crm2OportunidadesState.canEdit ? 'oninput="crm2OportunidadesToggleDetailObservations(this)"' : 'readonly aria-readonly="true"') + ' rows="5" placeholder="Nenhuma observação registrada.">' + escapeOpp(opp.observacoes || '') + '</textarea></label>' + (crm2OportunidadesState.canEdit ? '<button class="secondary-btn crm2-opp-save-observations" type="button" onclick="crm2OportunidadesSaveDetailObservations(this)" hidden>Salvar</button>' : '') + '</section>';
+  const itemsContent = renderOppItemsColumn(opp);
+  const status = opp.etapa || '—';
+  const headingContent = '<h3 id="crm2-opp-detail-title">' + escapeOpp(opportunityLabel(opp)) + '</h3>'
+    + '<span class="crm2-opp-detail-number">Oportunidade ' + escapeOpp(opp.numero) + '</span>'
+    + '<div class="crm2-opp-detail-badges" aria-label="Situação da oportunidade">'
+    + '<span class="crm2-opp-detail-status-label">Status do lead:</span>' + (crm2OportunidadesState.canEdit ? '<select class="crm2-opp-detail-badge is-status crm2-opp-detail-stage-select" aria-label="Status do lead (etapa)" onchange="crm2OportunidadesSetStageFromDetail(this)" data-opportunity-id="' + attrOpp(opp.id) + '">' + OPPORTUNITY_STAGES.map((stage) => '<option value="' + attrOpp(stage) + '" ' + (stage === opp.etapa ? 'selected' : '') + '>' + escapeOpp(stage) + '</option>').join('') + '</select>' : '<span class="crm2-opp-detail-badge is-status">' + escapeOpp(status) + '</span>')
+    + '<span class="crm2-opp-detail-badge-separator" aria-hidden="true">|</span><span class="crm2-opp-detail-status-label">Origem</span><span class="crm2-opp-detail-badge is-origin">' + escapeOpp(opp.origemOportunidade || '—') + '</span>'
+    + (partner !== '—' ? '<span class="crm2-opp-detail-badge">Parceiro: ' + escapeOpp(partner) + '</span>' : '')
+    + '</div>';
+  return '<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-detail-title">'
+    + '<div class="crm2-opp-detail-header">'
+    + renderHubRecordHeader({
+      onBack: 'crm2OportunidadesBack()',
+      backAriaLabel: 'Voltar à lista de oportunidades',
+      className: 'crm2-opp-detail-heading hub-record-header',
+      backClassName: 'icon-btn crm2-opp-screen-back hub-record-back-button',
+      contentClassName: 'hub-record-header-content crm2-opp-detail-heading-content',
+      content: headingContent
+    })
+    + '<div class="crm2-opp-detail-actions">'
+    + '<button class="secondary-btn" type="button" disabled title="Mais ações em breve">Mais ações</button>'
+    + (crm2OportunidadesState.canEdit ? renderHubRecordEditButton({ onClick: `crm2OportunidadesOpenEdit('${attrOpp(opp.id)}')`, className: 'secondary-btn hub-record-edit-button' }) : '')
+    + '<button class="save-btn crm2-opp-detail-primary-action" type="button" onclick="crm2OportunidadesOpenConversion(\'' + attrOpp(opp.id) + '\')">Gerar pedido(s)</button>'
+    + '</div>'
+    + '<div class="crm2-opp-detail-summary" aria-label="Resumo operacional">'
+    + '<div><span>Próxima ação</span><strong>' + escapeOpp(dateTimeLabelOpp(nextAction)) + '</strong></div>'
+    + '<div><span>Telefone</span><strong>' + escapeOpp(phone) + '</strong></div>'
+    + '<div><span>E-mail</span><strong>' + escapeOpp(email) + '</strong></div>'
+    + '<div><span>Nascimento</span><strong>' + escapeOpp(birth) + '</strong></div>'
+    + '<div><span>Parceiro</span><strong>' + escapeOpp(partner) + '</strong></div>'
+    + '<div><span>Responsável</span><strong>' + escapeOpp(opp.responsavel || '—') + '</strong></div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="crm2-opp-detail-layout"><main class="crm2-opp-detail-main">' + dataContent + itemsContent + renderOpportunityAttachmentsOpp(opp) + '</main><aside class="crm2-opp-detail-sidebar">' + observations + renderOppTimelineColumn(opp) + '</aside></div>'
+    + '</section>';
+}
+
+function renderOpp() { permissionsOpp(); const route = currentOppRoute(); if (!['opp-new', 'opp-edit'].includes(route.view) && !crm2OportunidadesState.inlineEditingId) closeOppEditActionPortal(); if (route.view !== 'list') { crm2OportunidadesState.filterModalOpen = false; crm2OportunidadesState.filterDraft = {}; } if (!crm2OportunidadesState.canView) return renderOppState(); if (route.view === 'opp-new' || route.view === 'opp-edit') { if (route.view === 'opp-new' && !crm2OportunidadesState.canCreate) return renderOppState(); if (route.view === 'opp-edit' && !crm2OportunidadesState.canEdit) return renderOppState(); const opp = opportunityById(route.id); if (route.view === 'opp-edit' && !opp) return renderOppState(); if (crm2OportunidadesState.formMode !== 'opportunity' || crm2OportunidadesState.detailId !== (opp?.id || '')) { crm2OportunidadesState.formMode = 'opportunity'; crm2OportunidadesState.detailId = opp?.id || ''; crm2OportunidadesState.draft = formDefaultsOpp(opp || {}); crm2OportunidadesState.pjTemporarios = []; crm2OportunidadesState.tempLoadedForId = ''; } if (opp?.id) void loadCnpjTemporariosOpp(opp.id); return renderOppForm(); } if (route.view === 'opp-detail') { const opp = opportunityById(route.id); return opp ? renderOppDetail(opp) : renderOppState(); } resetOppForm(); return renderOppList(); }
+function decorateOppMarkup(markup) { let output = markup; if (currentOppRoute().view !== 'list') return output; const actionsMarker = '<div class="crm2-opp-filter-actions">'; if (crm2OportunidadesState.viewMode === 'table') { const trigger = '<button class="icon-btn crm2-opp-table-settings-trigger" type="button" title="Configurar colunas da tabela" aria-label="Configurar colunas da tabela" aria-haspopup="dialog" aria-expanded="' + (crm2OportunidadesState.tableColumnSettingsOpen ? 'true' : 'false') + '" onclick="crm2OportunidadesOpenTableColumnSettings()"><i data-lucide="settings-2" aria-hidden="true"></i></button>'; output = output.replace(actionsMarker, actionsMarker + trigger); const modal = renderOppTableSettingsModal(); if (modal) { const end = output.lastIndexOf('</section>'); if (end >= 0) output = output.slice(0, end) + modal + output.slice(end); } return output; } if (crm2OportunidadesState.viewMode !== 'kanban') return output; const trigger = '<button class="icon-btn crm2-opp-kanban-settings-trigger" type="button" title="Configurar cards do Kanban" aria-label="Configurar cards do Kanban" aria-haspopup="dialog" aria-expanded="' + (crm2OportunidadesState.kanbanCardSettingsOpen ? 'true' : 'false') + '" onclick="crm2OportunidadesOpenKanbanCardSettings()"><i data-lucide="settings-2" aria-hidden="true"></i></button>'; output = output.replace(actionsMarker, actionsMarker + trigger); const modal = renderOppKanbanSettingsModal(); if (modal) { const end = output.lastIndexOf('</section>'); if (end >= 0) output = output.slice(0, end) + modal + output.slice(end); } return output; }
+function closeOppFilterDropdowns() { document.querySelectorAll('.crm2-opp-filter-select-control .hub-filter-dropdown-menu:not([hidden]), body > .hub-filter-dropdown-menu[data-dropdown-input-id^="crm2-opp-filter-"]:not([hidden])').forEach((menu) => { menu.hidden = true; const trigger = document.getElementById(menu.dataset.dropdownInputId || ''); trigger?.setAttribute('aria-expanded', 'false'); const combo = trigger?.closest('.crm2-pf-select'); if (combo && menu.parentElement === document.body) combo.appendChild(menu); }); }
+function positionOpportunityProductFilterDropdownOpp(input, menu) { if (!input || !menu || menu.hidden) return; const rect = input.getBoundingClientRect(); const padding = 8; const gap = 6; const viewportWidth = window.innerWidth; const viewportHeight = window.innerHeight; const width = Math.min(Number(menu.dataset.dropdownWidth) || 320, viewportWidth - padding * 2); const naturalHeight = menu.scrollHeight; const maxDesiredHeight = Math.min(280, naturalHeight); const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap - padding); const spaceAbove = Math.max(0, rect.top - gap - padding); const openAbove = maxDesiredHeight > spaceBelow && spaceAbove > spaceBelow; const availableSpace = openAbove ? spaceAbove : spaceBelow; const maxHeight = Math.min(280, availableSpace); const visibleHeight = Math.min(naturalHeight, maxHeight); const preferredLeft = rect.left; const left = Math.min(Math.max(padding, preferredLeft), Math.max(padding, viewportWidth - width - padding)); const preferredTop = openAbove ? rect.top - gap - visibleHeight : rect.bottom + gap; const top = Math.min(Math.max(padding, preferredTop), Math.max(padding, viewportHeight - visibleHeight - padding)); menu.style.position = 'fixed'; menu.style.width = `${width}px`; menu.style.maxHeight = `${maxHeight}px`; menu.style.overflowY = 'auto'; menu.style.left = `${left}px`; menu.style.top = `${top}px`; }
+function portalOppFilterModal() { const menuWidths = { source: '250', product: '320' }; const backdrops = [...document.querySelectorAll('.crm2-opp-filter-modal-backdrop')]; const active = crm2OportunidadesState.filterModalOpen ? backdrops[backdrops.length - 1] : null; const activeMenuIds = new Set(active ? [...active.querySelectorAll('.hub-filter-dropdown-menu[data-dropdown-input-id^="crm2-opp-filter-"]')].map((menu) => menu.id) : []); document.querySelectorAll('body > .hub-filter-dropdown-menu[data-dropdown-input-id^="crm2-opp-filter-"]').forEach((menu) => { if (!activeMenuIds.has(menu.id)) menu.remove(); }); backdrops.forEach((backdrop) => { if (backdrop !== active) backdrop.remove(); }); if (active && active.parentElement !== document.body) document.body.appendChild(active); Object.entries(menuWidths).forEach(([field, width]) => { const menu = active?.querySelector(`#crm2-opp-filter-${field}-menu`); if (menu) { menu.dataset.dropdownWidth = width; menu.dataset.dropdownAnchor = 'start'; if (field === 'product') menu.dataset.dropdownMaxHeight = '280'; } }); }
+document.addEventListener('click', (event) => { const target = event.target instanceof Element ? event.target : null; if (target?.closest('.crm2-opp-filter-select-control, .hub-filter-dropdown-menu[data-dropdown-input-id^="crm2-opp-filter-"]')) return; closeOppFilterDropdowns(); }, true);
+function rerenderOpp() { if (currentOppRoute().active && document.querySelector('[data-crm2-oportunidades="true"]')) document.querySelector('[data-crm2-oportunidades="true"]').outerHTML = decorateOppMarkup(renderOpp()); const target = document.querySelector('[data-crm2-oportunidades="true"]') || document; fitProductTitlesOpp(target); portalOppFilterModal(); window.hubInicializarTabelasRedimensionaveis?.(target); }
+function validateOpportunityOpp(values) { values.proximaAcaoEm = composeNextContactOpp(values.proximoContatoData, values.proximoContatoHora); const errors = {}; if (!crm2OportunidadesState.detailId && !String(values.origemOportunidade || '').trim()) errors.origemOportunidade = 'Informe a origem da oportunidade.'; if (!String(values.responsavel || '').trim()) errors.responsavel = 'Informe o responsável.'; if (crm2OportunidadesState.partnerSelectionRequired && String(values.parceiroNome || '').trim() && !values.parceiroId) errors.parceiroId = 'Selecione um parceiro da lista.'; if (values.pfNascimento && !isValidCrm2Date(values.pfNascimento)) errors.pfNascimento = 'Informe uma data válida no formato dd/mm/aaaa.'; else if (values.pfNascimento && new Date(`${values.pfNascimento}T00:00:00`) > new Date()) errors.pfNascimento = 'A data de nascimento não pode estar no futuro.'; if (!values.itens?.length || values.itens.some((item) => !item.produto || catalogUnitPriceOpp(item) <= 0)) errors.itens = 'Selecione um produto válido do catálogo para todos os itens.'; return errors; }
+function renderOppValidationErrors() { const messages = Object.values(crm2OportunidadesState.errors || {}).filter(Boolean); return messages.length ? `<div class="crm2-opp-save-error" role="alert"><strong>Revise os dados antes de salvar:</strong><ul>${messages.map((message) => `<li>${escapeOpp(message)}</li>`).join('')}</ul></div>` : ''; }
+function renderOppSaveError() { return crm2OportunidadesState.saveError ? `<div class="crm2-opp-save-error" role="alert">${escapeOpp(crm2OportunidadesState.saveError)}</div>` : ''; }
+
+function renderOppList() {
+  const filtered = sortedOpps(filteredOpps());
+  const allOpportunities = crm2OportunidadesState.opportunities;
+  const negotiatingCount = allOpportunities.filter((opp) => opp.etapa === 'Em Negociação' && !['Perdido', 'Arquivado'].includes(opportunityStatusOpp(opp)) && !['Perdido', 'Arquivado'].includes(opp.status)).length;
+  const validatedCount = allOpportunities.filter((opp) => opp.etapa === 'Pedido validado').length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / crm2OportunidadesState.perPage));
+  crm2OportunidadesState.page = Math.min(Math.max(1, crm2OportunidadesState.page), totalPages);
+  const pageItems = filtered.slice((crm2OportunidadesState.page - 1) * crm2OportunidadesState.perPage, crm2OportunidadesState.page * crm2OportunidadesState.perPage);
+  const content = crm2OportunidadesState.listState !== 'normal'
+    ? renderOppState()
+    : pageItems.length
+      ? (crm2OportunidadesState.viewMode === 'kanban'
+        ? renderOppKanban(filtered)
+        : `${renderOppTable(pageItems)}<div class="crm2-opp-pagination"><span>Página <strong>${crm2OportunidadesState.page}</strong> de <strong>${totalPages}</strong> · ${filtered.length} oportunidade(s)</span><div><button class="secondary-btn" type="button" onclick="crm2OportunidadesSetPage(${crm2OportunidadesState.page - 1})" ${crm2OportunidadesState.page <= 1 ? 'disabled' : ''}>Anterior</button><button class="secondary-btn" type="button" onclick="crm2OportunidadesSetPage(${crm2OportunidadesState.page + 1})" ${crm2OportunidadesState.page >= totalPages ? 'disabled' : ''}>Próxima</button></div></div>`)
+      : `<div class="crm2-pessoas-state" role="status"><strong>${crm2OportunidadesState.opportunities.length ? 'Nenhum resultado encontrado.' : 'Nenhuma oportunidade cadastrada.'}</strong><span>Ajuste os filtros ou cadastre uma nova oportunidade.</span><button class="secondary-btn" type="button" onclick="crm2OportunidadesClearFilters()">Limpar filtros</button></div>`;
+  const kanbanMessage = crm2OportunidadesState.kanbanSettingsMessage && !crm2OportunidadesState.kanbanCardSettingsOpen
+    ? `<p class="crm2-opp-kanban-settings-message" role="status">${escapeOpp(crm2OportunidadesState.kanbanSettingsMessage)}</p>`
+    : '';
+
+  return `<section class="admin-panel crm2-pessoas-page crm2-oportunidades-page" data-crm2-oportunidades="true" aria-labelledby="crm2-opp-title">
+    <div class="crm2-opp-module-header">
+      <div class="crm2-opp-identity">
+        <div class="crm2-opp-avatar" aria-hidden="true"><i data-lucide="layout-dashboard" aria-hidden="true"></i></div>
+        <div class="crm2-opp-heading">
+          <span class="ar-crm-phase1-kicker">CRM 2.0 · Pipeline comercial</span>
+          <h3 id="crm2-opp-title">Oportunidades</h3>
+          <p class="crm2-opp-subtitle">Negociações, itens e conversão.</p>
+        </div>
+      </div>
+      <div class="crm2-opp-summary-metrics" aria-label="Indicadores de oportunidades">
+        <article class="crm2-opp-summary-metric is-blue"><span class="crm2-opp-summary-metric-icon"><i data-lucide="layout-dashboard" aria-hidden="true"></i></span><span><strong>${allOpportunities.length}</strong><small>oportunidades</small></span></article>
+        <article class="crm2-opp-summary-metric is-green"><span class="crm2-opp-summary-metric-icon"><i data-lucide="clock-3" aria-hidden="true"></i></span><span><strong>${negotiatingCount}</strong><small>em negociação</small></span></article>
+        <article class="crm2-opp-summary-metric is-green"><span class="crm2-opp-summary-metric-icon"><i data-lucide="check-circle-2" aria-hidden="true"></i></span><span><strong>${validatedCount}</strong><small>pedido validado</small></span></article>
+      </div>
+      <div class="crm2-opp-header-actions">
+        <nav class="crm2-opp-module-nav" aria-label="Módulos CRM 2.0">
+          <button class="secondary-btn" type="button" onclick="navegarParaCrm2Cadastro('pf')">Cadastro</button>
+          <button class="secondary-btn" type="button" onclick="navegarParaCrm2PedidosRota()">Pedidos</button>
+          <button class="secondary-btn" type="button" onclick="navegarParaCrm2ComunicacaoRota()">Configurações</button>
+        </nav>
+        ${crm2OportunidadesState.canCreate ? '<button class="save-btn crm2-opp-new-btn" type="button" onclick="crm2OportunidadesOpenCreate()"><i data-lucide="plus" aria-hidden="true"></i><span>Nova oportunidade</span></button>' : ''}
+      </div>
+      ${renderOppFilters()}
+    </div>
+    ${kanbanMessage}${content}
+  </section>`;
+}
+
+function focusKanbanSettingsOpp(selector = '#crm2-opp-kanban-settings-close') { window.requestAnimationFrame(() => document.querySelector(selector)?.focus({ preventScroll: true })); }
+function clearKanbanDragStateOpp() { crm2OportunidadesState.kanbanDraggedOpportunityId = ''; document.querySelectorAll('.crm2-opp-kanban-column.is-drag-over, .crm2-opp-card.is-dragging').forEach((element) => element.classList.remove('is-drag-over', 'is-dragging')); }
+Object.assign(window, {
+  crm2OportunidadesRender() { void loadProductCatalogOpp(); void loadResponsibleUsersOpp(); void loadPartnersOpp(); return decorateOppMarkup(renderOpp()); },
+  crm2OportunidadesMount() { void loadProductCatalogOpp(); void loadResponsibleUsersOpp(); void loadPartnersOpp(); const target = document.querySelector('[data-crm2-oportunidades="true"]'); if (target) target.outerHTML = decorateOppMarkup(renderOpp()); const mountedTarget = document.querySelector('[data-crm2-oportunidades="true"]') || document; fitProductTitlesOpp(mountedTarget); portalOppFilterModal(); window.hubInicializarTabelasRedimensionaveis?.(mountedTarget); },
+  openRelatedCrm2RecordOpp,
+  crm2OportunidadesCloseRelatedView: closeRelatedCrm2RecordOpp,
+  crm2OportunidadesToggleAttachmentTarget(source) { crm2OportunidadesState.collapsedAttachmentTargets[source] = !crm2OportunidadesState.collapsedAttachmentTargets[source]; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesSelectAttachments(input, source) { const files = Array.from(input?.files || []); if (!files.length) return; crm2OportunidadesState.attachmentSelectionDraft = [...crm2OportunidadesState.attachmentSelectionDraft, ...files.map(normalizeOpportunityAttachmentOpp).map((attachment) => ({ ...attachment, targetSource: source }))]; input.value = ''; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesCancelAttachmentDraft() { crm2OportunidadesState.attachmentSelectionDraft = []; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesUpdateAttachmentDraft(source, index, value) { const draft = crm2OportunidadesState.attachmentSelectionDraft.filter((item) => item.targetSource === source)[Number(index)]; if (draft) draft.nome = String(value || ''); },
+  crm2OportunidadesUpdateAttachmentDraftDate(source, index, value) { const draft = crm2OportunidadesState.attachmentSelectionDraft.filter((item) => item.targetSource === source)[Number(index)]; if (draft) draft.validade = String(value || ''); },
+  crm2OportunidadesToggleAttachmentSelection() { crm2OportunidadesState.attachmentSelectionMode = !crm2OportunidadesState.attachmentSelectionMode; if (!crm2OportunidadesState.attachmentSelectionMode) crm2OportunidadesState.selectedAttachmentKeys = []; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesToggleAttachmentSelected(source, index, checked) { const key = `${source}:${Number(index)}`; const selected = new Set(crm2OportunidadesState.selectedAttachmentKeys); if (checked) selected.add(key); else selected.delete(key); crm2OportunidadesState.selectedAttachmentKeys = [...selected]; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesSetAttachmentView(view) { crm2OportunidadesState.attachmentView = view === 'grid' ? 'grid' : 'list'; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesDownloadAllAttachments(source) { const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); (target?.record?.anexos || []).forEach((attachment, index) => window.crm2OportunidadesDownloadAttachment?.(source, index)); },
+  crm2OportunidadesDownloadSelectedAttachments(source) { crm2OportunidadesState.selectedAttachmentKeys.filter((key) => key.startsWith(`${source}:`)).forEach((key) => window.crm2OportunidadesDownloadAttachment?.(source, Number(key.split(':').pop()))); },
+  crm2OportunidadesDeleteSelectedAttachments(source) { const keys = crm2OportunidadesState.selectedAttachmentKeys.filter((key) => key.startsWith(`${source}:`)); if (!keys.length || !window.confirm('Remover os anexos selecionados do cadastro espelhado?')) return; const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); if (!target) return; [...new Set(keys.map((key) => Number(key.split(':').pop())))].sort((a, b) => b - a).forEach((index) => { if (target.type === 'opportunity') target.record.anexos.splice(index, 1); else { const mutate = target.type === 'pf' ? window.crm2PfMutateMockAttachments : window.crm2PjMutateMockAttachments; mutate?.(target.id, { action: 'remove', index }); } }); crm2OportunidadesState.selectedAttachmentKeys = crm2OportunidadesState.selectedAttachmentKeys.filter((key) => !keys.includes(key)); rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesConfirmAttachmentDraft() { const opp = orderGenerationOpportunityOpp(); const drafts = [...crm2OportunidadesState.attachmentSelectionDraft]; drafts.forEach((attachment) => { const target = opportunityAttachmentTargetOpp(attachment.targetSource, opp); if (!target) return; const stored = storedOpportunityAttachmentOpp(attachment); if (target.type === 'opportunity') { opp.anexos = [...(opp.anexos || []), stored]; return; } const mutate = target.type === 'pf' ? window.crm2PfMutateMockAttachments : window.crm2PjMutateMockAttachments; mutate?.(target.id, { action: 'add', attachment: stored }); }); crm2OportunidadesState.attachmentSelectionDraft = []; crm2OportunidadesState.attachmentDraft = []; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesEditAttachment(source, index) { const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); const attachment = target?.record?.anexos?.[Number(index)]; if (!target || !attachment) return; crm2OportunidadesState.attachmentInlineEditKey = `${source}:${index}`; crm2OportunidadesState.attachmentInlineDraft = { nome: String(attachment.nome || '').replace(/(\.[^.]+)$/, ''), extensao: String(attachment.nome || '').match(/(\.[^.]+)$/)?.[1] || '', validade: attachment.validade || '' }; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesUpdateInlineAttachment(field, value) { if (crm2OportunidadesState.attachmentInlineDraft && ['nome', 'validade'].includes(field)) crm2OportunidadesState.attachmentInlineDraft[field] = String(value || ''); },
+  crm2OportunidadesSaveInlineAttachment() { const [source, index] = String(crm2OportunidadesState.attachmentInlineEditKey || ':').split(':'); const draft = crm2OportunidadesState.attachmentInlineDraft; const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); if (!target || !draft) return; const name = `${draft.nome || 'Anexo'}${draft.extensao || ''}`; if (target.type === 'opportunity') target.record.anexos[Number(index)] = { ...target.record.anexos[Number(index)], nome: name, validade: draft.validade || '' }; else { const mutate = target.type === 'pf' ? window.crm2PfMutateMockAttachments : window.crm2PjMutateMockAttachments; mutate?.(target.id, { action: 'update', index: Number(index), changes: { nome: name, validade: draft.validade || '' } }); } crm2OportunidadesCancelInlineAttachment(); },
+  crm2OportunidadesCancelInlineAttachment() { crm2OportunidadesState.attachmentInlineEditKey = ''; crm2OportunidadesState.attachmentInlineDraft = null; rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesRemoveAttachment(source, index) { const opp = orderGenerationOpportunityOpp(); const target = opportunityAttachmentTargetOpp(source, opp); if (!target) return; const record = target.record; const attachmentIndex = Number(index); if (!Number.isInteger(attachmentIndex) || !record.anexos?.[attachmentIndex]) return; if (!window.confirm('Remover este anexo do cadastro espelhado?')) return; if (target.type === 'opportunity') record.anexos.splice(attachmentIndex, 1); else { const mutate = target.type === 'pf' ? window.crm2PfMutateMockAttachments : window.crm2PjMutateMockAttachments; mutate?.(target.id, { action: 'remove', index: attachmentIndex }); } rerenderOpportunityAttachmentsOpp(); },
+  crm2OportunidadesDownloadAttachment(source, index) { const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); const attachment = target?.record?.anexos?.[Number(index)]; if (!attachment) return; const blob = typeof Blob !== 'undefined' && attachment.arquivo instanceof Blob ? attachment.arquivo : new Blob([`Nome: ${attachment.nome}\nTipo: ${attachment.tipo}\nValidade: ${attachment.validade || 'Sem validade'}`], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = attachment.nome || 'anexo-oportunidade'; link.style.display = 'none'; document.body.appendChild(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); },
+  crm2OportunidadesViewAttachment(source, index) { const target = opportunityAttachmentTargetOpp(source, orderGenerationOpportunityOpp()); const attachment = target?.record?.anexos?.[Number(index)]; const previewSource = getHubAttachmentPreviewSource(attachment || {}); if (previewSource) window.open(previewSource, '_blank', 'noopener,noreferrer'); },
+  navegarParaCrm2OportunidadesRota() { permissionsOpp(); if (crm2OportunidadesState.canView) navigateOpp(); },
+  crm2OportunidadesSelectPf(id) { crm2OportunidadesState.draft.pfId = String(id || ''); const values = pfOppFormData(id); const form = document.getElementById('crm2-opp-form'); Object.entries(values).forEach(([name, value]) => { const field = form?.querySelector(`[name="${name}"]`); if (field) field.value = value; }); },
+  crm2OportunidadesFormatPfCpf(input) { if (!input) return; const digits = digitsOpp(input.value).slice(0, 11); input.value = digits.length <= 3 ? digits : digits.length <= 6 ? `${digits.slice(0, 3)}.${digits.slice(3)}` : digits.length <= 9 ? `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}` : `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`; },
+  crm2OportunidadesFormatName(input) { if (input) input.value = upperOpp(input.value); },
+  crm2OportunidadesFormatPhone(input) { if (input) input.value = maskPhoneOpp(input.value); },
+  crm2OportunidadesFormatDocument(input) { if (!input) return; input.value = maskDocumentOpp(input.value, document.querySelector('[name="tipo"]')?.value); },
+  crm2OportunidadesRefreshDerivedStatus() { const form = document.getElementById('crm2-opp-form'); if (!form) return; const status = opportunityStatusOpp({ etapa: form.querySelector('[name="etapa"]')?.value || '', motivoPerda: form.querySelector('[name="motivoPerda"]')?.value || '' }); const target = form.closest('.crm2-oportunidades-page')?.querySelector('.crm2-opp-derived-status-value'); if (target) target.innerHTML = stagePillOpp(status); },
+  crm2OportunidadesMatchPf(value) { const cpf = digitsOpp(value); const searched = cpf.length === 11; const pf = searched ? (window.crm2PfGetMockItems?.() || []).find((item) => digitsOpp(item.cpf) === cpf) : null; const form = document.getElementById('crm2-opp-form') || document.getElementById('crm2-opp-inline-form'); const manualValues = form ? Object.fromEntries(new FormData(form).entries()) : {}; crm2OportunidadesState.draft.pfId = pf?.id || ''; crm2OportunidadesState.draft.pfCpf = maskCpfOpp(cpf); if (!pf) { crm2OportunidadesState.draft = { ...crm2OportunidadesState.draft, pfNome: manualValues.pfNome || '', pfNascimento: manualValues.pfNascimento || '', pfCei: manualValues.pfCei || '', pfEmail: manualValues.pfEmail || '', pfTelefone: manualValues.pfTelefone || '', pfParceiro: manualValues.pfParceiro || '' }; } const values = pfOppFormData(pf?.id || '', crm2OportunidadesState.draft); const hidden = form?.querySelector('[name="pfId"]'); if (hidden) hidden.value = pf?.id || ''; if (pf) Object.entries(values).forEach(([name, fieldValue]) => { const targetName = name === 'pfOrigem' ? 'origem' : name; const field = form?.querySelector(`[name="${targetName}"]`); if (field) field.value = name === 'pfOrigem' ? (normalizarOrigemCrm2(fieldValue) || 'Outros') : name === 'pfNascimento' ? formatCrm2DateForInput(fieldValue) : fieldValue; }); const birthField = form?.querySelector('[name="pfNascimento"]'); const birthPickerButton = form?.querySelector('.crm2-birth-date-picker'); const birthPicker = form?.querySelector('.crm2-birth-date-mask-wrap .crm2-opp-next-action-native-date'); if (birthPicker && birthField) birthPicker.value = normalizeCrm2Date(birthField.value) && isValidCrm2Date(normalizeCrm2Date(birthField.value)) ? normalizeCrm2Date(birthField.value) : ''; const cpfField = form?.querySelector('[name="pfCpf"]'); if (cpfField) cpfField.value = maskCpfOpp(cpf); const originPill = form?.querySelector('.crm2-opp-origin-pill-value'); if (originPill) originPill.textContent = values.pfOrigem || '—'; form?.querySelectorAll('[data-pf-auto-field="true"]').forEach((field) => { const keepEditable = field.name === 'pfCei'; field.readOnly = Boolean(pf) && !keepEditable; field.setAttribute('aria-readonly', String(Boolean(pf) && !keepEditable)); }); if (birthPickerButton) birthPickerButton.disabled = Boolean(pf); if (birthPicker) birthPicker.disabled = Boolean(pf); const message = form?.querySelector('.crm2-opp-cpf-match-message'); if (message) { message.hidden = Boolean(pf) || !searched; } },
+  crm2OportunidadesSyncPfContact(field, value) { if (!['pfEmail', 'pfTelefone'].includes(field)) return; const pf = relatedPfOpp(crm2OportunidadesState.draft.pfId); if (pf) pf[field === 'pfEmail' ? 'email' : 'telefone'] = String(value || ''); },
+  crm2OportunidadesMaskBirthDate(input) { if (!input) return; input.value = maskCrm2Date(input.value); crm2OportunidadesState.draft.pfNascimento = input.value; const picker = input.closest('.crm2-birth-date-mask-wrap')?.querySelector('.crm2-opp-next-action-native-date'); if (picker) picker.value = isValidCrm2Date(normalizeCrm2Date(input.value)) ? normalizeCrm2Date(input.value) : ''; },
+  crm2OportunidadesOpenBirthDatePicker(button) { const picker = button?.closest('.crm2-birth-date-mask-wrap')?.querySelector('.crm2-opp-next-action-native-date'); if (!picker) return; if (typeof picker.showPicker === 'function') picker.showPicker(); else picker.click(); },
+  crm2OportunidadesSetBirthDateFromPicker(picker) { const input = picker?.closest('.crm2-birth-date-mask-wrap')?.querySelector('[name="pfNascimento"]'); if (!input) return; input.value = picker.value ? formatCrm2DateForInput(picker.value) : ''; crm2OportunidadesState.draft.pfNascimento = input.value; },
+  crm2OportunidadesSyncItemPrice(field) { const row = field?.closest('tr'); const productInput = row?.querySelector('[name^="itemProduct-"]'); const unitPrice = productPriceOpp(productInput?.value || ''); const value = row?.querySelector('[data-item-price]'); if (value) value.textContent = moneyOpp(unitPrice); const form = field?.closest('.crm2-opp-items-form'); const estimate = form?.querySelector('[data-opportunity-estimate]'); if (estimate) { const total = [...form.querySelectorAll('tbody tr')].reduce((sum, itemRow) => { const product = itemRow.querySelector('[name^="itemProduct-"]')?.value || ''; const quantity = Math.max(1, Number(itemRow.dataset.itemQuantity || 1)); return sum + quantity * moneyValueOpp(productPriceOpp(product)); }, 0); estimate.textContent = `${moneyOpp(total)} estimado`; } },
+  crm2OportunidadesPartnerInput(input) { const hidden = input?.form?.elements?.namedItem('parceiroId'); if (hidden) hidden.value = ''; crm2OportunidadesState.draft.parceiroId = ''; crm2OportunidadesState.draft.parceiroNome = String(input?.value || ''); crm2OportunidadesState.partnerSelectionRequired = Boolean(String(input?.value || '').trim()); crm2OportunidadesState.errors.parceiroId = ''; window.crm2OportunidadesRenderPartnerSuggestions(input); },
+  crm2OportunidadesRenderPartnerSuggestions(input) {
+    const target = document.querySelector(`[data-partner-suggestions][data-partner-key="${input?.dataset?.partnerKey || ''}"]`);
+    if (!target) return;
+    const query = normOpp(input.value);
+    if (query.length < 2) { target.hidden = true; target.innerHTML = ''; restoreSuggestionsOpp(input, target); return; }
+    const terms = query.split(' ').filter(Boolean);
+    const matches = crm2OportunidadesState.partners.filter((partner) => {
+      const searchable = normOpp([partnerLabelOpp(partner), partner.codigo_revendedor, partner.codigo, partner.nome_empresa, partner.empresa, partner.cnpj, partner.email, partner.email_comercial].filter(Boolean).join(' '));
+      return terms.every((term) => searchable.includes(term));
+    }).slice(0, 8);
+    target.innerHTML = matches.length ? matches.map((partner) => {
+      const label = partnerLabelOpp(partner) || 'Parceiro sem nome';
+      const details = [partner.codigo_revendedor || partner.codigo, partner.nome_empresa || partner.empresa, partner.cnpj].filter(Boolean).join(' · ');
+      return `<button type="button" class="crm2-opp-product-suggestion" data-partner-id="${attrOpp(partner.id)}" onclick="crm2OportunidadesSelectPartnerSuggestion(this)"><strong>${escapeOpp(label)}</strong>${details ? `<small>${escapeOpp(details)}</small>` : ''}</button>`;
+    }).join('') : `<div class="crm2-opp-partner-no-results">${crm2OportunidadesState.partnersLoading ? 'Carregando parceiros...' : 'Nenhum parceiro encontrado.'}</div>`;
+    target.hidden = false;
+    if (target.parentElement !== document.body) document.body.appendChild(target);
+    target.dataset.suggestionPortal = 'true';
+    positionSuggestionsOpp(input, target);
+  },
+  crm2OportunidadesHidePartnerSuggestions(input) { const target = document.querySelector(`[data-partner-suggestions][data-partner-key="${input?.dataset?.partnerKey || ''}"]`); if (target) { target.hidden = true; restoreSuggestionsOpp(input, target); } },
+  crm2OportunidadesSelectPartnerSuggestion(button) {
+    const partner = partnerByIdOpp(button?.dataset?.partnerId);
+    const key = button?.closest('[data-partner-suggestions]')?.dataset?.partnerKey;
+    const input = key ? document.querySelector(`[data-partner-key="${key}"]`) : null;
+    const hidden = input?.form?.elements?.namedItem('parceiroId');
+    if (!partner || !input || !hidden) return;
+    const label = partnerLabelOpp(partner);
+    input.value = label;
+    hidden.value = String(partner.id);
+    crm2OportunidadesState.draft.parceiroId = String(partner.id);
+    crm2OportunidadesState.draft.parceiroNome = label;
+    crm2OportunidadesState.partnerSelectionRequired = false;
+    crm2OportunidadesState.errors.parceiroId = '';
+    window.crm2OportunidadesHidePartnerSuggestions(input);
+  },
+  crm2OportunidadesRenderProductSuggestions(input) { const target = productSuggestionsTargetOpp(input); if (!target) return; const matches = searchCrm2Products(crm2OportunidadesState.produtos, input.value); target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-product-suggestion" data-product-value="${attrOpp(item.value)}" onclick="crm2OportunidadesSelectProductSuggestion(this)"><strong>${escapeOpp(item.label)}</strong>${item.sku ? `<small>${escapeOpp(item.sku)}</small>` : ''}</button>`).join(''); target.hidden = !matches.length; if (!matches.length) { restoreSuggestionsOpp(input, target); return; } if (target.parentElement !== document.body) document.body.appendChild(target); target.dataset.suggestionPortal = 'true'; positionSuggestionsOpp(input, target); fitProductSuggestionTextOpp(target); positionSuggestionsOpp(input, target); },
+  crm2OportunidadesHideProductSuggestions(input) { const target = productSuggestionsTargetOpp(input); if (target) { target.hidden = true; restoreSuggestionsOpp(input, target); } },
+  crm2OportunidadesSelectProductSuggestion(button) { const target = button?.closest('[data-product-suggestions]'); const input = target ? document.querySelector(`[data-product-key="${target.dataset.productKey}"]`) : null; const row = input?.closest('tr'); if (!row || !input) return; input.value = button.dataset.productValue || ''; window.crm2OportunidadesSyncItemPrice?.(input); window.crm2OportunidadesHideProductSuggestions?.(input); },
+  crm2OportunidadesSyncItemCnpj(input) { const row = input?.closest('tr'); if (!row) return; const raw = String(input.value || ''); const hasText = /[A-Za-zÀ-ÿ]/.test(raw); if (hasText) { input.value = raw.slice(0, 80); const lookup = row.querySelector('.crm2-opp-cnpj-search'); if (lookup) lookup.disabled = true; const cnpjPill = row.querySelector('[data-pj-cnpj]'); if (cnpjPill) cnpjPill.hidden = true; window.crm2OportunidadesRenderCnpjSuggestions?.(input); return; } const normalized = normalizarCnpjLocal(raw).slice(0, 14); input.value = maskCnpjOpp(normalized); const lookup = row.querySelector('.crm2-opp-cnpj-search'); if (lookup) lookup.disabled = normalized.length !== 14; const pj = findPjByCnpjOpp(normalized); updateItemPjRowOpp(row, pj); window.crm2OportunidadesRenderCnpjSuggestions?.(input); },
+  crm2OportunidadesRenderCnpjSuggestions(input) { const target = document.querySelector(`[data-cnpj-suggestions][data-suggestion-key="${input?.dataset?.cnpjKey}"]`); if (!target) return; const query = String(input.value || '').trim(); const queryText = normOpp(query); const queryDigits = digitsOpp(query); if (queryText.length < 2 && queryDigits.length < 2) { target.hidden = true; target.innerHTML = ''; restoreSuggestionsOpp(input, target); return; } const matches = pjOptionsOpp().filter((item) => { const reason = normOpp(item.label); const cnpj = digitsOpp(item.cnpj); return (queryText && reason.includes(queryText)) || (queryDigits.length >= 2 && cnpj.includes(queryDigits)); }).slice(0, 6); target.innerHTML = matches.map((item) => `<button type="button" class="crm2-opp-cnpj-suggestion" data-pj-id="${attrOpp(item.value)}" onclick="crm2OportunidadesSelectCnpjSuggestion(this)"><strong>${escapeOpp(item.label)}</strong><small>${escapeOpp(maskCnpjOpp(item.cnpj))}</small></button>`).join(''); target.hidden = !matches.length; if (!matches.length) { restoreSuggestionsOpp(input, target); return; } if (target.parentElement !== document.body) document.body.appendChild(target); target.dataset.suggestionPortal = 'true'; positionSuggestionsOpp(input, target); },
+  crm2OportunidadesHideCnpjSuggestions(input) { const target = document.querySelector(`[data-cnpj-suggestions][data-suggestion-key="${input?.dataset?.cnpjKey}"]`); if (target) { target.hidden = true; restoreSuggestionsOpp(input, target); } },
+  crm2OportunidadesSelectCnpjSuggestion(button) { const target = button?.closest('[data-cnpj-suggestions]'); const input = target ? document.querySelector(`[data-cnpj-key="${target.dataset.suggestionKey}"]`) : null; const pj = relatedPjOpp(button?.dataset?.pjId); const row = input?.closest('tr'); if (!pj || !row) return; input.value = maskCnpjOpp(pj.cnpj); updateItemPjRowOpp(row, pj); window.crm2OportunidadesHideCnpjSuggestions?.(input); },
+  crm2OportunidadesLookupCnpj(button) { const row = button?.closest('tr'); const input = row?.querySelector('[name^="itemCnpj-"]'); if (!row || !input) return; const index = Number(String(input.name).split('-').pop()); const item = crm2OportunidadesState.draft.itens?.[index] || {}; const pj = findPjByCnpjOpp(input.value) || relatedPjOpp(item.pjId); const temporary = temporaryForItemOpp(item) || item.pjTemporario; const existing = pjCnpjDataOpp(pj, temporary); abrirConsultaCnpj({ value: input.value || existing.cnpj, existing: existing.cnpj ? existing : null, onConfirm: (data) => { const matchedPj = findPjByCnpjOpp(data.cnpj); const nextItem = { ...item, cnpj: normalizarCnpjLocal(data.cnpj), pjId: matchedPj?.id || item.pjId || '', pjTemporario: { ...data, cnpj: normalizarCnpjLocal(data.cnpj) }, pjTemporarioReconsultar: Boolean(temporary) }; crm2OportunidadesState.draft.itens[index] = nextItem; rerenderOpp(); } }); },
+  crm2OportunidadesOpenCreate() { permissionsOpp(); if (!crm2OportunidadesState.canCreate) return; crm2OportunidadesState.partnerSelectionRequired = false; crm2OportunidadesState.formMode = 'opportunity'; crm2OportunidadesState.detailId = ''; crm2OportunidadesState.errors = {}; crm2OportunidadesState.saveError = ''; crm2OportunidadesState.draft = formDefaultsOpp(); navigateOpp('oportunidade/novo'); },
+  crm2OportunidadesOpenDetail(id) { if (!opportunityById(id)) return; crm2OportunidadesState.inlineEditingId = ''; crm2OportunidadesState.detailId = id; crm2OportunidadesState.detailTab = 'timeline'; navigateOpp(`oportunidade/${id}`); },
+  crm2OportunidadesOpenEdit(id) { if (!crm2OportunidadesState.canEdit || !opportunityById(id)) return; crm2OportunidadesState.partnerSelectionRequired = false; crm2OportunidadesState.formMode = 'opportunity'; crm2OportunidadesState.detailId = id; crm2OportunidadesState.inlineEditingId = id; crm2OportunidadesState.draft = formDefaultsOpp(opportunityById(id)); crm2OportunidadesState.errors = {}; rerenderOpp(); },
+  crm2OportunidadesCancelEdit() { closeOppFloatingMenus(); closeOppEditActionPortal(); crm2OportunidadesState.inlineEditingId = ''; crm2OportunidadesState.formMode = ''; crm2OportunidadesState.draft = {}; crm2OportunidadesState.errors = {}; rerenderOpp(); },
+  crm2OportunidadesBack() { closeOppFloatingMenus(); closeOppEditActionPortal(); resetOppForm(); navigateOpp(); },
+  crm2OportunidadesSetView(view) { crm2OportunidadesState.viewMode = view === 'kanban' ? 'kanban' : 'table'; rerenderOpp(); },
+  crm2OportunidadesOpenTableColumnSettings() { crm2OportunidadesState.tableColumnSettingsDraft = [...crm2OportunidadesState.tableColumnFields]; crm2OportunidadesState.tableColumnSettingsOpen = true; rerenderOpp(); window.requestAnimationFrame(() => document.getElementById('crm2-opp-table-settings-close')?.focus()); },
+  crm2OportunidadesCloseTableColumnSettings(event) { if (event && event.target !== event.currentTarget) return; crm2OportunidadesState.tableColumnSettingsOpen = false; crm2OportunidadesState.tableColumnSettingsDraft = []; rerenderOpp(); window.requestAnimationFrame(() => document.querySelector('.crm2-opp-table-settings-trigger')?.focus()); },
+  crm2OportunidadesTableColumnDragStart(event, field) { if (!TABLE_COLUMN_OPTIONS.some((column) => column.key === field)) { event?.preventDefault(); return; } crm2OportunidadesState.tableColumnSettingsDraggedField = field; event?.dataTransfer?.setData('text/plain', field); if (event?.dataTransfer) event.dataTransfer.effectAllowed = 'move'; event?.currentTarget?.classList.add('is-dragging'); },
+  crm2OportunidadesTableColumnDragOver(event) { if (!crm2OportunidadesState.tableColumnSettingsDraggedField) return; event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; event.currentTarget.classList.add('is-drop-target'); },
+  crm2OportunidadesTableColumnDragLeave(event) { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove('is-drop-target'); },
+  crm2OportunidadesTableColumnDrop(event, targetField) { event.preventDefault(); const sourceField = event.dataTransfer?.getData('text/plain') || crm2OportunidadesState.tableColumnSettingsDraggedField; const current = [...crm2OportunidadesState.tableColumnSettingsDraft]; const sourceIndex = current.indexOf(sourceField); const targetIndex = current.indexOf(targetField); crm2OportunidadesState.tableColumnSettingsDraggedField = ''; document.querySelectorAll('.crm2-opp-table-settings-row.is-dragging, .crm2-opp-table-settings-row.is-drop-target').forEach((element) => element.classList.remove('is-dragging', 'is-drop-target')); if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return; current.splice(sourceIndex, 1); current.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, sourceField); crm2OportunidadesState.tableColumnSettingsDraft = current; rerenderOpp(); },
+  crm2OportunidadesTableColumnDragEnd() { crm2OportunidadesState.tableColumnSettingsDraggedField = ''; document.querySelectorAll('.crm2-opp-table-settings-row.is-dragging, .crm2-opp-table-settings-row.is-drop-target').forEach((element) => element.classList.remove('is-dragging', 'is-drop-target')); },
+  crm2OportunidadesApplyTableColumnSettings() { const selected = crm2OportunidadesState.tableColumnSettingsDraft; if (selected.length !== TABLE_COLUMN_OPTIONS.length) return; crm2OportunidadesState.tableColumnFields = [...selected]; crm2OportunidadesState.tableColumnSettingsOpen = false; crm2OportunidadesState.tableColumnSettingsDraft = []; rerenderOpp(); window.requestAnimationFrame(() => document.querySelector('.crm2-opp-table-settings-trigger')?.focus()); },
+  crm2OportunidadesOpenKanbanCardSettings() { crm2OportunidadesState.kanbanCardSettingsDraft = [...crm2OportunidadesState.kanbanCardFields]; crm2OportunidadesState.kanbanSettingsMessage = ''; crm2OportunidadesState.kanbanCardSettingsOpen = true; rerenderOpp(); focusKanbanSettingsOpp(); },
+  crm2OportunidadesCloseKanbanCardSettings(event) { if (event && event.target !== event.currentTarget) return; crm2OportunidadesState.kanbanCardSettingsOpen = false; crm2OportunidadesState.kanbanCardSettingsDraft = []; crm2OportunidadesState.kanbanSettingsMessage = ''; rerenderOpp(); focusKanbanSettingsOpp('.crm2-opp-kanban-settings-trigger'); },
+  crm2OportunidadesSetKanbanCardField(field, checked, input) { if (!KANBAN_CARD_FIELD_OPTIONS.some((option) => option.key === field)) return; const current = [...crm2OportunidadesState.kanbanCardSettingsDraft]; if (checked && !current.includes(field)) current.push(field); else if (!checked && current.length > 1) current.splice(current.indexOf(field), 1); else { if (input) input.checked = true; return; } crm2OportunidadesState.kanbanCardSettingsDraft = current; rerenderOpp(); },
+  crm2OportunidadesMoveKanbanCardField(field, direction) { const current = [...crm2OportunidadesState.kanbanCardSettingsDraft]; const index = current.indexOf(field); const nextIndex = index + Number(direction || 0); if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return; [current[index], current[nextIndex]] = [current[nextIndex], current[index]]; crm2OportunidadesState.kanbanCardSettingsDraft = current; rerenderOpp(); },
+  crm2OportunidadesKanbanSettingsDragStart(event, field) { if (!KANBAN_CARD_FIELD_OPTIONS.some((option) => option.key === field)) { event?.preventDefault(); return; } crm2OportunidadesState.kanbanSettingsDraggedField = field; event?.dataTransfer?.setData('text/plain', field); if (event?.dataTransfer) event.dataTransfer.effectAllowed = 'move'; event?.currentTarget?.classList.add('is-dragging'); },
+  crm2OportunidadesKanbanSettingsDragOver(event) { if (!crm2OportunidadesState.kanbanSettingsDraggedField) return; event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; event.currentTarget.classList.add(event.currentTarget.classList.contains('crm2-opp-kanban-settings-zone') ? 'is-drag-over' : 'is-drop-target'); },
+  crm2OportunidadesKanbanSettingsDragLeave(event) { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove('is-drop-target', 'is-drag-over'); },
+  crm2OportunidadesKanbanSettingsDrop(event, targetField) { event.preventDefault(); event.stopPropagation(); const sourceField = event.dataTransfer?.getData('text/plain') || crm2OportunidadesState.kanbanSettingsDraggedField; const current = [...crm2OportunidadesState.kanbanCardSettingsDraft]; const sourceIndex = current.indexOf(sourceField); const targetIndex = current.indexOf(targetField); document.querySelectorAll('.crm2-opp-kanban-settings-option-row.is-dragging, .crm2-opp-kanban-settings-option-row.is-drop-target, .crm2-opp-kanban-settings-zone.is-drag-over').forEach((element) => element.classList.remove('is-dragging', 'is-drop-target', 'is-drag-over')); crm2OportunidadesState.kanbanSettingsDraggedField = ''; if (!KANBAN_CARD_FIELD_OPTIONS.some((option) => option.key === sourceField) || targetIndex < 0) return; if (sourceIndex < 0) current.splice(targetIndex, 0, sourceField); else { if (sourceIndex === targetIndex) return; current.splice(sourceIndex, 1); current.splice(sourceIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, sourceField); } crm2OportunidadesState.kanbanCardSettingsDraft = current; rerenderOpp(); },
+  crm2OportunidadesKanbanSettingsDropZone(event, zone) { event.preventDefault(); const sourceField = event.dataTransfer?.getData('text/plain') || crm2OportunidadesState.kanbanSettingsDraggedField; const current = [...crm2OportunidadesState.kanbanCardSettingsDraft]; const isActive = current.includes(sourceField); document.querySelectorAll('.crm2-opp-kanban-settings-option-row.is-dragging, .crm2-opp-kanban-settings-option-row.is-drop-target, .crm2-opp-kanban-settings-zone.is-drag-over').forEach((element) => element.classList.remove('is-dragging', 'is-drop-target', 'is-drag-over')); crm2OportunidadesState.kanbanSettingsDraggedField = ''; if (!KANBAN_CARD_FIELD_OPTIONS.some((option) => option.key === sourceField)) return; if (zone === 'active' && !isActive) current.push(sourceField); else if (zone === 'inactive' && isActive && current.length > 1) current.splice(current.indexOf(sourceField), 1); else return; crm2OportunidadesState.kanbanCardSettingsDraft = current; rerenderOpp(); },
+  crm2OportunidadesKanbanSettingsDragEnd() { crm2OportunidadesState.kanbanSettingsDraggedField = ''; document.querySelectorAll('.crm2-opp-kanban-settings-option-row.is-dragging, .crm2-opp-kanban-settings-option-row.is-drop-target').forEach((element) => element.classList.remove('is-dragging', 'is-drop-target')); },
+  crm2OportunidadesApplyKanbanCardSettings() { const selected = crm2OportunidadesState.kanbanCardSettingsDraft; if (!selected.length) return; crm2OportunidadesState.kanbanCardFields = [...selected]; crm2OportunidadesState.kanbanCardSettingsOpen = false; crm2OportunidadesState.kanbanCardSettingsDraft = []; crm2OportunidadesState.kanbanSettingsMessage = 'Visualização atualizada'; rerenderOpp(); focusKanbanSettingsOpp('.crm2-opp-kanban-settings-trigger'); window.setTimeout(() => { if (crm2OportunidadesState.kanbanSettingsMessage === 'Visualização atualizada') { crm2OportunidadesState.kanbanSettingsMessage = ''; rerenderOpp(); } }, 3000); },
+  crm2OportunidadesToggleKanbanColumn(stage) { if (!OPPORTUNITY_STAGES.includes(stage)) return; const collapsed = { ...crm2OportunidadesState.kanbanCollapsedStages }; if (collapsed[stage]) delete collapsed[stage]; else collapsed[stage] = true; crm2OportunidadesState.kanbanCollapsedStages = collapsed; rerenderOpp(); },
+  crm2OportunidadesKanbanDragStart(event, id) { permissionsOpp(); if (!crm2OportunidadesState.canEdit || !opportunityById(id)) { event?.preventDefault(); return; } crm2OportunidadesState.kanbanDraggedOpportunityId = id; event?.dataTransfer?.setData('text/plain', id); if (event?.dataTransfer) event.dataTransfer.effectAllowed = 'move'; event?.currentTarget?.classList.add('is-dragging'); },
+  crm2OportunidadesKanbanDragOver(event) { permissionsOpp(); if (!crm2OportunidadesState.canEdit || !crm2OportunidadesState.kanbanDraggedOpportunityId) return; event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; event.currentTarget.classList.add('is-drag-over'); },
+  crm2OportunidadesKanbanDragLeave(event) { if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.classList.remove('is-drag-over'); },
+  crm2OportunidadesKanbanDrop(event, stage) { event.preventDefault(); const id = event.dataTransfer?.getData('text/plain') || crm2OportunidadesState.kanbanDraggedOpportunityId; clearKanbanDragStateOpp(); if (!id || !OPPORTUNITY_STAGES.includes(stage)) return; window.crm2OportunidadesChangeStage?.(id, stage); },
+  crm2OportunidadesKanbanDragEnd() { clearKanbanDragStateOpp(); },
+  crm2OportunidadesToggleFilterModal() { crm2OportunidadesState.filterModalOpen = !crm2OportunidadesState.filterModalOpen; crm2OportunidadesState.filterDraft = crm2OportunidadesState.filterModalOpen ? currentOppFilterValues() : {}; rerenderOpp(); if (crm2OportunidadesState.filterModalOpen) window.requestAnimationFrame(() => document.getElementById('crm2-opp-filter-modal-close')?.focus()); },
+  crm2OportunidadesCloseFilterModal(event) { if (event && event.target !== event.currentTarget) return; crm2OportunidadesState.filterModalOpen = false; crm2OportunidadesState.filterDraft = {}; rerenderOpp(); },
+  crm2OportunidadesToggleFilterDropdown(trigger, event) { const menu = document.getElementById(trigger?.dataset?.dropdownMenuId || trigger?.getAttribute('aria-controls') || ''); if (trigger?.dataset?.multiSelect === 'true' && menu && !menu.hidden) { event?.stopPropagation(); return; } menu?.querySelectorAll('[role="option"]').forEach((option) => { option.hidden = false; }); window.crm2PfToggleDropdown?.(trigger, event); },
+  crm2OportunidadesFilterDropdown(input, event) { if (input?.name !== 'product') { window.crm2PfFilterDropdown?.(input, event); return; } event?.stopPropagation(); const menu = document.getElementById(input.dataset.dropdownMenuId || ''); if (!menu) return; const query = normOpp(input.value); const empty = menu.querySelector('.crm2-opp-filter-product-empty'); if (!query) { menu.querySelectorAll('[role="option"]').forEach((option) => { option.hidden = false; }); if (empty) empty.hidden = true; menu.hidden = true; input.setAttribute('aria-expanded', 'false'); const combo = input.closest('.crm2-pf-select'); if (combo && menu.parentElement === document.body) combo.appendChild(menu); return; } input.dataset.selectedValue = ''; let visibleCount = 0; menu.querySelectorAll('[role="option"]').forEach((option) => { const matches = normOpp(option.dataset.searchText || option.dataset.label || '').includes(query); option.hidden = !matches; if (matches) visibleCount += 1; }); if (empty) empty.hidden = visibleCount > 0; if (menu.hidden) { if (menu.parentElement !== document.body) document.body.appendChild(menu); menu.hidden = false; input.setAttribute('aria-expanded', 'true'); } positionOpportunityProductFilterDropdownOpp(input, menu); },
+  crm2OportunidadesFilterDropdownKeydown(event, element) { const option = element?.getAttribute?.('role') === 'option' ? element : null; const trigger = document.getElementById(option?.closest('.hub-filter-dropdown-menu')?.dataset?.dropdownInputId || element?.id || ''); if (!option && trigger?.name === 'product' && document.getElementById(trigger.dataset.dropdownMenuId || '')?.hidden) return; if (option && trigger?.dataset?.multiSelect === 'true' && ['Enter', ' '].includes(event?.key)) { event.preventDefault(); event.stopPropagation(); crm2OportunidadesSelectFilterDropdown(option, event); return; } window.crm2PfDropdownKeydown?.(event, element); },
+  crm2OportunidadesOpenFilterNativeDate(button) { const nativeDate = button?.closest('.crm2-opp-filter-date-control')?.querySelector('.crm2-opp-filter-native-date'); if (!nativeDate) return; if (typeof nativeDate.showPicker === 'function') nativeDate.showPicker(); else nativeDate.click(); },
+  crm2OportunidadesUpdateFilterDate(input) { if (!input) return; crm2OportunidadesSetFilterDraft(input.name, dateTextToIsoOpp(input.value)); },
+  crm2OportunidadesSetFilterDateNative(input) { const control = input?.closest('.crm2-opp-filter-date-control'); const visible = control?.querySelector('.crm2-opp-filter-date-text'); if (!visible) return; visible.value = maskDateTextOpp(input.value); crm2OportunidadesSetFilterDraft(visible.name, input.value); },
+  crm2OportunidadesSelectFilterDropdown(option, event) { const menu = option?.closest('.hub-filter-dropdown-menu'); const trigger = document.getElementById(menu?.dataset?.dropdownInputId || ''); if (!menu || !trigger) return; const field = trigger.dataset.filterField || trigger.name; const value = option.dataset.value || ''; const multi = trigger.dataset.multiSelect === 'true'; if (multi) event?.stopPropagation(); const current = filterValuesOpp((crm2OportunidadesState.filterDraft || currentOppFilterValues())[field]); const nextValues = !multi ? [value].filter(Boolean) : value ? (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]) : []; const nextValue = multi ? nextValues : value; const labels = [...menu.querySelectorAll('[role="option"]')].filter((item) => nextValues.includes(item.dataset.value || '')).map((item) => item.dataset.label || ''); trigger.value = multi ? (labels.length ? labels.join(', ') : option.dataset.label || '') : option.dataset.label || ''; trigger.dataset.selectedValue = multi ? nextValues.join('|') : value; trigger.dataset.selectedValues = nextValues.join('|'); menu.querySelectorAll('[role="option"]').forEach((item) => { const selected = multi ? nextValues.includes(item.dataset.value || '') || (!nextValues.length && !(item.dataset.value || '')) : item === option; item.hidden = false; item.classList.toggle('is-selected', selected); item.setAttribute('aria-selected', String(selected)); }); menu.hidden = !multi; trigger.setAttribute('aria-expanded', String(multi)); const combo = trigger.closest('.crm2-pf-select'); if (!multi && combo && menu.parentElement === document.body) combo.appendChild(menu); crm2OportunidadesSetFilterDraft(field, nextValue); if (multi && field === 'product') positionOpportunityProductFilterDropdownOpp(trigger, menu); if (!multi) trigger.focus(); },
+  crm2OportunidadesSetFilterDraft(field, value) { if (!['stage', 'status', 'responsible', 'source', 'lossReason', 'product', 'nextContact', 'nextContactFrom', 'nextContactTo', 'dateFrom', 'dateTo', 'updatedFrom', 'updatedTo'].includes(field)) return; const multi = ['source', 'product'].includes(field); const draft = { ...currentOppFilterValues(), ...(crm2OportunidadesState.filterDraft || {}), [field]: multi ? filterValuesOpp(value) : String(value || '') }; if (field === 'nextContact' && value !== 'custom') { draft.nextContactFrom = ''; draft.nextContactTo = ''; } crm2OportunidadesState.filterDraft = draft; if (field === 'nextContact') rerenderOpp(); },
+  crm2OportunidadesClearFilterDraft() { crm2OportunidadesState.filterDraft = { stage: '', status: '', responsible: '', source: [], lossReason: '', product: [], nextContact: '', nextContactFrom: '', nextContactTo: '', dateFrom: '', dateTo: '', updatedFrom: '', updatedTo: '' }; rerenderOpp(); },
+  crm2OportunidadesApplyModalFilters(event) { event?.preventDefault(); const values = crm2OportunidadesState.filterDraft || currentOppFilterValues(); Object.assign(crm2OportunidadesState, { stageFilter: String(values.stage || ''), statusFilter: String(values.status || ''), responsibleFilter: String(values.responsible || ''), sourceFilter: filterValuesOpp(values.source), lossReasonFilter: String(values.lossReason || ''), productFilter: filterValuesOpp(values.product), nextContactFilter: String(values.nextContact || ''), nextContactFrom: String(values.nextContactFrom || ''), nextContactTo: String(values.nextContactTo || ''), dateFrom: String(values.dateFrom || ''), dateTo: String(values.dateTo || ''), updatedFrom: String(values.updatedFrom || ''), updatedTo: String(values.updatedTo || ''), filterModalOpen: false, filterDraft: {}, page: 1 }); rerenderOpp(); },
+  crm2OportunidadesSetSearch(value, input) { window.hubAtualizarBuscaAoDigitar(input, (search) => { crm2OportunidadesState.search = search; crm2OportunidadesState.searchExpanded = true; crm2OportunidadesState.page = 1; }, rerenderOpp, () => document.querySelector('.crm2-opp-search-control input[type="search"]')); },
+  crm2OportunidadesToggleSearch(button) { const control = button?.closest('.crm2-opp-search-control'); const input = control?.querySelector('input[type="search"]'); if (!control || !input) return; const expanded = !control.classList.contains('is-expanded'); crm2OportunidadesState.searchExpanded = expanded; control.classList.toggle('is-expanded', expanded); input.hidden = !expanded; button.setAttribute('aria-expanded', String(expanded)); if (expanded) input.focus({ preventScroll: true }); },
+  crm2OportunidadesHandleSearchBlur(event) { const input = event?.currentTarget; const control = input?.closest('.crm2-opp-search-control'); if (!control || control.contains(event.relatedTarget)) return; window.setTimeout(() => { if (control.contains(document.activeElement)) return; crm2OportunidadesState.searchExpanded = false; control.classList.remove('is-expanded'); input.hidden = true; control.querySelector('button')?.setAttribute('aria-expanded', 'false'); }, 0); },
+  crm2OportunidadesSetPage(page) { crm2OportunidadesState.page = Math.max(1, Number(page) || 1); rerenderOpp(); },
+  crm2OportunidadesSortBy(key) { const validKeys = ['name', 'nextAction', 'stage', 'document', 'order', 'partner']; if (!validKeys.includes(key)) return; const levels = [...(crm2OportunidadesState.sortLevels || [])]; const existingIndex = levels.findIndex((level) => level.key === key); if (existingIndex >= 0) levels[existingIndex] = { ...levels[existingIndex], direction: levels[existingIndex].direction === 'asc' ? 'desc' : 'asc' }; else if (levels.length < 3) levels.push({ key, direction: 'asc' }); else { crm2OportunidadesState.sortLevels = []; crm2OportunidadesState.page = 1; rerenderOpp(); return; } crm2OportunidadesState.sortLevels = levels; crm2OportunidadesState.page = 1; rerenderOpp(); },
+  crm2OportunidadesSetToolbarSort(key) { const validKeys = ['name', 'nextAction', 'stage', 'document', 'order', 'partner']; if (key && !validKeys.includes(key)) return; const current = crm2OportunidadesState.sortLevels?.find((level) => level.key === key); crm2OportunidadesState.sortLevels = key ? [{ key, direction: current?.direction || 'asc' }] : []; crm2OportunidadesState.page = 1; rerenderOpp(); },
+  crm2OportunidadesTrackNextActionPart(id, part, value, input) { if (!['date', 'time'].includes(part)) return; const opp = opportunityById(id); if (!opp) return; const current = Object.prototype.hasOwnProperty.call(opp, 'proximaAcaoEm') ? opp.proximaAcaoEm : opp.previsaoFechamento || ''; const dateValue = part === 'date' ? String(value || '') : dateInputValueOpp(current); const timeValue = part === 'time' ? String(value || '') : timeInputValueOpp(current); window.crm2OportunidadesSetNextAction?.(id, composeNextContactOpp(dateValue, timeValue)); },
+  crm2OportunidadesSyncHeaderNextAction(input, part) { if (!input || !['date', 'time'].includes(part)) return; if (part === 'date') input.value = maskDateTextOpp(input.value).slice(0, 5); if (part === 'date') crm2OportunidadesState.draft.proximoContatoData = dateTextToIsoOpp(input.value); if (part === 'time') crm2OportunidadesState.draft.proximoContatoHora = input.value; },
+  crm2OportunidadesSetHeaderNextActionDate(input) { const visible = input?.closest('.crm2-opp-header-next-action-date-control')?.querySelector('[name="proximoContatoData"]'); if (!visible) return; visible.value = dateDisplayValueOpp(input.value); window.crm2OportunidadesSyncHeaderNextAction?.(visible, 'date'); },
+  crm2OportunidadesHandleNextActionBlur(id, event) { const editor = event?.currentTarget; if (!editor || editor.contains(event.relatedTarget)) return; window.setTimeout(() => { if (editor.contains(document.activeElement)) return; window.crm2OportunidadesCommitNextAction?.(id); }, 0); },
+  crm2OportunidadesOpenNativeDate(button) { const nativeDate = button?.closest('.crm2-opp-next-action-date-row')?.querySelector('.crm2-opp-next-action-native-date'); if (!nativeDate) return; if (typeof nativeDate.showPicker === 'function') nativeDate.showPicker(); else nativeDate.click(); },
+  crm2OportunidadesCommitNextAction(id) { const opp = opportunityById(id); const draft = crm2OportunidadesState.nextActionDrafts[id]; if (!opp || !draft) return; if (draft.dateText && !draft.dateValue) { delete crm2OportunidadesState.nextActionDrafts[id]; rerenderOpp(); return; } const nextAction = draft.dateValue ? `${draft.dateValue}${draft.timeValue ? `T${draft.timeValue}` : ''}` : ''; delete crm2OportunidadesState.nextActionDrafts[id]; window.crm2OportunidadesSetNextAction?.(id, nextAction); },
+  crm2OportunidadesSetNextAction(id, value) { permissionsOpp(); if (!crm2OportunidadesState.canEdit) return; const opp = opportunityById(id); if (!opp) return; const nextAction = String(value || ''); const previous = Object.prototype.hasOwnProperty.call(opp, 'proximaAcaoEm') ? opp.proximaAcaoEm : opp.previsaoFechamento || ''; if (nextAction === previous) return; opp.proximaAcaoEm = nextAction; const now = new Date().toISOString(); opp.atualizadoEm = now; opp.historico = [...(opp.historico || []), { data: now, tipo: 'Próxima ação', usuario: opp.responsavel || 'Sistema', descricao: 'Data da próxima ação atualizada.', alteracoes: `Data: ${dateTimeLabelOpp(previous)} → ${dateTimeLabelOpp(nextAction)}` }]; rerenderOpp(); },
+  crm2OportunidadesSetStageFromDetail(select) { permissionsOpp(); const opp = opportunityById(select?.dataset?.opportunityId); if (!opp || !crm2OportunidadesState.canEdit) return; const nextStage = String(select.value || ''); if (!OPPORTUNITY_STAGES.includes(nextStage) || nextStage === opp.etapa) return; const previousStage = opp.etapa || '—'; const now = new Date().toISOString(); opp.etapa = nextStage; opp.status = opportunityStatusOpp(opp); opp.atualizadoEm = now; opp.historico = [...(opp.historico || []), { data: now, tipo: 'Etapa', usuario: opp.responsavel || 'Sistema', descricao: 'Etapa da oportunidade atualizada.', alteracoes: `Etapa: ${previousStage} → ${nextStage}` }]; rerenderOpp(); },
+  crm2OportunidadesToggleDetailObservations(field) { permissionsOpp(); const opp = opportunityById(field?.dataset?.opportunityObservations); if (!opp || !crm2OportunidadesState.canEdit) return; const button = field.closest('.crm2-opp-sidebar-observations')?.querySelector('.crm2-opp-save-observations'); if (button) button.hidden = String(field.value || '') === String(opp.observacoes || ''); },
+  crm2OportunidadesSaveDetailObservations(button) { permissionsOpp(); const section = button?.closest('.crm2-opp-sidebar-observations'); const field = section?.querySelector('[data-opportunity-observations]'); const opp = opportunityById(field?.dataset?.opportunityObservations); if (!opp || !crm2OportunidadesState.canEdit) return; const observations = String(field.value || ''); if (observations === String(opp.observacoes || '')) { button.hidden = true; return; } const previous = opp.observacoes || '—'; const now = new Date().toISOString(); opp.observacoes = observations; opp.atualizadoEm = now; opp.historico = [...(opp.historico || []), { data: now, tipo: 'Observações', usuario: opp.responsavel || 'Sistema', descricao: 'Observações da oportunidade atualizadas.', alteracoes: `Observações: ${previous} → ${observations || '—'}` }]; rerenderOpp(); },
+  crm2OportunidadesSetState(state) { crm2OportunidadesState.listState = ['normal', 'loading', 'error', 'empty'].includes(state) ? state : 'normal'; rerenderOpp(); },
+  crm2OportunidadesApplyFilters(event) { event?.preventDefault(); crm2OportunidadesApplyModalFilters(event); },
+  crm2OportunidadesClearFilters() { Object.assign(crm2OportunidadesState, { search: '', searchExpanded: false, stageFilter: '', statusFilter: '', responsibleFilter: '', sourceFilter: [], lossReasonFilter: '', productFilter: [], nextContactFilter: '', nextContactFrom: '', nextContactTo: '', dateFrom: '', dateTo: '', updatedFrom: '', updatedTo: '', filterModalOpen: false, filterDraft: {}, page: 1 }); rerenderOpp(); },
+  crm2OportunidadesAddItem() { crm2OportunidadesState.draft.itens = [...(crm2OportunidadesState.draft.itens || []), { id: `item-${Date.now()}`, produto: '', quantidade: 1, valorUnitario: '' }]; rerenderOpp(); },
+  crm2OportunidadesRemoveItem(index) { const itemIndex = Number(index); if (!Number.isInteger(itemIndex) || itemIndex < 0 || itemIndex >= (crm2OportunidadesState.draft.itens || []).length || !window.confirm('Remover este item da oportunidade?')) return; crm2OportunidadesState.draft.itens.splice(itemIndex, 1); rerenderOpp(); },
+  crm2OportunidadesRemoveItemFromDetail(button) { permissionsOpp(); const opp = opportunityById(button?.dataset?.opportunityId); const index = Number(button?.dataset?.itemIndex); if (!opp || !crm2OportunidadesState.canEdit || !Number.isInteger(index) || index < 0 || index >= (opp.itens || []).length) return; opp.itens.splice(index, 1); rerenderOpp(); },
+  async crm2OportunidadesSave(event) {
+    event?.preventDefault();
+    if (crm2OportunidadesState.saving) return;
+    closeOppFloatingMenus();
+    permissionsOpp();
+    const route = currentOppRoute();
+    if ((route.view === 'opp-edit' && !crm2OportunidadesState.canEdit) || (route.view === 'opp-new' && !crm2OportunidadesState.canCreate)) return;
+    commitOpportunityAttachmentSelectionOpp();
+    crm2OportunidadesState.saving = true;
+    crm2OportunidadesState.saveError = '';
+    const submitButton = event?.submitter || event?.currentTarget?.querySelector('button[type="submit"]') || document.querySelector(`button[type="submit"][form="${event?.currentTarget?.id || ''}"]`);
+    if (submitButton) { submitButton.disabled = true; submitButton.setAttribute('aria-busy', 'true'); submitButton.textContent = 'Salvando...'; }
+    const formValues = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const items = Object.keys(formValues).filter((key) => key.startsWith('itemProduct-')).map((key) => {
+      const index = key.split('-')[1];
+      const previous = crm2OportunidadesState.draft.itens?.[index] || {};
+      const cnpj = normalizarCnpjLocal(formValues[`itemCnpj-${index}`] || previous.cnpj);
+      const matchedPj = findPjByCnpjOpp(cnpj);
+      const previousPjCnpj = normalizarCnpjLocal(relatedPjOpp(previous.pjId)?.cnpj || previous.cnpj);
+      const pjId = matchedPj?.id || (previousPjCnpj === cnpj ? previous.pjId || '' : '');
+      const produto = formValues[`itemProduct-${index}`] || '';
+      const catalogProduct = findCrm2Product(crm2OportunidadesState.produtos, produto);
+      const quantidade = Math.max(1, Number.parseInt(formValues[`itemQuantity-${index}`] || previous.quantidade || 1, 10) || 1);
+      return { id: previous.id || `item-${Date.now()}-${index}`, numeroPedido: formValues[`itemOrder-${index}`] || '', produto, grupo: catalogProduct?.group || previous.grupo || '', pjId, cnpj, pjTemporario: previous.pjTemporario?.cnpj === cnpj ? previous.pjTemporario : null, pjTemporarioReconsultar: Boolean(previous.pjTemporarioReconsultar), quantidade, valorUnitario: productPriceOpp(produto) };
+    });
+    const selectedPartner = partnerByIdOpp(formValues.parceiroId);
+    const selectedPartnerName = partnerLabelOpp(selectedPartner) || String(formValues.parceiroNome || '').trim();
+    const values = { ...formValues, parceiroId: String(formValues.parceiroId || ''), parceiroNome: selectedPartnerName, pfParceiro: selectedPartnerName || crm2OportunidadesState.draft.pfParceiro || pfOppFormData(formValues.pfId, crm2OportunidadesState.draft).pfParceiro, itens: items, anexos: (crm2OportunidadesState.draft.anexos || []).map((attachment) => ({ ...attachment })), pfNome: upperOpp(formValues.pfNome), pfNascimento: normalizeCrm2Date(formValues.pfNascimento) };
+    values.status = opportunityStatusOpp(values);
+    syncPfContactOpp(values);
+    crm2OportunidadesState.draft = values;
+    const errors = validateOpportunityOpp(values);
+    crm2OportunidadesState.errors = errors;
+    if (Object.keys(errors).length) { crm2OportunidadesState.saving = false; rerenderOpp(); return; }
+    const now = new Date().toISOString();
+    if (crm2OportunidadesState.formMode === 'opportunity' && crm2OportunidadesState.detailId) {
+      const opp = opportunityById(crm2OportunidadesState.detailId);
+      const previousStage = opp.etapa;
+      const inlineEditing = crm2OportunidadesState.inlineEditingId === opp.id;
+      if (!await persistCnpjTemporariosSafeOpp(opp, values.itens)) { crm2OportunidadesState.saving = false; rerenderOpp(); return; }
+      Object.assign(opp, values, { atualizadoEm: now, valorEstimado: values.itens.reduce((total, item) => total + Number(item.quantidade || 1) * catalogUnitPriceOpp(item), 0).toFixed(2).replace('.', ',') });
+      opp.historico = [...(opp.historico || []), { data: now, tipo: previousStage !== values.etapa ? 'Etapa' : 'Edição', usuario: values.responsavel, descricao: 'Oportunidade atualizada no estado mockado.', alteracoes: previousStage !== values.etapa ? `Etapa: ${previousStage} → ${values.etapa}` : 'Dados comerciais revisados.' }];
+      resetOppForm();
+      closeOppEditActionPortal();
+      if (inlineEditing) { crm2OportunidadesState.detailId = opp.id; crm2OportunidadesState.formMode = ''; rerenderOpp(); return; }
+      navigateOpp(`oportunidade/${opp.id}`);
+      return;
+    }
+    const id = `opp-${String(crm2OportunidadesState.opportunities.length + 1).padStart(3, '0')}`;
+    const opp = { ...values, id, numero: `OPP-${String(crm2OportunidadesState.opportunities.length + 1).padStart(3, '0')}`, status: values.status, valorEstimado: values.itens.reduce((total, item) => total + Number(item.quantidade || 1) * catalogUnitPriceOpp(item), 0).toFixed(2).replace('.', ','), criadoEm: now, atualizadoEm: now, historico: [{ data: now, tipo: 'Criação', usuario: values.responsavel, descricao: 'Oportunidade criada no estado mockado.', alteracoes: `Etapa: — → ${values.etapa}` }] };
+    if (!await persistCnpjTemporariosSafeOpp(opp, values.itens)) { crm2OportunidadesState.saving = false; rerenderOpp(); return; }
+    crm2OportunidadesState.opportunities.unshift(opp);
+    resetOppForm();
+    closeOppEditActionPortal();
+    navigateOpp(`oportunidade/${opp.id}`);
+  },
+  crm2OportunidadesSelectTab(tab) { if (['dados', 'itens', 'timeline'].includes(tab)) { crm2OportunidadesState.detailTab = tab; rerenderOpp(); } },
+  crm2OportunidadesChangeStage(id, stage) { if (!crm2OportunidadesState.canEdit) return; const opp = opportunityById(id); if (!opp || !OPPORTUNITY_STAGES.includes(stage) || opp.etapa === stage) return; const previous = opp.etapa; opp.etapa = stage; opp.status = opportunityStatusOpp(opp); opp.atualizadoEm = new Date().toISOString(); opp.historico = [...(opp.historico || []), { data: opp.atualizadoEm, tipo: 'Etapa', usuario: opp.responsavel, descricao: `Etapa alterada para ${stage}.`, alteracoes: `Etapa: ${previous} → ${stage}` }]; crm2OportunidadesState.detailTab = 'timeline'; rerenderOpp(); },
+  crm2OportunidadesOpenOrderGeneration() { openOrderGenerationOpp(crm2OportunidadesState.detailId); }
+});
+
+observarContextoAcessoHub(() => { permissionsOpp(); if (currentOppRoute().active) window.crm2OportunidadesMount?.(); });
+window.addEventListener('resize', repositionOpenSuggestionsOpp);
+window.addEventListener('resize', () => fitProductTitlesOpp());
+window.addEventListener('scroll', repositionOpenSuggestionsOpp, true);
+permissionsOpp();
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && crm2OportunidadesState.filterModalOpen) window.crm2OportunidadesCloseFilterModal?.(); });
+
+function orderGenerationItemsAvailableOpp(opp) { return (opp?.itens || []).filter((item) => !item.conversaoEm && !(item.pedidoIds || []).length); }
+function orderGenerationItemPartyOpp(item = {}, opp = {}) {
+  const produto = String(item.produto || '');
+  if (productPersonTypeOpp(item) === 'pf') {
+    const pf = relatedPfOpp(opp.pfId);
+    const nome = pf?.nome || opp.pfNome || 'PF não vinculada';
+    const cpfValue = String(pf?.cpf || opp.pfCpf || '').replace(/\D/g, '');
+    const cpf = cpfValue.length === 11 ? maskCpfOpp(cpfValue) : 'CPF não informado';
+    return `PF: ${nome} · CPF: ${cpf}`;
+  }
+  const pj = relatedPjOpp(item.pjId || opp.pjId);
+  const temporary = temporaryForItemOpp(item) || item.pjTemporario || null;
+  const data = pjCnpjDataOpp(pj, temporary);
+  const razaoSocial = data.razaoSocial || pj?.razaoSocial || 'PJ não vinculada';
+  const cnpjValue = normalizarCnpjLocal(item.cnpj || data.cnpj);
+  const cnpj = cnpjValue.length === 14 ? maskCnpjOpp(cnpjValue) : 'CNPJ não informado';
+  return `PJ: ${razaoSocial} · CNPJ: ${cnpj}`;
+}
+function orderGenerationItemStatusOpp(item = {}, opp = {}) {
+  const produto = String(item.produto || '');
+  if (productPersonTypeOpp(item) === 'pf') {
+    const pf = relatedPfOpp(opp.pfId);
+    const cpf = String(pf?.cpf || opp.pfCpf || '').replace(/\D/g, '');
+    return pf ? 'Cadastro atualizado' : cpf.length === 11 ? 'Novo cadastro' : 'Dados pendentes: CPF';
+  }
+  const pj = relatedPjOpp(item.pjId || opp.pjId);
+  const temporary = temporaryForItemOpp(item) || item.pjTemporario || null;
+  const data = pjCnpjDataOpp(pj, temporary);
+  const cnpj = normalizarCnpjLocal(item.cnpj || data.cnpj);
+  const existing = pj || findPjByCnpjOpp(cnpj);
+  const requires = normOpp(produto).includes('cnpj') || Boolean(existing || temporary || opp.pjId);
+  return existing ? 'Cadastro atualizado' : temporary && cnpj.length === 14 ? 'Novo cadastro' : requires ? 'Dados pendentes: CNPJ' : 'Não se aplica';
+}
+function renderOrderGenerationItemOpp(item, opp, state, generatedOrder = null) {
+  const isCompleted = state.status === 'completed';
+  const isLocked = state.status === 'processing' || isCompleted;
+  const isConverted = isCompleted && Boolean(generatedOrder);
+  const pedido = generatedOrder?.numero || item.numeroPedido || item.pedido || '—';
+  const produto = item.produto || '—';
+  const party = orderGenerationItemPartyOpp(item, opp);
+  const status = isConverted ? 'Pedido gerado' : isCompleted ? 'Pedido não gerado' : orderGenerationItemStatusOpp(item, opp);
+  const selected = isConverted || state.selectedItemIds.includes(item.id);
+  const hasEmissionColumn = Boolean(state.informarDataEmissao);
+  const emissionDate = state.dataEmissaoPorItem?.[item.id] || '';
+  const disabledAttr = isLocked ? ' disabled' : '';
+  const emissionField = hasEmissionColumn ? (selected ? `<div class="crm2-opp-conversion-item-emission"><span>Data de emissão</span><div class="crm2-opp-conversion-item-emission-date-control"><input class="config-input crm2-opp-conversion-item-emission-date-text" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/aaaa" value="${attrOpp(orderGenerationEmissionDateTextOpp(emissionDate))}" oninput="crm2OportunidadesSetItemEmissionDateText('${attrOpp(item.id)}', this.value, this)"${disabledAttr}><button class="icon-btn crm2-opp-conversion-item-emission-calendar" type="button" title="Selecionar data" aria-label="Selecionar data" onclick="crm2OportunidadesOpenConversionEmissionDate(this)"${disabledAttr}><i data-lucide="calendar" aria-hidden="true"></i></button><input class="crm2-opp-next-action-native-date crm2-opp-conversion-item-emission-native-date" type="date" tabindex="-1" aria-hidden="true" value="${attrOpp(emissionDate)}" onchange="crm2OportunidadesSetItemEmissionDate('${attrOpp(item.id)}', this.value)"${disabledAttr}></div></div>` : '<span class="crm2-opp-conversion-item-emission-placeholder" aria-hidden="true"></span>') : '';
+  const itemClasses = [selected ? 'is-selected' : '', hasEmissionColumn ? 'has-emission' : ''].filter(Boolean).join(' ');
+  const itemAction = isCompleted && generatedOrder ? `<button class="secondary-btn crm2-opp-conversion-open-order" type="button" aria-label="Abrir pedido ${attrOpp(generatedOrder.numero)}" onclick="crm2OportunidadesOpenGeneratedOrder('${attrOpp(generatedOrder.id)}')">Abrir pedido</button>` : isCompleted ? `<input type="checkbox" value="${attrOpp(item.id)}"${selected ? ' checked' : ''} disabled aria-label="Item sem pedido gerado">` : `<input type="checkbox" value="${attrOpp(item.id)}" ${selected ? 'checked' : ''} onchange="crm2OportunidadesToggleConversionItem(this.value)"${disabledAttr}>`;
+  const wrapper = isCompleted ? 'article' : 'label';
+  return `<${wrapper} class="${itemClasses}">${itemAction}<span class="crm2-opp-conversion-item-values"><span class="crm2-opp-conversion-item-line-one"><span>Pedido: <strong>${escapeOpp(pedido)}</strong></span><span>Produto: ${escapeOpp(produto)}</span></span><small class="crm2-opp-conversion-item-line-two">${escapeOpp(party)}</small><small class="crm2-opp-conversion-item-line-three">Situação: ${escapeOpp(status)}</small></span>${emissionField}</${wrapper}>`;
+}
+function renderConversionItemOpp(...args) { return renderOrderGenerationItemOpp(...args); }
+function resolveOrderGenerationRecordOpp(type, id) { return (type === 'pf' ? (window.crm2PfGetMockItems?.() || []) : (window.crm2PjGetMockItems?.() || [])).find((item) => item.id === id) || null; }
+function renderOrderGenerationPjSummaryOpp(items = [], opp = {}, state = {}) {
+  const selectedIds = new Set(state.selectedItemIds || []);
+  const selectedItems = items.filter((item) => selectedIds.has(item.id));
+  const summaries = new Map();
+  selectedItems.forEach((item) => {
+    const linked = relatedPjOpp(item.pjId || opp.pjId || state.pjId);
+    const temporary = temporaryForItemOpp(item);
+    const data = pjCnpjDataOpp(linked, temporary);
+    const cnpj = normalizarCnpjLocal(item.cnpj || data.cnpj);
+    const key = cnpj || `item-${item.id}`;
+    const existing = linked || findPjByCnpjOpp(cnpj);
+    const requires = normOpp(item.produto).includes('cnpj') || Boolean(existing || temporary || opp.pjId || state.pjId);
+    const current = summaries.get(key) || { cnpj, status: 'Não se aplica', produtos: [] };
+    if (!current.produtos.includes(item.produto)) current.produtos.push(item.produto);
+    current.status = existing ? 'Cadastro atualizado' : temporary && cnpj.length === 14 ? 'Novo cadastro' : requires ? 'Dados pendentes: CNPJ' : 'Não se aplica';
+    summaries.set(key, current);
+  });
+  return [...summaries.values()].map((summary) => `<article><strong>${escapeOpp(summary.cnpj ? maskCnpjOpp(summary.cnpj) : 'Sem CNPJ')}</strong><span>${escapeOpp(summary.produtos.join(' · '))}</span><small>${escapeOpp(summary.status)}</small></article>`).join('');
+}
+function orderGenerationRenderOpp() {
+  const opp = opportunityById(crm2OportunidadesState.detailId);
+  const state = crm2OportunidadesState.orderGeneration;
+  if (!opp || !state.open) return '';
+  const backdrop = 'modal-backdrop crm2-opp-conversion-backdrop';
+  const modal = 'small-modal crm2-opp-conversion-modal';
+  const isProcessing = state.status === 'processing';
+  const isCompleted = state.status === 'completed';
+  const isLocked = isProcessing || isCompleted;
+  const disabledAttr = isLocked ? ' disabled' : '';
+  const resultItems = state.result?.items || [];
+  const completedItems = resultItems.map(({ item, pedido }) => ({ ...item, numeroPedido: item.numeroPedido || pedido.numero, pedidoIds: [pedido.id] }));
+  const items = isCompleted
+    ? [...completedItems, ...orderGenerationItemsAvailableOpp(opp).filter((item) => !resultItems.some((result) => result.item.id === item.id))]
+    : orderGenerationItemsAvailableOpp(opp);
+  const generatedOrderByItemId = new Map(resultItems.map(({ item, pedido }) => [item.id, pedido]));
+  const stateErrors = Object.values(state.errors || {});
+  const pfItems = window.crm2PfGetMockItems?.() || [];
+  const pjItems = window.crm2PjGetMockItems?.() || [];
+  const pf = pfItems.find((item) => item.id === (opp.pfId || state.pfId));
+  const pj = pjItems.find((item) => item.id === (opp.pjId || state.pjId));
+  const temporary = items.map((item) => temporaryForItemOpp(item)).find(Boolean) || null;
+  const temporaryData = pjCnpjDataOpp(pj, temporary);
+  const pfName = pf?.nome || opp.pfNome || '';
+  const pfCpf = pf?.cpf || opp.pfCpf || '';
+  const pfLabel = pfName || pfCpf ? `${pfName || 'PF'}${pfCpf ? ` · ${pfCpf}` : ''}` : 'PF não vinculada';
+  const pjLabel = pj || temporary ? `${temporaryData.razaoSocial || 'PJ'}${temporaryData.cnpj ? ` · ${temporaryData.cnpj}` : ''}` : 'PJ não vinculada';
+  const emissionQuestion = `<label class="crm2-opp-conversion-field crm2-opp-conversion-emission-field"><strong>Deseja informar data de emissão?</strong><select class="config-input" onchange="crm2OportunidadesSetConversionField('informarDataEmissao', this.value)"${disabledAttr}><option value="Não" ${!state.informarDataEmissao ? 'selected' : ''}>Não</option><option value="Sim" ${state.informarDataEmissao ? 'selected' : ''}>Sim</option></select></label>`;
+  const observationField = `<label class="crm2-opp-conversion-field"><strong>Observações</strong><textarea class="config-input" rows="3" oninput="crm2OportunidadesSetConversionField('observacoes', this.value)" placeholder="Registre uma observação sobre a geração do pedido"${disabledAttr}>${escapeOpp(state.observacoes)}</textarea></label>`;
+  const selectedConversionItems = items.filter((item) => state.selectedItemIds.includes(item.id));
+  const hasPjConversionItems = selectedConversionItems.some((item) => productPersonTypeOpp(item) === 'pj');
+  if (!hasPjConversionItems) state.vinculoTipo = 'Titular';
+  if (hasPjConversionItems && !['Titular', 'Representante legal'].includes(state.vinculoTipo)) state.vinculoTipo = 'Representante legal';
+  const linkField = hasPjConversionItems ? `<label class="crm2-opp-conversion-field"><strong>Vínculo PF/PJ</strong><select class="config-input" onchange="crm2OportunidadesSetConversionField('vinculoTipo', this.value)"${disabledAttr}>${['Titular', 'Representante legal'].map((type) => `<option value="${attrOpp(type)}" ${state.vinculoTipo === type ? 'selected' : ''}>${escapeOpp(type)}</option>`).join('')}</select></label>` : '';
+  const lossField = state.lossMode ? `<label class="is-wide crm2-opp-conversion-loss-field"><strong>Motivo de perda</strong><select class="config-input" aria-required="true" autofocus onchange="crm2OportunidadesSetConversionField('motivoPerda', this.value)"${disabledAttr}><option value="">Selecione o motivo</option>${OPPORTUNITY_LOSS_REASONS.map((reason) => `<option value="${attrOpp(reason)}" ${state.motivoPerda === reason ? 'selected' : ''}>${escapeOpp(reason)}</option>`).join('')}</select></label>` : '';
+  const conversionNotice = isProcessing
+    ? '<div class="crm2-opp-conversion-processing-state" role="status" aria-live="polite"><span class="crm2-opp-conversion-spinner" aria-hidden="true"></span><strong>Gerando pedido(s)…</strong></div>'
+    : isCompleted
+      ? `<div class="crm2-opp-conversion-confirmation" role="status" aria-live="polite"><strong>${state.result?.mode === 'loss' ? 'Oportunidade encerrada' : 'Pedido(s) gerado(s)'}</strong></div>`
+      : '';
+  const backdropInteraction = isProcessing ? '' : ' onclick="crm2OportunidadesCloseConversion(event)"';
+  const conversionFooter = isCompleted ? '' : `<footer class="small-modal-actions crm2-opp-conversion-actions"><button class="secondary-btn" type="button" onclick="crm2OportunidadesMarkLoss()"${state.lossMode || isProcessing ? ' disabled' : ''}>Encerrar como perdida</button><div><button class="secondary-btn" type="button" onclick="crm2OportunidadesCloseConversion()"${isProcessing ? ' disabled' : ''}>Cancelar</button><button class="save-btn" type="button" onclick="crm2OportunidadesConfirmConversion()"${isProcessing || (!state.lossMode && !items.length) ? ' disabled' : ''}>${state.lossMode ? 'Registrar perda' : 'Gerar pedido(s)'}</button></div></footer>`;
+  return `<div class="${backdrop}" role="presentation"${backdropInteraction}><section class="${modal}" role="dialog" aria-modal="true" aria-label="Modal de conversão" aria-busy="${isProcessing ? 'true' : 'false'}" tabindex="-1" onclick="event.stopPropagation()"><header class="small-modal-header crm2-opp-conversion-header"><div class="crm2-opp-conversion-client-header"><span>Cliente</span><strong>${escapeOpp(opportunityLabel(opp))}</strong></div><button id="crm2-opp-conversion-close" class="icon-btn" type="button" aria-label="Fechar conversão" title="Fechar conversão" onclick="crm2OportunidadesCloseConversion()"${isProcessing ? ' disabled' : ''}>×</button></header><div class="crm2-opp-conversion-divider" aria-hidden="true"></div>${stateErrors.length ? `<div class="crm2-opp-conversion-errors" role="alert"><strong>Revise antes de confirmar:</strong><ul>${stateErrors.map((error) => `<li>${escapeOpp(error)}</li>`).join('')}</ul></div>` : ''}<div class="crm2-opp-conversion-top-row"><fieldset class="crm2-opp-conversion-mode" role="radiogroup" aria-label="Tipo de conversão"><legend>Tipo de conversão</legend><div class="crm2-opp-conversion-mode-options"><label><input type="radio" name="conversionMode" value="total" ${state.mode === 'total' ? 'checked' : ''} onchange="crm2OportunidadesSetConversionField('mode', this.value)"${disabledAttr}><span>Total</span></label><label><input type="radio" name="conversionMode" value="partial" ${state.mode === 'partial' ? 'checked' : ''} onchange="crm2OportunidadesSetConversionField('mode', this.value)"${disabledAttr}><span>Parcial</span></label></div></fieldset>${emissionQuestion}</div><div class="crm2-opp-conversion-second-row${hasPjConversionItems ? '' : ' is-single'}">${linkField}${observationField}</div><section class="crm2-opp-conversion-section" aria-labelledby="crm2-conversion-items-title"><div class="crm2-opp-items-header"><strong id="crm2-conversion-items-title">Produto(s)</strong>${isCompleted ? '' : `<span class="crm2-opp-conversion-item-count">${state.selectedItemIds.length} de ${items.length} selecionado(s)</span>`}</div><div class="crm2-opp-conversion-items">${items.length ? items.map((item) => renderConversionItemOpp(item, opp, state, generatedOrderByItemId.get(item.id))).join('') : '<div class="crm2-pessoas-state is-compact"><strong>Todos os itens já foram convertidos.</strong><span>Nenhum pedido novo será gerado.</span></div>'}</div></section>${conversionNotice}${lossField ? `<div class="crm2-opp-conversion-loss-row">${lossField}</div>` : ''}${conversionFooter}</section></div>`;
+}
+function mountOrderGenerationOpp() { const host = document.querySelector('[data-crm2-oportunidades="true"]'); if (!host) return; host.querySelector('.crm2-opp-conversion-backdrop')?.remove(); if (crm2OportunidadesState.orderGeneration.open) { const modalMarkup = orderGenerationRenderOpp().replace('Observacao registrada no historico', 'Registre uma observação sobre a geração do pedido').replaceAll('conversão', 'geração').replaceAll('Conversão', 'Geração'); host.insertAdjacentHTML('beforeend', modalMarkup); } }
+ function openOrderGenerationOpp(id = '') { permissionsOpp(); const opp = opportunityById(id || crm2OportunidadesState.detailId); if (!opp || !crm2OportunidadesState.canEdit || opp.status === 'Ganha' && opp.conversaoStatus === 'Total') return; const items = orderGenerationItemsAvailableOpp(opp); crm2OportunidadesState.detailId = opp.id; crm2OportunidadesState.orderGeneration = { open: true, status: 'editing', mode: 'total', selectedItemIds: items.map((item) => item.id), pfId: opp.pfId || '', pjId: opp.pjId || '', vinculoTipo: opp.pjId ? 'Representante legal' : 'Representante legal', responsavel: opp.responsavel || 'Ana Martins', informarDataEmissao: false, dataEmissaoPorItem: {}, dataEmissao: '', lossMode: false, motivoPerda: '', observacoes: '', errors: {}, result: null }; rerenderOpp(); window.setTimeout(mountOrderGenerationOpp, 0); if (isSupabaseConfigured && crm2OportunidadesState.tempLoadedForId !== opp.id) void loadCnpjTemporariosOpp(opp.id).then(() => { if (crm2OportunidadesState.orderGeneration.open && crm2OportunidadesState.detailId === opp.id) mountOrderGenerationOpp(); }); }
+function closeOrderGenerationOpp() { crm2OportunidadesState.orderGeneration = { open: false, status: 'editing', mode: 'total', selectedItemIds: [], pfId: '', pjId: '', newPfNome: '', newPfCpf: '', newPjRazaoSocial: '', newPjCnpj: '', vinculoTipo: 'Representante legal', responsavel: 'Ana Martins', informarDataEmissao: false, dataEmissaoPorItem: {}, dataEmissao: '', lossMode: false, motivoPerda: '', observacoes: '', errors: {}, result: null }; document.querySelector('.crm2-opp-conversion-backdrop')?.remove(); }
+function setOrderGenerationFieldOpp(field, value) { const state = crm2OportunidadesState.orderGeneration; if (state.status !== 'editing') return; if (field === 'informarDataEmissao') { state.informarDataEmissao = String(value || '') === 'Sim'; mountOrderGenerationOpp(); return; } if (!['mode', 'pfId', 'pjId', 'newPfNome', 'newPfCpf', 'newPjRazaoSocial', 'newPjCnpj', 'vinculoTipo', 'responsavel', 'dataEmissao', 'motivoPerda', 'observacoes'].includes(field)) return; state[field] = String(value || ''); if (field === 'mode' && value === 'total') { const opp = orderGenerationOpportunityOpp(); state.selectedItemIds = orderGenerationItemsAvailableOpp(opp).map((item) => item.id); } if (field === 'mode' && value === 'partial' && !state.selectedItemIds.length) { const opp = orderGenerationOpportunityOpp(); state.selectedItemIds = orderGenerationItemsAvailableOpp(opp).slice(0, 1).map((item) => item.id); } mountOrderGenerationOpp(); }
+function setOrderGenerationItemEmissionDateOpp(itemId, value) { const state = crm2OportunidadesState.orderGeneration; if (state.status !== 'editing') return; state.dataEmissaoPorItem = { ...(state.dataEmissaoPorItem || {}), [itemId]: String(value || '') }; mountOrderGenerationOpp(); }
+function setOrderGenerationItemEmissionDateTextOpp(itemId, value, input) { const state = crm2OportunidadesState.orderGeneration; if (state.status !== 'editing') return; const masked = maskDateTextOpp(value); if (input && input.value !== masked) input.value = masked; state.dataEmissaoPorItem = { ...(state.dataEmissaoPorItem || {}), [itemId]: dateTextToIsoOpp(masked) }; }
+function openOrderGenerationEmissionDateOpp(button) { if (crm2OportunidadesState.orderGeneration.status !== 'editing') return; const nativeDate = button?.closest('.crm2-opp-conversion-item-emission')?.querySelector('.crm2-opp-conversion-item-emission-native-date'); if (!nativeDate) return; if (typeof nativeDate.showPicker === 'function') nativeDate.showPicker(); else nativeDate.click(); }
+function markOpportunityLossOpp() { const state = crm2OportunidadesState.orderGeneration; if (state.status !== 'editing') return; state.lossMode = true; state.errors = {}; mountOrderGenerationOpp(); }
+function toggleOrderGenerationItemOpp(id) { const state = crm2OportunidadesState.orderGeneration; if (state.status !== 'editing') return; const ids = state.selectedItemIds; state.selectedItemIds = ids.includes(id) ? ids.filter((itemId) => itemId !== id) : [...ids, id]; state.mode = 'partial'; mountOrderGenerationOpp(); }
+function orderGenerationFailureOpp(state, error, fallback = 'Não foi possível concluir a conversão.') {
+  state.status = 'editing';
+  state.errors = { orderGeneration: error?.message || fallback };
+  state.result = null;
+  mountOrderGenerationOpp();
+}
+function completeOpportunityLossOpp(opp, state) {
+  const snapshot = structuredClone(opp);
+  try {
+    const now = new Date().toISOString();
+    opp.motivoPerda = state.motivoPerda;
+    opp.status = opportunityStatusOpp(opp);
+    opp.atualizadoEm = now;
+    opp.historico = [...(opp.historico || []), { data: now, usuario: state.responsavel, tipo: 'Perda', descricao: `Oportunidade marcada como ${opp.status.toLowerCase()}.`, alteracoes: `Motivo: — → ${state.motivoPerda}` }];
+    state.errors = {};
+    state.result = { mode: 'loss', items: [], orders: [] };
+    state.status = 'completed';
+    rerenderOpp(); window.setTimeout(mountOrderGenerationOpp, 0);
+  } catch (error) {
+    Object.assign(opp, snapshot);
+    orderGenerationFailureOpp(state, error, 'Não foi possível registrar o insucesso.');
+  }
+}
+function completeOrderGenerationOpp({ opp, state, available, selected, pf, itemPjResolutions, pfName, pfCpf }) {
+  const snapshot = structuredClone(opp);
+  try {
+    const now = new Date().toISOString();
+    const orderGenerationObservations = state.observacoes || '';
+    const opportunityAttachments = Array.isArray(opp.anexos) ? opp.anexos.map((anexo) => ({ ...anexo })) : [];
+    const resolvedPf = pf || window.crm2PfCreateMockFromOpportunity({ nome: pfName, cpf: pfCpf, nascimento: opp.pfNascimento, cei: opp.pfCei, email: opp.pfEmail, telefone: opp.pfTelefone, origem: opp.origemOportunidade || opp.origem, parceiro: opp.pfParceiro, anexos: opportunityAttachments, usuario: state.responsavel });
+    const pjByCnpj = new Map();
+    const resolvedPjByItem = new Map();
+    for (const resolution of itemPjResolutions) {
+      if (!resolution.requiresPj) continue;
+      const cacheKey = resolution.cnpj || resolution.linked?.id || resolution.item.id;
+      let record = pjByCnpj.get(cacheKey) || resolution.linked || findPjByCnpjOpp(resolution.cnpj);
+      if (!record && resolution.cnpj.length === 14 && resolution.temporary) record = window.crm2PjCreateMockFromOpportunity({ ...resolution.data, razaoSocial: resolution.data.razaoSocial || opp.pjRazaoSocial, cnpj: resolution.cnpj, logradouro: resolution.data.endereco, cidadeEstado: [resolution.data.municipio, resolution.data.uf].filter(Boolean).join('/'), anexos: opportunityAttachments, usuario: state.responsavel });
+      if (record) pjByCnpj.set(cacheKey, record);
+      resolvedPjByItem.set(resolution.item.id, record || null);
+    }
+    const resolvedPjRecords = [...new Map([...pjByCnpj.values()].filter(Boolean).map((record) => [record.id, record])).values()];
+    const resolvedPj = resolvedPjByItem.get(selected[0]?.id) || resolvedPjRecords[0] || null;
+    const unresolvedRequiredPj = itemPjResolutions.some((resolution) => resolution.requiresPj && !resolvedPjByItem.get(resolution.item.id));
+    if (!resolvedPf || unresolvedRequiredPj) throw new Error('Não foi possível criar os registros de PF/PJ.');
+    if (pf && opportunityAttachments.length) opportunityAttachments.forEach((attachment) => window.crm2PfMutateMockAttachments?.(resolvedPf.id, { action: 'add', attachment }));
+    if (resolvedPjRecords.length && opportunityAttachments.length) opportunityAttachments.forEach((attachment) => resolvedPjRecords.forEach((record) => window.crm2PjMutateMockAttachments?.(record.id, { action: 'add', attachment })));
+    opp.anexos = [];
+    let link = null;
+    if (resolvedPj && state.vinculoTipo !== 'Nenhum') link = window.crm2VinculosCreateMockFromOpportunity({ pfNome: resolvedPf.nome, pfCpf: resolvedPf.cpf, pjRazaoSocial: resolvedPj.razaoSocial, pjCnpj: resolvedPj.cnpj, tipo: state.vinculoTipo, usuario: state.responsavel });
+    const orderTargets = selected.map((item) => resolvedPjByItem.get(item.id) || null);
+    const orders = selected.map((item, index) => { const target = orderTargets[index]; const dataEmissao = state.informarDataEmissao ? (state.dataEmissaoPorItem?.[item.id] || '') : ''; return window.crm2PedidosCreateMockFromOpportunity({ pfNome: resolvedPf.nome, pfCpf: resolvedPf.cpf, pjRazaoSocial: target?.razaoSocial || '', pjCnpj: target?.cnpj || '', produto: item.produto, numeroPedido: item.numeroPedido || item.pedido || '', valor: (Number(item.quantidade || 1) * catalogUnitPriceOpp(item)).toFixed(2).replace('.', ','), responsavel: state.responsavel, dataEmissao, oportunidadeId: opp.id, oportunidadeNumero: opp.numero, oportunidadeItemId: item.id }); });
+    if (orders.some((order) => !order)) throw new Error('Não foi possível gerar todos os pedidos.');
+    const pedidoCards = orders.map((order) => ({ numero: order.numero, produto: order.produto, status: order.status, vencimento: order.vencimento }));
+    const pedidoCardsByPj = new Map();
+    orderTargets.forEach((target, index) => { if (!target) return; const cards = pedidoCardsByPj.get(target.id) || []; cards.push(pedidoCards[index]); pedidoCardsByPj.set(target.id, cards); });
+    window.crm2PfApplyOpportunityGenerationMock?.(resolvedPf.id, { pedidos: pedidoCards, vinculos: link && !link.reused ? [link] : [], usuario: state.responsavel, descricao: `Pedidos gerados pela oportunidade ${opp.numero}.` });
+    resolvedPjRecords.forEach((record) => window.crm2PjApplyOpportunityGenerationMock?.(record.id, { pedidos: pedidoCardsByPj.get(record.id) || [], vinculos: link && !link.reused && record.id === resolvedPj?.id ? [link] : [] }));
+    selected.forEach((item, index) => { item.conversaoEm = now; item.pedidoIds = [orders[index].id]; item.statusConversao = 'Convertido'; });
+    const total = selected.length === available.length;
+    const generationLabel = total ? 'Pedidos gerados' : 'Pedidos gerados parcialmente';
+    opp.conversaoStatus = total ? 'Total' : 'Parcial';
+    if (total) opp.etapa = 'Pedido validado';
+    opp.status = opportunityStatusOpp(opp);
+    opp.atualizadoEm = now;
+    const orderGenerationRecord = { data: now, usuario: state.responsavel, tipo: generationLabel, itens: selected.map((item) => item.id), pedidos: orders.map((order) => order.id), pfId: resolvedPf.id, pjId: resolvedPj?.id || '', pjIds: resolvedPjRecords.map((record) => record.id), vinculoId: link?.id || '', dataEmissaoPorItem: Object.fromEntries(selected.map((item) => [item.id, state.informarDataEmissao ? (state.dataEmissaoPorItem?.[item.id] || '') : ''])), etapa: opp.etapa, observacoes: orderGenerationObservations };
+    opp.conversoes = [...(opp.conversoes || []), orderGenerationRecord];
+    opp.historico = [...(opp.historico || []), { data: now, usuario: state.responsavel, tipo: generationLabel, descricao: `${generationLabel} no estado mockado.${orderGenerationObservations ? ` Observação: ${orderGenerationObservations}` : ''}`, alteracoes: `Itens: ${selected.length} · Pedidos: ${orders.length}${link ? ` · Vínculo: ${link.tipo}` : ''}` }];
+    state.errors = {};
+    state.result = { mode: total ? 'total' : 'partial', items: selected.map((item, index) => ({ item: { ...item }, pedido: orders[index] })), orders };
+    state.status = 'completed';
+    rerenderOpp(); window.setTimeout(mountOrderGenerationOpp, 0);
+  } catch (error) {
+    Object.assign(opp, snapshot);
+    orderGenerationFailureOpp(state, error);
+  }
+}
+function executeOrderGenerationOpp() {
+  permissionsOpp();
+  const opp = orderGenerationOpportunityOpp();
+  const state = crm2OportunidadesState.orderGeneration;
+  if (state.status !== 'editing') return;
+  const errors = {};
+  if (!opp) errors.record = 'Oportunidade nao encontrada.';
+  if (!crm2OportunidadesState.canEdit) errors.permission = 'Voce nao possui permissao para gerar pedido(s).';
+  if (opp && ['Perdido', 'Arquivado'].includes(opp.status)) errors.stage = 'Oportunidades perdidas ou arquivadas nao podem ser convertidas.';
+  if (Object.keys(errors).length) { state.errors = errors; mountOrderGenerationOpp(); return; }
+  if (state.lossMode) {
+    if (!state.motivoPerda) errors.motivoPerda = 'Selecione o motivo da perda.';
+    if (Object.keys(errors).length) { state.errors = errors; mountOrderGenerationOpp(); return; }
+    state.status = 'processing';
+    mountOrderGenerationOpp();
+    window.setTimeout(() => { if (state.open && state.status === 'processing') completeOpportunityLossOpp(opp, state); }, 0);
+    return;
+  }
+  const available = orderGenerationItemsAvailableOpp(opp);
+  const selected = available.filter((item) => state.selectedItemIds.includes(item.id));
+  if (!selected.length) errors.items = 'Selecione ao menos um item para converter.';
+  const pf = resolveOrderGenerationRecordOpp('pf', state.pfId) || (opp?.pfId ? relatedPfOpp(opp.pfId) : null);
+  const itemPjResolutions = selected.map((item) => {
+    const linked = relatedPjOpp(item.pjId || opp.pjId || state.pjId);
+    const temporary = temporaryForItemOpp(item);
+    const data = pjCnpjDataOpp(linked, temporary);
+    const cnpj = normalizarCnpjLocal(item.cnpj || data.cnpj);
+    const requiresPj = normOpp(item.produto).includes('cnpj') || Boolean(linked || temporary || opp.pjId || state.pjId);
+    return { item, linked, temporary, data, cnpj, requiresPj };
+  });
+  const requiresPj = itemPjResolutions.some((resolution) => resolution.requiresPj);
+  const pfName = pf?.nome || opp.pfNome || '';
+  const pfCpf = pf?.cpf || opp.pfCpf || '';
+  if (itemPjResolutions.some((resolution) => resolution.requiresPj && resolution.cnpj.length !== 14)) errors.pj = 'Cada item que exige PJ deve possuir um CNPJ válido.';
+  if (!pf && String(pfCpf).replace(/\D/g, '').length !== 11) errors.pf = 'Informe ou vincule uma PF com CPF valido.';
+  if (requiresPj && typeof window.crm2PjCreateMockFromOpportunity !== 'function') errors.pj = 'A criacao mockada de PJ nao esta disponivel.';
+  if (itemPjResolutions.some((resolution) => resolution.linked && !resolution.linked.id)) errors.pj = 'Existe uma PJ vinculada a um item que nao foi localizada.';
+  if (itemPjResolutions.some((resolution) => resolution.requiresPj && !resolution.linked && !resolution.temporary)) errors.pj = 'Nao foram encontrados dados temporarios para um dos CNPJs da geração dos pedidos.';
+  if (itemPjResolutions.some((resolution) => resolution.linked || resolution.requiresPj) && state.vinculoTipo !== 'Nenhum' && typeof window.crm2VinculosCreateMockFromOpportunity !== 'function') errors.link = 'A criacao mockada de vinculo nao esta disponivel.';
+  if (typeof window.crm2PedidosCreateMockFromOpportunity !== 'function') errors.orders = 'A criacao mockada de pedidos nao esta disponivel.';
+  if (Object.keys(errors).length) { state.errors = errors; mountOrderGenerationOpp(); return; }
+  state.status = 'processing';
+  mountOrderGenerationOpp();
+  window.setTimeout(() => { if (state.open && state.status === 'processing') completeOrderGenerationOpp({ opp, state, available, selected, pf, itemPjResolutions, pfName, pfCpf }); }, 0);
+}
+Object.assign(window, {
+  crm2OportunidadesOpenOrderGeneration: openOrderGenerationOpp,
+  crm2OportunidadesNoticeConversion: openOrderGenerationOpp,
+  crm2OportunidadesOpenConversion: openOrderGenerationOpp,
+  crm2OportunidadesCloseOrderGeneration: closeOrderGenerationOpp,
+  crm2OportunidadesCloseConversion: closeOrderGenerationOpp,
+  crm2OportunidadesSetOrderGenerationField: setOrderGenerationFieldOpp,
+  crm2OportunidadesSetConversionField: setOrderGenerationFieldOpp,
+  crm2OportunidadesSetOrderGenerationItemEmissionDate: setOrderGenerationItemEmissionDateOpp,
+  crm2OportunidadesSetItemEmissionDate: setOrderGenerationItemEmissionDateOpp,
+  crm2OportunidadesSetOrderGenerationItemEmissionDateText: setOrderGenerationItemEmissionDateTextOpp,
+  crm2OportunidadesSetItemEmissionDateText: setOrderGenerationItemEmissionDateTextOpp,
+  crm2OportunidadesOpenOrderGenerationEmissionDate: openOrderGenerationEmissionDateOpp,
+  crm2OportunidadesOpenConversionEmissionDate: openOrderGenerationEmissionDateOpp,
+  crm2OportunidadesMarkOpportunityLoss: markOpportunityLossOpp,
+  crm2OportunidadesMarkLoss: markOpportunityLossOpp,
+  crm2OportunidadesToggleOrderGenerationItem: toggleOrderGenerationItemOpp,
+  crm2OportunidadesToggleConversionItem: toggleOrderGenerationItemOpp,
+  crm2OportunidadesGenerateOrders: executeOrderGenerationOpp,
+  crm2OportunidadesConfirmConversion: executeOrderGenerationOpp,
+  crm2OportunidadesOpenGeneratedOrder(id) { if (id) { closeOrderGenerationOpp(); window.crm2PedidosOpenDetail?.(id); } }
+});
+
+function parseOppTimelineChanges(value = '') {
+  return String(value || '').split(' · ').flatMap((part) => {
+    const match = part.match(/^([^:]+):\s*(.*?)\s+→\s*(.*)$/);
+    return match ? [{ campo: match[1].trim(), de: match[2].trim(), para: match[3].trim() }] : [];
+  });
+}
+
+function renderOppTimelineChanges(event) {
+  const changes = parseOppTimelineChanges(event.alteracoes);
+  const items = changes.length ? changes : [{ campo: 'Registro', de: '—', para: event.alteracoes || event.descricao || '—' }];
+  return items.map((change) => '<span class="crm2-unified-timeline-inline-change"><span class="crm2-unified-timeline-change-field">' + escapeOpp(change.campo) + ':</span> <s>' + escapeOpp(change.de) + '</s> <strong>' + escapeOpp(change.para) + '</strong></span>').join(' · ');
+}
+
+function renderOppTimelineEvent(event) {
+  const isComment = event.tipo === 'Observação interna';
+  const changes = parseOppTimelineChanges(event.alteracoes);
+  const action = changes.length ? 'Alteração' : event.tipo || 'Atualização';
+  const content = isComment
+    ? '<p class="crm2-unified-timeline-comment-meta"><span>' + escapeOpp(event.usuario || 'Sistema') + ' · ' + escapeOpp(dateTimeOpp(event.data)) + '</span></p><strong class="crm2-unified-timeline-comment-text">' + escapeOpp(event.descricao || '') + '</strong>'
+    : '<p class="crm2-unified-timeline-system-line"><span class="crm2-unified-timeline-meta">' + escapeOpp(event.usuario || 'Sistema') + ' - ' + escapeOpp(dateTimeOpp(event.data)) + ' -</span><strong class="crm2-unified-timeline-action">' + escapeOpp(action) + '</strong>' + renderOppTimelineChanges(event) + '</p>';
+  return '<article class="crm2-unified-timeline-item ' + (isComment ? 'is-comment' : '') + '"><span class="crm2-unified-timeline-marker" aria-hidden="true"></span><div class="crm2-unified-timeline-content">' + content + '</div></article>';
+}
+
+function renderOppTimelineFormatToolbar() {
+  return '<div class="crm2-pf-text-format-toolbar" role="toolbar" aria-label="Formatação da observação interna">' +
+    '<button class="icon-btn" type="button" title="Negrito" aria-label="Negrito" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'bold\')"><i data-lucide="bold" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Itálico" aria-label="Itálico" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'italic\')"><i data-lucide="italic" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Sublinhado" aria-label="Sublinhado" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'underline\')"><i data-lucide="underline" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Tachado" aria-label="Tachado" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'strike\')"><i data-lucide="strikethrough" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Lista com marcadores" aria-label="Lista com marcadores" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'bullet\')"><i data-lucide="list" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Lista numerada" aria-label="Lista numerada" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'ordered\')"><i data-lucide="list-ordered" aria-hidden="true"></i></button>' +
+    '<button class="icon-btn" type="button" title="Limpar formatação" aria-label="Limpar formatação" onmousedown="event.preventDefault()" onclick="crm2OportunidadesFormatTimelineNote(\'clear\')"><i data-lucide="remove-formatting" aria-hidden="true"></i></button>' +
+    '</div>';
+}
+
+function renderOppTimelineComposer(opp) {
+  if (!crm2OportunidadesState.canComment) return '';
+  const id = attrOpp(opp.id);
+  const draft = escapeOpp(crm2OportunidadesState.timelineCommentDraft || '');
+  return '<form class="crm2-unified-timeline-composer"><label><div id="crm2-opp-timeline-editor" class="config-input crm2-pf-rich-text-target" contenteditable="true" role="textbox" aria-multiline="true" data-value-target="crm2-opp-timeline-comment-value" data-placeholder="Registre uma observação sobre a oportunidade" aria-label="Observação interna" oninput="crm2OportunidadesSyncTimelineComment(this)" onkeydown="crm2OportunidadesTimelineFormatKeydown(event, this)">'
+    + draft
+    + '</div><textarea id="crm2-opp-timeline-comment-value" name="observacao" hidden>'
+    + draft
+    + '</textarea></label><div class="crm2-unified-timeline-composer-actions">'
+    + renderOppTimelineFormatToolbar()
+    + '<button class="secondary-btn" type="button" onmousedown="event.preventDefault()" onclick="crm2OportunidadesAddTimelineComment(event, \''
+    + id
+    + '\')">Comentar</button></div></form>';
+}
+
+function renderOppTimelineColumn(opp) {
+  const history = [...(opp.historico || [])].sort((a, b) => new Date(b.data) - new Date(a.data));
+  const observations = history.filter((event) => event.tipo === 'Observação interna');
+  const visibleEvents = crm2OportunidadesState.timelineDetailsExpanded ? history : observations;
+  const content = visibleEvents.length
+    ? '<div class="crm2-unified-timeline-list" aria-live="polite">' + visibleEvents.map(renderOppTimelineEvent).join('') + '</div>'
+    : '<div class="crm2-pessoas-state crm2-timeline-state" role="status"><strong>' + (history.length ? 'Nenhuma observação interna registrada.' : 'Nenhum evento registrado.') + '</strong><span>' + (history.length ? 'Expanda os detalhes para consultar os registros automáticos.' : 'O histórico será preenchido pelas interações realizadas.') + '</span></div>';
+  return '<section class="crm2-pf-timeline-column crm2-opp-timeline-column" aria-labelledby="crm2-opp-timeline-title"><div class="hub-form-section-title crm2-pf-timeline-title"><div class="crm2-pf-timeline-heading"><strong id="crm2-opp-timeline-title">Histórico</strong><span class="crm2-pf-timeline-count">' + history.length + ' eventos</span></div><button class="crm2-pf-timeline-details-toggle" type="button" aria-expanded="' + (crm2OportunidadesState.timelineDetailsExpanded ? 'true' : 'false') + '" aria-controls="crm2-opp-timeline-scroll" onclick="crm2OportunidadesToggleTimelineDetails()">' + (crm2OportunidadesState.timelineDetailsExpanded ? 'Recolher detalhes' : 'Expandir detalhes') + '</button></div><div id="crm2-opp-timeline-scroll" class="crm2-pf-timeline-scroll">' + content + '</div>' + renderOppTimelineComposer(opp) + '</section>';
+}
+
+function renderOppItemsColumn(opp) {
+  const items = opp.itens || [];
+  const total = items.reduce((sum, item) => sum + Number(item.quantidade || 1) * catalogUnitPriceOpp(item), 0);
+  return '<section class="crm2-opp-items-block" aria-labelledby="crm2-opp-items-title"><div class="crm2-opp-items-block-header"><div><strong id="crm2-opp-items-title">Itens e pedidos</strong><span>' + items.length + ' item(ns)</span></div><strong class="crm2-opp-items-total">Total: ' + moneyOpp(total) + '</strong></div>' + (items.length ? '<div class="crm2-opp-items-sheet-wrap"><table class="crm2-opp-items-sheet is-readonly"><thead><tr><th scope="col">Pedido</th><th scope="col">Produto</th><th scope="col">PJ vinculada</th></tr></thead><tbody>' + items.map((item) => {
+    const pj = relatedPjOpp(item.pjId || opp.pjId);
+    const temporary = temporaryForItemOpp(item) || item.pjTemporario || null;
+    const cnpjData = pjCnpjDataOpp(pj, temporary);
+    const cnpj = maskCnpjOpp(item.cnpj || cnpjData.cnpj);
+    const pjName = pj?.razaoSocial || temporary?.razaoSocial || '';
+    const pjPill = pj
+      ? '<button class="crm2-opp-related-link crm2-opp-pj-cnpj-pill" type="button" onclick="openRelatedCrm2RecordOpp(\'202\', \'' + attrOpp(pj.id) + '\')">' + escapeOpp(pjName) + '</button>'
+      : (pjName ? '<small class="crm2-opp-pj-cnpj-pill">' + escapeOpp(pjName) + '</small>' : (cnpj === '—' ? '' : '—'));
+    const unitPrice = productPriceOpp(item.produto);
+    const orderNumber = item.numeroPedido || item.pedido || '—';
+    return '<tr><td><div class="crm2-opp-order-cell"><strong class="crm2-opp-table-value">' + escapeOpp(orderNumber) + '</strong>' + renderOrderPricePillOpp(unitPrice) + '</div></td><td><strong class="crm2-opp-table-value crm2-opp-product-title">' + escapeOpp(item.produto || '—') + '</strong></td><td><div class="crm2-opp-pj-cell"><span class="crm2-opp-table-value">' + escapeOpp(cnpj === '—' ? '—' : cnpj) + '</span><div class="crm2-opp-pj-meta-row">' + pjPill + '</div></div></td></tr>';
+  }).join('') + '</tbody></table></div>' : '<div class="crm2-pessoas-state is-compact"><strong>Nenhum item cadastrado.</strong><span>Os itens da oportunidade aparecerão aqui.</span></div>') + '</section>';
+}
+
+Object.assign(window, {
+  crm2OportunidadesToggleTimelineDetails() { crm2OportunidadesState.timelineDetailsExpanded = !crm2OportunidadesState.timelineDetailsExpanded; rerenderOpp(); },
+  crm2OportunidadesSyncTimelineComment(editor) { crm2OportunidadesState.timelineCommentDraft = editor?.innerText || ''; const target = document.getElementById('crm2-opp-timeline-comment-value'); if (target) target.value = crm2OportunidadesState.timelineCommentDraft; },
+  crm2OportunidadesFormatTimelineNote(command) { const editor = document.getElementById('crm2-opp-timeline-editor'); if (!editor) return; const commands = { bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', bullet: 'insertUnorderedList', ordered: 'insertOrderedList', clear: 'removeFormat' }; if (!commands[command]) return; editor.focus(); document.execCommand(commands[command], false); window.crm2OportunidadesSyncTimelineComment(editor); },
+  crm2OportunidadesTimelineFormatKeydown(event) { if (!(event.ctrlKey || event.metaKey)) return; const key = String(event.key || '').toLowerCase(); const command = key === 'b' ? 'bold' : key === 'i' ? 'italic' : key === 'u' ? 'underline' : event.shiftKey && key === '5' ? 'strike' : event.shiftKey && key === '7' ? 'ordered' : event.shiftKey && key === '8' ? 'bullet' : ''; if (!command) return; event.preventDefault(); window.crm2OportunidadesFormatTimelineNote(command); },
+  crm2OportunidadesAddTimelineComment(event, id) { event?.preventDefault(); permissionsOpp(); if (!crm2OportunidadesState.canComment) return; const trigger = event?.currentTarget; const form = trigger?.closest('form') || trigger; const editor = form?.querySelector('.crm2-pf-rich-text-target'); const note = String(editor?.innerText || form?.querySelector('textarea[name="observacao"]')?.value || '').trim(); if (!editor || !note) return; const target = form.querySelector('textarea[name="observacao"]'); if (target) target.value = note; crm2OportunidadesState.timelineCommentDraft = note; const opp = opportunityById(id); if (!opp) return; const now = new Date().toISOString(); opp.historico = [...(opp.historico || []), { data: now, tipo: 'Observação interna', usuario: opp.responsavel || 'Sistema', descricao: note, alteracoes: '' }]; opp.atualizadoEm = now; crm2OportunidadesState.timelineCommentDraft = ''; crm2OportunidadesState.timelineDetailsExpanded = false; rerenderOpp(); }
+});

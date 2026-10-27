@@ -1,23 +1,10 @@
-const ADMIN_ABAS_ROTEAVEIS = new Set([
-  'identidade',
-  'limites',
-  'categorias',
-  'grupos',
-  'usuarios',
-  'perfis',
-  'permissoes',
-  'parceiros-indicacao',
-  'logs-integracoes',
-  'auditoria'
-]);
+import { HUB_ADMIN_ROUTE_TABS, HUB_ADMIN_TABS, obterAbaAdminPorRota, normalizarRotaHub } from './routeConfig.js';
+
+const ADMIN_ABAS_ROTEAVEIS = new Set([...HUB_ADMIN_TABS, 'permissoes']);
 
 let ultimaSincronizacao = '';
 let sincronizacaoPendente = false;
 let observador = null;
-
-function obterBaseHub(pathname = window.location.pathname || '/') {
-  return pathname === '/hub' || pathname.startsWith('/hub/') ? '/hub' : '';
-}
 
 function normalizarParte(valor = '') {
   return String(valor || '')
@@ -28,10 +15,7 @@ function normalizarParte(valor = '') {
 }
 
 function obterRotaSemBase() {
-  const base = obterBaseHub();
-  const pathname = window.location.pathname || '/';
-  const semBase = base ? pathname.slice(base.length) : pathname;
-  return normalizarParte(semBase).replace(/^index\.html$/i, '');
+  return normalizarRotaHub(window.location.pathname || '/');
 }
 
 function obterAbaAdministrativaAlvo() {
@@ -43,9 +27,13 @@ function obterAbaAdministrativaAlvo() {
   }
 
   if (rota.startsWith('admin/')) {
-    const partes = rota.split('/').filter(Boolean);
-    const ultimaParte = normalizarParte(partes[partes.length - 1] || '');
-    return ADMIN_ABAS_ROTEAVEIS.has(ultimaParte) ? ultimaParte : '';
+    const aba = obterAbaAdminPorRota(rota);
+    if (!ADMIN_ABAS_ROTEAVEIS.has(aba)) return '';
+
+    // Only synchronize canonical tab routes. Nested resource screens can end
+    // in a tab-like word such as "permissoes" without being that tab.
+    const rotaCanonica = `admin/${HUB_ADMIN_ROUTE_TABS[aba] || aba}`;
+    return rota === rotaCanonica ? aba : '';
   }
 
   return '';

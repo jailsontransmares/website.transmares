@@ -1,0 +1,240 @@
+{
+  "started_at": "2026-08-03T15:30:32.420Z",
+  "finished_at": "2026-08-03T15:53:03.365Z",
+  "workspace_id": "9013383196",
+  "list_ids": [
+    "901306012001"
+  ],
+  "total_tasks_considered": 1955,
+  "tasks_with_attachments": 1317,
+  "total_attachments": 2923,
+  "total_bytes": 3183998186,
+  "total_mib": 3036.5,
+  "total_gib": 2.9653,
+  "top_tasks_by_attachment_size": [
+    {
+      "task_id": "86afa4t30",
+      "name": "EDNALDO CURSINO DOS SANTOS",
+      "attachments": 4,
+      "bytes": 127351641,
+      "mib": 121.45,
+      "url": "https://app.clickup.com/t/86afa4t30"
+    },
+    {
+      "task_id": "86aa387mj",
+      "name": "MARIA NATANAELE DA SILVA COSTA",
+      "attachments": 2,
+      "bytes": 73331213,
+      "mib": 69.93,
+      "url": "https://app.clickup.com/t/86aa387mj"
+    },
+    {
+      "task_id": "86ad1xe3e",
+      "name": "MICHELLE DE MENDONCA RAMIRES DE LIMA",
+      "attachments": 4,
+      "bytes": 44072896,
+      "mib": 42.03,
+      "url": "https://app.clickup.com/t/86ad1xe3e"
+    },
+    {
+      "task_id": "86a8jgnar",
+      "name": "ANTONIO PERILLO",
+      "attachments": 4,
+      "bytes": 43018879,
+      "mib": 41.03,
+      "url": "https://app.clickup.com/t/86a8jgnar"
+    },
+    {
+      "task_id": "86agg3zg2",
+      "name": "EDUARDO SARMENTO TENORIO",
+      "attachments": 4,
+      "bytes": 36794022,
+      "mib": 35.09,
+      "url": "https://app.clickup.com/t/86agg3zg2"
+    },
+    {
+      "task_id": "86a4z6x63",
+      "name": "SAMUEL SANTOS DE OLIVEIRA",
+      "attachments": 5,
+      "bytes": 35516536,
+      "mib": 33.87,
+      "url": "https://app.clickup.com/t/86a4z6x63"
+    },
+    {
+      "task_id": "86ag2m20c",
+      "name": "JOAO JACQUES SANTOS DE AZEVEDO",
+      "attachments": 3,
+      "bytes": 33796045,
+      "mib": 32.23,
+      "url": "https://app.clickup.com/t/86ag2m20c"
+    },
+    {
+      "task_id": "86a8tujq2",
+      "name": "ROBERTO ALVES CAVALCANTE JUNIOR",
+      "attachments": 5,
+      "bytes": 31564257,
+      "mib": 30.1,
+      "url": "https://app.clickup.com/t/86a8tujq2"
+    },
+    {
+      "task_id": "86aabcccc",
+      "name": "MARILIA SAMPAIO DE SOUZA CARNEIRO",
+      "attachments": 4,
+      "bytes": 30175462,
+      "mib": 28.78,
+      "url": "https://app.clickup.com/t/86aabcccc"
+    },
+    {
+      "task_id": "86ad6n391",
+      "name": "LUIZ CARLOS LEITE DUARTE",
+      "attachments": 3,
+      "bytes": 24824863,
+      "mib": 23.67,
+      "url": "https://app.clickup.com/t/86ad6n391"
+    },
+    {
+      "task_id": "86a7e5at7",
+      "name": "FABIO PEREIRA DE ABREU DOS SANTOS",
+      "attachments": 3,
+      "bytes": 24219733,
+      "mib": 23.1,
+      "url": "https://app.clickup.com/t/86a7e5at7"
+    },
+    {
+      "task_id": "86ae61gdv",
+      "name": "FELYPE RAMOS DE MELO ",
+      "attachments": 4,
+      "bytes": 23717192,
+      "mib": 22.62,
+      "url": "https://app.clickup.com/t/86ae61gdv"
+    },
+    {
+      "task_id": "86a6q4bnn",
+      "name": "ROSANA CAPARICA ALEXANDRE",
+      "attachments": 3,
+      "bytes": 23116479,
+      "mib": 22.05,
+      "url": "https://app.clickup.com/t/86a6q4bnn"
+    },
+    {
+      "task_id": "86ab7w7kj",
+      "name": "VIVIANE MACHADO DE LIMA",
+      "attachments": 3,
+      "bytes": 21201294,
+      "mib": 20.22,
+      "url": "https://app.clickup.com/t/86ab7w7kj"
+    },
+    {
+      "task_id": "86a8tuj2m",
+      "name": "CASSIA CRISTINA SANTOS FAHNING CASTRO",
+      "attachments": 3,
+      "bytes": 20382895,
+      "mib": 19.44,
+      "url": "https://app.clickup.com/t/86a8tuj2m"
+    }
+  ],
+  "errors_count": 0,
+  "errors": [],
+  "page_stats": [
+    {
+      "listId": "901306012001",
+      "page": 0,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 1,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 2,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 3,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 4,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 5,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 6,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 7,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 8,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 9,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 10,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 11,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 12,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 13,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 14,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 15,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 16,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 17,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 18,
+      "tasks": 100
+    },
+    {
+      "listId": "901306012001",
+      "page": 19,
+      "tasks": 55
+    }
+  ]
+}

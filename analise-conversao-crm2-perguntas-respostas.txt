@@ -1,0 +1,287 @@
+ANÁLISE DO MODAL DE CONVERSÃO — CRM 2 / OPORTUNIDADES
+
+Data: 11/08/2026
+
+======================================================================
+PERGUNTA 1
+======================================================================
+
+No modal de conversão, da tela de oportunidades do CRM 2:
+
+Quais os vínculos/dependências dos campos do bloco dados da conversão?
+Eles são necessários? Estão mapeados corretamente ou são redundantes?
+Não altere nada.
+
+----------------------------------------------------------------------
+RESPOSTA
+----------------------------------------------------------------------
+
+O bloco está implementado em src/hub/crm2Oportunidades.js.
+
+Pessoa Física
+
+- Vem de opp.pfId; se não existir, usa nome e CPF da oportunidade.
+- O CPF é obrigatório para criar a PF.
+- O modal atual não permite editar nem selecionar outra PF.
+- É necessária para gerar o pedido.
+- O mapeamento funciona no cenário em que a oportunidade já possui dados
+  válidos, mas existem campos de seleção/criação previstos no estado e não
+  exibidos no modal.
+
+Pessoa Jurídica
+
+- Usa opp.pjId, a PJ do item convertido ou os dados temporários de CNPJ.
+- É obrigatória para produtos cujo nome contém CNPJ ou quando já há uma PJ
+  vinculada.
+- É necessária para produtos e-CNPJ.
+- O mapeamento apresenta risco quando há vários itens/PJs, pois o resumo
+  pode usar apenas o primeiro dado temporário, embora os pedidos sejam
+  direcionados por item.
+
+Vínculo PF/PJ
+
+- Define se será criado ou reutilizado um vínculo.
+- Se for diferente de "Nenhum", cria/reutiliza o relacionamento PF/PJ.
+- Não é tecnicamente necessário para converter ou gerar pedido.
+- É necessário apenas se o relacionamento fizer parte da regra comercial.
+- O padrão "Representante legal" pode criar vínculo automaticamente sem
+  confirmação explícita.
+
+Data de emissão/início da validade
+
+- É enviada para a criação do pedido.
+- Quando preenchida, altera o pedido para "Pedido emitido".
+- Também é registrada no histórico da conversão.
+- É necessária somente se a emissão ocorrer naquele momento.
+- Há inconsistência semântica: o rótulo fala também em início da validade,
+  mas essa data não é usada no vínculo, que recebe a data atual.
+
+Observações
+
+- Substitui/complementa a observação da oportunidade.
+- É propagada para PF, PJ, vínculo e registro da conversão.
+- É opcional e útil como contexto.
+- É parcialmente redundante com opp.observacoes.
+- No fluxo de insucesso, a observação não é persistida; somente o motivo
+  da perda é usado.
+
+Conclusão inicial
+
+- PF, PJ e itens são estruturalmente necessários.
+- Data de emissão e vínculo são regras opcionais de negócio.
+- Observações são complementares.
+- O fluxo está funcional para o cenário feliz, mas possui lacunas de
+  mapeamento, principalmente nos campos de PF/PJ previstos internamente,
+  porém não disponibilizados ao usuário.
+- A conversão e os cadastros gerados estão mockados/em memória. A
+  persistência externa identificada é a dos dados temporários de CNPJ.
+
+
+======================================================================
+PERGUNTA 2
+======================================================================
+
+Pessoa Física: tem como adicionar uma regra para, se não houver cadastro
+no CPF, ele automaticamente gerar o cadastro PF com as informações
+cadastradas na OPP? Se sim, veja se falta algo que é usado no fluxo de
+cadastro PF que não está mapeado na OPP/fluxo de conversão; adicionando
+essa regra, esse campo poderia deixar de existir na conversão?
+
+Pessoa Jurídica: tem como fazer o mesmo que o cadastro PF? Se não tiver PJ
+cadastrada, usar os dados do cadastro temporário da OPP para criar o
+cadastro PJ; se houver mais de um produto, essa validação seria para o
+CNPJ de cada produto.
+
+Data de emissão/início da validade: esse item pode aparecer como uma
+pergunta abaixo dos itens da conversão: "Deseja informar data de emissão?":
+Sim, Não. Se sim, habilita o campo para digitar a data de emissão em cada
+item/produto; se não, o campo fica oculto. Essa informação, se preenchida,
+deve ser vinculada ao pedido.
+
+Observações: se houver observação, ela deve ser registrada apenas no
+histórico/timeline.
+
+pfId, pjId, newPfNome, newPfCpf, newPjRazaoSocial e newPjCnpj existem no
+estado, mas não possuem controles no modal: não entendi isso.
+
+----------------------------------------------------------------------
+RESPOSTA
+----------------------------------------------------------------------
+
+Pessoa Física
+
+A criação automática já existe parcialmente. O fluxo procura a PF pelo
+CPF e, se não encontrar, tenta criar uma nova PF.
+
+Atualmente são enviados para a criação:
+
+- Nome;
+- CPF;
+- E-mail;
+- Telefone;
+- Observações;
+- Anexos;
+- Usuário responsável.
+
+O cadastro PF também possui campos para nascimento e CEI/CAEPF, mas eles
+atualmente são gravados vazios na criação por conversão.
+
+A OPP possui ou consegue obter:
+
+- Nome;
+- CPF;
+- Data de nascimento;
+- CEI/CAEPF;
+- E-mail;
+- Telefone;
+- Parceiro;
+- Origem;
+- Anexos.
+
+Faltam no mapeamento da conversão:
+
+- pfNascimento para nascimento;
+- pfCei para cei;
+- pfParceiro para parceiro;
+- Definir se a origem será "Conversão de oportunidade" ou se a origem
+  comercial da OPP também será preservada.
+
+Regra recomendada:
+
+1. Buscar a PF pelo CPF.
+2. Se encontrar, reutilizar o cadastro existente.
+3. Se não encontrar, criar a PF com os dados da OPP.
+4. Se faltarem nome ou CPF válido, bloquear a conversão e informar o
+   motivo.
+
+Com essa regra, "Pessoa Física" não precisa continuar como campo manual
+de conversão. Pode permanecer apenas como resumo automático, por exemplo:
+
+- PF encontrada pelo CPF;
+- PF será criada automaticamente com os dados da oportunidade.
+
+O conceito de PF ainda deve aparecer para validação e transparência, mas
+não como campo editável.
+
+Pessoa Jurídica
+
+A criação automática de PJ também existe parcialmente. Quando não há PJ
+cadastrada, o fluxo usa os dados temporários de CNPJ da OPP.
+
+O cadastro PJ aceita:
+
+- CNPJ;
+- Razão social;
+- Situação;
+- Endereço;
+- Número;
+- Complemento;
+- CEP;
+- Bairro;
+- Município;
+- UF;
+- Porte;
+- Observações;
+- Anexos.
+
+O problema atual é que a conversão resolve uma única PJ globalmente,
+usando o primeiro dado temporário encontrado. Isso não atende corretamente
+ao cenário de vários produtos com CNPJs diferentes.
+
+Regra recomendada por item:
+
+- Obter o CNPJ do produto;
+- Procurar uma PJ cadastrada por aquele CNPJ;
+- Se não encontrar, procurar o cadastro temporário daquele CNPJ;
+- Criar a PJ a partir dos dados temporários;
+- Associar o pedido à PJ correspondente.
+
+Se dois produtos tiverem o mesmo CNPJ, a mesma PJ deve ser reutilizada.
+Se tiverem CNPJs diferentes, devem ser localizadas ou criadas PJs
+distintas.
+
+Data de emissão
+
+A proposta é adequada:
+
+Deseja informar data de emissão?
+( ) Sim
+( ) Não
+
+Se Sim, cada item convertido deve possuir sua própria data. Se Não, os
+campos de data devem ficar ocultos.
+
+O modelo atual possui apenas uma dataEmissao para toda a conversão e a
+envia para todos os pedidos. Para atender à regra desejada, a data deve
+ser armazenada por item/produto.
+
+Observações
+
+O comportamento atual precisa ser alterado. Atualmente a observação é
+propagada para PF, PJ, vínculo e registro da conversão.
+
+Pela regra desejada, a observação deve:
+
+- Ser opcional;
+- Gerar um evento na timeline/histórico da oportunidade;
+- Não atualizar as observações cadastrais da PF ou PJ;
+- Não ser copiada automaticamente para o vínculo;
+- Não usar automaticamente a observação original da OPP como observação
+  da conversão.
+
+Exemplo de registro:
+
+"Conversão total realizada. Observação: cliente solicitou emissão após
+confirmação do pagamento."
+
+Significado dos campos que não aparecem no modal
+
+No estado interno da conversão existem:
+
+- pfId;
+- pjId;
+- newPfNome;
+- newPfCpf;
+- newPjRazaoSocial;
+- newPjCnpj.
+
+Essas variáveis eram preparadas para permitir seleção ou criação manual
+de PF/PJ, mas o modal atual não renderiza inputs para preenchê-las.
+
+Na prática:
+
+- pfId e pjId são inicialmente preenchidos a partir da OPP;
+- newPfNome, newPfCpf, newPjRazaoSocial e newPjCnpj não são usados pelo
+  fluxo visual atual;
+- não há como o usuário informar esses valores dentro da conversão.
+
+Por isso, esses campos representam uma estrutura interna preparada para
+uma funcionalidade que não foi concluída, e não campos visíveis ao usuário.
+
+Com a criação automática:
+
+- newPfNome;
+- newPfCpf;
+- newPjRazaoSocial;
+- newPjCnpj
+
+podem deixar de existir.
+
+pfId e pjId podem permanecer internamente como referências dos cadastros
+encontrados ou criados.
+
+
+CONCLUSÃO CONSOLIDADA
+======================================================================
+
+O fluxo recomendado é:
+
+1. PF: localizar pelo CPF; se não existir, criar automaticamente usando
+   os dados da OPP.
+2. PJ: localizar ou criar por CNPJ, individualmente para cada produto.
+3. Data de emissão: pergunta Sim/Não e data individual por item.
+4. Observação: registrar somente na timeline da oportunidade.
+5. PF e PJ: deixar de ser campos manuais e manter apenas um resumo/status
+   automático da resolução.
+
+Nenhuma alteração de código foi realizada durante esta análise.

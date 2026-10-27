@@ -82,7 +82,7 @@ async function requireAdmin(serviceClient: ReturnType<typeof createClient>, auth
     throw new Error("Acesso permitido apenas para administrador.");
   }
 
-  return usuario;
+  return { ...usuario, requester_auth_user_id: authData.user.id };
 }
 
 async function registrarAuditoria(serviceClient: ReturnType<typeof createClient>, params: Record<string, unknown>) {
@@ -97,6 +97,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
   const user = (payload.user || {}) as Record<string, unknown>;
   const id = normalizeText(user.id);
   const nome = normalizeText(user.nome);
+  const nomeUsuario = normalizeText(user.nome_usuario).toLowerCase();
   const email = normalizeEmail(user.email);
   const perfilId = normalizeText(user.perfil_id) || null;
   const status = normalizeStatus(user.status);
@@ -108,6 +109,10 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     throw new Error("Informe o nome do usuário.");
   }
 
+  if (!/^[a-z0-9._-]{3,32}$/.test(nomeUsuario)) {
+    throw new Error("O nome de usuário deve ter de 3 a 32 caracteres: letras sem acento, números, ponto, hífen ou sublinhado.");
+  }
+
   if (!email) {
     throw new Error("Informe o e-mail do usuário.");
   }
@@ -115,6 +120,15 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
   if (!perfilId) {
     throw new Error("Informe o perfil do usuário.");
   }
+
+  let nomeUsuarioQuery = serviceClient
+    .from("usuarios")
+    .select("id")
+    .ilike("nome_usuario", nomeUsuario);
+  if (id) nomeUsuarioQuery = nomeUsuarioQuery.neq("id", id);
+  const { data: nomeUsuarioExistente, error: nomeUsuarioError } = await nomeUsuarioQuery.limit(1).maybeSingle();
+  if (nomeUsuarioError) throw new Error(nomeUsuarioError.message || "Não foi possível validar o nome de usuário.");
+  if (nomeUsuarioExistente) throw new Error("Este nome de usuário já está em uso.");
 
   let authUserId = "";
   let temporaryPassword = "";
@@ -172,9 +186,11 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
       .update({
         auth_user_id: authUserId || null,
         nome,
+        nome_usuario: nomeUsuario,
         email,
         perfil_id: perfilId,
         status,
+        trocar_senha_proximo_acesso: Boolean(passwordInput) || Boolean(atual.trocar_senha_proximo_acesso),
         cpf,
         telefone,
         updated_at: new Date().toISOString()
@@ -191,7 +207,7 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
       p_acao: "usuario.atualizar",
       p_recurso: "admin.usuarios",
       p_alvo_usuario_id: data.id,
-      p_detalhes: { email, status, perfil_id: perfilId }
+      p_detalhes: { email, nome_usuario: nomeUsuario, status, perfil_id: perfilId }
     });
 
     return { record: data, temporary_password: temporaryPassword || null };
@@ -221,9 +237,11 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     .insert({
       auth_user_id: authUserId,
       nome,
+      nome_usuario: nomeUsuario,
       email,
       perfil_id: perfilId,
       status,
+      trocar_senha_proximo_acesso: true,
       cpf,
       telefone
     })
@@ -239,10 +257,30 @@ async function saveUser(serviceClient: ReturnType<typeof createClient>, payload:
     p_acao: "usuario.criar",
     p_recurso: "admin.usuarios",
     p_alvo_usuario_id: data.id,
-    p_detalhes: { email, status, perfil_id: perfilId }
+    p_detalhes: { email, nome_usuario: nomeUsuario, status, perfil_id: perfilId }
   });
 
   return { record: data, temporary_password: temporaryPassword };
+}
+
+async function completeFirstPasswordChange(serviceClient: ReturnType<typeof createClient>, authorization: string) {
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!token) throw new Error("Sessão não informada.");
+
+  const { data: authData, error: authError } = await serviceClient.auth.getUser(token);
+  if (authError || !authData?.user?.id) throw new Error("Sessão inválida.");
+
+  const { data, error } = await serviceClient
+    .from("usuarios")
+    .update({ trocar_senha_proximo_acesso: false, updated_at: new Date().toISOString() })
+    .eq("auth_user_id", authData.user.id)
+    .eq("trocar_senha_proximo_acesso", true)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || "Não foi possível concluir a troca da senha.");
+  if (!data) throw new Error("Não há troca de senha pendente para este usuário.");
+  return { ok: true };
 }
 
 async function setPassword(serviceClient: ReturnType<typeof createClient>, payload: Record<string, unknown>) {
@@ -259,18 +297,42 @@ async function setPassword(serviceClient: ReturnType<typeof createClient>, paylo
 
   const { data: usuario, error: consultaError } = await serviceClient
     .from("usuarios")
-    .select("id, auth_user_id, email")
+    .select("id, auth_user_id, email, nome")
     .eq("id", id)
     .maybeSingle();
 
-  if (consultaError || !usuario?.auth_user_id) {
-    throw new Error("Usuário sem vínculo com Supabase Auth.");
-  }
+  if (consultaError || !usuario) throw new Error("Usuário não encontrado.");
 
-  const { error } = await serviceClient.auth.admin.updateUserById(usuario.auth_user_id, { password });
+  const { error: flagError } = await serviceClient
+    .from("usuarios")
+    .update({ trocar_senha_proximo_acesso: true, updated_at: new Date().toISOString() })
+    .eq("id", usuario.id);
+  if (flagError) throw new Error(flagError.message || "Não foi possível exigir a troca da senha no próximo acesso.");
 
-  if (error) {
-    throw new Error(error.message || "Não foi possível alterar a senha.");
+  let authUserId = usuario.auth_user_id || "";
+  if (authUserId) {
+    const { error } = await serviceClient.auth.admin.updateUserById(authUserId, { password });
+    if (error) throw new Error(error.message || "Não foi possível alterar a senha.");
+  } else {
+    const { data: createdAuth, error: createError } = await serviceClient.auth.admin.createUser({
+      email: usuario.email,
+      password,
+      email_confirm: true,
+      user_metadata: { name: usuario.nome || usuario.email }
+    });
+    if (createError || !createdAuth?.user?.id) {
+      throw new Error(createError?.message || "Não foi possível criar o acesso no Supabase Auth.");
+    }
+
+    authUserId = createdAuth.user.id;
+    const { error: linkError } = await serviceClient
+      .from("usuarios")
+      .update({ auth_user_id: authUserId, updated_at: new Date().toISOString() })
+      .eq("id", usuario.id);
+    if (linkError) {
+      await serviceClient.auth.admin.deleteUser(authUserId).catch(() => null);
+      throw new Error(linkError.message || "Não foi possível vincular o usuário ao Supabase Auth.");
+    }
   }
 
   await registrarAuditoria(serviceClient, {
@@ -281,6 +343,78 @@ async function setPassword(serviceClient: ReturnType<typeof createClient>, paylo
   });
 
   return { ok: true };
+}
+
+async function deleteUser(
+  serviceClient: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>,
+  requesterAuthUserId: string
+) {
+  const id = normalizeText(payload.id);
+  if (!id) throw new Error("Informe o usuário que será excluído.");
+
+  const { data: usuario, error: consultaError } = await serviceClient
+    .from("usuarios")
+    .select("id, auth_user_id, email, nome, perfil, perfil_id, is_master, status")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (consultaError || !usuario) throw new Error("Usuário não encontrado.");
+  if (usuario.auth_user_id && usuario.auth_user_id === requesterAuthUserId) {
+    throw new Error("Não é possível excluir o próprio usuário.");
+  }
+
+  const { data: perfis, error: perfisError } = await serviceClient
+    .from("perfis")
+    .select("id, slug, nome")
+    .eq("status", "ativo");
+  if (perfisError) throw new Error(perfisError.message || "Não foi possível validar os perfis administrativos.");
+
+  const perfisAtivos = new Map((perfis || []).map((perfil) => [
+    perfil.id,
+    normalizeText(perfil.slug || perfil.nome).toLowerCase()
+  ]));
+  const ehAdministrador = (registro: Record<string, unknown>) => {
+    const slug = perfisAtivos.get(String(registro.perfil_id || "")) || normalizeText(registro.perfil).toLowerCase();
+    return registro.is_master === true || slug === "admin" || slug === "administrador";
+  };
+
+  const { data: usuariosAtivos, error: ativosError } = await serviceClient
+    .from("usuarios")
+    .select("id, perfil, perfil_id, is_master")
+    .eq("status", "ativo");
+  if (ativosError) throw new Error(ativosError.message || "Não foi possível validar os administradores ativos.");
+
+  if (usuario.status === "ativo" && ehAdministrador(usuario) && !(usuariosAtivos || []).some((item) => item.id !== id && ehAdministrador(item))) {
+    throw new Error("Não é possível excluir o último administrador ativo. Promova outro usuário antes.");
+  }
+
+  const { error: deleteRecordError } = await serviceClient.rpc("app_excluir_usuario_admin", {
+    p_usuario_id: id
+  });
+  if (deleteRecordError) {
+    throw new Error(deleteRecordError.message || "Não foi possível excluir o cadastro do Hub.");
+  }
+
+  let authDeleted: boolean | null = usuario.auth_user_id ? true : null;
+  if (usuario.auth_user_id) {
+    const { error: authDeleteError } = await serviceClient.auth.admin.deleteUser(usuario.auth_user_id);
+    if (authDeleteError) {
+      authDeleted = false;
+    }
+  }
+
+  await registrarAuditoria(serviceClient, {
+    p_acao: "usuario.excluir",
+    p_recurso: "admin.usuarios",
+    p_detalhes: { usuario_id: usuario.id, email: usuario.email, auth_deleted: authDeleted }
+  });
+
+  return {
+    record_deleted: true,
+    auth_deleted: authDeleted,
+    warning: authDeleted ? null : "O cadastro foi removido do Hub, mas a conta do Supabase Auth ainda precisa ser removida."
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -305,10 +439,15 @@ Deno.serve(async (req: Request) => {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    await requireAdmin(serviceClient, authorization);
-
     const payload = await req.json().catch(() => ({}));
     const action = normalizeText(payload.action);
+
+    if (action === "completeFirstPasswordChange") {
+      const result = await completeFirstPasswordChange(serviceClient, authorization);
+      return jsonResponse({ ok: true, ...result });
+    }
+
+    const admin = await requireAdmin(serviceClient, authorization);
 
     if (action === "saveUser") {
       const result = await saveUser(serviceClient, payload);
@@ -317,6 +456,11 @@ Deno.serve(async (req: Request) => {
 
     if (action === "setPassword") {
       const result = await setPassword(serviceClient, payload);
+      return jsonResponse({ ok: true, ...result });
+    }
+
+    if (action === "deleteUser") {
+      const result = await deleteUser(serviceClient, payload, String(admin.requester_auth_user_id || ""));
       return jsonResponse({ ok: true, ...result });
     }
 

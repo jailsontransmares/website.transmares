@@ -1,4 +1,6 @@
 import { exigirSupabaseConfigurado } from '../supabaseClient.js';
+import { HOME_SUBMODULES, obterSubmodulosHomeConfigurados } from '../homeSubmodules.js';
+import { obterRecursoModulo } from './permissionService.js';
 
 const DEFAULT_COLORS = {
   cor_principal: '#294895',
@@ -392,6 +394,101 @@ export async function listarModulosAdmin() {
   return { modules };
 }
 
+export async function listarConfiguracaoModulosHomeAdmin() {
+  const supabase = exigirSupabaseConfigurado();
+  const [modulesResponse, resourcesResponse, profilesResponse, profilePermissionsResponse] = await Promise.all([
+    listarModulosAdmin(),
+    supabase
+      .from('recursos_acesso')
+      .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
+      .order('ordem', { ascending: true }),
+    supabase
+      .from('perfis')
+      .select('id, nome, slug, status, nivel')
+      .order('nivel', { ascending: false })
+      .order('nome', { ascending: true }),
+    supabase
+      .from('perfil_permissoes')
+      .select('perfil_id, recurso_chave, acao, permitido')
+      .eq('acao', 'view')
+  ]);
+
+  if (resourcesResponse.error) {
+    throw new Error(resourcesResponse.error.message || 'Não foi possível carregar os recursos dos módulos.');
+  }
+
+  if (profilesResponse.error) {
+    throw new Error(profilesResponse.error.message || 'Não foi possível carregar os perfis.');
+  }
+
+  if (profilePermissionsResponse.error) {
+    throw new Error(profilePermissionsResponse.error.message || 'Não foi possível carregar as permissões dos perfis.');
+  }
+
+  const recursosPorChave = new Map((resourcesResponse.data || [])
+    .filter(item => HOME_SUBMODULES.some(submodule => submodule.key === item.chave))
+    .map(item => [item.chave, item]));
+  const chavesRecursos = new Set((resourcesResponse.data || []).map(item => item.chave));
+  const modules = modulesResponse.modules.map(item => {
+    const permissionKey = obterRecursoModulo(item.slug);
+    return {
+      ...item,
+      permissionKey: chavesRecursos.has(permissionKey) ? permissionKey : ''
+    };
+  });
+  const submodules = obterSubmodulosHomeConfigurados([...recursosPorChave.values()])
+    .filter(item => recursosPorChave.has(item.key))
+    .map(item => ({
+      ...item,
+      permissionKey: item.permission && chavesRecursos.has(item.permission) ? item.permission : ''
+    }));
+
+  return {
+    modules,
+    submodules,
+    profiles: (profilesResponse.data || []).filter(item => item.status !== 'inativo'),
+    profilePermissions: profilePermissionsResponse.data || []
+  };
+}
+
+export async function salvarConfiguracaoSubmodulosHomeAdmin({ submodulos = [] } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const permitidas = new Map(HOME_SUBMODULES.map(item => [item.key, item]));
+  const alteracoes = Array.isArray(submodulos)
+    ? submodulos
+      .filter(item => permitidas.has(item?.key))
+      .map(item => ({
+        key: item.key,
+        status: item.status === 'inativo' ? 'inativo' : 'ativo',
+        exibir_home: item.status !== 'inativo' && item.exibir_home !== false
+      }))
+    : [];
+
+  if (!alteracoes.length) {
+    throw new Error('Nenhum submódulo informado para atualização.');
+  }
+
+  for (const alteracao of alteracoes) {
+    const { data, error } = await supabase
+      .from('recursos_acesso')
+      .update({ status: alteracao.status, exibir_home: alteracao.exibir_home })
+      .eq('chave', alteracao.key)
+      .eq('tipo', 'aba')
+      .select('chave, status, exibir_home')
+      .single();
+
+    if (error) {
+      throw new Error(error.message || `Não foi possível atualizar o submódulo ${alteracao.key}.`);
+    }
+
+    if (data.status !== alteracao.status || data.exibir_home !== alteracao.exibir_home) {
+      throw new Error(`O Supabase não confirmou a configuração do submódulo ${alteracao.key}.`);
+    }
+  }
+
+  return listarConfiguracaoModulosHomeAdmin();
+}
+
 export async function listarUsuariosAdmin() {
   const supabase = exigirSupabaseConfigurado();
   const [usuarios, perfis, permissoesUsuario, permissoesPerfil] = await Promise.all([
@@ -508,6 +605,7 @@ export async function listarUsuariosAdmin() {
     return {
       id: usuario.id,
       nome: usuario.nome || usuario.email || 'Usuário',
+      nome_usuario: usuario.nome_usuario || '',
       email: usuario.email || '',
       cpf: usuario.cpf || '',
       telefone: usuario.telefone || '',
@@ -537,6 +635,7 @@ export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
     supabase
       .from('recursos_acesso')
       .select('*')
+      .eq('status', 'ativo')
       .order('ordem', { ascending: true }),
     supabase
       .from('usuario_permissoes')
@@ -558,7 +657,7 @@ export async function listarPermissoesUsuarioAdmin({ usuario_id }) {
   };
 }
 
-export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfil_id, status, password }) {
+export async function salvarUsuarioAdmin({ id, nome, nome_usuario, email, cpf, telefone, perfil_id, status, password }) {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase.functions.invoke('admin-users', {
     body: {
@@ -566,6 +665,7 @@ export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfi
       user: {
         id: id || null,
         nome,
+        nome_usuario,
         email,
         cpf,
         telefone,
@@ -577,13 +677,43 @@ export async function salvarUsuarioAdmin({ id, nome, email, cpf, telefone, perfi
   });
 
   if (error) {
-    throw new Error(error.message || 'Não foi possível salvar o usuário.');
+    const resposta = error.context && typeof error.context.clone === 'function'
+      ? await error.context.clone().json().catch(() => null)
+      : null;
+    throw new Error(resposta?.message || error.message || 'Não foi possível salvar o usuário.');
   }
 
   if (data?.ok === false) {
     throw new Error(data.message || 'Não foi possível salvar o usuário.');
   }
 
+  return data || {};
+}
+
+export async function excluirUsuarioAdmin({ id }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'deleteUser', id }
+  });
+
+  if (error) {
+    const resposta = error.context && typeof error.context.clone === 'function'
+      ? await error.context.clone().json().catch(() => null)
+      : null;
+    throw new Error(resposta?.message || error.message || 'Não foi possível excluir o usuário.');
+  }
+  if (data?.ok === false) throw new Error(data.message || 'Não foi possível excluir o usuário.');
+  return data || {};
+}
+
+export async function salvarSenhaTemporariaUsuarioAdmin({ id, password }) {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body: { action: 'setPassword', id, password }
+  });
+
+  if (error) throw new Error(error.message || 'Não foi possível sincronizar a senha com o Supabase.');
+  if (data?.ok === false) throw new Error(data.message || 'Não foi possível sincronizar a senha com o Supabase.');
   return data || {};
 }
 
@@ -698,6 +828,7 @@ export async function listarPermissoesAdmin() {
     supabase
       .from('recursos_acesso')
       .select('*')
+      .eq('status', 'ativo')
       .order('ordem', { ascending: true }),
     supabase
       .from('perfis')
@@ -974,9 +1105,11 @@ export async function salvarVisibilidadeModulosHomeAdmin({ modulos = [] }) {
     }
 
     const dadosAtuais = getDadosItem(atual);
+    const statusAtual = normalizarModuloAdmin(atual).status;
+    const exibirHome = statusAtual !== 'inativo' && Boolean(alteracao.exibir_home);
     const dadosAtualizados = {
       ...dadosAtuais,
-      exibir_home: Boolean(alteracao.exibir_home)
+      exibir_home: exibirHome
     };
 
     const { error } = await supabase
@@ -1000,7 +1133,7 @@ export async function salvarVisibilidadeModulosHomeAdmin({ modulos = [] }) {
 
     const moduloAtualizado = normalizarModuloAdmin(confirmado);
 
-    if (moduloAtualizado.exibir_home !== Boolean(alteracao.exibir_home)) {
+    if (moduloAtualizado.exibir_home !== exibirHome) {
       throw new Error('O Supabase não confirmou a alteração da visibilidade do módulo.');
     }
   }
@@ -1036,9 +1169,15 @@ export async function salvarStatusModuloAdmin({ id, status }) {
     throw new Error('O módulo Administração não pode ser inativado.');
   }
 
+  const dadosAtualizados = statusNormalizado === 'inativo'
+    ? { ...getDadosItem(atual), exibir_home: false }
+    : getDadosItem(atual);
   const { error } = await supabase
     .from('itens')
-    .update({ status: statusNormalizado })
+    .update({
+      status: statusNormalizado,
+      ...(statusNormalizado === 'inativo' ? { dados: dadosAtualizados } : {})
+    })
     .eq('id', id);
 
   if (error) {
@@ -1057,7 +1196,8 @@ export async function salvarStatusModuloAdmin({ id, status }) {
 
   const moduloAtualizado = normalizarModuloAdmin(atualizado);
 
-  if (moduloAtualizado.status !== statusNormalizado) {
+  if (moduloAtualizado.status !== statusNormalizado
+    || (statusNormalizado === 'inativo' && moduloAtualizado.exibir_home !== false)) {
     throw new Error('O Supabase não confirmou a alteração. Verifique as permissões de update da tabela itens.');
   }
 

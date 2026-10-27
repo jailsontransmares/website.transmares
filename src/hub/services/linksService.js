@@ -72,6 +72,7 @@ function mapearLink(item, apoio, usuario) {
     titulo: item.titulo || '',
     descricao: item.descricao || '',
     url: item.url || '',
+    escopo: dados.escopo || 'corretora',
     categoria: categoria?.nome || dados.categoria || '',
     grupo: grupo?.nome || dados.grupo || '',
     status: item.status || 'ativo',
@@ -101,11 +102,12 @@ export async function carregarLinksData(payload = {}) {
     throw new Error(error.message || 'Não foi possível carregar links.');
   }
 
-  const escopo = payload.escopo || 'corretora';
+  const escopo = payload.escopo || 'todos';
   const links = (data || [])
     .filter(item => {
       const dados = getDados(item);
-      return normalizarStatus(dados.tipo) === 'link' && (dados.escopo || 'corretora') === escopo;
+      const escopoItem = dados.escopo || 'corretora';
+      return normalizarStatus(dados.tipo) === 'link' && (escopo === 'todos' || escopoItem === escopo);
     })
     .map(item => mapearLink(item, apoio, usuario));
 
@@ -120,6 +122,7 @@ export async function carregarLinksData(payload = {}) {
 export async function salvarLinkItem(payload = {}) {
   const supabase = exigirSupabaseConfigurado();
   const apoio = await carregarApoio();
+  const escopo = String(payload.escopo || 'corretora').trim().toLowerCase();
   const item = {
     titulo: String(payload.titulo || '').trim(),
     descricao: String(payload.descricao || '').trim() || null,
@@ -129,7 +132,7 @@ export async function salvarLinkItem(payload = {}) {
     status: payload.status === 'inativo' ? 'inativo' : 'ativo',
     dados: {
       tipo: 'link',
-      escopo: payload.escopo || 'corretora',
+      escopo,
       categoria: payload.categoria || '',
       grupo: payload.grupo || ''
     }
@@ -137,6 +140,19 @@ export async function salvarLinkItem(payload = {}) {
 
   if (!item.titulo || !item.url) {
     throw new Error('Informe título e URL do link.');
+  }
+
+  if (!['corretora', 'ar', 'gestao'].includes(escopo)) {
+    throw new Error('Selecione uma área válida para o link.');
+  }
+
+  try {
+    const url = new URL(item.url);
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      throw new Error();
+    }
+  } catch {
+    throw new Error('Informe uma URL válida começando com http:// ou https://.');
   }
 
   if (payload.id) {

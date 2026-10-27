@@ -27,6 +27,11 @@ function getOpenModals() {
   return Array.from(document.querySelectorAll(MODAL_SELECTOR)).filter(isVisible);
 }
 
+function isContainedModal(modal) {
+  return modal.classList.contains('hub-modal-backdrop--contained')
+    || Boolean(modal.closest('.hub-modal-scope'));
+}
+
 function ensureHeadingId(dialog) {
   const heading = dialog.querySelector('h1, h2, h3, h4, h5, h6');
   if (!heading) return;
@@ -55,7 +60,10 @@ function enhanceModal(backdrop) {
 }
 
 function updateScrollLock() {
-  document.body.classList.toggle('modal-is-open', getOpenModals().length > 0);
+  const hasViewportModal = getOpenModals().some(
+    (modal) => !isContainedModal(modal)
+  );
+  document.body.classList.toggle('modal-is-open', hasViewportModal);
 }
 
 function focusInitialElement(dialog) {
@@ -103,7 +111,10 @@ function closeWithEscape() {
 
 function syncModals() {
   const openModals = getOpenModals();
-  openModals.forEach(enhanceModal);
+  openModals.forEach((modal) => {
+    if (isContainedModal(modal)) modal.classList.add('hub-modal-backdrop--contained');
+    enhanceModal(modal);
+  });
   const nextModal = openModals[openModals.length - 1] || null;
 
   if (nextModal !== activeModal) {

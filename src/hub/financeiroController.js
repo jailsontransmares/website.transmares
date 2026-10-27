@@ -49,10 +49,16 @@ import {
   salvarOrcamentoFinanceiro,
   validarChecklistHomologacaoFinanceiro
 } from './services/financeiroService.js';
+import {
+  abrirMenuAcaoGlobal,
+  fecharMenuAcaoGlobal
+} from './actionMenuPortal.js';
 
 export function criarFinanceiroController({
   renderShell,
   pode,
+  submoduleEnabled = () => true,
+  renderUnavailable = () => {},
   escapeHtml,
   escapeAttr,
   obterPartesRota,
@@ -159,6 +165,7 @@ export function criarFinanceiroController({
     },
     lancamentoAba: 'titulos',
     configuracaoAba: 'parametros',
+    submoduleEnabled,
     lancamentosOperacional: {
       carregadoEmpresaId: '',
       loading: false,
@@ -180,6 +187,133 @@ export function criarFinanceiroController({
     pode
   };
 
+  let faixaNavegacaoFinanceiro = '';
+  let resizeNavegacaoFinanceiroConfigurado = false;
+  let menuMaisFinanceiroAberto = null;
+  let listenersMenuMaisFinanceiroConfigurados = false;
+
+  function fecharMenuMaisFinanceiro() {
+    if (!menuMaisFinanceiroAberto) return;
+
+    const menu = menuMaisFinanceiroAberto.menu;
+    const trigger = menuMaisFinanceiroAberto.trigger;
+    fecharMenuAcaoGlobal(menu);
+    menu.hidden = true;
+    trigger?.setAttribute('aria-expanded', 'false');
+    menuMaisFinanceiroAberto = null;
+  }
+
+  function configurarListenersMenuMaisFinanceiro() {
+    if (listenersMenuMaisFinanceiroConfigurados || typeof document === 'undefined') return;
+
+    document.addEventListener('click', event => {
+      const trigger = event.target?.closest?.('[data-fin-more-trigger]');
+      const menu = event.target?.closest?.('[data-hub-action-menu-portal]');
+
+      if (!trigger && !menu) fecharMenuMaisFinanceiro();
+    }, true);
+
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !menuMaisFinanceiroAberto) return;
+
+      event.preventDefault();
+      const trigger = menuMaisFinanceiroAberto.trigger;
+      fecharMenuMaisFinanceiro();
+      trigger?.focus();
+    });
+
+    listenersMenuMaisFinanceiroConfigurados = true;
+  }
+
+  function conectarMenusMaisFinanceiro() {
+    configurarListenersMenuMaisFinanceiro();
+
+    document.querySelectorAll('[data-fin-more-trigger]').forEach(trigger => {
+      trigger.addEventListener('keydown', event => {
+        if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+
+        event.preventDefault();
+        trigger.click();
+        const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+        const itens = Array.from(menu?.querySelectorAll('[role="menuitem"]') || []);
+        itens[event.key === 'ArrowDown' ? 0 : itens.length - 1]?.focus();
+      });
+
+      trigger.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+        if (!menu) return;
+
+        const abrir = menu.hidden;
+        fecharMenuMaisFinanceiro();
+        if (!abrir) return;
+
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        menuMaisFinanceiroAberto = { menu, trigger };
+        abrirMenuAcaoGlobal(trigger, menu, {
+          minWidth: 190,
+          maxWidth: 320,
+          gap: 6,
+          flipVertical: true
+        });
+        menu.querySelector('[role="menuitem"], button')?.focus();
+      });
+
+      const menu = document.getElementById(trigger.getAttribute('aria-controls') || '');
+      menu?.addEventListener('keydown', event => {
+        const itens = Array.from(menu.querySelectorAll('[role="menuitem"]'));
+        const atual = itens.indexOf(event.target);
+        if (!itens.length) return;
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          fecharMenuMaisFinanceiro();
+          trigger.focus();
+          return;
+        }
+
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+
+        event.preventDefault();
+        const proximo = event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? itens.length - 1
+            : (atual + (event.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length;
+        itens[proximo]?.focus();
+      });
+
+      menu?.querySelectorAll('[role="menuitem"]').forEach(item => {
+        item.addEventListener('click', () => fecharMenuMaisFinanceiro());
+      });
+    });
+  }
+
+  function obterFaixaNavegacaoFinanceiroAtual() {
+    const largura = window.innerWidth;
+    if (largura <= 480) return 'compact';
+    if (largura <= 760) return 'mobile';
+    if (largura <= 1000) return 'tablet';
+    return 'desktop';
+  }
+
+  function configurarResizeNavegacaoFinanceiro() {
+    if (resizeNavegacaoFinanceiroConfigurado || typeof window === 'undefined') return;
+
+    faixaNavegacaoFinanceiro = obterFaixaNavegacaoFinanceiroAtual();
+    window.addEventListener('resize', () => {
+      const novaFaixa = obterFaixaNavegacaoFinanceiroAtual();
+      if (novaFaixa === faixaNavegacaoFinanceiro) return;
+
+      faixaNavegacaoFinanceiro = novaFaixa;
+      render();
+    });
+    resizeNavegacaoFinanceiroConfigurado = true;
+  }
+
   function obterSecaoRota() {
     const partes = obterPartesRota();
     const aliases = {
@@ -200,7 +334,8 @@ export function criarFinanceiroController({
     const abaInformada = String(partes[2] || 'pessoas').trim().toLowerCase();
     const aba = aliases[abaInformada] || abaInformada;
 
-    return FINANCEIRO_CADASTRO_ABAS.some(item => item.id === aba) ? aba : 'pessoas';
+    const solicitada = FINANCEIRO_CADASTRO_ABAS.some(item => item.id === aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('cadastros', solicitada);
   }
 
   function obterRotaCadastros() {
@@ -222,23 +357,53 @@ export function criarFinanceiroController({
     const abaInformada = String(partes[2] || 'titulos').trim().toLowerCase();
     const aba = aliases[abaInformada] || abaInformada;
 
-    return FINANCEIRO_LANCAMENTO_ABAS.some(item => item.id === aba) ? aba : 'titulos';
+    const solicitada = FINANCEIRO_LANCAMENTO_ABAS.some(item => item.id === aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('lancamentos', solicitada);
   }
 
   function obterConfiguracaoAbaRota() {
     const partes = obterPartesRota();
     const aba = String(partes[2] || 'parametros').trim().toLowerCase();
-    return ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'].includes(aba) ? aba : 'parametros';
+    const solicitada = ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'].includes(aba) ? aba : '';
+    return obterPrimeiraAbaFinanceiraAtiva('configuracoes', solicitada);
+  }
+
+  function obterChaveAbaFinanceira(secao, aba) {
+    const segmento = aba === 'centros_custo' ? 'centros_custo' : aba;
+    return `home.financeiro.${secao}.${segmento}`;
+  }
+
+  function submoduloFinanceiroAtivo(secao, aba) {
+    return submoduleEnabled(obterChaveAbaFinanceira(secao, aba));
+  }
+
+  function obterPrimeiraAbaFinanceiraAtiva(secao, solicitada = '') {
+    const abas = secao === 'cadastros'
+      ? FINANCEIRO_CADASTRO_ABAS.map(item => item.id)
+      : secao === 'lancamentos'
+        ? FINANCEIRO_LANCAMENTO_ABAS.map(item => item.id)
+        : ['parametros', 'alertas', 'backups', 'auditoria', 'homologacao'];
+    if (solicitada && submoduloFinanceiroAtivo(secao, solicitada)) return solicitada;
+    return abas.find(aba => submoduloFinanceiroAtivo(secao, aba)) || '';
+  }
+
+  function secaoFinanceiraDisponivel(secao) {
+    if (!submoduleEnabled(`financeiro.${secao.id}`)) return false;
+    if (['cadastros', 'lancamentos', 'configuracoes'].includes(secao.id)) {
+      return Boolean(obterPrimeiraAbaFinanceiraAtiva(secao.id));
+    }
+    return true;
   }
 
   function obterSecaoPermitida(secao) {
     const candidata = FINANCEIRO_SECOES.find(item => item.id === secao);
-    if (candidata && podeAcessarSecaoFinanceiro(candidata, pode)) return candidata.id;
+    if (candidata && podeAcessarSecaoFinanceiro(candidata, pode) && secaoFinanceiraDisponivel(candidata)) return candidata.id;
 
-    return FINANCEIRO_SECOES.find(item => podeAcessarSecaoFinanceiro(item, pode))?.id || '';
+    return FINANCEIRO_SECOES.find(item => podeAcessarSecaoFinanceiro(item, pode) && secaoFinanceiraDisponivel(item))?.id || '';
   }
 
   function render() {
+    fecharMenuMaisFinanceiro();
     document.getElementById('app').innerHTML = renderFinanceiroPagina({
       state,
       renderShell,
@@ -246,6 +411,7 @@ export function criarFinanceiroController({
       escapeAttr
     });
     conectarEventos();
+    conectarMenusMaisFinanceiro();
   }
 
   function navegar(secao) {
@@ -1079,8 +1245,13 @@ export function criarFinanceiroController({
   }
 
   async function abrir() {
+    configurarResizeNavegacaoFinanceiro();
     const secaoRota = obterSecaoRota();
     const secaoPermitida = obterSecaoPermitida(secaoRota);
+    if (!secaoPermitida) {
+      renderUnavailable('financeiro');
+      return;
+    }
     const rotaAtual = obterPartesRota();
     const secaoInformada = String(rotaAtual[1] || '').trim().toLowerCase();
 

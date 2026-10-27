@@ -336,7 +336,7 @@ function posicionarPainelNotificacoes() {
   if (!botao || !painel) return;
   const margem = 12;
   const rect = botao.getBoundingClientRect();
-  const largura = Math.min(440, window.innerWidth - margem * 2);
+  const largura = Math.min(340, window.innerWidth - margem * 2);
   const esquerda = Math.min(Math.max(margem, rect.right - largura), window.innerWidth - largura - margem);
   painel.style.setProperty('--hub-notification-panel-left', `${esquerda}px`);
   painel.style.setProperty('--hub-notification-panel-top', `${rect.bottom + 10}px`);

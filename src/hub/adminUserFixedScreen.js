@@ -281,7 +281,7 @@ async function carregarUsuario(id) {
     const client = exigirSupabaseConfigurado();
     const { data, error } = await client
       .from('usuarios')
-      .select('id, nome, email, perfil_id, status, cpf, telefone')
+      .select('id, nome, nome_usuario, email, perfil_id, status, cpf, telefone')
       .eq('id', id)
       .maybeSingle();
 
@@ -300,9 +300,9 @@ function invalidarCacheUsuario(id = '') {
 }
 
 function renderOptionsPerfis(perfis, perfilAtual = '') {
-  const options = ['<option value="">Selecione</option>'];
+  const options = ['<option value="">Selecione um perfil ativo</option>'];
   perfis
-    .filter(perfil => perfil.status !== 'inativo' || perfil.id === perfilAtual)
+    .filter(perfil => String(perfil.status || '').trim().toLowerCase() === 'ativo')
     .forEach(perfil => {
       options.push(`<option value="${escapeAttr(perfil.id)}" ${perfil.id === perfilAtual ? 'selected' : ''}>${escapeHtml(perfil.nome || perfil.slug || 'Perfil')}</option>`);
     });
@@ -330,6 +330,7 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
         </div>
         <div class="admin-user-direct-fields">
           <label><span>Nome</span><input id="${prefixo}_nome" class="config-input" type="text" value="${escapeAttr(usuario.nome || '')}"></label>
+          <label><span>Nome de usuário *</span><input id="${prefixo}_nome_usuario" class="config-input" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9._-]{3,32}" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${escapeAttr(usuario.nome_usuario || '')}" placeholder="ex.: joao.silva"><small>Use de 3 a 32 letras sem acento, números, ponto, hífen ou sublinhado.</small></label>
           <label><span>E-mail</span><input id="${prefixo}_email" class="config-input" type="email" value="${escapeAttr(usuario.email || '')}"></label>
           <label><span>CPF</span><input id="${prefixo}_cpf" class="config-input" type="text" value="${escapeAttr(usuario.cpf || '')}" placeholder="000.000.000-00"></label>
           <label><span>Telefone</span><input id="${prefixo}_telefone" class="config-input" type="tel" value="${escapeAttr(usuario.telefone || '')}" placeholder="(00) 00000-0000"></label>
@@ -341,7 +342,7 @@ function renderTelaDadosUsuario(estado, usuario, perfis) {
           <h4>Acesso e permissões</h4>
           <p>Controle de perfil, status, senha e permissões adicionais.</p>
         </div>
-        <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input">${renderOptionsPerfis(perfis, usuario.perfil_id || '')}</select></label>
+        <label><span>Perfil</span><select id="${prefixo}_perfil" class="config-input" required>${renderOptionsPerfis(perfis, usuario.perfil_id || '')}</select></label>
         <label><span>Status</span><select id="${prefixo}_status" class="config-input">${renderOptionsStatus(usuario.status || 'ativo')}</select></label>
         <p class="admin-user-direct-note">Status padronizado com o Supabase: ativo, inativo ou arquivado. Para bloquear acesso, use inativo.</p>
         <label><span>${editando ? 'Nova senha administrativa' : 'Senha inicial'}</span><input id="${prefixo}_senha_admin" class="config-input" type="text" autocomplete="new-password" placeholder="${editando ? 'Opcional' : 'Gerar ou informar senha'}"></label>

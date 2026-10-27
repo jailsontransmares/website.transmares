@@ -1,4 +1,4 @@
-import { atualizarProdutosGrupoAR, carregarDadosAR, gerarLinksAR } from './services/arService.js';
+import { atualizarProdutosGrupoAR, atualizarStatusProdutosAR, carregarDadosAR, carregarProdutosARPorStatus, criarProdutoAR, gerarLinksAR } from './services/arService.js';
 import { adicionarAnexoCrmAr, alternarReacaoComentarioCrmAr, atualizarComentarioCrmAr, atualizarTarefaCrmAr, carregarAtividadeCrmAr, carregarDadosCrmAr, carregarOpcoesCadastroCrmAr, carregarPedidosRelacionadosCrmAr, criarClienteCrmAr, criarComentarioCrmAr, excluirComentarioCrmAr, responderComentarioCrmAr, sincronizarCrmAr, sincronizarPendenciaCrmAr } from './services/arCrmService.js';
 import {
   cancelarReciboAR,
@@ -13,6 +13,7 @@ import {
   carregarAdminData,
   listarPerfisAdmin,
   listarModulosAdmin,
+  listarConfiguracaoModulosHomeAdmin,
   obterParceiroIndicacaoAdmin,
   listarPermissoesAdmin,
   listarPermissoesUsuarioAdmin,
@@ -25,6 +26,8 @@ import {
   arquivarParceirosIndicacaoAdminLote,
   excluirPerfilAdmin,
   listarUsuariosAdmin,
+  excluirUsuarioAdmin,
+  salvarSenhaTemporariaUsuarioAdmin,
   restaurarCoresPadrao,
   salvarConfig,
   salvarPerfilAdmin,
@@ -36,7 +39,8 @@ import {
   salvarUsuarioAdmin,
   salvarStatusModuloAdmin,
   salvarTemaUsuario,
-  salvarVisibilidadeModulosHomeAdmin
+  salvarVisibilidadeModulosHomeAdmin,
+  salvarConfiguracaoSubmodulosHomeAdmin
 } from './services/adminService.js';
 import { carregarDadosIniciaisSupabase } from './services/hubService.js';
 import {
@@ -46,13 +50,49 @@ import {
 } from './services/linksService.js';
 import {
   carregarPasswordsData,
+  alterarStatusSeguradora,
+  criarAcessosSeguradora,
+  excluirSeguradora,
   excluirPasswordItem,
+  renomearSeguradora,
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
+import {
+  createConsultoria360Atendimento,
+  addConsultoria360Event,
+  deleteConsultoria360Atendimento,
+  getConsultoria360Atendimento,
+  getConsultoria360Dashboard,
+  listConsultoria360Clients,
+  listConsultoria360Companies,
+  saveConsultoria360Dimensioning,
+  saveConsultoria360Opportunity,
+  saveConsultoria360Proposal,
+  saveConsultoria360Responses,
+  updateConsultoria360Atendimento
+} from './services/consultoria360Service.js';
+import {
+  getSimuladorSaudeCatalog,
+  getLatestSimuladorSaudeQuote,
+  getRecentSimuladorSaudeQuotes,
+  getSimuladorSaudeQuoteById,
+  getSimuladorSaudeBrokerBranding,
+  saveSimuladorSaudeQuote,
+  setSimuladorSaudeQuoteStatus,
+  deleteSimuladorSaudeQuote,
+  saveSimuladorSaudeOperator,
+  saveSimuladorSaudePlan,
+  deleteSimuladorSaudePlan,
+  setSimuladorSaudePlanStatus,
+  saveSimuladorSaudeTable,
+  deleteSimuladorSaudeTable,
+  setSimuladorSaudeTableStatus
+} from './services/simuladorSaudeService.js';
 
 const ACOES_QUE_INVALIDAM_ACESSO = new Set([
   'saveAdminUser',
+  'deleteAdminUser',
   'saveAdminProfile',
   'deleteAdminProfile',
   'saveAdminProfilePermission',
@@ -97,10 +137,43 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'getArProductsByStatus') {
+      const produtos = await carregarProdutosARPorStatus(payload.status);
+      return { ok: true, data: { produtos } };
+    }
+
     if (action === 'getArCrmData') {
       const dados = await carregarDadosCrmAr(payload.pagina, payload.limite);
       return { ok: true, data: dados };
     }
+
+    if (action === 'getConsultoria360Dashboard') return { ok: true, data: await getConsultoria360Dashboard(payload.empresaId) };
+    if (action === 'getConsultoria360Atendimento') return { ok: true, data: await getConsultoria360Atendimento(payload.id, payload.empresaId) };
+    if (action === 'listConsultoria360Clients') return { ok: true, data: await listConsultoria360Clients(payload.empresaId, payload.search) };
+    if (action === 'listConsultoria360Companies') return { ok: true, data: await listConsultoria360Companies() };
+    if (action === 'createConsultoria360Atendimento') return { ok: true, data: await createConsultoria360Atendimento(payload) };
+    if (action === 'updateConsultoria360Atendimento') return { ok: true, data: await updateConsultoria360Atendimento(payload) };
+    if (action === 'saveConsultoria360Responses') return { ok: true, data: await saveConsultoria360Responses(payload) };
+    if (action === 'saveConsultoria360Dimensioning') return { ok: true, data: await saveConsultoria360Dimensioning(payload) };
+    if (action === 'saveConsultoria360Proposal') return { ok: true, data: await saveConsultoria360Proposal(payload) };
+    if (action === 'saveConsultoria360Opportunity') return { ok: true, data: await saveConsultoria360Opportunity(payload) };
+    if (action === 'addConsultoria360Event') return { ok: true, data: await addConsultoria360Event(payload) };
+    if (action === 'deleteConsultoria360Atendimento') return { ok: true, data: await deleteConsultoria360Atendimento(payload.id, payload.empresaId) };
+    if (action === 'getSimuladorSaudeCatalog') return { ok: true, data: await getSimuladorSaudeCatalog() };
+    if (action === 'getLatestSimuladorSaudeQuote') return { ok: true, data: await getLatestSimuladorSaudeQuote() };
+    if (action === 'getRecentSimuladorSaudeQuotes') return { ok: true, data: await getRecentSimuladorSaudeQuotes(payload.limit) };
+    if (action === 'getSimuladorSaudeQuoteById') return { ok: true, data: await getSimuladorSaudeQuoteById(payload.id) };
+    if (action === 'saveSimuladorSaudeQuote') return { ok: true, data: await saveSimuladorSaudeQuote(payload) };
+    if (action === 'setSimuladorSaudeQuoteStatus') return { ok: true, data: await setSimuladorSaudeQuoteStatus(payload.id, payload.status) };
+    if (action === 'deleteSimuladorSaudeQuote') return { ok: true, data: await deleteSimuladorSaudeQuote(payload.id) };
+    if (action === 'saveSimuladorSaudeOperator') return { ok: true, data: await saveSimuladorSaudeOperator(payload) };
+    if (action === 'saveSimuladorSaudePlan') return { ok: true, data: await saveSimuladorSaudePlan(payload) };
+    if (action === 'deleteSimuladorSaudePlan') return { ok: true, data: await deleteSimuladorSaudePlan(payload.id) };
+    if (action === 'setSimuladorSaudePlanStatus') return { ok: true, data: await setSimuladorSaudePlanStatus(payload.id, payload.status) };
+    if (action === 'getSimuladorSaudeBrokerBranding') return { ok: true, data: await getSimuladorSaudeBrokerBranding() };
+    if (action === 'saveSimuladorSaudeTable') return { ok: true, data: await saveSimuladorSaudeTable(payload) };
+    if (action === 'deleteSimuladorSaudeTable') return { ok: true, data: await deleteSimuladorSaudeTable(payload.id) };
+    if (action === 'setSimuladorSaudeTableStatus') return { ok: true, data: await setSimuladorSaudeTableStatus(payload.id, payload.status) };
 
     if (action === 'getArCrmFormOptions') {
       const dados = await carregarOpcoesCadastroCrmAr();
@@ -150,6 +223,16 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: resultado };
     }
 
+    if (action === 'updateArProductsStatus') {
+      const resultado = await atualizarStatusProdutosAR(payload.produtoIds, payload.status);
+      return { ok: true, data: resultado };
+    }
+
+    if (action === 'createArProduct') {
+      const resultado = await criarProdutoAR(payload);
+      return { ok: true, data: resultado };
+    }
+
     if (action === 'getArValidacoesData') {
       const dados = await carregarDadosValidacoesAR(payload);
       return { ok: true, data: dados };
@@ -188,6 +271,7 @@ export async function chamarApi(action, payload = {}) {
     const acoes = {
       getAdminData: () => carregarAdminData(),
       listAdminModules: () => listarModulosAdmin(),
+      listHomeModuleSettings: () => listarConfiguracaoModulosHomeAdmin(),
       listAdminUsers: () => listarUsuariosAdmin(),
       listAdminProfiles: () => listarPerfisAdmin(),
       listAdminPartners: () => listarParceirosIndicacaoAdmin(),
@@ -198,9 +282,12 @@ export async function chamarApi(action, payload = {}) {
       archiveAdminPartnersBatch: () => arquivarParceirosIndicacaoAdminLote(payload),
       listAdminPermissions: () => listarPermissoesAdmin(),
       listAdminUserPermissions: () => listarPermissoesUsuarioAdmin(payload),
+      saveHomeModuleProfilePermissionsBatch: () => salvarPermissoesPerfilAdminLote(payload),
       listAdminRecords: () => listarRegistrosAdmin(payload),
       listAdminIntegrationLogs: () => listarLogsIntegracoesAdmin(payload),
       saveAdminUser: () => salvarUsuarioAdmin(payload),
+      deleteAdminUser: () => excluirUsuarioAdmin(payload),
+      setAdminUserPassword: () => salvarSenhaTemporariaUsuarioAdmin(payload),
       saveAdminProfile: () => salvarPerfilAdmin(payload),
       deleteAdminProfile: () => excluirPerfilAdmin(payload),
       saveAdminProfilePermission: () => salvarPermissaoPerfilAdmin(payload),
@@ -210,6 +297,7 @@ export async function chamarApi(action, payload = {}) {
       saveAdminRecord: () => salvarRegistroAdmin(payload),
       updateAdminModuleStatus: () => salvarStatusModuloAdmin(payload),
       saveAdminModuleHomeVisibilityBatch: () => salvarVisibilidadeModulosHomeAdmin(payload),
+      saveHomeSubmodulesBatch: () => salvarConfiguracaoSubmodulosHomeAdmin(payload),
       saveConfig: () => salvarConfig(payload),
       restoreDefaultColors: () => restaurarCoresPadrao(),
       saveUserTheme: () => salvarTemaUsuario(payload),
@@ -218,7 +306,11 @@ export async function chamarApi(action, payload = {}) {
       toggleFavoriteLink: () => alternarFavoritoLink(payload),
       getPasswordsData: () => carregarPasswordsData(payload),
       deletePasswordItem: () => excluirPasswordItem(payload),
-      savePasswordItem: () => salvarPasswordItem(payload)
+      savePasswordItem: () => salvarPasswordItem(payload),
+      createInsurerAccesses: () => criarAcessosSeguradora(payload),
+      setInsurerStatus: () => alterarStatusSeguradora(payload),
+      renameInsurer: () => renomearSeguradora(payload),
+      deleteInsurer: () => excluirSeguradora(payload)
     };
 
     if (!acoes[action]) {
