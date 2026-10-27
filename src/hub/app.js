@@ -15322,9 +15322,23 @@ async function visualizarReciboValidacoesAr(id) {
           body.ar-recibo-preview-page { background: var(--fundo, #f4f7fb); color: var(--texto, #172033); margin: 0; min-height: 100vh; padding: 24px; }
           .ar-recibo-preview-page .ar-recibo-preview-shell { aspect-ratio: 297 / 210; background: #fff; box-sizing: border-box; margin: 0 auto; max-width: 1122px; padding: 1cm; width: 100%; }
           .ar-recibo-preview-controls { display: flex; gap: 8px; justify-content: flex-end; margin: 0 auto 14px; max-width: 1122px; }
-          .ar-recibo-preview-page .ar-recibo-print { background: transparent; border: 0; border-radius: 0; box-sizing: border-box; min-height: 100%; padding: 0; width: 100%; }
+          .ar-recibo-preview-page .ar-recibo-print { background: transparent; border: 0; border-radius: 0; box-sizing: border-box; padding: 0; width: 100%; }
           @media (max-width: 760px) { body.ar-recibo-preview-page { padding: 12px; } }
-          @media print { body.ar-recibo-preview-page { background: #fff; margin: 0; padding: 0; } .ar-recibo-preview-controls { display: none !important; } .ar-recibo-preview-page .ar-recibo-preview-shell { aspect-ratio: auto; background: transparent; margin: 0; max-width: none; padding: 0; width: auto; } .ar-recibo-preview-page .ar-recibo-print { padding: 0; } }
+          @page { size: A4 landscape; margin: 1cm; }
+          @media print {
+            body.ar-recibo-preview-page { background: #fff; margin: 0; padding: 0; }
+            .ar-recibo-preview-controls { display: none !important; }
+            .ar-recibo-preview-page .ar-recibo-preview-shell { aspect-ratio: auto; background: transparent; margin: 0; max-width: none; padding: 0; width: auto; }
+            .ar-recibo-preview-page .ar-recibo-print { align-content: start !important; background: transparent; display: grid !important; gap: 14px; grid-auto-rows: max-content; min-height: 0 !important; padding: 0; width: 100%; }
+            .ar-recibo-preview-page .ar-recibo-report-header { align-items: flex-start !important; display: flex !important; justify-content: space-between; }
+            .ar-recibo-preview-page .ar-recibo-report-top-grid { display: grid !important; gap: 16px; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) !important; }
+            .ar-recibo-preview-page .ar-recibo-report-partner,
+            .ar-recibo-preview-page .ar-recibo-report-receipt { break-inside: avoid; min-width: 0; page-break-inside: avoid; }
+            .ar-recibo-preview-page .ar-recibo-report-fields { display: grid !important; gap: 8px 14px; grid-template-columns: minmax(135px, 175px) minmax(0, 1fr) !important; }
+            .ar-recibo-preview-page .ar-recibo-report-right-fields { display: grid !important; gap: 10px; grid-template-columns: 125px minmax(0, 1fr) !important; }
+            .ar-recibo-preview-page .ar-recibo-report-dates { display: flex !important; justify-content: space-between; }
+            .ar-recibo-preview-page .ar-recibo-report-totals { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+          }
         </style>
       </head>
       <body class="ar-recibo-preview-page${temaEscuro}">
