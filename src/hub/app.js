@@ -1,5 +1,7 @@
-﻿import './style.css';
+import './style.css';
+import './hubToast.js';
 import './crm2Phase2.css';
+import './hubTableSorting.js';
 import './crm2PessoaFisica.js';
 import './crm2PessoaJuridica.js';
 import './crm2PessoaJuridica.css';
@@ -29,6 +31,7 @@ import { mountSimuladorSaudeQuotePage } from './simuladorSaudeCotacao.js';
 import { getHubAttachmentPreviewKind } from './hubAttachmentManager.js';
 import { initializeHubResizableTables } from './hubResizableTable.js';
 import { chamarApi } from './api.js';
+import { supabase } from './supabaseClient.js';
 import { obterRotuloStatusHub } from './statusLabels.js';
 import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
 import { entrarComSenha, obterSessaoAtual, sairDoHub, trocarSenhaProvisoria } from './services/authService.js';
@@ -546,13 +549,53 @@ const state = {
       pedido: '',
       cliente: ''
     },
+    filtrosModalAberto: false,
+    filtrosRascunho: {
+      codigoEntidade: '',
+      produto: '',
+      pedido: '',
+      cliente: ''
+    },
+    lancamentoManual: {
+      aberto: false,
+      message: '',
+      parceiros: [],
+      parceirosCarregados: false,
+      parceirosCarregando: false,
+      form: {
+        parceiro: '',
+        codigo: '',
+        data: '',
+        produto: '',
+        pedido: '',
+        cliente: '',
+        valor: ''
+      }
+    },
     pendentes: [],
+    paginaPendentes: 1,
+    ordenacaoPendentes: { campo: 'data', direcao: 'desc' },
     selecionados: [],
     recibos: [],
+    paginaRecibos: 1,
+    filtrosRecibos: { numero: '', parceiro: '', pedido: '', cliente: '' },
     reciboAtivo: null,
+    impostos: {
+      itens: [],
+      aberto: false,
+      loading: false,
+      saving: false,
+      message: '',
+      form: { id: '', nome: '', percentual: '' }
+    },
     importacaoRepasse: {
       mesBase: '',
       arquivoNome: '',
+      cabecalhos: [],
+      linhasOriginais: [],
+      mapeamentos: {},
+      tiposColunas: {},
+      camposExtras: [],
       linhas: [],
       erros: [],
       resumo: null,
@@ -646,14 +689,15 @@ let renderPainelAr;
 let selecionarAbaAr;
 const ADMIN_PARTNER_SEARCH_DEBOUNCE_MS = 650;
 const ADMIN_PARTNER_COLUMNS = [
-  { id: 'parceiro', label: 'Parceiro', locked: true, min: '180px', size: '1.2fr' },
-  { id: 'contato', label: 'Contato', min: '100px', size: '0.5fr' },
-  { id: 'email_cadastro_certificado', label: 'E-mail para cadastro', min: '145px', size: '0.7fr' },
-  { id: 'empresa', label: 'Empresa', min: '140px', size: '0.8fr' },
-  { id: 'remunerado', label: 'Remunerado', min: '100px', size: '0.55fr' },
-  { id: 'status', label: 'Status', min: '90px', size: '0.4fr' }
+  { id: 'parceiro', label: 'Parceiro', locked: true, size: '2.4fr' },
+  { id: 'codigo_revendedor', label: 'CÓDIGO', locked: true, size: '0.55fr' },
+  { id: 'contato', label: 'Contato', size: '0.85fr' },
+  { id: 'email_cadastro_certificado', label: 'E-mail para cadastro', size: '1.2fr' },
+  { id: 'empresa', label: 'Empresa', size: '1fr' },
+  { id: 'remunerado', label: 'Remunerado', size: '0.7fr' },
+  { id: 'status', label: 'Status', size: '0.65fr' }
 ];
-const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['parceiro', 'contato', 'email_cadastro_certificado', 'status'];
+const ADMIN_PARTNER_DEFAULT_VISIBLE_COLUMNS = ['parceiro', 'codigo_revendedor', 'contato', 'email_cadastro_certificado', 'status'];
 
 function sincronizarContextoInicialHub() {
   atualizarContextoInicialHub({
@@ -2709,7 +2753,7 @@ async function abrirModuloDireto(id) {
     return;
   }
 
-  alert(`Módulo ainda não implementado: ${idModulo}`);
+  window.hubToast?.info(`Módulo ainda não implementado: ${idModulo}`);
 }
 
 function sincronizarPaginaUsuarioAdminPelaRota() {
@@ -3707,42 +3751,35 @@ function renderListaParceirosIndicacaoAdmin(records) {
 
   const colunas = obterColunasVisiveisParceirosIndicacaoAdmin();
   const modoLote = Boolean(state.admin.loteParceirosModo);
-  const style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao: modoLote });
   const idsVisiveis = records.map(parceiro => parceiro.id).filter(Boolean);
   const selecionados = new Set(state.admin.loteParceirosSelecionados || []);
   const todosVisiveisSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
+  const pesoColunas = colunas.reduce((total, coluna) => total + (parseFloat(coluna.size) || 1), 0);
+  const larguraSelecaoPercentual = modoLote ? 5 : 0;
+  const larguraColunasPercentual = 100 - larguraSelecaoPercentual;
 
   return `
-    <div class="crud-list admin-partners-list crm2-pessoas-table-wrap crm2-parceiros-table-wrap" role="table" aria-label="Parceiros de indicação">
-      <div class="crud-header" role="row" style="${escapeAttr(style)}">
-        ${modoLote ? `
-          <label class="admin-partner-select-cell" role="columnheader" aria-label="Selecionar todos os parceiros visíveis">
-            <input
-              type="checkbox"
-              ${todosVisiveisSelecionados ? 'checked' : ''}
-              onchange="alternarTodosParceirosIndicacaoAdmin(this.checked)"
-            >
-          </label>
-        ` : ''}
-        ${colunas.map(coluna => `<span role="columnheader">${escapeHtml(coluna.label)}</span>`).join('')}
-      </div>
-      ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, style, { selecao: modoLote })).join('')}
+    <div class="admin-table-wrap admin-partners-table-wrap">
+      <table class="hub-data-table admin-partners-data-table" aria-label="Parceiros de indicação">
+        <colgroup>
+          ${modoLote ? `<col style="width:${larguraSelecaoPercentual}%">` : ''}
+          ${colunas.map(coluna => `<col style="width:${(larguraColunasPercentual * (parseFloat(coluna.size) || 1) / pesoColunas).toFixed(3)}%">`).join('')}
+        </colgroup>
+        <thead>
+          <tr>
+            ${modoLote ? `<th class="admin-partner-select-cell" aria-label="Selecionar todos os parceiros visíveis"><input type="checkbox" ${todosVisiveisSelecionados ? 'checked' : ''} onchange="alternarTodosParceirosIndicacaoAdmin(this.checked)" aria-label="Selecionar todos os parceiros visíveis"></th>` : ''}
+            ${colunas.map(coluna => `<th data-column="${escapeAttr(coluna.id)}">${escapeHtml(coluna.label)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, { selecao: modoLote })).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function obterGridTemplateColunasParceirosIndicacaoAdmin(colunas, { selecao = false } = {}) {
-  const template = colunas
-    .map(coluna => `minmax(${coluna.min}, ${coluna.size})`)
-    .join(' ');
-  const minWidth = colunas.reduce((total, coluna) => total + (parseInt(coluna.min, 10) || 120), 0);
-  const colunaSelecao = selecao ? '44px ' : '';
-  const larguraSelecao = selecao ? 44 : 0;
-
-  return `grid-template-columns: ${colunaSelecao}${template}; min-width: ${Math.max(minWidth + larguraSelecao + 48, 520)}px;`;
-}
-
-function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), style = obterGridTemplateColunasParceirosIndicacaoAdmin(colunas), { selecao = false } = {}) {
+function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), { selecao = false } = {}) {
   const nome = parceiro.nome_completo || parceiro.nome || 'Sem nome';
   const empresa = parceiro.nome_empresa || parceiro.vinculo_empresa || '';
   const contato = parceiro.whatsapp_comercial || parceiro.telefone || parceiro.whatsapp_pessoal || parceiro.email_comercial || parceiro.email || '-';
@@ -3751,18 +3788,10 @@ function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisPa
   const selecionado = (state.admin.loteParceirosSelecionados || []).includes(parceiro.id);
 
   return `
-    <div class="crud-row admin-partner-row" role="row" style="${escapeAttr(style)}">
-      ${selecao ? `
-        <label class="admin-partner-select-cell" role="cell" aria-label="Selecionar ${escapeAttr(nome)}">
-          <input
-            type="checkbox"
-            ${selecionado ? 'checked' : ''}
-            onchange="alternarParceiroIndicacaoSelecionadoAdmin('${escapeAttr(parceiro.id || '')}', this.checked)"
-          >
-        </label>
-      ` : ''}
+    <tr class="admin-partner-row">
+      ${selecao ? `<td class="admin-partner-select-cell"><input type="checkbox" ${selecionado ? 'checked' : ''} onchange="alternarParceiroIndicacaoSelecionadoAdmin('${escapeAttr(parceiro.id || '')}', this.checked)" aria-label="Selecionar ${escapeAttr(nome)}"></td>` : ''}
       ${colunas.map(coluna => renderCelulaParceiroIndicacaoAdmin(coluna.id, parceiro, { nome, empresa, contato, status, remunerado })).join('')}
-    </div>
+    </tr>
   `;
 }
 
@@ -3771,12 +3800,12 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
 
   if (colunaId === 'parceiro') {
     return `
-      <div class="admin-partner-cell admin-user-main" role="cell">
+      <td class="admin-partner-cell">
         <div class="admin-user-identity">
-          <button class="crm2-parceiro-name-link" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" aria-label="Abrir cadastro de ${escapeAttr(nome)}">${escapeHtml(nome)}</button>
+          <button class="admin-user-name-link" type="button" onclick="visualizarParceiroIndicacaoAdmin('${escapeAttr(parceiro.id || '')}')" aria-label="Abrir cadastro de ${escapeAttr(nome)}">${escapeHtml(nome)}</button>
           ${empresa ? `<small>${escapeHtml(empresa)}</small>` : ''}
         </div>
-      </div>
+      </td>
     `;
   }
 
@@ -3790,12 +3819,11 @@ function renderCelulaParceiroIndicacaoAdmin(colunaId, parceiro, contexto) {
   };
 
   if (colunaId === 'status') {
-    return `<span class="admin-partner-cell" role="cell"><span class="badge status-${escapeAttr(status)}">${escapeHtml(obterRotuloStatusHub(status))}${escapeHtml(remunerado)}</span></span>`;
+    return `<td class="admin-partner-cell"><span class="badge status-${escapeAttr(status)}">${escapeHtml(obterRotuloStatusHub(status))}${escapeHtml(remunerado)}</span></td>`;
   }
 
-  return `<span class="admin-partner-cell" role="cell">${escapeHtml(celulas[colunaId] || '-')}</span>`;
+  return `<td class="admin-partner-cell">${escapeHtml(celulas[colunaId] || '-')}</td>`;
 }
-
 function obterParceirosIndicacaoFiltradosAdmin(records) {
   const filtro = state.admin.filtros.parceirosIndicacao || 'todos';
   const busca = normalizarBuscaAr(state.admin.buscaParceirosIndicacaoAplicada || '');
@@ -4282,12 +4310,18 @@ function renderModalParceiroIndicacaoAdmin() {
   const botaoTexto = state.admin.parceiroModal.salvo
     ? 'Salvo'
     : (state.admin.parceiroModal.salvando ? 'Salvando...' : 'Salvar parceiro');
+  const acaoCadastroPrincipal = podeEditar && item.id && item.codigo_revendedor
+    ? item.principal_codigo_revendedor
+      ? '<span class="hub-page-kicker">Cadastro principal deste código</span>'
+      : `<button class="secondary-btn partner-modal-edit-btn" type="button" onclick="definirParceiroIndicacaoPrincipalAdmin('${escapeAttr(item.id)}')" ${state.admin.parceiroModal.definindoPrincipal ? 'disabled' : ''}><i data-lucide="star" aria-hidden="true"></i>${state.admin.parceiroModal.definindoPrincipal ? 'Definindo...' : 'Definir como principal'}</button>`
+    : '';
 
   return `
     <section id="parceiro_modal_dialog" class="hub-form-screen partner-form-screen" role="region" aria-labelledby="parceiro_modal_title" tabindex="-1" data-partner-modal>
         <div class="hub-form-screen-header">
           <h3 id="parceiro_modal_title">${escapeHtml(titulo)}</h3>
           <div class="partner-modal-header-actions">
+            ${acaoCadastroPrincipal}
             ${somenteLeitura && podeEditar ? `<button class="secondary-btn partner-modal-edit-btn" type="button" onclick="editarParceiroIndicacaoAdmin('${escapeAttr(state.admin.parceiroModal.id || item.id || '')}')"><i data-lucide="pencil" aria-hidden="true"></i>Editar</button>` : ''}
             <button class="secondary-btn" type="button" onclick="fecharModalParceiroIndicacaoAdmin()" title="Fechar">Fechar</button>
           </div>
@@ -4510,6 +4544,47 @@ function editarParceiroIndicacaoAdmin(id) {
   return abrirModalParceiroIndicacaoExistenteAdmin(id, 'edit');
 }
 
+async function definirParceiroIndicacaoPrincipalAdmin(id) {
+  const modal = state.admin.parceiroModal;
+  const parceiro = modal?.dados;
+  const codigo = String(parceiro?.codigo_revendedor || '').trim();
+
+  if (!id || !codigo) {
+    window.hubToast?.error('Informe o código do revendedor antes de definir o cadastro principal.');
+    return;
+  }
+  if (!pode('admin.parceiros_indicacao', 'update')) {
+    window.hubToast?.error('Seu usuário não possui permissão para definir o cadastro principal.');
+    return;
+  }
+  if (modal.definindoPrincipal) return;
+
+  modal.definindoPrincipal = true;
+  renderAdministracao();
+
+  try {
+    const response = await chamarApi('setAdminPartnerCodePrincipal', { id });
+    if (!response.ok) {
+      throw new Error(obterMensagemApi(response, 'Não foi possível definir o cadastro principal.'));
+    }
+
+    const codigoNormalizado = codigo.toLocaleUpperCase('pt-BR');
+    state.admin.parceirosIndicacao = (state.admin.parceirosIndicacao || []).map(item => {
+      const mesmoCodigo = String(item.codigo_revendedor || '').trim().toLocaleUpperCase('pt-BR') === codigoNormalizado;
+      return mesmoCodigo
+        ? { ...item, principal_codigo_revendedor: item.id === id }
+        : item;
+    });
+    modal.dados = { ...parceiro, principal_codigo_revendedor: true };
+    window.hubToast?.success('Cadastro principal definido para este código de revendedor.');
+  } catch (erro) {
+    window.hubToast?.error(erro.message || 'Não foi possível definir o cadastro principal.');
+  } finally {
+    modal.definindoPrincipal = false;
+    renderAdministracao();
+  }
+}
+
 async function arquivarParceiroIndicacaoAdmin(id) {
   const parceiro = (state.admin.parceirosIndicacao || []).find(item => item.id === id) || {};
   const nome = parceiro.nome_completo || parceiro.nome || 'este parceiro';
@@ -4560,6 +4635,8 @@ function obterDadosParceiroIndicacaoModalAdmin() {
     permite_dados_sensiveis: pode('admin.parceiros_indicacao', 'view_sensitive') ? 'sim' : 'nao',
     nome_completo: obterValorCampoParceiroIndicacao('nome_completo'),
     codigo_revendedor: obterValorCampoParceiroIndicacao('codigo_revendedor'),
+    codigo_revendedor_original: state.admin.parceiroModal?.dados?.codigo_revendedor || '',
+    principal_codigo_revendedor: Boolean(state.admin.parceiroModal?.dados?.principal_codigo_revendedor),
     ac: obterValorCampoParceiroIndicacao('ac'),
     cpf: obterValorCampoParceiroIndicacao('cpf'),
     data_aniversario: obterValorCampoParceiroIndicacao('data_aniversario'),
@@ -9378,6 +9455,14 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && state.ar.validacoes.lancamentoManual.aberto) {
+    fecharModalLancamentoManualValidacoesAr();
+    return;
+  }
+  if (event.key === 'Escape' && state.ar.validacoes.filtrosModalAberto) {
+    fecharFiltrosValidacoesAr();
+    return;
+  }
   if (event.key !== 'Escape' || !menuMaisArAberto) return;
   event.preventDefault();
   const trigger = menuMaisArAberto.trigger;
@@ -11377,69 +11462,263 @@ function renderEmitirReciboAr() {
   const totalSelecionado = validacoes.pendentes
     .filter(item => validacoes.selecionados.includes(item.id))
     .reduce((total, item) => total + (Number(item.valor_tot_comiss) || 0), 0);
+  const filtrosAvancadosAtivos = [filtros.codigoEntidade, filtros.produto, filtros.pedido, filtros.cliente]
+    .filter(valor => String(valor || '').trim()).length;
 
   return `
     <div class="ar-validacoes-panel">
-      <div class="ar-validacoes-header">
-        <div class="ar-validacoes-title">
-          <span class="ar-eyebrow">Validações</span>
-          ${renderSubnavValidacoesAr()}
-          <h3>Emitir recibo</h3>
-          <p>Consulte lançamentos pendentes, selecione itens por parceiro e emita recibos atômicos via Supabase RPC.</p>
-        </div>
-        <button class="secondary-btn" type="button" onclick="carregarValidacoesAr()">Atualizar</button>
-      </div>
+      <div class="ar-validacoes-toolbar">
+        <div class="ar-validacoes-toolbar-actions">
+          <div class="ar-validacoes-header-actions">
+            <button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Recibos Emitidos</button>
+            ${pode('painel_ar.validacoes', 'importar') ? '<button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr(\'importacao\')">Importar recibos</button>' : ''}
+            ${pode('painel_ar.validacoes', 'importar') ? '<button class="secondary-btn ar-validacoes-action-with-icon" type="button" onclick="abrirModalLancamentoManualValidacoesAr()"><i data-lucide="plus" aria-hidden="true"></i><span>Lançamento</span></button>' : ''}
+            <button class="secondary-btn ar-validacoes-action-with-icon ar-validacoes-tax-action" type="button" onclick="abrirConfiguracaoImpostosValidacoesAr()" aria-label="Configurar impostos do recibo" title="Configurar impostos do recibo"><i data-lucide="settings" aria-hidden="true"></i><span class="ar-validacoes-action-copy"><strong>Impostos</strong></span></button>
+          </div>
 
-      <div class="ar-validacoes-filters">
-        <input class="config-input" value="${escapeAttr(filtros.parceiro)}" placeholder="Parceiro" oninput="alterarFiltroValidacoesAr('parceiro', this.value)">
-        <input class="config-input" value="${escapeAttr(filtros.codigoEntidade)}" placeholder="Código da entidade" oninput="alterarFiltroValidacoesAr('codigoEntidade', this.value)">
-        <input class="config-input" type="date" value="${escapeAttr(filtros.dataInicio)}" onchange="alterarFiltroValidacoesAr('dataInicio', this.value)">
-        <input class="config-input" type="date" value="${escapeAttr(filtros.dataFim)}" onchange="alterarFiltroValidacoesAr('dataFim', this.value)">
-        <input class="config-input" value="${escapeAttr(filtros.produto)}" placeholder="Produto" oninput="alterarFiltroValidacoesAr('produto', this.value)">
-        <input class="config-input" value="${escapeAttr(filtros.pedido)}" placeholder="Pedido" oninput="alterarFiltroValidacoesAr('pedido', this.value)">
-        <input class="config-input" value="${escapeAttr(filtros.cliente)}" placeholder="Nome do cliente" oninput="alterarFiltroValidacoesAr('cliente', this.value)">
-        <button class="save-btn" type="button" onclick="carregarValidacoesAr()" ${validacoes.loading ? 'disabled' : ''}>Aplicar filtros</button>
-      </div>
+        </div>
 
-      <div class="ar-validacoes-summary">
-        <div>
-          <span>Pendentes</span>
-          <strong>${validacoes.pendentes.length}</strong>
-        </div>
-        <div>
-          <span>Total pendente</span>
-          <strong>${formatarMoedaNumeroAr(totalPendente)}</strong>
-        </div>
-        <div>
-          <span>Selecionados</span>
-          <strong>${validacoes.selecionados.length}</strong>
-        </div>
-        <div>
-          <span>Total selecionado</span>
-          <strong>${formatarMoedaNumeroAr(totalSelecionado)}</strong>
-        </div>
-      </div>
-
-      <div class="ar-validacoes-actions">
-        <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()" ${validacoes.selecionados.length ? '' : 'disabled'}>Limpar seleção</button>
-        <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${validacoes.selecionados.length && podeEmitir ? '' : 'disabled'}>Emitir recibo</button>
+        <form class="ar-validacoes-filters" role="search" aria-label="Filtros principais dos recibos" onsubmit="event.preventDefault(); carregarValidacoesAr()">
+          <input class="config-input ar-validacoes-filter-partner" value="${escapeAttr(filtros.parceiro)}" placeholder="Parceiro ou código" aria-label="Buscar por parceiro ou código do vendedor" oninput="alterarFiltroValidacoesAr('parceiro', this.value)">
+          <input class="config-input ar-validacoes-filter-date" type="text" inputmode="numeric" autocomplete="off" maxlength="10" value="${escapeAttr(formatarDataFiltroValidacoesAr(filtros.dataInicio))}" placeholder="Data inicial" aria-label="Data inicial" oninput="mascararDataDigitadaValidacoesAr(this)" onchange="alterarFiltroDataValidacoesAr('dataInicio', this.value)">
+          <input class="config-input ar-validacoes-filter-date" type="text" inputmode="numeric" autocomplete="off" maxlength="10" value="${escapeAttr(formatarDataFiltroValidacoesAr(filtros.dataFim))}" placeholder="Data final" aria-label="Data final" oninput="mascararDataDigitadaValidacoesAr(this)" onchange="alterarFiltroDataValidacoesAr('dataFim', this.value)">
+          <button class="icon-btn ar-validacoes-search-button" type="submit" aria-label="Aplicar filtros" title="Aplicar filtros" ${validacoes.loading ? 'disabled' : ''}><i data-lucide="search" aria-hidden="true"></i></button>
+          <button class="secondary-btn ar-validacoes-filter-trigger ${filtrosAvancadosAtivos ? 'is-active' : ''}" type="button" onclick="abrirFiltrosValidacoesAr()" aria-haspopup="dialog" aria-controls="ar-validacoes-filter-modal" aria-expanded="${validacoes.filtrosModalAberto ? 'true' : 'false'}" aria-label="Filtros${filtrosAvancadosAtivos ? ` (${filtrosAvancadosAtivos} ativos)` : ''}" title="Filtros"><i data-lucide="sliders-horizontal" aria-hidden="true"></i>${filtrosAvancadosAtivos ? `<span class="ar-validacoes-filter-count" aria-hidden="true">${filtrosAvancadosAtivos}</span>` : ''}</button>
+          <button class="icon-btn ar-validacoes-refresh-button" type="button" onclick="carregarValidacoesAr()" aria-label="Atualizar lançamentos" title="Atualizar lançamentos" ${validacoes.loading ? 'disabled' : ''}><i data-lucide="refresh-cw" aria-hidden="true"></i></button>
+        </form>
       </div>
 
       ${renderBarraSelecaoValidacoesAr(totalSelecionado)}
+      <div class="ar-validacoes-table-toolbar">
+        <div class="ar-validacoes-summary ar-validacoes-emit-summary">
+          <div><span>Pendentes</span><strong>${validacoes.pendentes.length}</strong></div>
+          <div><span>Total pendente</span><strong>${formatarMoedaNumeroAr(totalPendente)}</strong></div>
+        </div>
+      </div>
       ${renderTabelaValidacoesPendentesAr()}
+      ${renderModalFiltrosValidacoesAr()}
+      ${renderModalConfiguracaoImpostosValidacoesAr()}
       ${renderLancamentoManualValidacoesAr()}
     </div>
   `;
 }
 
+function renderModalFiltrosValidacoesAr() {
+  const validacoes = state.ar.validacoes;
+  if (!validacoes.filtrosModalAberto) return '';
+  const filtros = validacoes.filtrosRascunho;
+
+  return `
+    <div class="modal-backdrop ar-validacoes-filter-backdrop" role="presentation" onclick="fecharFiltrosValidacoesAr(event)">
+      <section id="ar-validacoes-filter-modal" class="small-modal ar-validacoes-filter-modal" role="dialog" aria-modal="true" aria-labelledby="ar-validacoes-filter-title" tabindex="-1" onclick="event.stopPropagation()">
+        <header class="small-modal-header">
+          <div>
+            <span class="hub-page-kicker">Emitir recibo</span>
+            <h3 id="ar-validacoes-filter-title">Mais filtros</h3>
+            <p>Escolha critérios adicionais para localizar os lançamentos.</p>
+          </div>
+          <button class="icon-btn ar-validacoes-filter-close" type="button" onclick="fecharFiltrosValidacoesAr()" aria-label="Fechar filtros" title="Fechar filtros"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+        <form class="ar-validacoes-filter-form" onsubmit="aplicarFiltrosAvancadosValidacoesAr(event)">
+          <label><span>Código da entidade</span><input class="config-input" name="codigoEntidade" value="${escapeAttr(filtros.codigoEntidade)}" placeholder="Código da entidade"></label>
+          <label><span>Produto</span><input class="config-input" name="produto" value="${escapeAttr(filtros.produto)}" placeholder="Produto"></label>
+          <label><span>Pedido</span><input class="config-input" name="pedido" value="${escapeAttr(filtros.pedido)}" placeholder="Número do pedido"></label>
+          <label><span>Nome do cliente</span><input class="config-input" name="cliente" value="${escapeAttr(filtros.cliente)}" placeholder="Nome do cliente"></label>
+          <footer class="small-modal-actions ar-validacoes-filter-actions">
+            <button class="secondary-btn" type="button" onclick="limparFiltrosValidacoesAr()"><i data-lucide="rotate-ccw" aria-hidden="true"></i> Limpar filtros</button>
+            <div>
+              <button class="secondary-btn" type="button" onclick="fecharFiltrosValidacoesAr()">Cancelar</button>
+              <button class="save-btn" type="submit" ${validacoes.loading ? 'disabled' : ''}><i data-lucide="filter" aria-hidden="true"></i> Aplicar filtros</button>
+            </div>
+          </footer>
+        </form>
+      </section>
+    </div>
+  `;
+}
+
+function renderModalConfiguracaoImpostosValidacoesAr() {
+  const impostos = state.ar.validacoes.impostos;
+  if (!impostos.aberto) return '';
+
+  const form = impostos.form;
+  const totalPercentual = impostos.itens.reduce((total, item) => total + (Number(item.percentual) || 0), 0);
+
+  return `
+    <div class="modal-backdrop ar-impostos-modal-backdrop" role="presentation" onclick="if(event.target === this) fecharConfiguracaoImpostosValidacoesAr()">
+      <section class="small-modal ar-impostos-modal" role="dialog" aria-modal="true" aria-labelledby="ar-impostos-modal-title">
+        <div class="small-modal-header">
+          <h3 id="ar-impostos-modal-title">Configurar impostos do recibo</h3>
+          <button class="icon-btn" type="button" onclick="fecharConfiguracaoImpostosValidacoesAr()" aria-label="Fechar">×</button>
+        </div>
+        <p class="ar-impostos-modal-help">Os percentuais serão calculados sobre a comissão bruta em cada nova emissão. Recibos emitidos mantêm os valores e nomes usados na data da emissão.</p>
+        ${impostos.loading ? renderHubLoading('Carregando impostos...') : `
+          <div class="ar-impostos-list">
+            ${impostos.itens.length ? impostos.itens.map(item => `
+              <div class="ar-impostos-item">
+                <div><strong>${escapeHtml(item.nome)}</strong><span>${escapeHtml(formatarPercentualImpostoValidacoesAr(item.percentual))}%</span></div>
+                <div class="ar-impostos-item-actions">
+                  <button class="secondary-btn" type="button" onclick="editarImpostoValidacoesAr('${escapeAttr(item.id)}')">Editar</button>
+                  <button class="secondary-btn danger" type="button" onclick="excluirImpostoValidacoesAr('${escapeAttr(item.id)}')">Excluir</button>
+                </div>
+              </div>
+            `).join('') : '<p class="quick-link-empty">Nenhum imposto cadastrado.</p>'}
+          </div>
+          <p class="ar-impostos-total">Percentual total configurado: <strong>${escapeHtml(formatarPercentualImpostoValidacoesAr(totalPercentual))}%</strong></p>
+          <form class="ar-impostos-form" onsubmit="event.preventDefault(); salvarImpostoValidacoesAr()">
+            <h4>${form.id ? 'Editar imposto' : 'Novo imposto'}</h4>
+            <label><span>Nome do imposto</span><input class="config-input" type="text" maxlength="80" value="${escapeAttr(form.nome)}" oninput="alterarCampoImpostoValidacoesAr('nome', this.value)" required></label>
+            <label><span>Percentual (%)</span><input class="config-input" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="${escapeAttr(form.percentual)}" oninput="alterarCampoImpostoValidacoesAr('percentual', this.value)" required></label>
+            <div class="small-modal-actions">
+              ${form.id ? '<button class="secondary-btn" type="button" onclick="novoImpostoValidacoesAr()">Novo</button>' : ''}
+              <button class="save-btn" type="submit" ${impostos.saving ? 'disabled' : ''}>${impostos.saving ? 'Salvando...' : form.id ? 'Salvar alterações' : 'Adicionar imposto'}</button>
+            </div>
+          </form>
+        `}
+      </section>
+    </div>
+  `;
+}
+
+function formatarPercentualImpostoValidacoesAr(percentual) {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(Number(percentual) || 0);
+}
+
+function mostrarToastImpostosValidacoesAr(mensagem, erro = false) {
+  if (erro) window.hubToast?.error(mensagem);
+  else window.hubToast?.success(mensagem);
+}
+
+async function abrirConfiguracaoImpostosValidacoesAr() {
+  const impostos = state.ar.validacoes.impostos;
+  impostos.aberto = true;
+  impostos.loading = true;
+  impostos.message = '';
+  impostos.form = { id: '', nome: '', percentual: '' };
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('getArImpostosRecibo');
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível carregar os impostos.'));
+    impostos.itens = response.data || [];
+  } catch (erro) {
+    impostos.message = erro.message || 'Erro ao carregar impostos.';
+    mostrarToastImpostosValidacoesAr(impostos.message, true);
+  } finally {
+    impostos.loading = false;
+    renderPainelAr();
+  }
+}
+
+function fecharConfiguracaoImpostosValidacoesAr() {
+  state.ar.validacoes.impostos.aberto = false;
+  renderPainelAr();
+}
+
+function novoImpostoValidacoesAr() {
+  state.ar.validacoes.impostos.form = { id: '', nome: '', percentual: '' };
+  state.ar.validacoes.impostos.message = '';
+  renderPainelAr();
+}
+
+function editarImpostoValidacoesAr(id) {
+  const imposto = state.ar.validacoes.impostos.itens.find(item => item.id === id);
+  if (!imposto) return;
+
+  state.ar.validacoes.impostos.form = {
+    id: imposto.id,
+    nome: imposto.nome || '',
+    percentual: String(imposto.percentual ?? '')
+  };
+  state.ar.validacoes.impostos.message = '';
+  renderPainelAr();
+}
+
+function alterarCampoImpostoValidacoesAr(campo, valor) {
+  if (!['nome', 'percentual'].includes(campo)) return;
+  state.ar.validacoes.impostos.form[campo] = valor;
+}
+
+async function salvarImpostoValidacoesAr() {
+  const impostos = state.ar.validacoes.impostos;
+  const nome = String(impostos.form.nome || '').trim();
+  const percentual = Number(String(impostos.form.percentual || '').replace(',', '.'));
+
+  if (!nome || !Number.isFinite(percentual) || percentual < 0 || percentual > 100) {
+    impostos.message = 'Informe o nome do imposto e um percentual entre 0 e 100.';
+    mostrarToastImpostosValidacoesAr(impostos.message, true);
+    renderPainelAr();
+    return;
+  }
+
+  impostos.saving = true;
+  impostos.message = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('saveArImpostoRecibo', {
+      id: impostos.form.id || null,
+      nome,
+      percentual
+    });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível salvar o imposto.'));
+
+    impostos.itens = await carregarListaImpostosValidacoesAr();
+    impostos.form = { id: '', nome: '', percentual: '' };
+    impostos.message = 'Imposto salvo. O cálculo será aplicado aos próximos recibos emitidos.';
+    mostrarToastImpostosValidacoesAr(impostos.message);
+  } catch (erro) {
+    impostos.message = erro.message || 'Erro ao salvar imposto.';
+    mostrarToastImpostosValidacoesAr(impostos.message, true);
+  } finally {
+    impostos.saving = false;
+    renderPainelAr();
+  }
+}
+
+async function carregarListaImpostosValidacoesAr() {
+  const response = await chamarApi('getArImpostosRecibo');
+  if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível atualizar a lista de impostos.'));
+  return response.data || [];
+}
+
+async function excluirImpostoValidacoesAr(id) {
+  const imposto = state.ar.validacoes.impostos.itens.find(item => item.id === id);
+  if (!imposto || !window.confirm(`Excluir o imposto "${imposto.nome}"? Essa alteração valerá para as próximas emissões; recibos já emitidos não serão alterados.`)) return;
+
+  const impostos = state.ar.validacoes.impostos;
+  impostos.saving = true;
+  impostos.message = '';
+  renderPainelAr();
+
+  try {
+    const response = await chamarApi('deleteArImpostoRecibo', { id });
+    if (!response.ok) throw new Error(obterMensagemApi(response, 'Não foi possível excluir o imposto.'));
+    impostos.itens = await carregarListaImpostosValidacoesAr();
+    if (impostos.form.id === id) impostos.form = { id: '', nome: '', percentual: '' };
+    impostos.message = 'Imposto excluído. Recibos já emitidos mantêm o cálculo original.';
+    mostrarToastImpostosValidacoesAr(impostos.message);
+  } catch (erro) {
+    impostos.message = erro.message || 'Erro ao excluir imposto.';
+    mostrarToastImpostosValidacoesAr(impostos.message, true);
+  } finally {
+    impostos.saving = false;
+    renderPainelAr();
+  }
+}
+
+function obterNomeParceiroValidacaoAr(item) {
+  return item?.nome_parceiro_hub || item?.parceiro_nome || item?.cod_vendedor || item?.codigo_entidade || '';
+}
+
 function renderBarraSelecaoValidacoesAr(totalSelecionado) {
-  const { pendentes, selecionados } = state.ar.validacoes;
+  const { pendentes, selecionados, loading } = state.ar.validacoes;
   const podeEmitir = pode('painel_ar.validacoes', 'emitir_recibo');
 
   if (!selecionados.length) return '';
 
   const primeiro = pendentes.find(item => selecionados.includes(item.id));
-  const parceiro = primeiro?.parceiro_nome || primeiro?.codigo_entidade || 'Parceiro selecionado';
+  const parceiro = obterNomeParceiroValidacaoAr(primeiro) || 'Parceiro selecionado';
 
   return `
     <div class="ar-validacoes-selection-bar">
@@ -11448,14 +11727,26 @@ function renderBarraSelecaoValidacoesAr(totalSelecionado) {
         <span>${escapeHtml(parceiro)} · ${escapeHtml(formatarMoedaNumeroAr(totalSelecionado))}</span>
       </div>
       <button class="secondary-btn" type="button" onclick="limparSelecaoValidacoesAr()">Limpar</button>
-      <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${podeEmitir ? '' : 'disabled'}>Emitir recibo</button>
+      <button class="save-btn" type="button" onclick="emitirReciboValidacoesAr()" ${podeEmitir && !loading ? '' : 'disabled'}>Emitir recibo</button>
     </div>
   `;
 }
 
 function renderTabelaValidacoesPendentesAr() {
   const { pendentes, selecionados, loading } = state.ar.validacoes;
+  const { campo: campoOrdenado, direcao } = state.ar.validacoes.ordenacaoPendentes;
+  const pendentesOrdenados = ordenarListaPendentesValidacoesAr(pendentes, campoOrdenado, direcao);
+  const itensPorPagina = 30;
+  const totalPaginas = Math.max(1, Math.ceil(pendentesOrdenados.length / itensPorPagina));
+  const paginaAtual = Math.min(Math.max(1, Number(state.ar.validacoes.paginaPendentes) || 1), totalPaginas);
+  const inicio = (paginaAtual - 1) * itensPorPagina;
+  const pendentesPagina = pendentesOrdenados.slice(inicio, inicio + itensPorPagina);
+  state.ar.validacoes.paginaPendentes = paginaAtual;
   const todosSelecionados = pendentes.length > 0 && pendentes.every(item => selecionados.includes(item.id));
+  const cabecalhoOrdenavel = (rotulo, campo) => {
+    const ativo = campoOrdenado === campo;
+    return `<button class="ar-validacoes-sort" type="button" onclick="ordenarPendentesValidacoesAr('${campo}')" aria-label="Ordenar por ${rotulo}${ativo ? (direcao === 'asc' ? ', crescente' : ', decrescente') : ''}"><span>${rotulo}</span></button>`;
+  };
 
   if (loading) {
     return renderHubLoading('Carregando lançamentos pendentes...');
@@ -11466,178 +11757,327 @@ function renderTabelaValidacoesPendentesAr() {
   }
 
   return `
-    <div class="ar-validacoes-table">
-      <div class="ar-validacoes-row head">
-        <span><input type="checkbox" ${todosSelecionados ? 'checked' : ''} onchange="alternarTodasValidacoesVisiveisAr(this.checked)" aria-label="Selecionar todos os lançamentos visíveis"></span>
-        <span>Parceiro</span>
-        <span>Data</span>
-        <span>Produto</span>
-        <span>Pedido</span>
-        <span>Cliente</span>
-        <span>Comissão</span>
+    <div class="ar-validacoes-table-wrap">
+      <table class="hub-data-table ar-validacoes-data-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" ${todosSelecionados ? 'checked' : ''} onchange="alternarTodasValidacoesVisiveisAr(this.checked)" aria-label="Selecionar todos os lançamentos pendentes em todas as páginas"></th>
+            <th>${cabecalhoOrdenavel('Parceiro', 'parceiro')}</th>
+            <th>${cabecalhoOrdenavel('Data', 'data')}</th>
+            <th>${cabecalhoOrdenavel('Produto', 'produto')}</th>
+            <th>${cabecalhoOrdenavel('Pedido', 'pedido')}</th>
+            <th>${cabecalhoOrdenavel('Cliente', 'cliente')}</th>
+            <th>${cabecalhoOrdenavel('Comissão', 'comissao')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pendentesPagina.map(item => `
+            <tr class="${selecionados.includes(item.id) ? 'selected' : ''}">
+              <td><input type="checkbox" ${selecionados.includes(item.id) ? 'checked' : ''} onchange="alternarValidacaoSelecionadaAr('${escapeAttr(item.id)}')" aria-label="Selecionar lançamento de ${escapeAttr(obterNomeParceiroValidacaoAr(item) || 'parceiro')}"></td>
+              <td title="${escapeAttr([obterNomeParceiroValidacaoAr(item) || '-', item.cod_vendedor].filter(Boolean).join(' · '))}"><strong>${escapeHtml(obterNomeParceiroValidacaoAr(item) || '-')}</strong>${item.cod_vendedor ? `<small>${escapeHtml(item.cod_vendedor)}</small>` : ''}</td>
+              <td title="${escapeAttr(formatarDataCurtaAr(item.data_validacao))}">${escapeHtml(formatarDataCurtaAr(item.data_validacao))}</td>
+              <td title="${escapeAttr(item.produto || '-')}">${escapeHtml(item.produto || '-')}</td>
+              <td title="${escapeAttr(item.pedido || '-')}">${escapeHtml(item.pedido || '-')}</td>
+              <td title="${escapeAttr(item.nome_cliente || '-')}">${escapeHtml(item.nome_cliente || '-')}</td>
+              <td title="${escapeAttr(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}">${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="ar-validacoes-pagination">
+      <span>Mostrando ${inicio + 1}–${Math.min(inicio + itensPorPagina, pendentes.length)} de ${pendentes.length} registros</span>
+      <div>
+        <button class="secondary-btn" type="button" onclick="selecionarPaginaPendentesValidacoesAr(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''}>Anterior</button>
+        <strong>Página ${paginaAtual} de ${totalPaginas}</strong>
+        <button class="secondary-btn" type="button" onclick="selecionarPaginaPendentesValidacoesAr(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>Próxima</button>
       </div>
-      ${pendentes.map(item => `
-        <article class="ar-validacoes-row ${selecionados.includes(item.id) ? 'selected' : ''}">
-          <span><input type="checkbox" ${selecionados.includes(item.id) ? 'checked' : ''} onchange="alternarValidacaoSelecionadaAr('${escapeAttr(item.id)}')"></span>
-          <span><strong>${escapeHtml(item.parceiro_nome || '-')}</strong>${item.codigo_entidade ? `<small>${escapeHtml(item.codigo_entidade)}</small>` : ''}</span>
-          <span>${escapeHtml(formatarDataCurtaAr(item.data_validacao))}</span>
-          <span>${escapeHtml(item.produto || '-')}</span>
-          <span>${escapeHtml(item.pedido || '-')}</span>
-          <span>${escapeHtml(item.nome_cliente || '-')}</span>
-          <span>${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</span>
-        </article>
-      `).join('')}
     </div>
   `;
 }
 
 function renderLancamentoManualValidacoesAr() {
-  if (!pode('painel_ar.validacoes', 'importar')) {
-    return '';
-  }
+  const manual = state.ar.validacoes.lancamentoManual;
+  if (!manual.aberto || !pode('painel_ar.validacoes', 'importar')) return '';
 
+  const form = manual.form;
   return `
-    <details class="ar-validacoes-manual">
-      <summary>Lançamento manual</summary>
-      <div class="ar-validacoes-manual-grid">
-        <input id="ar_manual_parceiro" class="config-input" placeholder="Parceiro">
-        <input id="ar_manual_codigo" class="config-input" placeholder="Código da entidade">
-        <input id="ar_manual_data" class="config-input" type="date">
-        <input id="ar_manual_produto" class="config-input" placeholder="Produto">
-        <input id="ar_manual_pedido" class="config-input" placeholder="Pedido">
-        <input id="ar_manual_cliente" class="config-input" placeholder="Nome do cliente">
-        <input id="ar_manual_valor" class="config-input" type="number" step="0.01" min="0" placeholder="Valor comissão">
-        <button class="save-btn" type="button" onclick="criarLancamentoManualValidacoesAr()">Salvar lançamento</button>
-      </div>
-    </details>
+    <div class="modal-backdrop ar-validacoes-manual-backdrop" role="presentation" onclick="fecharModalLancamentoManualValidacoesAr(event)">
+      <section class="small-modal ar-validacoes-manual-modal" role="dialog" aria-modal="true" aria-labelledby="ar-validacoes-manual-title" onclick="event.stopPropagation()">
+        <header class="small-modal-header">
+          <div>
+            <span class="hub-page-kicker">Emitir recibo</span>
+            <h3 id="ar-validacoes-manual-title">Lançamento manual</h3>
+            <p>Cadastre um lançamento pendente para emissão de recibo.</p>
+          </div>
+          <button class="icon-btn" type="button" onclick="fecharModalLancamentoManualValidacoesAr()" aria-label="Fechar lançamento manual" title="Fechar"><i data-lucide="x" aria-hidden="true"></i></button>
+        </header>
+        <form class="ar-validacoes-manual-form" onsubmit="criarLancamentoManualValidacoesAr(event)">
+          <label class="ar-validacoes-manual-partner-field"><span>Parceiro *</span><input id="ar_manual_parceiro" class="config-input" name="parceiro" value="${escapeAttr(form.parceiro)}" placeholder="Digite para buscar parceiro" autocomplete="off" required oninput="alterarBuscaParceiroLancamentoManualValidacoesAr(this)" onfocus="filtrarParceirosLancamentoManualValidacoesAr(this)" onkeydown="navegarSugestoesParceiroLancamentoManualAr(event, this)" onblur="window.setTimeout(() => fecharSugestoesParceiroLancamentoManualAr(this), 150)"><div id="ar_manual_parceiro_sugestoes" class="ar-validacoes-manual-partner-suggestions" role="listbox" aria-label="Parceiros encontrados" hidden></div></label>
+          <label><span>Código do vendedor</span><input id="ar_manual_codigo" class="config-input" name="codigo" value="${escapeAttr(form.codigo)}" placeholder="Código do vendedor"></label>
+          <label><span>Data de validação *</span><input id="ar_manual_data" class="config-input" name="data" type="text" inputmode="numeric" autocomplete="off" maxlength="10" value="${escapeAttr(form.data)}" placeholder="DD/MM/AAAA" oninput="mascararDataDigitadaValidacoesAr(this)" required></label>
+          <label><span>Produto *</span><input id="ar_manual_produto" class="config-input" name="produto" value="${escapeAttr(form.produto)}" placeholder="Produto" required></label>
+          <label><span>Pedido</span><input id="ar_manual_pedido" class="config-input" name="pedido" value="${escapeAttr(form.pedido)}" placeholder="Número do pedido"></label>
+          <label><span>Nome do cliente</span><input id="ar_manual_cliente" class="config-input" name="cliente" value="${escapeAttr(form.cliente)}" placeholder="Nome do cliente"></label>
+          <label><span>Valor da comissão *</span><input id="ar_manual_valor" class="config-input" name="valor" type="number" step="0.01" value="${escapeAttr(form.valor)}" placeholder="0,00" required></label>
+          ${manual.message ? `<p class="admin-message error ar-validacoes-manual-message" role="alert">${escapeHtml(manual.message)}</p>` : ''}
+          <footer class="small-modal-actions ar-validacoes-manual-actions">
+            <button class="secondary-btn" type="button" onclick="fecharModalLancamentoManualValidacoesAr()">Cancelar</button>
+            <button class="save-btn" type="submit" ${state.ar.validacoes.loading ? 'disabled' : ''}>${state.ar.validacoes.loading ? 'Salvando...' : 'Salvar lançamento'}</button>
+          </footer>
+        </form>
+      </section>
+    </div>
   `;
 }
 
 function renderConsultarRecibosAr() {
-  const { recibos, loading } = state.ar.validacoes;
-  const totalEmitido = recibos
-    .filter(recibo => recibo.status !== 'cancelado')
-    .reduce((total, recibo) => total + (Number(recibo.valor_total) || 0), 0);
-  const cancelados = recibos.filter(recibo => recibo.status === 'cancelado').length;
+  const { recibos, loading, filtrosRecibos } = state.ar.validacoes;
+  const recibosFiltrados = filtrarListaRecibosAr(recibos, filtrosRecibos);
 
   return `
     <div class="ar-validacoes-panel">
       <div class="ar-validacoes-header">
         <div class="ar-validacoes-title">
           <span class="ar-eyebrow">Validações</span>
-          ${renderSubnavValidacoesAr()}
           <h3>Consultar recibos</h3>
-          <p>Últimos recibos emitidos, com opção de visualização, impressão e cancelamento.</p>
+          <p>Localize recibos por número, parceiro, pedido ou cliente.</p>
         </div>
-        <button class="secondary-btn" type="button" onclick="carregarValidacoesAr()">Atualizar</button>
-      </div>
-
-      <div class="ar-validacoes-summary">
-        <div>
-          <span>Recibos</span>
-          <strong>${recibos.length}</strong>
-        </div>
-        <div>
-          <span>Emitidos</span>
-          <strong>${recibos.length - cancelados}</strong>
-        </div>
-        <div>
-          <span>Cancelados</span>
-          <strong>${cancelados}</strong>
-        </div>
-        <div>
-          <span>Total emitido</span>
-          <strong>${formatarMoedaNumeroAr(totalEmitido)}</strong>
+        <div class="ar-validacoes-header-actions">
+          <button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Voltar para emissão</button>
+          <button class="secondary-btn" type="button" onclick="carregarValidacoesAr()">Atualizar</button>
         </div>
       </div>
 
-      ${loading ? renderHubLoading('Carregando recibos...') : renderTabelaRecibosAr(recibos)}
+      <form class="ar-recibos-filters" role="search" aria-label="Buscar recibos emitidos" onsubmit="aplicarFiltrosRecibosValidacoesAr(event)">
+        <input class="config-input" name="numero" value="${escapeAttr(filtrosRecibos.numero)}" placeholder="Nº do recibo" aria-label="Número do recibo" oninput="alterarFiltroRecibosValidacoesAr('numero', this.value)">
+        <input class="config-input" name="parceiro" value="${escapeAttr(filtrosRecibos.parceiro)}" placeholder="Parceiro" aria-label="Parceiro" oninput="alterarFiltroRecibosValidacoesAr('parceiro', this.value)">
+        <input class="config-input" name="pedido" value="${escapeAttr(filtrosRecibos.pedido)}" placeholder="Nº do pedido" aria-label="Número do pedido" oninput="alterarFiltroRecibosValidacoesAr('pedido', this.value)">
+        <input class="config-input" name="cliente" value="${escapeAttr(filtrosRecibos.cliente)}" placeholder="Nome do cliente" aria-label="Nome do cliente" oninput="alterarFiltroRecibosValidacoesAr('cliente', this.value)">
+        <button class="icon-btn ar-recibos-search-button" type="submit" aria-label="Buscar recibos" title="Buscar recibos"><i data-lucide="search" aria-hidden="true"></i></button>
+        <button class="secondary-btn ar-recibos-clear-button" type="button" onclick="limparFiltrosRecibosValidacoesAr()">Limpar</button>
+      </form>
+
+      ${loading ? renderHubLoading('Carregando recibos...') : renderTabelaRecibosAr(recibosFiltrados, Object.values(filtrosRecibos).some(valor => String(valor || '').trim()))}
     </div>
   `;
 }
 
-function renderTabelaRecibosAr(recibos) {
+function normalizarBuscaReciboAr(valor) {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR');
+}
+
+function filtrarListaRecibosAr(recibos, filtros = {}) {
+  const normalizados = Object.fromEntries(Object.entries(filtros).map(([campo, valor]) => [campo, normalizarBuscaReciboAr(valor)]));
+  return recibos.filter(recibo => {
+    const itens = Array.isArray(recibo.ar_recibo_itens) ? recibo.ar_recibo_itens : [];
+    const pedidos = [recibo.pedido, ...itens.flatMap(item => { const validacoes = Array.isArray(item.ar_validacoes) ? item.ar_validacoes : [item.ar_validacoes || {}]; return [...validacoes.map(validacao => validacao.pedido), item.pedido]; })];
+    const clientes = [recibo.nome_cliente, ...itens.flatMap(item => { const validacoes = Array.isArray(item.ar_validacoes) ? item.ar_validacoes : [item.ar_validacoes || {}]; return [...validacoes.map(validacao => validacao.nome_cliente), item.nome_cliente]; })];
+    return (!normalizados.numero || normalizarBuscaReciboAr(recibo.numero).includes(normalizados.numero))
+      && (!normalizados.parceiro || normalizarBuscaReciboAr(recibo.parceiro_nome).includes(normalizados.parceiro))
+      && (!normalizados.pedido || pedidos.some(valor => normalizarBuscaReciboAr(valor).includes(normalizados.pedido)))
+      && (!normalizados.cliente || clientes.some(valor => normalizarBuscaReciboAr(valor).includes(normalizados.cliente)));
+  });
+}
+
+function alterarFiltroRecibosValidacoesAr(campo, valor) {
+  if (!Object.prototype.hasOwnProperty.call(state.ar.validacoes.filtrosRecibos, campo)) return;
+  state.ar.validacoes.filtrosRecibos[campo] = String(valor || '');
+}
+
+function aplicarFiltrosRecibosValidacoesAr(event) {
+  event.preventDefault();
+  renderPainelAr();
+}
+
+function limparFiltrosRecibosValidacoesAr() {
+  state.ar.validacoes.filtrosRecibos = { numero: '', parceiro: '', pedido: '', cliente: '' };
+  renderPainelAr();
+}
+
+function renderTabelaRecibosAr(recibos, temFiltros = false) {
   const podeCancelar = pode('painel_ar.validacoes', 'cancelar_recibo');
+  const itensPorPagina = 15;
+  const totalPaginas = Math.max(1, Math.ceil(recibos.length / itensPorPagina));
+  const paginaAtual = Math.min(Math.max(1, Number(state.ar.validacoes.paginaRecibos) || 1), totalPaginas);
+  const inicio = (paginaAtual - 1) * itensPorPagina;
+  const recibosPagina = recibos.slice(inicio, inicio + itensPorPagina);
+  state.ar.validacoes.paginaRecibos = paginaAtual;
 
   if (!recibos.length) {
-    return '<p class="quick-link-empty">Nenhum recibo emitido até agora.</p>';
+    return temFiltros ? '<p class="quick-link-empty">Nenhum recibo corresponde aos filtros informados.</p>' : '<p class="quick-link-empty">Nenhum recibo emitido até agora.</p>';
   }
 
   return `
     <div class="ar-recibos-table">
-      <div class="ar-recibos-row head">
-        <span>Número</span>
-        <span>Parceiro</span>
-        <span>Data</span>
-        <span>Valor</span>
-        <span>Status</span>
-        <span>Ações</span>
-      </div>
-      ${recibos.map(recibo => `
-        <article class="ar-recibos-row">
-          <span>${escapeHtml(recibo.numero || '-')}</span>
-          <span>${escapeHtml(recibo.parceiro_nome || '-')}</span>
-          <span>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</span>
-          <span>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</span>
-          <span><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</mark></span>
-          <span class="ar-recibos-actions">
-            <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
-            <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' || !podeCancelar ? 'disabled' : ''}>Cancelar</button>
-          </span>
-        </article>
-      `).join('')}
+      <table class="hub-data-table ar-recibos-data-table">
+        <thead>
+          <tr>
+            <th>Número</th>
+            <th>Parceiro</th>
+            <th>Data</th>
+            <th>Valor</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${recibosPagina.map(recibo => `
+            <tr>
+              <td>${escapeHtml(recibo.numero || '-')}</td>
+              <td title="${escapeAttr(recibo.parceiro_nome || '-')}">${escapeHtml(recibo.parceiro_nome || '-')}</td>
+              <td>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</td>
+              <td>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</td>
+              <td><mark class="ar-status-chip ${recibo.status === 'cancelado' ? 'cancelled' : ''}">${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</mark></td>
+              <td><div class="ar-recibos-actions">
+                <button class="secondary-btn" type="button" onclick="visualizarReciboValidacoesAr('${escapeAttr(recibo.id)}')">Visualizar</button>
+                <button class="secondary-btn" type="button" onclick="cancelarReciboValidacoesAr('${escapeAttr(recibo.id)}')" ${recibo.status === 'cancelado' || !podeCancelar ? 'disabled' : ''}>Cancelar</button>
+              </div></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
-    ${renderModalReciboValidacoesAr()}
+    <div class="ar-validacoes-pagination">
+      <span>Mostrando ${inicio + 1}–${Math.min(inicio + itensPorPagina, recibos.length)} de ${recibos.length} recibos</span>
+      <div>
+        <button class="secondary-btn" type="button" onclick="selecionarPaginaRecibosValidacoesAr(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''}>Anterior</button>
+        <strong>Página ${paginaAtual} de ${totalPaginas}</strong>
+        <button class="secondary-btn" type="button" onclick="selecionarPaginaRecibosValidacoesAr(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>Próxima</button>
+      </div>
+    </div>
   `;
 }
 
-function renderModalReciboValidacoesAr() {
-  const recibo = state.ar.validacoes.reciboAtivo;
+function selecionarPaginaRecibosValidacoesAr(pagina) {
+  const validacoes = state.ar.validacoes;
+  const recibosFiltrados = filtrarListaRecibosAr(validacoes.recibos, validacoes.filtrosRecibos);
+  const totalPaginas = Math.max(1, Math.ceil(recibosFiltrados.length / 15));
+  validacoes.paginaRecibos = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
+  renderPainelAr();
+}
 
-  if (!recibo) return '';
+function formatarEnderecoCorretoraReciboAr(configuracao, erro = false) {
+  if (erro) return 'Não foi possível carregar o endereço cadastrado no Hub.';
 
-  const itens = recibo.ar_recibo_itens || [];
+  const registro = configuracao || {};
+  const logradouro = [registro.endereco_logradouro, registro.endereco_numero]
+    .filter(Boolean)
+    .join(', ');
+  const localizacao = [
+    registro.endereco_bairro,
+    [registro.endereco_cidade, registro.endereco_uf].filter(Boolean).join('/'),
+    registro.endereco_cep ? `CEP: ${registro.endereco_cep}` : ''
+  ].filter(Boolean).join(' · ');
+  const linhas = [
+    [logradouro, registro.endereco_complemento].filter(Boolean).join(' · '),
+    localizacao
+  ].filter(Boolean);
+
+  return linhas.length ? linhas.map(escapeHtml).join('<br>') : 'Endereço não cadastrado no Hub.';
+}
+
+function renderConteudoReciboValidacoesAr(recibo, enderecoCorretora, erroEndereco = false) {
+
+  const itens = [...(recibo.ar_recibo_itens || [])].sort((itemA, itemB) => {
+    const dataA = itemA.ar_validacoes?.data_validacao;
+    const dataB = itemB.ar_validacoes?.data_validacao;
+    if (!dataA) return dataB ? 1 : 0;
+    if (!dataB) return -1;
+    return String(dataA).localeCompare(String(dataB));
+  });
+  const datasValidacao = itens
+    .map(item => item.ar_validacoes?.data_validacao)
+    .filter(Boolean)
+    .sort();
+  const periodoValidacao = datasValidacao.length
+    ? datasValidacao[0] === datasValidacao[datasValidacao.length - 1]
+      ? formatarDataCurtaAr(datasValidacao[0])
+      : `${formatarDataCurtaAr(datasValidacao[0])} a ${formatarDataCurtaAr(datasValidacao[datasValidacao.length - 1])}`
+    : '—';
+  const formatarValorOpcional = valor => valor == null || valor === ''
+    ? '—'
+    : formatarMoedaNumeroAr(Number(valor) || 0);
+  const imposto = recibo.valor_impostos ?? null;
+  const liquido = recibo.valor_liquido ?? recibo.total_liquido ?? recibo.valor_total;
+  const impostosDetalhesHtml = (Array.isArray(recibo.impostos) ? recibo.impostos : []).map(item => `
+    <small>${escapeHtml(item.nome || 'Imposto')} (${escapeHtml(formatarPercentualImpostoValidacoesAr(item.percentual))}%)</small>
+  `).join('');
+  const logoPadraoHub = obterCaminhoAssetHub('assets/logo-transmares.png');
+  const logoConfiguradaHub = document.querySelector('.brand-logo-slot img')?.currentSrc || logoPadraoHub;
+  const enderecoCorretoraHtml = formatarEnderecoCorretoraReciboAr(enderecoCorretora, erroEndereco);
 
   return `
-    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Recibo">
-      <section class="small-modal ar-recibo-modal">
-        <div class="small-modal-header no-print">
-          <h3>${escapeHtml(recibo.numero || 'Recibo')}</h3>
-          <button class="icon-btn" type="button" onclick="fecharReciboValidacoesAr()" aria-label="Fechar">×</button>
-        </div>
-
         <div class="ar-recibo-print">
-          <header>
-            <div>
-              <h2>Recibo de pagamento</h2>
-              <p>${escapeHtml(recibo.parceiro_nome || '-')}</p>
+          <header class="ar-recibo-report-header">
+            <div class="ar-recibo-report-heading">
+              <h2>Relatório Analítico de Repasse <span>Campanha do Contador-Revendedor</span></h2>
+              <div class="ar-recibo-report-accent" aria-hidden="true"></div>
             </div>
-            <strong>${escapeHtml(recibo.numero || '-')}</strong>
+            <div class="ar-recibo-report-company">
+              <img src="${escapeAttr(logoConfiguradaHub)}" onerror="this.onerror=null;this.src='${escapeAttr(logoPadraoHub)}'" alt="Transmares Corretora de Seguros e Certificação Digital">
+              <address>
+                ${enderecoCorretoraHtml}
+              </address>
+            </div>
           </header>
 
-          <dl>
-            <div><dt>Emissão</dt><dd>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</dd></div>
-            <div><dt>Status</dt><dd>${escapeHtml(obterRotuloStatusHub(recibo.status, '—'))}</dd></div>
-            <div><dt>Total</dt><dd>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</dd></div>
-            <div><dt>Código</dt><dd>${escapeHtml(recibo.codigo_entidade || '-')}</dd></div>
-          </dl>
+          <div class="ar-recibo-report-top-grid">
+            <section class="ar-recibo-report-panel ar-recibo-report-partner" aria-label="Dados do revendedor">
+              <div class="ar-recibo-report-fields">
+                <span>Nome:</span><strong>${escapeHtml(recibo.parceiro_nome || '—')}</strong>
+                <span>Código:</span><strong>${escapeHtml(recibo.cod_vendedor || itens.map(item => item.ar_validacoes?.cod_vendedor).find(Boolean) || '—')}</strong>
+                <span>Dados Bancários/PIX:</span><strong>${escapeHtml(recibo.dados_bancarios_pix || recibo.chave_pix || '—')}</strong>
+                <span>Deduções:</span><strong>${escapeHtml(formatarValorOpcional(recibo.deducoes))}</strong>
+              </div>
+            </section>
+            <section class="ar-recibo-report-panel ar-recibo-report-receipt" aria-label="Dados do recibo">
+              <div class="ar-recibo-report-right-fields">
+                <span>Nº do recibo:</span><strong>${escapeHtml(recibo.numero || '—')}</strong>
+                <span>Observações:</span><strong class="ar-recibo-report-observation">${escapeHtml(recibo.observacao || '—')}</strong>
+              </div>
+              <div class="ar-recibo-report-dates">
+                <div><span>Data de emissão:</span><strong>${escapeHtml(formatarDataCurtaAr(recibo.data_emissao))}</strong></div>
+                <div><span>Extrato do Período:</span><strong>${escapeHtml(periodoValidacao)}</strong></div>
+              </div>
+              <section class="ar-recibo-report-totals" aria-label="Resumo financeiro">
+                <div><span>Total comissão bruta</span><strong>${escapeHtml(formatarMoedaNumeroAr(Number(recibo.valor_total) || 0))}</strong></div>
+                <div class="is-deduction"><span>Impostos</span><strong>${escapeHtml(formatarValorOpcional(imposto))}</strong>${impostosDetalhesHtml ? `<div class="ar-recibo-tax-details">${impostosDetalhesHtml}</div>` : ''}</div>
+                <div class="is-net"><span>Total comissão líquida</span><strong>${escapeHtml(formatarValorOpcional(liquido))}</strong></div>
+              </section>
+            </section>
+          </div>
 
-          <table>
-            <thead><tr><th>Descrição</th><th>Valor</th></tr></thead>
-            <tbody>
-              ${itens.length
-                ? itens.map(item => `<tr><td>${escapeHtml(item.descricao || '-')}</td><td>${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</td></tr>`).join('')
-                : '<tr><td colspan="2">Nenhum item vinculado.</td></tr>'}
-            </tbody>
-          </table>
-        </div>
+          <div class="ar-recibo-report-table-wrap">
+            <table class="ar-recibo-report-table">
+              <colgroup>
+                <col class="ar-recibo-col-date"><col class="ar-recibo-col-order"><col class="ar-recibo-col-product"><col class="ar-recibo-col-client"><col class="ar-recibo-col-voucher"><col class="ar-recibo-col-value"><col class="ar-recibo-col-commission">
+              </colgroup>
+              <thead><tr><th>Data validação</th><th>Pedido</th><th>Produto</th><th>Nome cliente</th><th>Voucher</th><th>Valor</th><th>Comissão</th></tr></thead>
+              <tbody>
+                ${itens.length
+                  ? itens.map(item => {
+                    const validacao = item.ar_validacoes || {};
+                    const descricao = String(item.descricao || '').split(' | ');
+                    const produto = validacao.produto || descricao[0] || '—';
+                    const pedido = validacao.pedido || descricao[1] || '—';
+                    const cliente = validacao.nome_cliente || descricao[2] || '—';
+                    const dadosAdicionais = validacao.dados_adicionais || {};
+                    const camposExtras = dadosAdicionais.campos || {};
+                    const rotulosExtras = dadosAdicionais.rotulos || {};
+                    const voucher = Object.entries(camposExtras).find(([chave]) => {
+                      const nomeCampo = normalizarCabecalhoRepasseAr(rotulosExtras[chave] || chave);
+                      return nomeCampo.includes('voucher');
+                    })?.[1];
+                    const valorVenda = validacao.valor_bruto;
 
-        <div class="small-modal-actions no-print">
-          <button class="secondary-btn" type="button" onclick="fecharReciboValidacoesAr()">Fechar</button>
-          <button class="save-btn" type="button" onclick="window.print()">Imprimir / salvar PDF</button>
+                    return `<tr><td>${escapeHtml(validacao.data_validacao ? formatarDataCurtaAr(validacao.data_validacao) : '—')}</td><td>${escapeHtml(pedido)}</td><td title="${escapeAttr(produto)}">${escapeHtml(produto)}</td><td title="${escapeAttr(cliente)}">${escapeHtml(cliente)}</td><td>${escapeHtml(voucher == null || voucher === '' ? '—' : String(voucher))}</td><td>${escapeHtml(formatarValorOpcional(valorVenda))}</td><td>${escapeHtml(formatarMoedaNumeroAr(Number(item.valor_tot_comiss) || 0))}</td></tr>`;
+                  }).join('')
+                  : '<tr><td colspan="7">Nenhum item vinculado.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </section>
-    </div>
   `;
 }
 
@@ -11650,7 +12090,7 @@ function renderImportacaoValidacoesAr() {
   const repasse = state.ar.validacoes.importacaoRepasse;
   const podeImportarPermissao = pode('painel_ar.validacoes', 'importar');
   const podeExcluirImportacao = pode('painel_ar.validacoes', 'excluir_importacao');
-  const podeSelecionarArquivo = podeImportarPermissao && Boolean(repasse.mesBase) && !repasse.loteExistente && !repasse.loading;
+  const podeSelecionarArquivo = podeImportarPermissao && !repasse.loteExistente && !repasse.loading;
   const podeImportar = podeImportarPermissao && Boolean(repasse.mesBase) && repasse.linhas.length > 0 && !repasse.erros.length && !repasse.loteExistente && !repasse.loading;
 
   return `
@@ -11658,9 +12098,11 @@ function renderImportacaoValidacoesAr() {
       <div class="ar-validacoes-header">
         <div class="ar-validacoes-title">
           <span class="ar-eyebrow">Validações</span>
-          ${renderSubnavValidacoesAr()}
-          <h3>Importar recibos</h3>
-          <p>Importe o repasse por mês-base para gerar lançamentos pendentes de recibo.</p>
+          <h3>Importar repasse</h3>
+          <p>Importe o repasse por mês-base, ajuste o mapeamento das colunas e gere lançamentos pendentes de recibo.</p>
+        </div>
+        <div class="ar-validacoes-header-actions">
+          <button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr('emitir')">Voltar para emissão</button>
         </div>
       </div>
 
@@ -11668,7 +12110,7 @@ function renderImportacaoValidacoesAr() {
         <div class="ar-import-repasse-header">
           <div>
             <strong>Repasse</strong>
-            <span>Informe o mês-base antes de anexar a planilha.</span>
+            <span>Selecione a planilha e informe o mês-base antes de importar.</span>
           </div>
           <button class="secondary-btn" type="button" onclick="limparImportacaoRepasseAr()">Limpar</button>
         </div>
@@ -11676,11 +12118,12 @@ function renderImportacaoValidacoesAr() {
         <div class="ar-import-controls">
           <label>
             <span>Mês-base</span>
-            <input class="config-input" type="month" value="${escapeAttr(repasse.mesBase)}" onchange="alterarMesBaseRepasseAr(this.value)">
+            <input class="config-input" type="text" inputmode="numeric" autocomplete="off" placeholder="MM/AAAA" maxlength="7" value="${escapeAttr(formatarEntradaMesBaseRepasseAr(repasse.mesBase))}" oninput="mascararEntradaMesBaseRepasseAr(this)" onchange="alterarMesBaseRepasseAr(this.value)">
           </label>
-          <label>
+          <label class="ar-import-file-dropzone${podeSelecionarArquivo ? '' : ' is-disabled'}" ondragover="arrastarArquivoRepasseAr(event, this)" ondragleave="sairArrasteArquivoRepasseAr(event, this)" ondrop="soltarArquivoRepasseAr(event, this)">
             <span>Planilha de repasse</span>
             <input class="config-input" type="file" accept=".xlsx,.xls" onchange="processarArquivoRepasseAr(event)" ${podeSelecionarArquivo ? '' : 'disabled'}>
+            ${repasse.arquivoNome ? `<small>${escapeHtml(repasse.arquivoNome)}</small>` : ''}
           </label>
           <button class="save-btn" type="button" onclick="importarRepasseValidacoesAr()" ${podeImportar ? '' : 'disabled'}>
             ${repasse.loading ? 'Importando...' : 'Importar repasse'}
@@ -11695,6 +12138,7 @@ function renderImportacaoValidacoesAr() {
           </div>
         ` : ''}
         ${repasse.resumo ? renderResumoImportacaoRepasseAr(repasse) : ''}
+        ${repasse.cabecalhos.length ? renderMapeamentoRepasseAr(repasse) : ''}
         ${repasse.erros.length ? renderErrosImportacaoRepasseAr(repasse.erros) : ''}
         ${repasse.linhas.length ? renderPreviewImportacaoRepasseAr(repasse.linhas) : ''}
       </section>
@@ -11709,6 +12153,252 @@ function renderImportacaoValidacoesAr() {
       </div>
     </div>
   `;
+}
+
+const CAMPOS_REPASSE_AR = [
+  ['codigo_entidade', 'Código da entidade', 'texto'],
+  ['cod_vendedor', 'Código do vendedor', 'texto'],
+  ['nome_vendedor', 'Parceiro / nome do vendedor', 'texto'],
+  ['agente_validacao', 'Agente de validação', 'texto'],
+  ['cod_produto', 'Código do produto', 'texto'],
+  ['produto', 'Produto', 'texto'],
+  ['pedido', 'Pedido', 'texto'],
+  ['status_pedido', 'Status do pedido', 'texto'],
+  ['data_pedido', 'Data do pedido', 'data'],
+  ['data_validacao', 'Data da validação', 'data'],
+  ['data_verificacao', 'Data da verificação', 'data'],
+  ['data_emissao_renovacao', 'Data de emissão / renovação', 'data'],
+  ['nome_cliente', 'Nome do cliente', 'texto'],
+  ['cod_ac', 'Código AC', 'texto'],
+  ['grupo_produto', 'Grupo do produto', 'texto'],
+  ['link_repasse', 'Link do repasse', 'texto'],
+  ['valor_bruto', 'Valor bruto', 'numero'],
+  ['valor_faturamento', 'Valor de faturamento', 'numero'],
+  ['valor_tot_comiss', 'Comissão (obrigatório)', 'numero']
+];
+
+const ALIASES_CAMPOS_REPASSE_AR = {
+  codigo_entidade: ['codent', 'codentidade', 'codigoentidade'],
+  cod_vendedor: ['codvendedor'],
+  nome_vendedor: ['nomevendedor', 'parceiro', 'nomedoparceiro', 'descentidade'],
+  agente_validacao: ['descagenteval', 'descagentevalidacao', 'agentevalidacao'],
+  cod_produto: ['codproduto'],
+  produto: ['descproduto', 'produto'],
+  pedido: ['pedido', 'numeropedido'],
+  status_pedido: ['statuspedido'],
+  data_pedido: ['dtpedido', 'datapedido'],
+  data_validacao: ['dtvalidacao', 'datavalidacao'],
+  data_verificacao: ['dtverificacao', 'dataverificacao'],
+  data_emissao_renovacao: ['dtemissaorenovacao', 'dataemissaorenovacao'],
+  nome_cliente: ['nomecliente', 'cliente'],
+  cod_ac: ['codac', 'codigoac'],
+  grupo_produto: ['descgrupo', 'grupoproduto'],
+  link_repasse: ['link', 'linkrepasse'],
+  valor_bruto: ['valbruto', 'valorbruto'],
+  valor_faturamento: ['valfaturamento', 'valorfaturamento'],
+  valor_tot_comiss: ['valortotcomiss', 'valortotalcomissao', 'valorcomissao', 'comissao']
+};
+
+function sugerirMapeamentoRepasseAr(cabecalhos) {
+  const mapeamentos = {};
+
+  for (const [chave] of CAMPOS_REPASSE_AR) {
+    const aliases = [chave.replace(/_/g, ''), ...(ALIASES_CAMPOS_REPASSE_AR[chave] || [])];
+    const cabecalhoCorrespondente = aliases
+      .map(alias => cabecalhos.find(nome => normalizarCabecalhoRepasseAr(nome) === alias))
+      .find(nome => nome && !Object.values(mapeamentos).includes(chave));
+
+    if (cabecalhoCorrespondente) mapeamentos[cabecalhoCorrespondente] = chave;
+  }
+
+  for (const cabecalho of cabecalhos) {
+    if (!mapeamentos[cabecalho]) mapeamentos[cabecalho] = 'ignorar';
+  }
+
+  return mapeamentos;
+}
+
+function chaveConfiguracaoRepasseAr(cabecalhos) {
+  const texto = JSON.stringify(cabecalhos);
+  let hash = 2166136261;
+  for (let indice = 0; indice < texto.length; indice += 1) {
+    hash ^= texto.charCodeAt(indice);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `ar-repasse-mapeamento-v1:${(hash >>> 0).toString(36)}`;
+}
+
+function carregarConfiguracaoMapeamentoRepasseAr(cabecalhos) {
+  try {
+    const armazenado = localStorage.getItem(chaveConfiguracaoRepasseAr(cabecalhos));
+    if (!armazenado) return null;
+    const configuracao = JSON.parse(armazenado);
+    const cabecalhosValidos = new Set(cabecalhos);
+    const camposValidos = new Set(CAMPOS_REPASSE_AR.map(([chave]) => chave));
+    const extras = (configuracao.camposExtras || []).filter(campo => {
+      return campo && campo.salvarProximas !== false
+        && cabecalhosValidos.has(campo.cabecalho) && campo.chave && campo.rotulo;
+    }).map(campo => ({
+      ...campo,
+      salvarProximas: campo.salvarProximas !== false,
+      tipo: ['texto', 'numero', 'valor', 'data'].includes(campo.tipo) ? campo.tipo : 'texto'
+    }));
+    const extrasValidos = new Set(extras.map(campo => `extra:${campo.chave}`));
+    const mapeamentos = {};
+    const camposUsados = new Set();
+
+    for (const cabecalho of cabecalhos) {
+      const destino = configuracao.mapeamentos?.[cabecalho] || 'ignorar';
+      const destinoValido = destino === 'ignorar'
+        || camposValidos.has(destino)
+        || extrasValidos.has(destino);
+      const repetido = camposUsados.has(destino) && destino !== 'ignorar';
+      mapeamentos[cabecalho] = destinoValido && !repetido ? destino : 'ignorar';
+      if (mapeamentos[cabecalho] !== 'ignorar') camposUsados.add(mapeamentos[cabecalho]);
+    }
+
+    const tiposValidos = new Set(['texto', 'numero', 'valor', 'data']);
+    const tiposColunas = Object.fromEntries(cabecalhos
+      .map(cabecalho => {
+        const extra = extras.find(campo => campo.cabecalho === cabecalho);
+        const tipo = configuracao.tiposColunas?.[cabecalho] || extra?.tipo;
+        return [cabecalho, tiposValidos.has(tipo) ? tipo : ''];
+      })
+      .filter(([, tipo]) => tipo));
+
+    return { mapeamentos, tiposColunas, camposExtras: extras };
+  } catch {
+    return null;
+  }
+}
+
+function salvarConfiguracaoMapeamentoRepasseAr(repasse) {
+  if (!repasse.cabecalhos.length) return;
+  const extrasSalvos = repasse.camposExtras.filter(campo => campo.salvarProximas !== false);
+  const chavesExtrasSalvas = new Set(extrasSalvos.map(campo => `extra:${campo.chave}`));
+  const mapeamentosSalvos = Object.fromEntries(Object.entries(repasse.mapeamentos).map(([cabecalho, destino]) => [
+    cabecalho,
+    destino.startsWith('extra:') && !chavesExtrasSalvas.has(destino) ? 'ignorar' : destino
+  ]));
+
+  try {
+    localStorage.setItem(chaveConfiguracaoRepasseAr(repasse.cabecalhos), JSON.stringify({
+      mapeamentos: mapeamentosSalvos,
+      tiposColunas: repasse.tiposColunas,
+      camposExtras: extrasSalvos
+    }));
+  } catch {
+    // O mapeamento continua utilizável mesmo quando o navegador bloqueia o armazenamento local.
+  }
+}
+
+function renderMapeamentoRepasseAr(repasse) {
+  const amostra = repasse.linhasOriginais.slice(0, 2);
+  const camposUsados = new Set(Object.values(repasse.mapeamentos).filter(campo => campo !== 'ignorar'));
+
+  return `
+    <section class="ar-import-mapping" aria-label="Mapeamento de colunas">
+      <div class="ar-import-mapping-header">
+        <div><strong>Mapeie as colunas</strong><p>O mapeamento e o tipo de dado ficam salvos neste navegador e são reaplicados em planilhas com os mesmos cabeçalhos.</p></div>
+      </div>
+      <div class="ar-import-mapping-list">
+        ${repasse.cabecalhos.map((cabecalho, indice) => {
+          const destino = repasse.mapeamentos[cabecalho] || 'ignorar';
+          const extra = repasse.camposExtras.find(campo => campo.cabecalho === cabecalho);
+          const tipoAtual = repasse.tiposColunas[cabecalho] || extra?.tipo || CAMPOS_REPASSE_AR.find(([chave]) => chave === destino)?.[2] || 'texto';
+          const valorAmostra = amostra.map(linha => textoRepasseAr(linha[cabecalho])).filter(Boolean).join(' · ');
+          const opcoes = CAMPOS_REPASSE_AR.map(([chave, rotulo]) => {
+            const usado = camposUsados.has(chave) && destino !== chave;
+            return `<option value="${chave}" ${destino === chave ? 'selected' : ''} ${usado ? 'disabled' : ''}>${escapeHtml(rotulo)}</option>`;
+          }).join('');
+
+          return `
+            <article class="ar-import-mapping-row">
+              <div class="ar-import-mapping-source"><strong>${escapeHtml(cabecalho || `Coluna ${indice + 1}`)}</strong><small title="${escapeAttr(valorAmostra)}">Ex.: ${escapeHtml(valorAmostra || 'sem valor')}</small></div>
+              <label><span>Campo no sistema</span><select class="config-input" onchange="alterarMapeamentoRepasseAr('${escapeAttr(cabecalho)}', this.value)">
+                <option value="ignorar" ${destino === 'ignorar' ? 'selected' : ''}>Ignorar coluna</option>
+                ${opcoes}
+                ${extra ? `<option value="extra:${escapeAttr(extra.chave)}" selected>Campo extra</option>` : ''}
+              </select></label>
+              <label class="ar-import-extra-type${extra ? '' : ' ar-import-column-type'}"><span>Tipo do dado</span><select class="config-input" onchange="alterarTipoColunaRepasseAr('${escapeAttr(cabecalho)}', this.value)"><option value="texto" ${tipoAtual === 'texto' ? 'selected' : ''}>Texto</option><option value="numero" ${tipoAtual === 'numero' ? 'selected' : ''}>Número</option><option value="valor" ${tipoAtual === 'valor' ? 'selected' : ''}>Valor (R$)</option><option value="data" ${tipoAtual === 'data' ? 'selected' : ''}>Data</option></select></label>
+              ${extra
+                ? `<label class="ar-import-extra-label"><span>Nome do campo extra</span><input class="config-input" value="${escapeAttr(extra.rotulo)}" onchange="renomearCampoExtraRepasseAr('${escapeAttr(extra.chave)}', this.value)"></label><label class="ar-import-extra-save"><input type="checkbox" ${extra.salvarProximas !== false ? 'checked' : ''} onchange="alterarPersistenciaCampoExtraRepasseAr('${escapeAttr(extra.chave)}', this.checked)"><span>Salvar para próximas importações</span></label>`
+                : `<button class="secondary-btn" type="button" onclick="adicionarCampoExtraRepasseAr('${escapeAttr(cabecalho)}')">Adicionar como campo extra</button>`}
+            </article>
+          `;
+        }).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function alterarMapeamentoRepasseAr(cabecalho, destino) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  if (destino.startsWith('extra:')) return;
+  const outroCabecalho = Object.entries(repasse.mapeamentos).find(([nome, campo]) => nome !== cabecalho && campo === destino);
+  if (destino !== 'ignorar' && !destino.startsWith('extra:') && outroCabecalho) {
+    repasse.message = 'Cada campo padrão pode receber apenas uma coluna da planilha.';
+    renderPainelAr();
+    return;
+  }
+
+  repasse.mapeamentos[cabecalho] = destino;
+  repasse.camposExtras = repasse.camposExtras.filter(campo => campo.cabecalho !== cabecalho);
+  salvarConfiguracaoMapeamentoRepasseAr(repasse);
+  recalcularLinhasRepasseAr();
+  renderPainelAr();
+}
+
+function alterarTipoColunaRepasseAr(cabecalho, tipo) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  if (!['texto', 'numero', 'valor', 'data'].includes(tipo)) return;
+  repasse.tiposColunas[cabecalho] = tipo;
+  const extra = repasse.camposExtras.find(campo => campo.cabecalho === cabecalho);
+  if (extra) extra.tipo = tipo;
+  salvarConfiguracaoMapeamentoRepasseAr(repasse);
+  recalcularLinhasRepasseAr();
+  renderPainelAr();
+}
+
+function adicionarCampoExtraRepasseAr(cabecalho) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  const base = normalizarCabecalhoRepasseAr(cabecalho) || `campo_${repasse.camposExtras.length + 1}`;
+  let chave = base;
+  let indice = 2;
+  while (repasse.camposExtras.some(campo => campo.chave === chave)) chave = `${base}_${indice++}`;
+
+  const rotulo = String(cabecalho || `Campo ${indice}`).trim();
+  repasse.camposExtras.push({ chave, rotulo, cabecalho, tipo: 'texto', salvarProximas: true });
+  repasse.mapeamentos[cabecalho] = `extra:${chave}`;
+  salvarConfiguracaoMapeamentoRepasseAr(repasse);
+  recalcularLinhasRepasseAr();
+  renderPainelAr();
+}
+
+function renomearCampoExtraRepasseAr(chave, rotulo) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  const campo = repasse.camposExtras.find(item => item.chave === chave);
+  if (!campo) return;
+  campo.rotulo = String(rotulo || '').trim() || campo.rotulo;
+  salvarConfiguracaoMapeamentoRepasseAr(repasse);
+  recalcularLinhasRepasseAr();
+  renderPainelAr();
+}
+
+function alterarPersistenciaCampoExtraRepasseAr(chave, salvarProximas) {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  const campo = repasse.camposExtras.find(item => item.chave === chave);
+  if (!campo) return;
+  campo.salvarProximas = salvarProximas === true;
+  salvarConfiguracaoMapeamentoRepasseAr(repasse);
+  renderPainelAr();
+}
+
+function recalcularLinhasRepasseAr() {
+  const repasse = state.ar.validacoes.importacaoRepasse;
+  const resultado = normalizarLinhasRepasseAr(repasse.linhasOriginais, repasse.mapeamentos, repasse.camposExtras, repasse.tiposColunas);
+  repasse.linhas = resultado.linhas;
+  repasse.erros = resultado.erros;
 }
 
 function renderResumoImportacaoRepasseAr(repasse) {
@@ -11734,7 +12424,20 @@ function renderErrosImportacaoRepasseAr(erros) {
 
 function renderPreviewImportacaoRepasseAr(linhas) {
   const total = linhas.reduce((soma, linha) => soma + (Number(linha.valor_tot_comiss) || 0), 0);
-
+  const extras = state.ar.validacoes.importacaoRepasse.camposExtras;
+  const colunas = [
+    ['Parceiro', linha => linha.nome_vendedor || linha.codigo_entidade || '-'],
+    ['Pedido', linha => linha.pedido || '-'],
+    ['Produto', linha => linha.produto || '-'],
+    ['Cliente', linha => linha.nome_cliente || '-'],
+    ['Validação', linha => formatarDataCurtaAr(linha.data_validacao)],
+    ['Comissão', linha => formatarMoedaNumeroAr(Number(linha.valor_tot_comiss) || 0)],
+    ...extras.map(extra => [extra.rotulo, linha => {
+      const valor = linha.dados_adicionais?.campos?.[extra.chave];
+      if (valor == null || valor === '') return '-';
+      return extra.tipo === 'valor' ? formatarMoedaNumeroAr(Number(valor) || 0) : String(valor);
+    }])
+  ];
   return `
     <div class="ar-import-preview">
       <div class="ar-import-preview-head">
@@ -11742,24 +12445,12 @@ function renderPreviewImportacaoRepasseAr(linhas) {
         <span>${linhas.length} linha(s) · ${escapeHtml(formatarMoedaNumeroAr(total))}</span>
       </div>
       <div class="ar-import-preview-table">
-        <div class="ar-import-preview-row head">
-          <span>Parceiro</span>
-          <span>Pedido</span>
-          <span>Produto</span>
-          <span>Cliente</span>
-          <span>Validação</span>
-          <span>Comissão</span>
-        </div>
-        ${linhas.slice(0, 10).map(linha => `
-          <div class="ar-import-preview-row">
-            <span>${escapeHtml(linha.nome_vendedor || linha.codigo_entidade || '-')}</span>
-            <span>${escapeHtml(linha.pedido || '-')}</span>
-            <span>${escapeHtml(linha.produto || '-')}</span>
-            <span>${escapeHtml(linha.nome_cliente || '-')}</span>
-            <span>${escapeHtml(formatarDataCurtaAr(linha.data_validacao))}</span>
-            <span>${escapeHtml(formatarMoedaNumeroAr(Number(linha.valor_tot_comiss) || 0))}</span>
-          </div>
-        `).join('')}
+        <table class="ar-import-preview-grid">
+          <thead><tr>${colunas.map(([rotulo]) => `<th>${escapeHtml(rotulo)}</th>`).join('')}</tr></thead>
+          <tbody>${linhas.slice(0, 10).map(linha => `
+            <tr>${colunas.map(([, obterValor]) => `<td>${escapeHtml(obterValor(linha))}</td>`).join('')}</tr>
+          `).join('')}</tbody>
+        </table>
       </div>
       ${linhas.length > 10 ? `<small>Mostrando 10 de ${linhas.length} linha(s).</small>` : ''}
     </div>
@@ -14094,9 +14785,100 @@ function selecionarSubabaValidacoesAr(aba) {
 
 function alterarFiltroValidacoesAr(chave, valor) {
   state.ar.validacoes.filtros[chave] = valor;
+  state.ar.validacoes.paginaPendentes = 1;
 }
 
-async function carregarValidacoesAr(manterMensagem = false) {
+function abrirFiltrosValidacoesAr() {
+  const validacoes = state.ar.validacoes;
+  validacoes.filtrosRascunho = {
+    codigoEntidade: validacoes.filtros.codigoEntidade || '',
+    produto: validacoes.filtros.produto || '',
+    pedido: validacoes.filtros.pedido || '',
+    cliente: validacoes.filtros.cliente || ''
+  };
+  validacoes.filtrosModalAberto = true;
+  renderPainelAr();
+}
+
+function fecharFiltrosValidacoesAr(event) {
+  if (event && event.target !== event.currentTarget) return;
+  state.ar.validacoes.filtrosModalAberto = false;
+  renderPainelAr();
+}
+
+async function aplicarFiltrosAvancadosValidacoesAr(event) {
+  event.preventDefault();
+  const validacoes = state.ar.validacoes;
+  const valores = Object.fromEntries(new FormData(event.currentTarget).entries());
+  validacoes.filtros.codigoEntidade = String(valores.codigoEntidade || '').trim();
+  validacoes.filtros.produto = String(valores.produto || '').trim();
+  validacoes.filtros.pedido = String(valores.pedido || '').trim();
+  validacoes.filtros.cliente = String(valores.cliente || '').trim();
+  validacoes.filtrosRascunho = { ...validacoes.filtrosRascunho, ...validacoes.filtros };
+  validacoes.filtrosModalAberto = false;
+  validacoes.paginaPendentes = 1;
+  await carregarValidacoesAr();
+}
+
+async function limparFiltrosValidacoesAr() {
+  const validacoes = state.ar.validacoes;
+  validacoes.filtros = {
+    parceiro: '',
+    codigoEntidade: '',
+    dataInicio: '',
+    dataFim: '',
+    produto: '',
+    pedido: '',
+    cliente: ''
+  };
+  validacoes.filtrosRascunho = {
+    codigoEntidade: '',
+    produto: '',
+    pedido: '',
+    cliente: ''
+  };
+  validacoes.filtrosModalAberto = false;
+  validacoes.paginaPendentes = 1;
+  await carregarValidacoesAr();
+}
+
+function alterarFiltroDataValidacoesAr(chave, valor) {
+  const dataIso = converterDataDigitadaValidacoesAr(valor);
+  if (String(valor || '').trim() && !dataIso) {
+    state.ar.validacoes.message = 'Informe a data no formato DD/MM/AAAA.';
+    renderPainelAr();
+    return;
+  }
+  state.ar.validacoes.message = '';
+  alterarFiltroValidacoesAr(chave, dataIso);
+}
+
+function mascararDataDigitadaValidacoesAr(input) {
+  const digitos = String(input.value || '').replace(/\D/g, '').slice(0, 8);
+  input.value = digitos.length > 4
+    ? `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`
+    : digitos.length > 2
+      ? `${digitos.slice(0, 2)}/${digitos.slice(2)}`
+      : digitos;
+}
+
+function formatarDataFiltroValidacoesAr(valor) {
+  const partes = String(valor || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : String(valor || '');
+}
+
+function converterDataDigitadaValidacoesAr(valor) {
+  const partes = String(valor || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!partes) return '';
+  const dia = Number(partes[1]);
+  const mes = Number(partes[2]);
+  const ano = Number(partes[3]);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) return '';
+  return `${partes[3]}-${partes[2]}-${partes[1]}`;
+}
+
+async function carregarValidacoesAr(manterMensagem = false, pendenteAlvoId = '') {
   try {
     state.ar.validacoes.loading = true;
     if (!manterMensagem) {
@@ -14113,6 +14895,19 @@ async function carregarValidacoesAr(manterMensagem = false) {
     }
 
     state.ar.validacoes.pendentes = response.data.pendentes || [];
+    state.ar.validacoes.paginaPendentes = Math.min(
+      state.ar.validacoes.paginaPendentes,
+      Math.max(1, Math.ceil(state.ar.validacoes.pendentes.length / 30))
+    );
+    if (pendenteAlvoId) {
+      const ordenados = ordenarListaPendentesValidacoesAr(
+        state.ar.validacoes.pendentes,
+        state.ar.validacoes.ordenacaoPendentes.campo,
+        state.ar.validacoes.ordenacaoPendentes.direcao
+      );
+      const indiceAlvo = ordenados.findIndex(item => String(item.id) === String(pendenteAlvoId));
+      if (indiceAlvo >= 0) state.ar.validacoes.paginaPendentes = Math.floor(indiceAlvo / 30) + 1;
+    }
     state.ar.validacoes.recibos = response.data.recibos || [];
     state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => {
       return state.ar.validacoes.pendentes.some(item => item.id === id);
@@ -14138,18 +14933,63 @@ function alternarValidacaoSelecionadaAr(id) {
 }
 
 function alternarTodasValidacoesVisiveisAr(marcar) {
-  const idsVisiveis = state.ar.validacoes.pendentes.map(item => item.id);
+  const idsPendentes = state.ar.validacoes.pendentes.map(item => item.id);
 
   if (marcar) {
     state.ar.validacoes.selecionados = Array.from(new Set([
       ...state.ar.validacoes.selecionados,
-      ...idsVisiveis
+      ...idsPendentes
     ]));
   } else {
-    state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => !idsVisiveis.includes(id));
+    state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => !idsPendentes.includes(id));
   }
 
   renderPainelAr();
+}
+
+function selecionarPaginaPendentesValidacoesAr(pagina) {
+  const totalPaginas = Math.max(1, Math.ceil(state.ar.validacoes.pendentes.length / 30));
+  state.ar.validacoes.paginaPendentes = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
+  renderPainelAr();
+}
+
+function ordenarPendentesValidacoesAr(campo) {
+  const validacoes = state.ar.validacoes;
+  const camposOrdenaveis = ['parceiro', 'data', 'produto', 'pedido', 'cliente', 'comissao'];
+  if (!camposOrdenaveis.includes(campo)) return;
+
+  if (validacoes.ordenacaoPendentes.campo === campo) {
+    validacoes.ordenacaoPendentes.direcao = validacoes.ordenacaoPendentes.direcao === 'asc' ? 'desc' : 'asc';
+  } else {
+    validacoes.ordenacaoPendentes = { campo, direcao: 'asc' };
+  }
+  validacoes.paginaPendentes = 1;
+  renderPainelAr();
+}
+
+function ordenarListaPendentesValidacoesAr(registros, campo, direcao) {
+  const multiplicador = direcao === 'desc' ? -1 : 1;
+  const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+  const valorTexto = item => {
+    if (campo === 'parceiro') return obterNomeParceiroValidacaoAr(item);
+    if (campo === 'produto') return item.produto || '';
+    if (campo === 'pedido') return item.pedido || '';
+    if (campo === 'cliente') return item.nome_cliente || '';
+    return '';
+  };
+
+  return registros.map((registro, indice) => ({ registro, indice })).sort((a, b) => {
+    let comparacao = 0;
+    if (campo === 'comissao') {
+      comparacao = (Number(a.registro.valor_tot_comiss) || 0) - (Number(b.registro.valor_tot_comiss) || 0);
+    } else if (campo === 'data') {
+      comparacao = String(a.registro.data_validacao || '').localeCompare(String(b.registro.data_validacao || ''));
+    } else {
+      comparacao = collator.compare(String(valorTexto(a.registro)), String(valorTexto(b.registro)));
+    }
+
+    return comparacao ? comparacao * multiplicador : a.indice - b.indice;
+  }).map(item => item.registro);
 }
 
 function limparSelecaoValidacoesAr() {
@@ -14157,36 +14997,169 @@ function limparSelecaoValidacoesAr() {
   renderPainelAr();
 }
 
-async function criarLancamentoManualValidacoesAr() {
+function abrirModalLancamentoManualValidacoesAr() {
+  if (!pode('painel_ar.validacoes', 'importar')) return;
+  const manual = state.ar.validacoes.lancamentoManual;
+  manual.aberto = true;
+  manual.message = '';
+  manual.form = { parceiro: '', codigo: '', data: '', produto: '', pedido: '', cliente: '', valor: '' };
+  renderPainelAr();
+  document.getElementById('ar_manual_parceiro')?.focus();
+  carregarParceirosLancamentoManualValidacoesAr();
+}
+
+async function carregarParceirosLancamentoManualValidacoesAr() {
+  const manual = state.ar.validacoes.lancamentoManual;
+  if (manual.parceirosCarregados || manual.parceirosCarregando) return;
+  manual.parceirosCarregando = true;
+  const response = await chamarApi('getArManualPartners');
+  manual.parceirosCarregando = false;
+  if (!response.ok) {
+    manual.message = obterMensagemApi(response, 'Não foi possível carregar os parceiros ativos.');
+    if (manual.aberto) renderPainelAr();
+    return;
+  }
+  manual.parceiros = Array.isArray(response.data) ? response.data : [];
+  manual.parceirosCarregados = true;
+  const input = document.getElementById('ar_manual_parceiro');
+  if (manual.aberto && input && document.activeElement === input) filtrarParceirosLancamentoManualValidacoesAr(input);
+}
+
+function normalizarBuscaParceiroLancamentoManualAr(valor = '') {
+  return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim();
+}
+
+function alterarBuscaParceiroLancamentoManualValidacoesAr(input) {
+  if (input?.dataset.selectedPartnerId) {
+    input.dataset.selectedPartnerId = '';
+    const codigo = document.getElementById('ar_manual_codigo');
+    if (codigo) codigo.value = '';
+  }
+  filtrarParceirosLancamentoManualValidacoesAr(input);
+}
+
+function nomeParceiroLancamentoManualAr(parceiro = {}) {
+  return String(parceiro.nome_completo || parceiro.nome || parceiro.nome_empresa || '').trim();
+}
+
+function filtrarParceirosLancamentoManualValidacoesAr(input) {
+  const manual = state.ar.validacoes.lancamentoManual;
+  const lista = document.getElementById('ar_manual_parceiro_sugestoes');
+  if (!input || !lista) return;
+  const consulta = normalizarBuscaParceiroLancamentoManualAr(input.value);
+  if (consulta.length < 2) {
+    lista.hidden = true;
+    lista.innerHTML = '';
+    return;
+  }
+  if (!manual.parceirosCarregados) {
+    lista.innerHTML = `<div class="ar-validacoes-manual-partner-empty">${manual.parceirosCarregando ? 'Carregando parceiros...' : 'A lista de parceiros ainda não foi carregada.'}</div>`;
+    lista.hidden = false;
+    return;
+  }
+  const termos = consulta.split(' ').filter(Boolean);
+  const encontrados = manual.parceiros.filter(parceiro => {
+    const pesquisavel = normalizarBuscaParceiroLancamentoManualAr([
+      nomeParceiroLancamentoManualAr(parceiro), parceiro.codigo_revendedor, parceiro.nome_empresa
+    ].filter(Boolean).join(' '));
+    return termos.every(termo => pesquisavel.includes(termo));
+  }).sort((a, b) => Number(Boolean(b.principal_codigo_revendedor)) - Number(Boolean(a.principal_codigo_revendedor))
+    || nomeParceiroLancamentoManualAr(a).localeCompare(nomeParceiroLancamentoManualAr(b), 'pt-BR'))
+    .slice(0, 8);
+  lista.innerHTML = encontrados.length ? encontrados.map(parceiro => {
+    const codigo = String(parceiro.codigo_revendedor || '').trim();
+    const nome = nomeParceiroLancamentoManualAr(parceiro) || 'Parceiro sem nome';
+    const detalhes = [codigo ? `Código ${codigo}` : '', parceiro.nome_empresa && parceiro.nome_empresa !== nome ? parceiro.nome_empresa : '', parceiro.principal_codigo_revendedor ? 'Cadastro principal' : ''].filter(Boolean).join(' · ');
+    return `<button type="button" class="ar-validacoes-manual-partner-option" role="option" data-partner-id="${escapeAttr(parceiro.id)}" onmousedown="event.preventDefault()" onclick="selecionarParceiroLancamentoManualValidacoesAr(this)"><strong>${escapeHtml(nome)}</strong>${detalhes ? `<small>${escapeHtml(detalhes)}</small>` : ''}</button>`;
+  }).join('') : `<div class="ar-validacoes-manual-partner-empty">Nenhum parceiro encontrado.</div>`;
+  lista.hidden = false;
+}
+
+function selecionarParceiroLancamentoManualValidacoesAr(botao) {
+  const parceiro = state.ar.validacoes.lancamentoManual.parceiros.find(item => String(item.id) === String(botao?.dataset.partnerId));
+  const input = document.getElementById('ar_manual_parceiro');
+  const codigo = document.getElementById('ar_manual_codigo');
+  if (!parceiro || !input || !codigo) return;
+  input.value = nomeParceiroLancamentoManualAr(parceiro);
+  input.dataset.selectedPartnerId = String(parceiro.id);
+  codigo.value = String(parceiro.codigo_revendedor || '');
+  document.getElementById('ar_manual_parceiro_sugestoes').hidden = true;
+}
+
+function fecharSugestoesParceiroLancamentoManualAr(input) {
+  const lista = input?.closest('.ar-validacoes-manual-partner-field')?.querySelector('.ar-validacoes-manual-partner-suggestions');
+  if (lista) lista.hidden = true;
+}
+
+function navegarSugestoesParceiroLancamentoManualAr(event, input) {
+  if (event.key === 'Escape') {
+    fecharSugestoesParceiroLancamentoManualAr(input);
+    return;
+  }
+  if (event.key === 'Enter' && !document.getElementById('ar_manual_parceiro_sugestoes')?.hidden) {
+    const primeiraOpcao = document.querySelector('#ar_manual_parceiro_sugestoes .ar-validacoes-manual-partner-option');
+    if (primeiraOpcao) {
+      event.preventDefault();
+      selecionarParceiroLancamentoManualValidacoesAr(primeiraOpcao);
+    }
+  }
+}
+
+function fecharModalLancamentoManualValidacoesAr(event) {
+  if (event && event.target !== event.currentTarget) return;
+  state.ar.validacoes.lancamentoManual.aberto = false;
+  state.ar.validacoes.lancamentoManual.message = '';
+  renderPainelAr();
+}
+
+async function criarLancamentoManualValidacoesAr(event) {
+  event?.preventDefault();
   if (!pode('painel_ar.validacoes', 'importar')) {
     state.ar.validacoes.message = 'Seu usuário não possui permissão para criar lançamentos.';
     renderPainelAr();
     return;
   }
 
-  const valor = document.getElementById('ar_manual_valor')?.value || '';
-  const parceiroNome = document.getElementById('ar_manual_parceiro')?.value || '';
-  const dataValidacao = document.getElementById('ar_manual_data')?.value || '';
-  const produto = document.getElementById('ar_manual_produto')?.value || '';
+  const validacoes = state.ar.validacoes;
+  const manual = validacoes.lancamentoManual;
+  const valores = Object.fromEntries(new FormData(event.currentTarget).entries());
+  manual.form = {
+    parceiro: valores.parceiro || '',
+    codigo: valores.codigo || '',
+    data: valores.data || '',
+    produto: valores.produto || '',
+    pedido: valores.pedido || '',
+    cliente: valores.cliente || '',
+    valor: valores.valor || ''
+  };
+  manual.message = '';
+  const valor = manual.form.valor;
+  const parceiroNome = manual.form.parceiro;
+  const dataDigitada = manual.form.data;
+  const dataValidacao = converterDataDigitadaValidacoesAr(dataDigitada);
+  const produto = manual.form.produto;
 
   if (!parceiroNome.trim() || !dataValidacao || !produto.trim() || !valor) {
-    state.ar.validacoes.message = 'Informe parceiro, data, produto e valor da comissão.';
+    manual.message = dataDigitada && !dataValidacao
+      ? 'Confira a data: use o formato DD/MM/AAAA e informe uma data válida.'
+      : 'Informe parceiro, data, produto e valor da comissão.';
     renderPainelAr();
     return;
   }
 
   try {
-    state.ar.validacoes.loading = true;
-    state.ar.validacoes.message = '';
+    validacoes.loading = true;
+    validacoes.message = '';
     renderPainelAr();
 
     const response = await chamarApi('createArValidacaoManual', {
+      parceiro_id: document.getElementById('ar_manual_parceiro')?.dataset.selectedPartnerId || '',
       parceiro_nome: parceiroNome.trim(),
-      codigo_entidade: document.getElementById('ar_manual_codigo')?.value || '',
+      cod_vendedor: manual.form.codigo,
       data_validacao: dataValidacao,
       produto: produto.trim(),
-      pedido: document.getElementById('ar_manual_pedido')?.value || '',
-      nome_cliente: document.getElementById('ar_manual_cliente')?.value || '',
+      pedido: manual.form.pedido,
+      nome_cliente: manual.form.cliente,
       valor_tot_comiss: valor
     });
 
@@ -14194,16 +15167,24 @@ async function criarLancamentoManualValidacoesAr() {
       throw new Error(obterMensagemApi(response, 'Não foi possível salvar o lançamento manual.'));
     }
 
-    state.ar.validacoes.message = 'Lançamento manual salvo.';
-    await carregarValidacoesAr(true);
+    manual.aberto = false;
+    manual.form = { parceiro: '', codigo: '', data: '', produto: '', pedido: '', cliente: '', valor: '' };
+    validacoes.filtros = { parceiro: '', codigoEntidade: '', dataInicio: '', dataFim: '', produto: '', pedido: '', cliente: '' };
+    validacoes.filtrosRascunho = { codigoEntidade: '', produto: '', pedido: '', cliente: '' };
+    validacoes.filtrosModalAberto = false;
+    validacoes.paginaPendentes = 1;
+    validacoes.message = 'Lançamento manual salvo.';
+    await carregarValidacoesAr(true, response.data?.id || '');
   } catch (erro) {
-    state.ar.validacoes.loading = false;
-    state.ar.validacoes.message = erro.message || 'Erro ao salvar o lançamento manual.';
+    validacoes.loading = false;
+    manual.message = erro.message || 'Erro ao salvar o lançamento manual.';
     renderPainelAr();
   }
 }
 
 async function emitirReciboValidacoesAr() {
+  if (state.ar.validacoes.loading) return;
+
   if (!pode('painel_ar.validacoes', 'emitir_recibo')) {
     state.ar.validacoes.message = 'Seu usuário não possui permissão para emitir recibos.';
     renderPainelAr();
@@ -14221,7 +15202,7 @@ async function emitirReciboValidacoesAr() {
   }
 
   const chavesParceiro = new Set(selecionados.map(item => {
-    return item.parceiro_id || item.codigo_entidade || item.parceiro_nome || 'sem-parceiro';
+    return item.parceiro_id || item.cod_vendedor || item.parceiro_nome || item.codigo_entidade || 'sem-parceiro';
   }));
 
   if (chavesParceiro.size > 1) {
@@ -14255,9 +15236,108 @@ async function emitirReciboValidacoesAr() {
   }
 }
 
-function visualizarReciboValidacoesAr(id) {
-  state.ar.validacoes.reciboAtivo = state.ar.validacoes.recibos.find(item => item.id === id) || null;
-  renderPainelAr();
+async function visualizarReciboValidacoesAr(id) {
+  const recibo = state.ar.validacoes.recibos.find(item => item.id === id);
+
+  if (!recibo) return;
+
+  const janela = window.open('', '_blank');
+
+  if (!janela) {
+    state.ar.validacoes.message = 'O navegador bloqueou a nova aba do recibo. Permita pop-ups para este site e tente novamente.';
+    renderPainelAr();
+    return;
+  }
+
+  const estilos = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .map(link => `<link rel="stylesheet" href="${escapeAttr(link.href)}">`)
+    .join('');
+  const estilosInline = Array.from(document.querySelectorAll('style'))
+    .map(style => style.outerHTML)
+    .join('');
+  const temaEscuro = state.temaAtual === 'escuro' ? ' dark' : '';
+  const titulo = `Recibo ${recibo.numero || ''}`.trim();
+  let enderecoCorretora = null;
+  let erroEndereco = false;
+  let dadosBancariosPix = '';
+
+  janela.opener = null;
+  janela.document.title = titulo;
+  janela.document.body.textContent = 'Carregando recibo...';
+
+  let parceiroCadastroRecibo = null;
+  const codigoVendedor = String(recibo.cod_vendedor || recibo.ar_recibo_itens?.map(item => item.ar_validacoes?.cod_vendedor).find(Boolean) || '').trim();
+  if (codigoVendedor) {
+    try {
+      const respostaParceiro = await chamarApi('getAdminPartnerPaymentDetailsByCode', { codigo_revendedor: codigoVendedor });
+      if (!respostaParceiro.ok) throw new Error(obterMensagemApi(respostaParceiro, 'Não foi possível carregar os dados PIX do parceiro.'));
+      const parceiro = respostaParceiro.data.record;
+      parceiroCadastroRecibo = parceiro || null;
+      if (parceiro) {
+        if (parceiro.chave_pix) {
+          dadosBancariosPix = parceiro.chave_pix;
+        } else {
+          window.hubToast?.error(`O vendedor ${codigoVendedor} foi localizado, mas não tem chave PIX cadastrada.`);
+        }
+      } else {
+        window.hubToast?.error(`Nenhum parceiro foi encontrado com o código do vendedor ${codigoVendedor}.`);
+      }
+    } catch (erro) {
+      console.warn('Não foi possível localizar os dados PIX pelo código do revendedor.', erro);
+      window.hubToast?.error(erro.message || 'Não foi possível consultar os dados PIX do parceiro.');
+    }
+  } else {
+    window.hubToast?.error(`O recibo ${recibo.numero || ''} não tem Código do Vendedor para localizar os dados PIX.`.trim());
+  }
+
+
+  try {
+    if (!supabase) throw new Error('Supabase indisponível.');
+    const { data, error } = await supabase
+      .from('corretora_configuracoes')
+      .select('endereco_logradouro, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf, endereco_cep')
+      .eq('status', 'ativo')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    enderecoCorretora = data || {};
+  } catch (erro) {
+    erroEndereco = true;
+    console.error('Não foi possível carregar o endereço da corretora para o recibo.', erro);
+  }
+
+  if (janela.closed) return;
+
+  janela.document.open();
+  janela.document.write(`<!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>${escapeHtml(titulo)}</title>
+        ${estilos}${estilosInline}
+        <style>
+          body.ar-recibo-preview-page { background: var(--fundo, #f4f7fb); color: var(--texto, #172033); margin: 0; min-height: 100vh; padding: 24px; }
+          .ar-recibo-preview-page .ar-recibo-preview-shell { aspect-ratio: 297 / 210; background: #fff; box-sizing: border-box; margin: 0 auto; max-width: 1122px; padding: 1cm; width: 100%; }
+          .ar-recibo-preview-controls { display: flex; gap: 8px; justify-content: flex-end; margin: 0 auto 14px; max-width: 1122px; }
+          .ar-recibo-preview-page .ar-recibo-print { background: transparent; border: 0; border-radius: 0; box-sizing: border-box; min-height: 100%; padding: 0; width: 100%; }
+          @media (max-width: 760px) { body.ar-recibo-preview-page { padding: 12px; } }
+          @media print { body.ar-recibo-preview-page { background: #fff; margin: 0; padding: 0; } .ar-recibo-preview-controls { display: none !important; } .ar-recibo-preview-page .ar-recibo-preview-shell { aspect-ratio: auto; background: transparent; margin: 0; max-width: none; padding: 0; width: auto; } .ar-recibo-preview-page .ar-recibo-print { padding: 0; } }
+        </style>
+      </head>
+      <body class="ar-recibo-preview-page${temaEscuro}">
+        <main class="hub-layout">
+          <div class="ar-recibo-preview-controls no-print">
+            <button class="secondary-btn" type="button" onclick="window.close()">Fechar</button>
+            <button class="save-btn" type="button" onclick="window.print()">Imprimir / salvar PDF</button>
+          </div>
+          <div class="ar-recibo-preview-shell">${renderConteudoReciboValidacoesAr({ ...recibo, parceiro_nome: parceiroCadastroRecibo?.nome_completo || parceiroCadastroRecibo?.nome || recibo.parceiro_nome, cod_vendedor: parceiroCadastroRecibo?.codigo_revendedor || codigoVendedor, chave_pix: dadosBancariosPix, dados_bancarios_pix: dadosBancariosPix }, enderecoCorretora, erroEndereco)}</div>
+        </main>
+      </body>
+    </html>`);
+  janela.document.close();
 }
 
 function fecharReciboValidacoesAr() {
@@ -14303,12 +15383,20 @@ async function cancelarReciboValidacoesAr(id) {
 
 async function alterarMesBaseRepasseAr(valor) {
   const repasse = state.ar.validacoes.importacaoRepasse;
-  repasse.mesBase = valor;
-  repasse.linhas = [];
-  repasse.erros = [];
-  repasse.resumo = null;
+  const mesBase = converterMesBaseDigitadoRepasseAr(valor);
+  if (String(valor || '').trim() && !mesBase) {
+    repasse.mesBase = '';
+    repasse.loteExistente = null;
+    repasse.message = 'Informe o mês-base no formato MM/AAAA.';
+    renderPainelAr();
+    return;
+  }
+
+  repasse.mesBase = mesBase;
   repasse.loteExistente = null;
   repasse.message = '';
+  recalcularLinhasRepasseAr();
+  if (repasse.resumo) repasse.resumo.validas = repasse.linhas.length;
 
   if (!valor) {
     renderPainelAr();
@@ -14320,7 +15408,7 @@ async function alterarMesBaseRepasseAr(valor) {
     renderPainelAr();
 
     const response = await chamarApi('checkArRepasseImportado', {
-      mes_base: normalizarMesBaseRepasseAr(valor)
+      mes_base: normalizarMesBaseRepasseAr(mesBase)
     });
 
     if (!response.ok) {
@@ -14344,21 +15432,26 @@ async function processarArquivoRepasseAr(event) {
     return;
   }
 
-  const arquivo = event.target.files?.[0];
+  const arquivo = event.dataTransfer?.files?.[0] || event.target?.files?.[0];
   const repasse = state.ar.validacoes.importacaoRepasse;
 
-  if (!repasse.mesBase) {
-    repasse.message = 'Informe o mês-base antes de selecionar a planilha.';
+  if (!arquivo) return;
+
+  if (!/\.(xlsx|xls)$/i.test(arquivo.name || '')) {
+    repasse.message = 'Selecione um arquivo de planilha .xlsx ou .xls.';
     renderPainelAr();
     return;
   }
-
-  if (!arquivo) return;
 
   try {
     repasse.loading = true;
     repasse.message = '';
     repasse.arquivoNome = arquivo.name;
+    repasse.cabecalhos = [];
+    repasse.linhasOriginais = [];
+    repasse.mapeamentos = {};
+    repasse.tiposColunas = {};
+    repasse.camposExtras = [];
     repasse.linhas = [];
     repasse.erros = [];
     repasse.resumo = null;
@@ -14378,17 +15471,26 @@ async function processarArquivoRepasseAr(event) {
       defval: '',
       raw: true
     });
-    const { linhas, erros } = normalizarLinhasRepasseAr(linhasOriginais);
+    const cabecalhos = Object.keys(linhasOriginais[0] || {});
 
-    repasse.linhas = linhas;
-    repasse.erros = erros;
+    if (!cabecalhos.length) {
+      throw new Error('A aba selecionada não tem cabeçalhos reconhecíveis.');
+    }
+
+    repasse.cabecalhos = cabecalhos;
+    repasse.linhasOriginais = linhasOriginais;
+    const configuracaoSalva = carregarConfiguracaoMapeamentoRepasseAr(cabecalhos);
+    repasse.mapeamentos = configuracaoSalva?.mapeamentos || sugerirMapeamentoRepasseAr(cabecalhos);
+    repasse.tiposColunas = configuracaoSalva?.tiposColunas || {};
+    repasse.camposExtras = configuracaoSalva?.camposExtras || [];
+    recalcularLinhasRepasseAr();
     repasse.resumo = {
       aba: sheetName,
       total: linhasOriginais.length,
-      validas: linhas.length
+      validas: repasse.linhas.length
     };
-    repasse.message = linhas.length
-      ? `Planilha lida: ${linhas.length} linha(s) válida(s) na aba ${sheetName}.`
+    repasse.message = repasse.linhas.length
+      ? `Planilha lida: ${repasse.linhas.length} linha(s) na aba ${sheetName}. Revise os campos sugeridos antes de importar.`
       : 'Nenhuma linha válida encontrada na planilha.';
   } catch (erro) {
     repasse.message = erro.message || 'Erro ao ler a planilha de repasse.';
@@ -14396,6 +15498,27 @@ async function processarArquivoRepasseAr(event) {
     repasse.loading = false;
     renderPainelAr();
   }
+}
+
+function arrastarArquivoRepasseAr(event, elemento) {
+  if (elemento.classList.contains('is-disabled')) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  elemento.classList.add('is-drag-over');
+}
+
+function sairArrasteArquivoRepasseAr(event, elemento) {
+  if (elemento.contains(event.relatedTarget)) return;
+  elemento.classList.remove('is-drag-over');
+}
+
+function soltarArquivoRepasseAr(event, elemento) {
+  event.preventDefault();
+  elemento.classList.remove('is-drag-over');
+  if (elemento.classList.contains('is-disabled')) return;
+  const arquivo = event.dataTransfer?.files?.[0];
+  if (!arquivo) return;
+  processarArquivoRepasseAr({ dataTransfer: { files: [arquivo] } });
 }
 
 async function importarRepasseValidacoesAr() {
@@ -14435,6 +15558,11 @@ async function importarRepasseValidacoesAr() {
       mes_base: response.data?.mes_base
     };
     repasse.linhas = [];
+    repasse.linhasOriginais = [];
+    repasse.cabecalhos = [];
+    repasse.mapeamentos = {};
+    repasse.tiposColunas = {};
+    repasse.camposExtras = [];
     repasse.erros = [];
     repasse.resumo = null;
     repasse.loading = false;
@@ -14487,6 +15615,10 @@ async function excluirMesBaseRepasseAr() {
     state.ar.validacoes.importacaoRepasse = {
       mesBase: '',
       arquivoNome: '',
+      cabecalhos: [],
+      linhasOriginais: [],
+      mapeamentos: {},
+      camposExtras: [],
       linhas: [],
       erros: [],
       resumo: null,
@@ -14506,6 +15638,10 @@ function limparImportacaoRepasseAr() {
   state.ar.validacoes.importacaoRepasse = {
     mesBase: '',
     arquivoNome: '',
+    cabecalhos: [],
+    linhasOriginais: [],
+    mapeamentos: {},
+    camposExtras: [],
     linhas: [],
     erros: [],
     resumo: null,
@@ -14776,6 +15912,25 @@ function formatarMesBaseRepasseAr(valor) {
   return nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
 }
 
+function formatarEntradaMesBaseRepasseAr(valor) {
+  if (!valor) return '';
+  const [ano, mes] = String(valor).slice(0, 7).split('-');
+  return ano && mes ? `${mes}/${ano}` : String(valor);
+}
+
+function mascararEntradaMesBaseRepasseAr(input) {
+  const digitos = String(input.value || '').replace(/\D/g, '').slice(0, 6);
+  input.value = digitos.length > 2 ? `${digitos.slice(0, 2)}/${digitos.slice(2)}` : digitos;
+}
+
+function converterMesBaseDigitadoRepasseAr(valor) {
+  const correspondencia = String(valor || '').trim().match(/^(\d{2})\/(\d{4})$/);
+  if (!correspondencia) return '';
+  const mes = Number(correspondencia[1]);
+  if (mes < 1 || mes > 12) return '';
+  return `${correspondencia[2]}-${correspondencia[1]}`;
+}
+
 function normalizarMesBaseRepasseAr(valor) {
   if (!valor) return '';
   return `${String(valor).slice(0, 7)}-01`;
@@ -14790,20 +15945,6 @@ function normalizarCabecalhoRepasseAr(valor) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-function obterValorRepasseAr(linha, aliases) {
-  const mapa = Object.entries(linha).reduce((acc, [chave, valor]) => {
-    acc[normalizarCabecalhoRepasseAr(chave)] = valor;
-    return acc;
-  }, {});
-
-  for (const alias of aliases) {
-    const valor = mapa[normalizarCabecalhoRepasseAr(alias)];
-    if (valor !== '' && valor != null) return valor;
-  }
-
-  return '';
-}
-
 function textoRepasseAr(valor) {
   if (valor == null) return '';
   return String(valor).trim();
@@ -14811,15 +15952,28 @@ function textoRepasseAr(valor) {
 
 function numeroRepasseAr(valor) {
   if (typeof valor === 'number') return valor;
-  const texto = textoRepasseAr(valor).replace(/[^\d,.-]/g, '');
+  let texto = textoRepasseAr(valor).replace(/\s/g, '').replace(/[^\d,.-]/g, '');
   if (!texto) return null;
 
-  const normalizado = texto.includes(',')
-    ? texto.replace(/\./g, '').replace(',', '.')
-    : texto;
+  const negativo = texto.startsWith('-') || (String(valor).includes('(') && String(valor).includes(')'));
+  texto = texto.replace(/-/g, '');
+  const ultimaVirgula = texto.lastIndexOf(',');
+  const ultimoPonto = texto.lastIndexOf('.');
+  let normalizado = texto;
+  if (ultimaVirgula >= 0 && ultimoPonto >= 0) {
+    const separadorDecimal = ultimaVirgula > ultimoPonto ? ',' : '.';
+    const separadorMilhar = separadorDecimal === ',' ? '.' : ',';
+    normalizado = texto.split(separadorMilhar).join('');
+    if (separadorDecimal === ',') normalizado = normalizado.replace(',', '.');
+  } else if (ultimaVirgula >= 0) {
+    normalizado = texto.replace(/\./g, '').replace(',', '.');
+  } else if (ultimoPonto >= 0) {
+    const casasDecimais = texto.length - ultimoPonto - 1;
+    normalizado = casasDecimais === 3 ? texto.replace(/\./g, '') : texto;
+  }
   const numero = Number(normalizado);
 
-  return Number.isNaN(numero) ? null : numero;
+  return Number.isNaN(numero) ? null : negativo ? -Math.abs(numero) : numero;
 }
 
 function dataRepasseAr(valor) {
@@ -14851,26 +16005,41 @@ function dataRepasseAr(valor) {
   return Number.isNaN(data.getTime()) ? '' : data.toISOString().slice(0, 10);
 }
 
-function normalizarLinhasRepasseAr(linhasOriginais) {
+function normalizarLinhasRepasseAr(linhasOriginais, mapeamentos = {}, camposExtras = [], tiposColunas = {}) {
   const linhas = [];
   const erros = [];
+  const tipoPorCampo = new Map(CAMPOS_REPASSE_AR.map(([chave, , tipo]) => [chave, tipo]));
 
   linhasOriginais.forEach((linha, index) => {
     const numeroLinha = index + 2;
-    const codigoEntidade = textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Ent.', 'Cod Ent', 'Cod. Entidade']));
-    const nomeVendedor = textoRepasseAr(obterValorRepasseAr(linha, ['Nome Vendedor']));
-    const descEntidade = textoRepasseAr(obterValorRepasseAr(linha, ['Des. Entidade', 'Desc. Entidade']));
-    const produto = textoRepasseAr(obterValorRepasseAr(linha, ['Desc.Produto', 'Desc Produto']));
-    const pedido = textoRepasseAr(obterValorRepasseAr(linha, ['Pedido']));
-    const cliente = textoRepasseAr(obterValorRepasseAr(linha, ['Nome Cliente']));
-    const dataValidacao = dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Validação', 'Dt.Validacao', 'Dt Validação']));
-    const valorComissao = numeroRepasseAr(obterValorRepasseAr(linha, ['Valor Tot. Comiss.', 'Valor Tot Comiss', 'Valor Total Comissão']));
+    const registro = {};
+    for (const [cabecalho, campo] of Object.entries(mapeamentos)) {
+      if (campo === 'ignorar' || campo.startsWith('extra:')) continue;
+      const valorBruto = linha[cabecalho];
+      const tipo = tiposColunas[cabecalho] || tipoPorCampo.get(campo);
+      registro[campo] = ['numero', 'valor'].includes(tipo)
+        ? numeroRepasseAr(valorBruto)
+        : tipo === 'data'
+          ? dataRepasseAr(valorBruto)
+          : textoRepasseAr(valorBruto);
+    }
 
-    if (!codigoEntidade && !nomeVendedor && !produto && !pedido && !cliente && valorComissao == null) {
+    const codigoEntidade = registro.codigo_entidade || '';
+    const nomeVendedor = registro.nome_vendedor || '';
+    const produto = registro.produto || '';
+    const pedido = registro.pedido || '';
+    const cliente = registro.nome_cliente || '';
+    const valorComissao = registro.valor_tot_comiss;
+
+    const temDadosMapeados = Object.entries(mapeamentos).some(([cabecalho, campo]) => {
+      return campo !== 'ignorar' && String(linha[cabecalho] ?? '').trim() !== '';
+    }) || camposExtras.some(campo => String(linha[campo.cabecalho] ?? '').trim() !== '');
+
+    if (!temDadosMapeados) {
       return;
     }
 
-    if (!nomeVendedor && !codigoEntidade) {
+    if (!nomeVendedor && !registro.cod_vendedor && !codigoEntidade) {
       erros.push(`Linha ${numeroLinha}: parceiro não identificado.`);
     }
 
@@ -14886,28 +16055,34 @@ function normalizarLinhasRepasseAr(linhasOriginais) {
       erros.push(`Linha ${numeroLinha}: valor de comissão inválido.`);
     }
 
-    linhas.push({
-      codigo_entidade: codigoEntidade,
-      entidade: descEntidade,
-      cod_vendedor: textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Vendedor', 'Cod Vendedor'])),
-      nome_vendedor: nomeVendedor || descEntidade,
-      agente_validacao: textoRepasseAr(obterValorRepasseAr(linha, ['Desc. Agente Val.', 'Desc Agente Val'])),
-      cod_produto: textoRepasseAr(obterValorRepasseAr(linha, ['Cod.Produto', 'Cod Produto'])),
-      produto,
-      pedido,
-      status_pedido: textoRepasseAr(obterValorRepasseAr(linha, ['Status Pedido'])),
-      data_pedido: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Pedido', 'Dt Pedido'])),
-      data_validacao: dataValidacao,
-      data_verificacao: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Verificação', 'Dt.Verificacao', 'Dt Verificação'])),
-      data_emissao_renovacao: dataRepasseAr(obterValorRepasseAr(linha, ['Dt.Emissão/Renovação', 'Dt.Emissao/Renovacao'])),
-      nome_cliente: cliente,
-      cod_ac: textoRepasseAr(obterValorRepasseAr(linha, ['Cód. AC', 'Cod. AC', 'Cod AC'])),
-      grupo_produto: textoRepasseAr(obterValorRepasseAr(linha, ['Desc. Grupo', 'Desc Grupo'])),
-      link_repasse: textoRepasseAr(obterValorRepasseAr(linha, ['Link'])),
-      valor_bruto: numeroRepasseAr(obterValorRepasseAr(linha, ['Val. Bruto', 'Valor Bruto'])),
-      valor_faturamento: numeroRepasseAr(obterValorRepasseAr(linha, ['Val. Faturamento', 'Valor Faturamento'])),
-      valor_tot_comiss: valorComissao ?? 0
-    });
+    registro.nome_vendedor = nomeVendedor;
+    registro.data_validacao = registro.data_validacao || normalizarMesBaseRepasseAr(state.ar.validacoes.importacaoRepasse.mesBase);
+    registro.valor_tot_comiss = valorComissao ?? 0;
+    registro.dados_adicionais = {
+      campos: {},
+      rotulos: {},
+      tipos: {}
+    };
+
+    for (const campoExtra of camposExtras) {
+      const bruto = linha[campoExtra.cabecalho];
+      if (bruto == null || String(bruto).trim() === '') continue;
+      const tipo = tiposColunas[campoExtra.cabecalho] || campoExtra.tipo;
+      const valor = ['numero', 'valor'].includes(tipo)
+        ? numeroRepasseAr(bruto)
+        : tipo === 'data'
+          ? dataRepasseAr(bruto)
+          : textoRepasseAr(bruto);
+      if (valor == null || (tipo === 'data' && !valor)) {
+        erros.push(`Linha ${numeroLinha}: valor inválido para o campo extra "${campoExtra.rotulo}".`);
+        continue;
+      }
+      registro.dados_adicionais.campos[campoExtra.chave] = valor;
+      registro.dados_adicionais.rotulos[campoExtra.chave] = campoExtra.rotulo;
+      registro.dados_adicionais.tipos[campoExtra.chave] = tipo;
+    }
+
+    linhas.push(registro);
   });
 
   return { linhas, erros };
@@ -14936,9 +16111,7 @@ function escolherAbaRepasseAr(workbook, xlsx) {
     return { nome, score: score + bonus };
   });
 
-  return candidatas.sort((a, b) => b.score - a.score)[0]?.score > 3
-    ? candidatas.sort((a, b) => b.score - a.score)[0].nome
-    : '';
+  return candidatas.sort((a, b) => b.score - a.score)[0]?.nome || '';
 }
 
 function carregarXlsxAr() {
@@ -17036,6 +18209,20 @@ Object.assign(window, {
   alternarVisibilidadeSenhaAcesso,
   copiarSenhaAcesso,
   alterarFiltroValidacoesAr,
+  alterarFiltroDataValidacoesAr,
+  abrirFiltrosValidacoesAr,
+  fecharFiltrosValidacoesAr,
+  aplicarFiltrosAvancadosValidacoesAr,
+  limparFiltrosValidacoesAr,
+  abrirModalLancamentoManualValidacoesAr,
+  fecharModalLancamentoManualValidacoesAr,
+  mascararDataDigitadaValidacoesAr,
+  mascararEntradaMesBaseRepasseAr,
+  alterarMapeamentoRepasseAr,
+  alterarTipoColunaRepasseAr,
+  adicionarCampoExtraRepasseAr,
+  renomearCampoExtraRepasseAr,
+  alterarPersistenciaCampoExtraRepasseAr,
   alterarFiltroProdutoAr,
   alterarFiltroSenha,
   alternarFiltrosSenhas,
@@ -17052,6 +18239,8 @@ Object.assign(window, {
   abrirBuscaSidebarHub,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
+  selecionarPaginaPendentesValidacoesAr,
+  ordenarPendentesValidacoesAr,
   alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
   alternarTema,
@@ -17066,6 +18255,13 @@ Object.assign(window, {
   descartarAlteracoesPermissoesUsuarioAdmin,
   arquivarParceiroIndicacaoAdmin,
   cancelarReciboValidacoesAr,
+  abrirConfiguracaoImpostosValidacoesAr,
+  fecharConfiguracaoImpostosValidacoesAr,
+  novoImpostoValidacoesAr,
+  editarImpostoValidacoesAr,
+  alterarCampoImpostoValidacoesAr,
+  salvarImpostoValidacoesAr,
+  excluirImpostoValidacoesAr,
   carregarValidacoesAr,
   alterarMesBaseRepasseAr,
   copiarLink,
@@ -17075,8 +18271,14 @@ Object.assign(window, {
   copiarSenhaTemporariaUsuarioAdmin,
   copiarVisualizacaoProdutosClienteAr,
   criarLancamentoManualValidacoesAr,
+  alterarBuscaParceiroLancamentoManualValidacoesAr,
+  filtrarParceirosLancamentoManualValidacoesAr,
+  navegarSugestoesParceiroLancamentoManualAr,
+  selecionarParceiroLancamentoManualValidacoesAr,
+  fecharSugestoesParceiroLancamentoManualAr,
   editarLinkItem,
   editarParceiroIndicacaoAdmin,
+  definirParceiroIndicacaoPrincipalAdmin,
   editarPerfilAdmin,
   excluirPerfilAdmin,
   excluirUsuarioAdmin,
@@ -17110,6 +18312,9 @@ Object.assign(window, {
   navegarHome,
   navegarParaModulo,
   navegarParaRota,
+  arrastarArquivoRepasseAr,
+  sairArrasteArquivoRepasseAr,
+  soltarArquivoRepasseAr,
   processarArquivoRepasseAr,
   renderDashboard,
   restaurarCoresPadrao,
@@ -17182,6 +18387,10 @@ Object.assign(window, {
   fecharVisualizacaoCrmAr,
   selecionarAbaSenhas,
   selecionarSubabaValidacoesAr,
+  alterarFiltroRecibosValidacoesAr,
+  aplicarFiltrosRecibosValidacoesAr,
+  limparFiltrosRecibosValidacoesAr,
+  selecionarPaginaRecibosValidacoesAr,
   selecionarParceiroAr,
   selecionarProdutoAr,
   selecionarProdutoCompletoAr,

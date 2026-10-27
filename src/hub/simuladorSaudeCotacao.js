@@ -10,7 +10,6 @@ const BANDS = ['0-18', '19-23', '24-28', '29-33', '34-38', '39-43', '44-48', '49
 const ACCOMMODATIONS = ['Apartamento', 'Enfermaria', 'Ambulatorial'];
 const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', citySource: 'unset', cnpjLookupLoading: false, cnpjLookupError: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
 let context = {};
-let quoteToastTimer = null;
 let quoteToastKey = '';
 let cnpjLookupTimer = null;
 let cnpjLookupRequestId = 0;
@@ -187,32 +186,17 @@ function quoteOperators() {
   return operators.filter(operator => operator?.id && !seen.has(operator.id) && seen.add(operator.id));
 }
 function clearQuoteToast() {
-  if (quoteToastTimer) window.clearTimeout(quoteToastTimer);
-  quoteToastTimer = null;
-  document.querySelector('.saude-quote-toast')?.remove();
+  window.hubToast?.dismiss('simulador-saude-quote');
 }
-function showQuoteToast(message, { isError = false, retry = false, isCorner = false } = {}) {
-  clearQuoteToast();
-  const toast = document.createElement('div');
-  toast.className = `saude-quote-toast${isError ? ' is-error' : ''}${isCorner ? ' is-corner' : ''}`;
-  toast.setAttribute('role', isError ? 'alert' : 'status');
-  toast.setAttribute('aria-live', isError ? 'assertive' : 'polite');
-  const text = document.createElement('span');
-  text.textContent = message;
-  toast.append(text);
-  if (retry) {
-    const action = document.createElement('button');
-    action.type = 'button';
-    action.className = 'secondary-btn';
-    action.textContent = 'Tentar novamente';
-    action.addEventListener('click', () => { quoteToastKey = ''; window.saudeQuoteReloadCatalog(); });
-    toast.append(action);
-  }
-  document.body.appendChild(toast);
-  quoteToastTimer = window.setTimeout(() => {
-    clearQuoteToast();
+function showQuoteToast(message, { isError = false, retry = false } = {}) {
+  window.hubToast?.show(message, {
+    type: isError ? 'error' : 'success',
+    dedupeKey: 'simulador-saude-quote',
+    action: retry ? { label: 'Tentar novamente', onClick: () => { quoteToastKey = ''; window.saudeQuoteReloadCatalog(); } } : undefined
+  });
+  window.setTimeout(() => {
     if (!isError && quote.notice === message) { quote.notice = ''; quoteToastKey = ''; }
-  }, 4200);
+  }, 5000);
 }
 function syncQuoteToast() {
   const isError = Boolean(quote.cnpjLookupError || quote.catalogError);

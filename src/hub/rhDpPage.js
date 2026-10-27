@@ -322,26 +322,8 @@ export function criarRhDpController({
   let faixaNavegacaoRhDp = '';
   let listenersMenuRhDpConfigurados = false;
   let resizeNavegacaoRhDpConfigurado = false;
-  let toastRhDpTimer = null;
-
   function mostrarToastRhDp(mensagem) {
-    if (!mensagem || !document.body) return;
-    if (toastRhDpTimer) window.clearTimeout(toastRhDpTimer);
-    document.getElementById('rh-dp-toast')?.remove();
-
-    const toast = document.createElement('div');
-    toast.id = 'rh-dp-toast';
-    toast.className = 'rh-dp-toast';
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
-    toast.setAttribute('aria-atomic', 'true');
-    toast.textContent = mensagem;
-    document.body.appendChild(toast);
-
-    toastRhDpTimer = window.setTimeout(() => {
-      toast.remove();
-      toastRhDpTimer = null;
-    }, 3000);
+    window.hubToast?.success(mensagem);
   }
 
   function criarEstadoModal({

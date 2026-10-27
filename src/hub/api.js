@@ -6,7 +6,11 @@ import {
   criarValidacaoManual,
   emitirReciboAR,
   excluirImportacaoRepasseAR,
+  excluirImpostoReciboAR,
   importarRepasseAR,
+  listarParceirosLancamentoManualAR,
+  listarImpostosReciboAR,
+  salvarImpostoReciboAR,
   verificarImportacaoRepasseAR
 } from './services/arValidacoesService.js';
 import {
@@ -15,12 +19,14 @@ import {
   listarModulosAdmin,
   listarConfiguracaoModulosHomeAdmin,
   obterParceiroIndicacaoAdmin,
+  obterDadosPagamentoParceiroPorCodigoAdmin,
   listarPermissoesAdmin,
   listarPermissoesUsuarioAdmin,
   listarParceirosIndicacaoAdmin,
   listarRegistrosAdmin,
   listarLogsIntegracoesAdmin,
   salvarParceiroIndicacaoAdmin,
+  definirParceiroIndicacaoPrincipalAdmin,
   arquivarParceiroIndicacaoAdmin,
   atualizarStatusParceirosIndicacaoAdmin,
   arquivarParceirosIndicacaoAdminLote,
@@ -238,6 +244,22 @@ export async function chamarApi(action, payload = {}) {
       return { ok: true, data: dados };
     }
 
+    if (action === 'getArManualPartners') {
+      return { ok: true, data: await listarParceirosLancamentoManualAR() };
+    }
+
+    if (action === 'getArImpostosRecibo') {
+      return { ok: true, data: await listarImpostosReciboAR() };
+    }
+
+    if (action === 'saveArImpostoRecibo') {
+      return { ok: true, data: await salvarImpostoReciboAR(payload) };
+    }
+
+    if (action === 'deleteArImpostoRecibo') {
+      return { ok: true, data: await excluirImpostoReciboAR(payload) };
+    }
+
     if (action === 'createArValidacaoManual') {
       const dados = await criarValidacaoManual(payload);
       return { ok: true, data: dados };
@@ -276,7 +298,9 @@ export async function chamarApi(action, payload = {}) {
       listAdminProfiles: () => listarPerfisAdmin(),
       listAdminPartners: () => listarParceirosIndicacaoAdmin(),
       getAdminPartner: () => obterParceiroIndicacaoAdmin(payload),
+      getAdminPartnerPaymentDetailsByCode: () => obterDadosPagamentoParceiroPorCodigoAdmin(payload),
       saveAdminPartner: () => salvarParceiroIndicacaoAdmin(payload),
+      setAdminPartnerCodePrincipal: () => definirParceiroIndicacaoPrincipalAdmin(payload),
       archiveAdminPartner: () => arquivarParceiroIndicacaoAdmin(payload),
       updateAdminPartnersStatusBatch: () => atualizarStatusParceirosIndicacaoAdmin(payload),
       archiveAdminPartnersBatch: () => arquivarParceirosIndicacaoAdminLote(payload),

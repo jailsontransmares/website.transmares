@@ -166,6 +166,7 @@ export async function listarParceirosIndicacaoAdmin() {
       nome,
       nome_completo,
       codigo_revendedor,
+      principal_codigo_revendedor,
       ac,
       status,
       remunerado,
@@ -187,6 +188,22 @@ export async function listarParceirosIndicacaoAdmin() {
   }
 
   return { records: data || [] };
+}
+
+export async function obterDadosPagamentoParceiroPorCodigoAdmin({ codigo_revendedor } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const codigo = String(codigo_revendedor || '').trim();
+  if (!codigo) return { record: null };
+
+  const { data, error } = await supabase.rpc('ar_recibo_dados_pix_parceiro', {
+    p_codigo_revendedor: codigo
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar os dados PIX do parceiro.');
+  }
+
+  return { record: Array.isArray(data) ? data[0] || null : data || null };
 }
 
 export async function obterParceiroIndicacaoAdmin({ id, incluir_sensiveis = false } = {}) {
@@ -212,6 +229,7 @@ export async function obterParceiroIndicacaoAdmin({ id, incluir_sensiveis = fals
       updated_at,
       remunerado,
       codigo_revendedor,
+      principal_codigo_revendedor,
       nome_completo,
       data_aniversario,
       whatsapp_pessoal,
@@ -291,6 +309,12 @@ export async function salvarParceiroIndicacaoAdmin(payload = {}) {
     record.nome_chave_pix = limparTexto(payload.nome_chave_pix);
   }
 
+  const codigoAntigo = limparTexto(payload.codigo_revendedor_original).toLocaleUpperCase('pt-BR');
+  const codigoNovo = limparTexto(payload.codigo_revendedor).toLocaleUpperCase('pt-BR');
+  if (id && normalizarBooleano(payload.principal_codigo_revendedor) && codigoAntigo !== codigoNovo) {
+    record.principal_codigo_revendedor = false;
+  }
+
   const query = id
     ? supabase.from('parceiros').update(record).eq('id', id)
     : supabase.from('parceiros').insert(record);
@@ -302,6 +326,21 @@ export async function salvarParceiroIndicacaoAdmin(payload = {}) {
   }
 
   return { ok: true };
+}
+
+export async function definirParceiroIndicacaoPrincipalAdmin({ id } = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  if (!id) throw new Error('Parceiro não identificado.');
+
+  const { data, error } = await supabase.rpc('admin_marcar_parceiro_principal_codigo_revendedor', {
+    p_parceiro_id: id
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível definir o cadastro principal do parceiro.');
+  }
+
+  return { id: data || id };
 }
 
 export async function arquivarParceiroIndicacaoAdmin({ id } = {}) {

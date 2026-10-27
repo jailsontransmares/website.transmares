@@ -2,11 +2,16 @@ import { exigirSupabaseConfigurado } from '../supabaseClient.js';
 
 const STATUS_PENDENTE = 'pendente';
 
+function citarValorFiltroOrPostgrest(valor) {
+  return `"${String(valor).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
 function aplicarFiltrosValidacoes(query, filtros = {}) {
   let consulta = query;
 
   if (filtros.parceiro) {
-    consulta = consulta.ilike('parceiro_nome', `%${filtros.parceiro}%`);
+    const termo = `%${String(filtros.parceiro).replace(/[\\%_]/g, '\\$&')}%`;
+    consulta = consulta.or(`parceiro_nome.ilike.${citarValorFiltroOrPostgrest(termo)},cod_vendedor.ilike.${citarValorFiltroOrPostgrest(termo)}`);
   }
 
   if (filtros.codigoEntidade) {
@@ -56,34 +61,71 @@ function normalizarErroValidacoes(error, fallback) {
 
 export async function listarValidacoesPendentes(filtros = {}) {
   const supabase = exigirSupabaseConfigurado();
-  let query = supabase
-    .from('ar_validacoes')
-    .select('*')
-    .eq('status_pagamento', STATUS_PENDENTE)
-    .order('data_validacao', { ascending: false })
-    .limit(300);
+  const tamanhoPagina = 1000;
+  const registros = [];
+  let totalRegistros = null;
+  let offset = 0;
+  let primeiraPagina = true;
 
-  query = aplicarFiltrosValidacoes(query, filtros);
+  while (primeiraPagina || offset < totalRegistros) {
+    primeiraPagina = false;
+    let query = supabase
+      .from('ar_validacoes')
+      .select('*', { count: 'exact' })
+      .eq('status_pagamento', STATUS_PENDENTE)
+      .order('data_validacao', { ascending: false })
+      .range(offset, offset + tamanhoPagina - 1);
 
-  const { data, error } = await query;
+    query = aplicarFiltrosValidacoes(query, filtros);
 
-  if (error) {
-    throw new Error(normalizarErroValidacoes(error, 'Erro ao carregar lançamentos pendentes.'));
+    const { data, error, count } = await query;
+
+    if (error) {
+      throw new Error(normalizarErroValidacoes(error, 'Erro ao carregar lançamentos pendentes.'));
+    }
+
+    if (totalRegistros == null) {
+      totalRegistros = count ?? offset + (data?.length || 0) + (data?.length === tamanhoPagina ? 1 : 0);
+    }
+    if (!data?.length) {
+      if (offset < totalRegistros) {
+        throw new Error('Não foi possível carregar todos os lançamentos pendentes. Atualize a tela e tente novamente.');
+      }
+      break;
+    }
+
+    registros.push(...data);
+    offset += data.length;
   }
 
-  return data || [];
+  return registros;
 }
 
 export async function listarRecibosRecentes() {
   const supabase = exigirSupabaseConfigurado();
   const { data, error } = await supabase
     .from('ar_recibos')
-    .select('*, ar_recibo_itens(*)')
+    .select('*, ar_recibo_itens(*, ar_validacoes!ar_recibo_itens_validacao_id_fkey(data_validacao, pedido, produto, nome_cliente, valor_bruto, dados_adicionais, cod_vendedor))')
     .order('data_emissao', { ascending: false })
     .limit(50);
 
   if (error) {
     throw new Error(normalizarErroValidacoes(error, 'Erro ao carregar recibos.'));
+  }
+
+  return data || [];
+}
+
+export async function listarParceirosLancamentoManualAR() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select('id, nome, nome_completo, nome_empresa, codigo_revendedor, principal_codigo_revendedor, status')
+    .eq('status', 'ativo')
+    .order('nome', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Não foi possível carregar os parceiros ativos.');
   }
 
   return data || [];
@@ -95,7 +137,107 @@ export async function carregarDadosValidacoesAR(payload = {}) {
     listarRecibosRecentes()
   ]);
 
-  return { pendentes, recibos };
+  const codigosRevendedor = [...new Set(
+    pendentes
+      .map(item => String(item.cod_vendedor || '').trim())
+      .filter(Boolean)
+  )];
+  let nomesParceirosPorCodigo = new Map();
+
+  if (codigosRevendedor.length) {
+    const supabase = exigirSupabaseConfigurado();
+    const { data, error } = await supabase.rpc('ar_resolver_nomes_parceiros_por_codigo', {
+      p_codigos_revendedor: codigosRevendedor
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Não foi possível localizar os parceiros pelo código do vendedor.');
+    }
+
+    nomesParceirosPorCodigo = new Map((data || []).map(item => [
+      String(item.codigo_revendedor || '').trim().toLocaleUpperCase('pt-BR'),
+      String(item.nome || '').trim()
+    ]));
+  }
+
+  const pendentesComNomesParceiros = pendentes.map(item => ({
+    ...item,
+    nome_parceiro_hub: nomesParceirosPorCodigo.get(String(item.cod_vendedor || '').trim().toLocaleUpperCase('pt-BR')) || ''
+  }));
+
+  return { pendentes: pendentesComNomesParceiros, recibos };
+}
+
+export async function listarImpostosReciboAR() {
+  const supabase = exigirSupabaseConfigurado();
+  const { data, error } = await supabase
+    .from('ar_impostos_configuracoes')
+    .select('id, nome, percentual, created_at, updated_at')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(normalizarErroValidacoes(error, 'Não foi possível carregar os impostos do recibo.'));
+  }
+
+  return data || [];
+}
+
+export async function salvarImpostoReciboAR(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  const nome = String(payload.nome || '').trim();
+  const percentual = Number(payload.percentual);
+
+  if (!nome) throw new Error('Informe o nome do imposto.');
+  if (!Number.isFinite(percentual) || percentual < 0 || percentual > 100) {
+    throw new Error('Informe um percentual entre 0 e 100.');
+  }
+
+  const { data: atuais, error: erroConsulta } = await supabase
+    .from('ar_impostos_configuracoes')
+    .select('id, percentual');
+
+  if (erroConsulta) {
+    throw new Error(normalizarErroValidacoes(erroConsulta, 'Não foi possível validar o total de impostos.'));
+  }
+
+  const somaAtual = (atuais || [])
+    .filter(item => item.id !== payload.id)
+    .reduce((total, item) => total + (Number(item.percentual) || 0), 0);
+
+  if (somaAtual + percentual > 100) {
+    throw new Error('A soma dos percentuais de impostos não pode ultrapassar 100%.');
+  }
+
+  const registro = { nome, percentual, updated_at: new Date().toISOString() };
+  if (payload.id) registro.id = payload.id;
+
+  const { data, error } = await supabase
+    .from('ar_impostos_configuracoes')
+    .upsert(registro)
+    .select('id, nome, percentual, created_at, updated_at')
+    .single();
+
+  if (error) {
+    throw new Error(normalizarErroValidacoes(error, 'Não foi possível salvar o imposto.'));
+  }
+
+  return data;
+}
+
+export async function excluirImpostoReciboAR(payload = {}) {
+  const supabase = exigirSupabaseConfigurado();
+  if (!payload.id) throw new Error('Selecione um imposto para excluir.');
+
+  const { error } = await supabase
+    .from('ar_impostos_configuracoes')
+    .delete()
+    .eq('id', payload.id);
+
+  if (error) {
+    throw new Error(normalizarErroValidacoes(error, 'Não foi possível excluir o imposto.'));
+  }
+
+  return { id: payload.id };
 }
 
 export async function criarValidacaoManual(payload = {}) {
@@ -103,7 +245,7 @@ export async function criarValidacaoManual(payload = {}) {
   const registro = {
     parceiro_id: payload.parceiro_id || null,
     parceiro_nome: payload.parceiro_nome || '',
-    codigo_entidade: payload.codigo_entidade || '',
+    cod_vendedor: payload.cod_vendedor || '',
     data_validacao: payload.data_validacao || new Date().toISOString().slice(0, 10),
     produto: payload.produto || '',
     pedido: payload.pedido || '',
