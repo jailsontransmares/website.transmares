@@ -4,7 +4,7 @@ import { SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
 import { renderHubRecordHeader } from './recordWorkflow.js';
 import { formatCoparticipacaoTable, isCoparticipacaoTable, normalizeCoparticipacaoTable } from './simuladorSaudeCoparticipacao.js';
-import { isCarenciaTable, normalizeCarenciaTable } from './simuladorSaudeCarencias.js';
+import { normalizeCarenciaTable } from './simuladorSaudeCarencias.js';
 import { consultarCnpj } from './services/cnpjService.js';
 
 const BANDS = ['0-18', '19-23', '24-28', '29-33', '34-38', '39-43', '44-48', '49-53', '54-58', '59+'];
@@ -69,15 +69,15 @@ function proposalDetail(item, key) {
   return '';
 }
 function coparticipacaoProposalTable(value) {
-  if (!isCoparticipacaoTable(value)) return '';
+  if (value == null || value === '') return '';
   const table = normalizeCoparticipacaoTable(value);
   const columns = table.colunas.filter(column => column.label || table.linhas.some(row => String(row.celulas[column.id] || '').trim()));
   const rows = table.linhas.filter(row => columns.some(column => String(row.celulas[column.id] || '').trim()));
   if (!columns.length || !rows.length) return '';
-  return `<div class="copay-detail-table-wrap"><table class="copay-detail-table"><thead><tr>${columns.map(column => `<th>${esc(column.label || '—')}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${esc(row.celulas[column.id] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return `<div class="copay-detail-table-wrap"><table class="copay-detail-table copay-procedure-detail-table"><thead><tr>${columns.map(column => `<th>${esc(column.label || '—')}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${esc(row.celulas[column.id] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function carenciaProposalTable(value) {
-  if (!isCarenciaTable(value)) return '';
+  if (value == null || value === '') return '';
   const table = normalizeCarenciaTable(value);
   const rows = table.linhas.filter(row => row.celulas.prazo.trim() || row.celulas.regra.trim());
   if (!rows.length) return '';
@@ -965,7 +965,6 @@ window.saudeQuoteClear = () => {
 
 function proposalHtml(branding, saved, { autoPrint = true } = {}) {
   const plans = quote.plans.filter(item => item.selected).map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
-  const copayPlans = plans.filter(item => item.table.coparticipacao === true || item.table.coparticipacao === 'true');
   const planSectionTitle = plans.length === 1 ? 'Cotação' : 'Cotações';
   const brokerName = branding.nome_fantasia || branding.razao_social || 'Transmares Corretora de Seguros';
   const logo = branding.logo_url || document.querySelector('.brand-logo-slot img')?.src || '';
@@ -1001,51 +1000,26 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
     ['Modalidade', item => item.plan.modalidade || 'Não informada'],
     ['Acomodação', item => item.table.acomodacao || 'Não informada'],
     ['Coparticipação', item => item.table.coparticipacao ? 'Sim' : 'Não'],
+    ['Coparticipação por procedimento', item => proposalDetail(item, 'coparticipacao') || 'Não informados neste plano.'],
     ['Abrangência', item => item.plan.abrangencia || 'Não informada'],
     ['Coberturas e serviços', item => proposalDetail(item, 'coberturas') || 'Não informadas.'],
     ['Adicionais', item => proposalDetail(item, 'adicionais') || 'Não informados neste plano.'],
-    ['Prestadores e unidades', item => proposalDetail(item, 'rede') || 'A relação nominal não está cadastrada neste plano.'],
-    ['Conferência recomendada', () => `Confirme a rede disponível para ${quote.city || 'a região do contrato'} diretamente com a operadora.`]
-  ].map(([label, getValue]) => `<tr><th>${esc(label)}</th>${plans.map(item => `<td>${esc(getValue(item))}</td>`).join('')}</tr>`).join('');
-  const copayRows = [
-    ['Coparticipação prevista', item => item.table.coparticipacao ? 'Sim' : 'Não'],
-    ['Valores por procedimento', item => proposalDetail(item, 'coparticipacao') || 'Não informados neste plano.'],
     ['Carências', item => proposalDetail(item, 'carencias') || 'Não informadas neste plano.'],
-    ['Adicionais por vida', item => proposalDetail(item, 'adicionais') || 'Não informados neste plano.']
-  ];
-  const copayColumns = [];
-  copayPlans.forEach(item => {
-    const operatorClass = operatorVisualClass(item.operator.nome);
-    const existing = operatorClass === 'hapvida' ? copayColumns.find(column => column.operatorClass === 'hapvida') : null;
-    if (existing) existing.items.push(item);
-    else copayColumns.push({ operatorClass, items: [item] });
-  });
-  const copayHeaders = copayColumns.map(column => {
-    const item = column.items[0];
-    const subtitle = column.operatorClass === 'hapvida' && column.items.length > 1
-      ? `${column.items.length} planos selecionados`
-      : item.plan.nome || 'Plano';
-    const colspan = column.operatorClass === 'hapvida' && column.items.length > 1 ? ` colspan="${column.items.length}"` : '';
-    return `<th class="brand-${column.operatorClass}"${colspan}>${esc(item.operator.nome || 'Operadora')}<small>${esc(subtitle)}</small></th>`;
-  }).join('');
-  const copayRowsHtml = copayRows.map(([label, getValue]) => `<tr><th>${esc(label)}</th>${copayColumns.map(column => {
-    const item = column.items[0];
-    const colspan = column.operatorClass === 'hapvida' && column.items.length > 1 ? ` colspan="${column.items.length}"` : '';
-    if (label === 'Valores por procedimento') {
+    ['Prestadores e unidades', item => proposalDetail(item, 'rede') || 'A relação nominal não está cadastrada neste plano.']
+  ].map(([label, getValue]) => `<tr><th>${esc(label)}</th>${plans.map(item => {
+    if (label === 'Coparticipação por procedimento') {
+      if (item.table.coparticipacao !== true && item.table.coparticipacao !== 'true') return '<td>—</td>';
       const coparticipacao = item.plan?.detalhes?.coparticipacao ?? item.table?.condicoes?.coparticipacao;
       const tableMarkup = coparticipacaoProposalTable(coparticipacao);
-      if (tableMarkup) return `<td class="copay-procedure-cell"${colspan}>${tableMarkup}</td>`;
+      if (tableMarkup) return `<td class="copay-procedure-cell">${tableMarkup}</td>`;
     }
     if (label === 'Carências') {
       const carencias = item.plan?.detalhes?.carencias ?? item.table?.condicoes?.carencias;
       const tableMarkup = carenciaProposalTable(carencias);
-      if (tableMarkup) return `<td class="copay-procedure-cell"${colspan}>${tableMarkup}</td>`;
+      if (tableMarkup) return `<td class="copay-procedure-cell">${tableMarkup}</td>`;
     }
-    return `<td${colspan}>${esc(getValue(item))}</td>`;
+    return `<td>${esc(getValue(item))}</td>`;
   }).join('')}</tr>`).join('');
-  const copaySection = copayPlans.length
-    ? `<section><div class="section-heading"><h2>Regras de coparticipação</h2><p>Este catálogo registra se o plano prevê coparticipação; valores por serviço dependem das condições da operadora.</p></div><div class="proposal-data-table-wrap"><table class="proposal-table copay-table"><thead><tr><th>Informação</th>${copayHeaders}</tr></thead><tbody>${copayRowsHtml}</tbody></table></div></section>`
-    : '';
   const logoMarkup = logo ? `<img src="${esc(logo)}" alt="Logo ${esc(brokerName)}" onerror="this.style.display='none'">` : `<strong class="brand-fallback">${esc(brokerName)}</strong>`;
   const header = (title, subtitle) => `<header class="proposal-header"><div class="proposal-brand">${logoMarkup}</div><div class="proposal-heading"><h1>${title}</h1><p>${subtitle}</p></div></header>`;
   const footer = page => `<footer class="proposal-footer"><div class="footer-lines"><strong>${esc(footerLineOne)}</strong>${footerLineTwo ? `<span>${esc(footerLineTwo)}</span>` : ''}${address ? `<span>${esc(address)}</span>` : ''}</div><span class="page-number">${page}/2</span></footer>`;
@@ -1073,12 +1047,12 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
         .proposal-data-table-wrap .proposal-table thead th:not([class^="brand-"]) { background: #f3f6fa; color: #52657d; }
         .proposal-data-table-wrap .proposal-table tbody th { background: #f8fafc; color: #23415f; font-size: 9px; font-weight: 700; }
         .proposal-data-table-wrap .proposal-table td.copay-procedure-cell { padding: 3px; }
+        .copay-procedure-detail-table th, .copay-procedure-detail-table td { line-height: 1.05; padding: 1px 2px; }
         .proposal-data-table-wrap .proposal-table tbody tr:not(.group-total):not(.grand-total):nth-child(even) td { background: #f8fafc; }
         .proposal-data-table-wrap .proposal-table tbody tr:last-child th, .proposal-data-table-wrap .proposal-table tbody tr:last-child td { border-bottom: 0; }
         @media print { .proposal-data-table-wrap { box-shadow: none; } }
       </style>
-      <section><div class="section-heading"><h2>Principais condições do plano</h2><p>Características cadastradas para os planos comparados. A rede disponível deve ser confirmada para a região e o contrato.</p></div><div class="proposal-data-table-wrap"><table class="proposal-table network-table"><thead><tr><th>Item</th>${comparisonHeaders}</tr></thead><tbody>${networkRows}</tbody></table></div></section>
-      ${copaySection}
+      <section><div class="section-heading"><h2>Principais condições do plano</h2><p>Características cadastradas para os planos comparados. A rede disponível deve ser confirmada para a região e o contrato.</p></div><div class="proposal-data-table-wrap"><table class="proposal-table network-table"><thead><tr><th>CARACTERÍSTICA</th>${comparisonHeaders}</tr></thead><tbody>${networkRows}</tbody></table></div></section>
       ${footer(2)}
     </section>
     <div class="actions"><button onclick="window.print()">▣ &nbsp; Imprimir / Salvar em PDF</button></div>
