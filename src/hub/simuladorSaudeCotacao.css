@@ -21,8 +21,8 @@
 .saude-inline-input { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; box-sizing: border-box; color: var(--texto); font: inherit; height: 31px; min-width: 88px; padding: 0 7px; }
 .saude-inline-name-cell { align-items: center; display: flex; gap: 6px; min-width: 0; }
 .saude-inline-name-cell .saude-inline-input { flex: 1; min-width: 120px; width: 100%; }
-.saude-inline-remove-life { flex: 0 0 30px; height: 28px; min-height: 28px; padding: 4px; width: 30px; }
-.saude-inline-remove-life svg { height: 14px; width: 14px; }
+.saude-inline-remove-life { flex: 0 0 38px; height: 34px; min-height: 34px; padding: 4px; width: 38px; }
+.saude-inline-remove-life svg { height: 16px; width: 16px; }
 .saude-inline-life-row td:nth-child(4) .saude-inline-input { width: 142px; }
 .saude-life-badge { border-radius: 99px; font-size: 10px; font-weight: 700; padding: 4px 7px; }
 .saude-life-badge.titular { background: color-mix(in srgb, var(--cor-principal) 12%, var(--card)); color: var(--cor-principal); }
@@ -30,9 +30,9 @@
 .saude-quote-empty { color: var(--texto-suave); font-size: 12px; padding: 22px 14px; text-align: center; }
 .saude-quote-result-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 14px; }
 .saude-quote-filters { align-items: end; display: flex; flex-wrap: wrap; gap: 8px; }
-.saude-quote-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 115px; }
-.saude-quote-filters label span { color: var(--texto-suave); font-size: 10px; }
-.saude-quote-filters select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 33px; padding: 0 8px; }
+.saude-quote-filters label { display: flex; flex-direction: column; gap: 5px; min-width: 115px; }
+.saude-quote-filters label span { color: var(--texto-suave); font-size: 11px; }
+.saude-quote-filters select { background: var(--card); border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); height: 35px; padding: 0 9px; }
 .saude-quote-results { border-collapse: collapse; min-width: 720px; width: 100%; }
 .saude-quote-results th, .saude-quote-results td { border-bottom: 1px solid var(--borda); border-right: 1px solid var(--borda); font-size: 11px; padding: 9px; text-align: center; vertical-align: top; }
 .saude-quote-results th:last-child, .saude-quote-results td:last-child { border-right: 0; }
@@ -124,11 +124,18 @@
 @media (max-width: 480px) { .saude-quote-company-grid, .saude-manual-plan-fields, .saude-plan-picker-filters { grid-template-columns: 1fr; } .saude-quote-actions { width: 100%; } .saude-plan-catalog-modal > header { align-items: start; } .saude-plan-selection-count { align-self: center; } }
 
 /* Ajustes locais do Simulador - Saúde para aproximar as telas da referência. */
+.simulador-saude-page .icon-btn svg { flex: 0 0 16px; height: 16px; width: 16px; }
 .saude-quote-page .save-btn,
-.saude-quote-page .secondary-btn { align-items: center; display: inline-flex; gap: 7px; justify-content: center; white-space: nowrap; }
+.saude-quote-page .secondary-btn { align-items: center; display: inline-flex; font-size: 13px; gap: 7px; justify-content: center; line-height: 1.2; min-height: 34px; padding: 6px 10px; white-space: nowrap; }
 .saude-quote-page .secondary-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .saude-quote-page .save-btn svg,
-.saude-quote-page .secondary-btn svg { height: 15px; width: 15px; }
+.saude-quote-page .secondary-btn svg { height: 16px; width: 16px; }
+.saude-quote-page > .admin-panel { display: flex; flex-direction: column; gap: 12px; }
+.saude-quote-company-grid .saude-quote-field > span:not(.saude-quote-cnpj-control) { font-size: 12px; }
+.saude-quote-company-grid .saude-quote-field input,
+.saude-quote-company-grid .saude-quote-field select { font-family: inherit; font-size: 13px; line-height: 1.4; }
+.saude-quote-company-grid .saude-quote-cnpj-status { font-size: 12px; line-height: 1.4; }
+.saude-quote-company-grid .saude-quote-cnpj-lookup { height: 38px; min-height: 38px; }
 .saude-quote-title { align-items: center; display: flex; gap: 12px; min-width: 0; }
 .saude-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
 .saude-title-icon svg { height: 23px; width: 23px; }
@@ -145,7 +152,8 @@
 .saude-quote-count-chips span { background: color-mix(in srgb, var(--cor-principal) 6%, var(--card)); border-radius: 99px; color: var(--texto); font-size: 10px; font-weight: 650; padding: 5px 9px; }
 .saude-quote-count-chips span.is-total { background: color-mix(in srgb, var(--cor-principal) 12%, var(--card)); color: var(--cor-principal); }
 .saude-quote-actions { align-items: center; gap: 8px; justify-content: flex-end; margin-left: auto; }
-.saude-edit-all-lives { flex: 0 0 38px; height: 34px; width: 38px; }
+.saude-edit-all-lives { flex: 0 0 38px; height: 34px; padding: 4px; width: 38px; }
+.saude-edit-all-lives svg { height: 16px; width: 16px; }
 .saude-quote-lives-table { min-width: 760px; }
 .saude-quote-lives-table { table-layout: fixed; width: 100%; }
 .saude-life-col-group { width: 8%; }
@@ -168,8 +176,8 @@
 .saude-life-badge.titular { background: #dcecff; color: #0759c7; }
 .saude-life-badge.dependente { background: #d9f7e5; color: #087b39; }
 .saude-life-actions { text-align: center; }
-.saude-life-actions .icon-btn { height: 28px; min-height: 28px; padding: 4px; width: 30px; }
-.saude-life-actions .icon-btn svg { height: 14px; width: 14px; }
+.saude-life-actions .icon-btn { height: 34px; min-height: 34px; padding: 4px; width: 38px; }
+.saude-life-actions .icon-btn svg { height: 16px; width: 16px; }
 .saude-quote-result-tools { padding: 10px 14px 9px; }
 .saude-result-title h3 { align-items: center; display: flex; gap: 7px; font-size: 16px; }
 .saude-quote-result-card .saude-quote-table-wrap { padding: 0 12px 12px; }
@@ -181,7 +189,7 @@
 .saude-result-stub-content { display: flex; flex-direction: column; justify-content: space-between; min-height: 130px; }
 .saude-result-stub-content small { color: var(--texto-suave); display: block; font-size: 10px; font-weight: 500; }
 .saude-plan-heading { min-width: 180px; padding: 0 !important; position: relative; }
-.saude-plan-remove { background: var(--card); height: 25px; width: 25px; }
+.saude-plan-remove { background: var(--card); height: 34px; width: 38px; }
 .saude-plan-brand { align-items: center; color: #fff; display: flex; flex-direction: column; gap: 3px; min-height: 78px; padding: 34px 8px 7px; }
 .saude-plan-operator-logo { background: #fff; border: 1px solid #fff; border-radius: 4px; box-sizing: border-box; display: block; height: 30px; max-width: 130px; object-fit: contain; padding: 3px; }
 .saude-plan-brand > strong { font-size: 14px; }
@@ -230,9 +238,14 @@
 .saude-total-row td small { color: var(--texto-suave); }
 @media (max-width: 1100px) { .saude-quote-lives-layout { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .saude-quote-title { align-items: flex-start; } .saude-title-icon { flex-basis: 34px; height: 34px; width: 34px; } }
+@media (max-width: 480px) {
+  .saude-quote-header-actions, .saude-quote-actions { justify-content: stretch; width: 100%; }
+  .saude-quote-actions { margin-left: 0; }
+  .saude-quote-header-actions > button, .saude-quote-actions > button:not(.saude-edit-all-lives) { flex: 1 1 132px; }
+}
 
 .saude-quote-cnpj-control { align-items: center; display: flex; gap: 6px; min-width: 0; }
 .saude-quote-cnpj-control input { flex: 1 1 0; min-width: 0; width: 0; }
-.saude-quote-cnpj-lookup { align-items: center; display: inline-flex; flex: 0 0 35px; height: 35px; justify-content: center; min-height: 35px; padding: 0; width: 35px; }
-.saude-quote-cnpj-lookup svg { height: 15px; width: 15px; }
+.saude-quote-cnpj-lookup { align-items: center; display: inline-flex; flex: 0 0 38px; height: 34px; justify-content: center; min-height: 34px; padding: 0; width: 38px; }
+.saude-quote-cnpj-lookup svg { height: 16px; width: 16px; }
 .saude-quote-cnpj-lookup:disabled { cursor: wait; opacity: .6; }

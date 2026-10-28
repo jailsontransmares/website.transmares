@@ -17,7 +17,12 @@
 .simsaude-card > header h3 { font-size: 15px; margin: 0; }
 .simsaude-card > header > span { color: var(--texto-suave); font-size: 12px; }
 .simsaude-table-wrap { overflow-x: auto; }
-.simsaude-table-card .simsaude-catalog-table { min-width: 980px; }
+.simsaude-table-card .simsaude-catalog-table { min-width: 1200px; }
+.simsaude-status-pill { border-radius: 999px; display: inline-flex; font-size: 11px; font-weight: 700; line-height: 1.2; padding: 5px 9px; white-space: nowrap; }
+.simsaude-status-pill.is-current { background: color-mix(in srgb, #16a34a 13%, var(--card)); color: #15803d; }
+.simsaude-status-pill.is-review { background: color-mix(in srgb, #2563eb 12%, var(--card)); color: #1d4ed8; }
+.simsaude-status-pill.is-inactive { background: color-mix(in srgb, #64748b 14%, var(--card)); color: #64748b; }
+.simsaude-status-pill.is-expired { background: color-mix(in srgb, #d97706 14%, var(--card)); color: #a35a00; }
 .simsaude-table-card table { border-collapse: collapse; min-width: 1120px; width: 100%; }
 .simsaude-table-card td { border-top: 1px solid var(--borda); padding: 8px; vertical-align: middle; }
 .simsaude-table-card td small { color: var(--texto-suave); display: block; margin-top: 2px; }
@@ -38,8 +43,9 @@
 .simsaude-link { background: none; border: 0; color: var(--cor-principal); cursor: pointer; font-size: 11px; font-weight: 650; padding: 3px; }
 .simsaude-delete-link { color: #b42318; }
 .simsaude-delete-link:disabled { cursor: wait; opacity: .6; }
-.simsaude-plan-actions { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--cor-principal); cursor: pointer; font: inherit; font-size: 11px; min-height: 30px; padding: 0 7px; }
-.simsaude-plan-actions:focus-visible { border-color: var(--cor-principal); outline: 2px solid color-mix(in srgb, var(--cor-principal) 18%, transparent); }
+.simsaude-plan-row-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 5px; }
+.simsaude-plan-row-action { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 0; width: 28px; }
+.simulador-saude-page .simsaude-plan-row-action svg { height: 14px; width: 14px; }
 .simsaude-plan-inactive { background: #ffebed; border-radius: 99px; color: #b52c39; display: inline-block; font-size: 9px; font-weight: 700; margin-left: 6px; padding: 3px 7px; vertical-align: middle; }
 .simsaude-empty { color: var(--texto-suave); height: 110px; text-align: center; }
 .simsaude-pagination { align-items: center; border-top: 1px solid var(--borda); color: var(--texto-suave); display: flex; gap: 12px; min-height: 48px; padding: 8px 12px; }
@@ -80,10 +86,6 @@
 .simsaude-accommodation-options > label { align-items: center; display: inline-flex; flex-direction: row; gap: 6px; }
 .simsaude-accommodation-options input { height: auto; width: auto; }
 .simsaude-band-note { color: var(--texto-suave); display: block; font-size: 10px; margin-top: 4px; }
-.simsaude-message { align-items: center; background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--cor-destaque) 30%, var(--borda)); border-radius: 7px; display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 12px; }
-.simsaude-message.is-error { background: #fff1f1; border-color: #f1c2c5; color: #8e2932; }
-.simsaude-message span { flex: 1; font-size: 12px; }
-.simsaude-message button { background: transparent; border: 0; cursor: pointer; font-size: 19px; }
 .simsaude-state { align-items: center; color: var(--texto-suave); display: flex; gap: 10px; justify-content: center; min-height: 180px; }
 .simsaude-history-modal { max-width: 540px; width: 100%; }
 .simsaude-history-modal h3 { margin: 3px 0; }
@@ -103,6 +105,12 @@
 .simsaude-copart-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-bottom: 9px; }
 .simsaude-copart-heading strong { color: var(--texto); display: block; font-size: 12px; }
 .simsaude-copart-heading p, .simsaude-copart-legacy { color: var(--texto-suave); font-size: 11px; margin: 4px 0 0; }
+.simsaude-carencia-copy-controls { align-items: end; display: flex; flex-wrap: wrap; gap: 7px; }
+.simsaude-carencia-copy-controls label { display: flex; flex-direction: column; gap: 4px; min-width: 190px; }
+.simsaude-carencia-copy-controls label span, .simsaude-carencia-copy-empty { color: var(--texto-suave); font-size: 10px; }
+.simsaude-carencia-copy-controls select { background: var(--card); border: 1px solid var(--borda); border-radius: 5px; color: var(--texto); font: inherit; font-size: 11px; height: 30px; max-width: 250px; padding: 0 8px; }
+.simsaude-carencia-copy-controls button { font-size: 11px; min-height: 30px; padding: 0 9px; }
+.simsaude-carencia-copy-controls button:disabled { cursor: not-allowed; opacity: .5; }
 .simsaude-copart-legacy { background: color-mix(in srgb, var(--cor-destaque) 8%, var(--card)); border-left: 3px solid var(--cor-destaque); margin: 0 0 9px; padding: 8px 10px; }
 .simsaude-copart-table-wrap { border: 1px solid var(--borda); border-radius: 7px; max-width: 100%; overflow-x: auto; }
 .simsaude-copart-table { border-collapse: collapse; table-layout: fixed; width: 100%; }
@@ -120,9 +128,11 @@
 .simsaude-copart-add-row { background: transparent; border: 0; color: var(--cor-principal); cursor: pointer; font: inherit; font-size: 12px; margin-top: 7px; padding: 6px 2px; }
 .simsaude-copart-add-row:hover { text-decoration: underline; }
 @media (max-width: 520px) { .simsaude-copart-heading { align-items: flex-start; flex-direction: column; } .simsaude-copart-heading > button { width: 100%; } }
+@media (max-width: 520px) { .simsaude-carencia-copy-controls, .simsaude-carencia-copy-controls label, .simsaude-carencia-copy-controls select, .simsaude-carencia-copy-controls button { max-width: none; width: 100%; } }
 
 /* Ajustes visuais restritos ao Catálogo de Planos e Preços. */
 .simulador-saude-page { container-type: inline-size; min-width: 0; }
+.simulador-saude-page .icon-btn svg { flex: 0 0 16px; height: 16px; width: 16px; }
 .simulador-saude-page .save-btn,
 .simulador-saude-page .secondary-btn { align-items: center; display: inline-flex; gap: 7px; justify-content: center; white-space: nowrap; }
 .simulador-saude-page .save-btn svg,
@@ -164,6 +174,9 @@
 .simsaude-count-pill { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); border-radius: 99px; color: var(--cor-principal); font-size: 10px; font-weight: 600; margin-left: 2px; padding: 4px 8px; }
 .simsaude-table-card table { min-width: 1050px; }
 .simsaude-table-card td { padding: 7px; }
+.simsaude-operator-name-link { max-width: 100%; white-space: normal; }
+.simsaude-operator-name-link > span { display: block; min-width: 0; }
+.simsaude-operator-name-link small { color: var(--texto-suave); display: block; font-size: 11px; font-weight: 400; margin-top: 2px; }
 .simsaude-operator-cell { align-items: center; display: inline-flex; gap: 7px; white-space: nowrap; }
 .simsaude-operator-mark { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 25px; font-size: 10px; font-weight: 800; height: 25px; justify-content: center; width: 25px; }
 .simsaude-operator-mark.is-unimed { background: #078d48; }

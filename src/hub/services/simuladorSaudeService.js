@@ -150,6 +150,7 @@ export async function saveSimuladorSaudeTable(draft) {
   const operatorId = draft.operadora_id || (draft.plano_id ? null : await ensureOperator(supabase, draft.operadora_nome));
   const planId = await ensurePlan(supabase, draft, operatorId);
   const requestedStatus = draft.status || 'em_revisao';
+  if (!['vigente', 'em_revisao', 'inativo'].includes(requestedStatus)) throw new Error('Selecione um status válido para a tabela.');
   const accommodations = [...new Set((Array.isArray(draft.acomodacoes) ? draft.acomodacoes : []).filter(item => ['Apartamento', 'Enfermaria', 'Ambulatorial'].includes(item)))];
   const table = {
     plano_id: planId,
@@ -173,7 +174,7 @@ export async function saveSimuladorSaudeTable(draft) {
   table.min_vidas = 1;
   let tableId = draft.id;
   if (tableId) {
-    unwrap(await supabase.from(TABLES.prices).update(table).eq('id', tableId), 'Não foi possível salvar a tabela.');
+    unwrap(await supabase.from(TABLES.prices).update(table).eq('id', tableId).select('id').single(), 'Não foi possível salvar a tabela.');
   } else {
     table.status = 'em_revisao';
     tableId = unwrap(await supabase.from(TABLES.prices).insert(table).select('id').single(), 'Não foi possível criar a tabela.').id;
@@ -190,9 +191,11 @@ export async function saveSimuladorSaudeTable(draft) {
     const payload = prices.map(row => ({ tabela_preco_id: tableId, ...row }));
     unwrap(await supabase.from(TABLES.bands).upsert(payload, { onConflict: 'tabela_preco_id,acomodacao,faixa_etaria,regra_vidas' }), 'Não foi possível salvar os preços por acomodação.');
   }
-  if (requestedStatus !== 'em_revisao') {
-    unwrap(await supabase.from(TABLES.prices).update({ status: requestedStatus }).eq('id', tableId), 'Não foi possível atualizar o status da tabela.');
-  }
+  const persistedStatus = unwrap(
+    await supabase.from(TABLES.prices).update({ status: requestedStatus }).eq('id', tableId).select('id,status').single(),
+    'Não foi possível atualizar o status da tabela.'
+  );
+  if (persistedStatus.status !== requestedStatus) throw new Error('O status da tabela não foi persistido. Tente salvar novamente.');
   return tableId;
 }
 

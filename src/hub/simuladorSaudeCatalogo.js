@@ -2,6 +2,7 @@ import './simuladorSaudeCatalogo.css';
 import { chamarApi } from './api.js';
 import { exigirSupabaseConfigurado } from './supabaseClient.js';
 import { COPARTICIPACAO_TABLE_FORMAT, COPARTICIPACAO_TABLE_VERSION, createCoparticipacaoColumn, createCoparticipacaoRow, normalizeCoparticipacaoTable } from './simuladorSaudeCoparticipacao.js';
+import { CARENCIA_TABLE_FORMAT, CARENCIA_TABLE_VERSION, createCarenciaRow, normalizeCarenciaTable } from './simuladorSaudeCarencias.js';
 import { obterBaseHub } from './routeConfig.js';
 import { renderHubRecordHeader } from './recordWorkflow.js';
 import { SIMULADOR_SAUDE_CATALOGO_ROUTE, SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
@@ -97,7 +98,21 @@ function operatorMark(operator = {}, compact = false) {
     : `<span class="simsaude-operator-mark ${compact ? 'is-compact' : ''}" style="${style}">${esc(operatorMonogram(operator.nome))}</span>`;
 }
 function renderLoading() { return `<div class="simsaude-state" aria-busy="true"><span class="hub-loading-spinner" aria-hidden="true"></span><span>Carregando o catálogo…</span></div>`; }
-function renderMessage() { return state.error ? `<div class="simsaude-message is-error" role="alert"><strong>Operação não concluída.</strong><span>${esc(state.error)}</span><button type="button" onclick="simsaudeFecharAviso()" aria-label="Fechar">×</button>${!state.data.tables.length ? '<button class="simsaude-link" type="button" onclick="simsaudeRecarregar()">Tentar novamente</button>' : ''}</div>` : state.notice ? `<div class="simsaude-message" role="status"><span>${esc(state.notice)}</span><button type="button" onclick="simsaudeFecharAviso()" aria-label="Fechar">×</button></div>` : ''; }
+function renderMessage() {
+  if (state.error) {
+    const message = state.error;
+    state.error = '';
+    window.hubToast?.error(`Operação não concluída. ${message}`, {
+      ...(state.data.tables.length ? {} : { action: { label: 'Tentar novamente', onClick: () => window.simsaudeRecarregar?.() } })
+    });
+  } else if (state.notice) {
+    const message = state.notice;
+    state.notice = '';
+    if (/^Os planos selecionados já estão nesse status\./i.test(message)) window.hubToast?.info(message);
+    else window.hubToast?.success(message);
+  }
+  return '';
+}
 
 function selectedOptions(items, value, empty = 'Todas') { return `<option value="">${empty}</option>${items.map(item => `<option value="${esc(item.value)}" ${String(value) === String(item.value) ? 'selected' : ''}>${esc(item.label)}</option>`).join('')}`; }
 function filteredTables() {
@@ -119,10 +134,12 @@ function filteredTables() {
 function renderTableRow(table) {
   const plan = planFor(table); const operator = operatorFor(plan);
   const canOpen = Boolean(context.pode?.('simulador_saude.catalogo', 'view'));
+  const status = displayStatus(table);
+  const statusClass = ({ 'Vigente': 'is-current', 'Em revisão': 'is-review', 'Inativo': 'is-inactive', 'Vencido': 'is-expired' })[status] || '';
   return `<tr class="simsaude-row">
-    <td><strong>${esc(operator.nome || '—')}</strong></td><td><strong>${esc(plan.nome || '—')}</strong></td>
+    <td>${esc(operator.nome || '—')}</td><td>${esc(plan.nome || '—')}</td>
     <td>${canOpen ? `<button class="simsaude-table-name-link" type="button" onclick="simsaudeEditarTabela('${esc(table.id)}')" aria-label="Abrir tabela ${esc(table.nome || 'sem nome')}" ${state.loading ? 'disabled' : ''}><i data-lucide="search" aria-hidden="true"></i>${esc(table.nome || 'Tabela sem nome')}</button>` : `<span class="simsaude-table-name-static"><i data-lucide="search" aria-hidden="true"></i><strong>${esc(table.nome || 'Tabela sem nome')}</strong></span>`}</td>
-    <td>${esc(plan.modalidade || '—')}</td><td>${table.coparticipacao ? 'Sim' : 'Não'}</td><td>${esc(plan.abrangencia || '—')}</td>
+    <td><span class="simsaude-status-pill ${statusClass}">${esc(status)}</span></td><td>${esc(table.tipo_contratacao || 'Empresarial (PJ)')}</td><td>${esc(plan.modalidade || '—')}</td><td>${table.coparticipacao ? 'Sim' : 'Não'}</td><td>${esc(plan.abrangencia || '—')}</td>
   </tr>`;
 }
 
@@ -152,6 +169,33 @@ function renderCoparticipacaoEditor(value) {
     <div class="simsaude-copart-table-wrap"><table class="simsaude-copart-table" style="min-width:${Math.max(700, table.colunas.length * 210 + 90)}px"><thead><tr>${table.colunas.map((column, index) => `<th scope="col"><div class="simsaude-copart-column-head"><input type="text" data-copart-column-label="${esc(column.id)}" aria-label="Cabeçalho da coluna ${index + 1}" value="${esc(column.label)}" maxlength="80" required ${disabled}><button class="simsaude-copart-remove" type="button" data-column-id="${esc(column.id)}" aria-label="Remover coluna ${esc(column.label || index + 1)}" onclick="simsaudeCopartRemoverColuna(this)" ${table.colunas.length <= 1 || state.loading ? 'disabled' : ''}>×</button></div></th>`).join('')}<th class="simsaude-copart-actions-head" scope="col">Ações</th></tr></thead><tbody>${rows.map(row => `<tr data-copart-row="${esc(row.id)}">${table.colunas.map((column, index) => `<td><input type="text" data-copart-cell="${esc(column.id)}" aria-label="${esc(column.label || `Coluna ${index + 1}`)}" value="${esc(row.celulas[column.id] || '')}" maxlength="300" placeholder="${index === 0 ? 'Ex.: Consultas eletivas' : 'Informe a regra ou o valor'}" ${disabled}></td>`).join('')}<td class="simsaude-copart-row-actions"><button class="simsaude-copart-remove" type="button" aria-label="Remover procedimento" onclick="simsaudeCopartRemoverLinha(this)" ${disabled}>Remover</button></td></tr>`).join('')}</tbody></table></div>
     <button class="simsaude-copart-add-row" type="button" onclick="simsaudeCopartAdicionarLinha(this)" ${disabled}>+ Adicionar procedimento</button>
   </section>`;
+}
+
+function renderCarenciaEditor(value, draft, selectedSourceId = '') {
+  const table = normalizeCarenciaTable(value);
+  const rows = table.linhas.length ? table.linhas : [createCarenciaRow()];
+  const operatorId = draft?.operadora_id || state.selectedOperatorId;
+  const sourcePlans = state.data.plans.filter(plan => plan.operadora_id === operatorId
+    && plan.id !== draft?.plano_id
+    && normalizeCarenciaTable(plan.detalhes?.carencias).linhas.some(row => Object.values(row.celulas).some(cell => String(cell).trim())));
+  const disabled = state.loading ? 'disabled' : '';
+  const copyAction = sourcePlans.length
+    ? `<div class="simsaude-carencia-copy-controls"><label><span>Replicar regras de outro plano</span><select data-carencia-source onchange="this.parentElement.parentElement.querySelector('[data-carencia-copy]').disabled=!this.value" ${disabled}><option value="">Selecione um plano</option>${sourcePlans.map(plan => `<option value="${esc(plan.id)}" ${plan.id === selectedSourceId ? 'selected' : ''}>${esc(plan.nome)}</option>`).join('')}</select></label><button class="secondary-btn" type="button" data-carencia-copy onclick="simsaudeCarenciaReplicar(this)" ${!selectedSourceId || state.loading ? 'disabled' : ''}>Replicar regras</button></div>`
+    : '<span class="simsaude-carencia-copy-empty">Não há outros planos desta operadora com regras de carência.</span>';
+  return `<section class="simsaude-copart-editor simsaude-carencia-editor" aria-label="Cadastro de carências">
+    <div class="simsaude-copart-heading"><div><strong>Carências</strong><p>Cadastre cada procedimento e seu prazo correspondente.</p></div>${copyAction}</div>
+    ${table.legadoConvertido ? '<p class="simsaude-copart-legacy" role="status">As regras antigas foram preservadas em linhas para revisão. Confira a separação entre prazo e procedimento ou cobertura.</p>' : ''}
+    <div class="simsaude-copart-table-wrap"><table class="simsaude-copart-table"><thead><tr><th scope="col">Procedimento</th><th scope="col">Prazo</th><th class="simsaude-copart-actions-head" scope="col">Ações</th></tr></thead><tbody>${rows.map(row => `<tr data-carencia-row="${esc(row.id)}"><td><input type="text" data-carencia-cell="regra" aria-label="Procedimento" value="${esc(row.celulas.regra)}" maxlength="300" placeholder="Ex.: exames especiais" ${disabled}></td><td><input type="text" data-carencia-cell="prazo" aria-label="Prazo de carência" value="${esc(row.celulas.prazo)}" maxlength="120" placeholder="Ex.: 90 dias" ${disabled}></td><td class="simsaude-copart-row-actions"><button class="simsaude-copart-remove" type="button" aria-label="Remover regra de carência" onclick="simsaudeCarenciaRemoverLinha(this)" ${disabled}>Remover</button></td></tr>`).join('')}</tbody></table></div>
+    <button class="simsaude-copart-add-row" type="button" onclick="simsaudeCarenciaAdicionarLinha(this)" ${disabled}>+ Adicionar carência</button>
+  </section>`;
+}
+
+function readCarenciaEditor(editor) {
+  const linhas = [...editor.querySelectorAll('[data-carencia-row]')].map(row => ({
+    id: row.dataset.carenciaRow,
+    celulas: Object.fromEntries([...row.querySelectorAll('[data-carencia-cell]')].map(input => [input.dataset.carenciaCell, input.value.trim()]))
+  })).filter(row => Object.values(row.celulas).some(Boolean));
+  return { formato: CARENCIA_TABLE_FORMAT, versao: CARENCIA_TABLE_VERSION, colunas: [{ id: 'regra', label: 'Procedimento' }, { id: 'prazo', label: 'Prazo' }], linhas };
 }
 
 function readCoparticipacaoEditor(editor) {
@@ -220,7 +264,7 @@ function renderPlanEditor(draft) {
       ${textareaField('Coberturas e serviços', 'coberturas_texto', detailLines(details.coberturas), 'Ex.: consultas, exames simples, internação e parto')}
       ${textareaField('Rede credenciada', 'rede_texto', detailLines(details.rede), 'Uma unidade por linha. Ex.: Hospital Central — Maceió')}
       ${renderCoparticipacaoEditor(details.coparticipacao)}
-      ${textareaField('Carências', 'carencias_texto', detailLines(details.carencias), 'Uma regra por linha. Ex.: 90 dias: exames especiais')}
+      ${renderCarenciaEditor(details.carencias, draft)}
       ${textareaField('Adicionais e taxas', 'adicionais_texto', detailLines(details.adicionais), 'Uma cobrança por linha. Ex.: Proteção odontológica: R$ 3,85 por beneficiário')}
       ${textareaField('Observações do plano', 'observacoes_plano', details.observacoes || '', 'Informações complementares')}
     </div>
@@ -251,7 +295,10 @@ function renderOperatorPage() {
   const canUpdate = Boolean(context.pode?.('simulador_saude.catalogo', 'update'));
   const canDelete = Boolean(context.pode?.('simulador_saude.catalogo', 'delete'));
   const selected = state.data.operators.find(item => item.id === state.selectedOperatorId);
-  const title = `<div class="simsaude-page-head"><div class="simsaude-page-title"><span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Operadoras e Planos</h2></div></div><div class="simsaude-page-actions">${selected ? `<button class="secondary-btn" type="button" onclick="simsaudeVoltarOperadoras()">Todas as operadoras</button>` : ''}${canCreate && !selected ? `<button class="save-btn" type="button" onclick="simsaudeNovaOperadora()"><i data-lucide="plus" aria-hidden="true"></i> Nova operadora</button>` : ''}<button class="secondary-btn" type="button" onclick="simsaudeMudarVisao('tables')">Voltar ao catálogo</button></div></div>`;
+  const actions = `<div class="simsaude-page-actions">${canCreate && !selected ? `<button class="save-btn" type="button" onclick="simsaudeNovaOperadora()"><i data-lucide="plus" aria-hidden="true"></i> Nova operadora</button>` : ''}</div>`;
+  const backAction = state.planDraft ? 'simsaudeFecharPlano()' : state.operatorDraft ? 'simsaudeFecharOperadora()' : "simsaudeMudarVisao('tables')";
+  const backLabel = state.planDraft ? 'Voltar aos planos da operadora' : state.operatorDraft ? 'Voltar às operadoras' : 'Voltar ao catálogo de Planos e Preços';
+  const title = renderHubRecordHeader({ onBack: backAction, backAriaLabel: backLabel, className: 'simsaude-page-head simsaude-catalog-page-head hub-record-header', backClassName: 'icon-btn hub-record-back-button', contentClassName: 'hub-record-header-content simsaude-page-title', content: '<span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Operadoras</h2></div>', actions, disabled: state.loading });
   let body;
   if (state.operatorDraft) body = `<section class="simsaude-card">${renderOperatorEditor(state.operatorDraft)}</section>`;
   else if (state.planDraft) body = `<section class="simsaude-card">${renderPlanEditor(state.planDraft)}</section>`;
@@ -262,12 +309,11 @@ function renderOperatorPage() {
     const rows = plans.map(plan => {
       const tableCount = state.data.tables.filter(table => table.plano_id === plan.id).length;
       const actions = [
-        canUpdate ? '<option value="editar">Editar</option>' : '',
-        canCreate ? '<option value="duplicar">Duplicar</option>' : '',
-        canUpdate ? `<option value="status">${plan.status === 'inativo' ? 'Ativar plano' : 'Inativar plano'}</option>` : '',
-        canDelete ? '<option value="excluir">Excluir plano</option>' : ''
+        canCreate ? `<button class="icon-btn simsaude-plan-row-action" type="button" onclick="simsaudeAcaoPlano('${esc(plan.id)}','duplicar')" aria-label="Duplicar plano ${esc(plan.nome)}" title="Duplicar plano" ${state.loading ? 'disabled' : ''}><i data-lucide="copy" aria-hidden="true"></i></button>` : '',
+        canUpdate ? `<button class="icon-btn simsaude-plan-row-action" type="button" onclick="simsaudeAcaoPlano('${esc(plan.id)}','status')" aria-label="${plan.status === 'inativo' ? 'Ativar' : 'Inativar'} plano ${esc(plan.nome)}" title="${plan.status === 'inativo' ? 'Ativar plano' : 'Inativar plano'}" ${state.loading ? 'disabled' : ''}><i data-lucide="${plan.status === 'inativo' ? 'rotate-ccw' : 'archive'}" aria-hidden="true"></i></button>` : '',
+        canDelete ? `<button class="icon-btn danger simsaude-plan-row-action" type="button" onclick="simsaudeAcaoPlano('${esc(plan.id)}','excluir')" aria-label="Excluir plano ${esc(plan.nome)}" title="Excluir plano" ${state.loading ? 'disabled' : ''}><i data-lucide="trash-2" aria-hidden="true"></i></button>` : ''
       ].filter(Boolean).join('');
-      return `<tr><td>${canUpdate || canDelete ? `<input class="simsaude-select-row" type="checkbox" aria-label="Selecionar plano ${esc(plan.nome)}" onchange="simsaudeSelecionarPlano('${esc(plan.id)}',this.checked)" ${state.selectedPlanIds.includes(plan.id) ? 'checked' : ''} ${state.loading ? 'disabled' : ''}>` : ''}</td><td><strong>${esc(plan.nome)}</strong>${plan.status === 'inativo' ? '<span class="simsaude-plan-inactive">Inativo</span>' : ''}</td><td>${esc(plan.modalidade)}</td><td>${esc(plan.abrangencia)}</td><td>${tableCount}</td><td>${actions ? `<select class="simsaude-plan-actions" aria-label="Ações do plano ${esc(plan.nome)}" onchange="simsaudeAcaoPlano('${esc(plan.id)}',this.value);this.value=''" ${state.loading ? 'disabled' : ''}><option value="">Ações</option>${actions}</select>` : '—'}</td></tr>`;
+      return `<tr><td>${canUpdate || canDelete ? `<input class="simsaude-select-row" type="checkbox" aria-label="Selecionar plano ${esc(plan.nome)}" onchange="simsaudeSelecionarPlano('${esc(plan.id)}',this.checked)" ${state.selectedPlanIds.includes(plan.id) ? 'checked' : ''} ${state.loading ? 'disabled' : ''}>` : ''}</td><td><button class="simsaude-table-name-link" type="button" onclick="simsaudeEditarPlano('${esc(plan.id)}')" aria-label="Abrir e editar plano ${esc(plan.nome)}" ${state.loading ? 'disabled' : ''}><i data-lucide="search" aria-hidden="true"></i>${esc(plan.nome)}</button>${plan.status === 'inativo' ? '<span class="simsaude-plan-inactive">Inativo</span>' : ''}</td><td>${esc(plan.modalidade)}</td><td>${esc(plan.abrangencia)}</td><td>${tableCount}</td><td><div class="simsaude-plan-row-actions">${actions || '—'}</div></td></tr>`;
     }).join('');
     const bulkPlanActions = state.selectedPlanIds.length ? `<div class="simsaude-bulk-actions" role="group" aria-label="Ações em lote para planos"><span>${state.selectedPlanIds.length} selecionado(s)</span>${canUpdate && selectedPlans.some(plan => plan.status !== 'inativo') ? `<button class="secondary-btn" type="button" onclick="simsaudeAcaoEmLotePlano('inativar')" ${state.loading ? 'disabled' : ''}>Inativar</button>` : ''}${canUpdate && selectedPlans.some(plan => plan.status === 'inativo') ? `<button class="secondary-btn" type="button" onclick="simsaudeAcaoEmLotePlano('ativar')" ${state.loading ? 'disabled' : ''}>Ativar</button>` : ''}${canDelete ? `<button class="secondary-btn simsaude-delete-link" type="button" onclick="simsaudeAcaoEmLotePlano('excluir')" ${state.loading ? 'disabled' : ''}>Excluir</button>` : ''}</div>` : '';
     const planListActions = `<div class="simsaude-plan-list-actions">${bulkPlanActions}${canCreate ? `<button class="save-btn" type="button" onclick="simsaudeNovoPlano()"><i data-lucide="plus" aria-hidden="true"></i> Novo plano</button>` : ''}</div>`;
@@ -275,11 +321,12 @@ function renderOperatorPage() {
   } else {
     const rows = state.data.operators.map(operator => {
       const count = state.data.plans.filter(plan => plan.operadora_id === operator.id).length;
-      return `<tr><td>${operatorMark(operator, true)}</td><td><strong>${esc(operator.nome)}</strong><small>${count} plano${count === 1 ? '' : 's'}</small></td><td><i class="simsaude-color-swatch" style="background:${esc(operator.cor_marca || '#174A8B')}"></i>${esc(operator.cor_marca || '#174A8B')}</td><td><button type="button" class="simsaude-link" onclick="simsaudeAbrirOperadora('${esc(operator.id)}')">Abrir</button>${canUpdate ? `<button type="button" class="simsaude-link" onclick="simsaudeEditarOperadora('${esc(operator.id)}')">Editar</button>` : ''}</td></tr>`;
+      return `<tr><td>${operatorMark(operator, true)}</td><td><button type="button" class="simsaude-table-name-link simsaude-operator-name-link" onclick="simsaudeAbrirOperadora('${esc(operator.id)}')" aria-label="Abrir operadora ${esc(operator.nome)}"><i data-lucide="search" aria-hidden="true"></i><span><strong>${esc(operator.nome)}</strong><small>${count} plano${count === 1 ? '' : 's'}</small></span></button></td><td><i class="simsaude-color-swatch" style="background:${esc(operator.cor_marca || '#174A8B')}"></i>${esc(operator.cor_marca || '#174A8B')}</td></tr>`;
     }).join('');
-    body = `<section class="simsaude-card simsaude-table-card"><header><h3>Operadoras cadastradas <span class="simsaude-count-pill">${state.data.operators.length}</span></h3></header><div class="simsaude-table-wrap"><table class="hub-data-table"><thead><tr><th>Logomarca</th><th>Operadora</th><th>Cor da marca</th><th>Ações</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="simsaude-empty">Nenhuma operadora cadastrada.</td></tr>'}</tbody></table></div></section>`;
+    body = `<div class="admin-table-wrap"><table class="hub-data-table admin-table"><thead><tr><th>Logomarca</th><th>Operadora</th><th>Cor da marca</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="simsaude-empty">Nenhuma operadora cadastrada.</td></tr>'}</tbody></table></div>`;
   }
-  return context.renderShell({ tituloPagina: selected ? selected.nome : 'Operadoras', classeConteudo: 'simulador-saude-page', conteudo: `${title}${renderMessage()}${body}` });
+  const pageContent = `${title}${renderMessage()}${body}`;
+  return context.renderShell({ tituloPagina: selected ? selected.nome : 'Operadoras', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${pageContent}</section>` });
 }
 
 function renderEditor(draft, readOnly = false) {
@@ -302,7 +349,7 @@ function renderEditor(draft, readOnly = false) {
   const statusOptions = [{ value: 'em_revisao', label: 'Em revisão' }, { value: 'vigente', label: 'Vigente' }, { value: 'inativo', label: 'Inativo' }];
   return `<form class="simsaude-editor simsaude-table-editor ${readOnly ? 'is-readonly' : ''}" data-plan-id="${esc(draft.plano_id || '')}" onsubmit="simsaudeSalvar(event)">
     <input type="hidden" name="id" value="${esc(draft.id || '')}">
-    <header><div><span class="hub-page-kicker">${readOnly ? 'Visualização da tabela' : editing ? 'Edição da tabela' : 'Cadastro da tabela'}</span></div><div class="simsaude-editor-actions">${editing && canCreate ? `<button class="secondary-btn" type="button" onclick="simsaudeDuplicar('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Duplicar</button>` : ''}${!readOnly && editing ? `<button class="secondary-btn" type="button" onclick="simsaudeVerHistorico('${esc(draft.id)}')">Histórico</button>${canUpdate ? `<button class="secondary-btn" type="button" onclick="simsaudeInativar('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Inativar</button>` : ''}${context.pode?.('simulador_saude.catalogo', 'delete') ? `<button class="secondary-btn simsaude-delete-link" type="button" onclick="simsaudeExcluir('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Excluir tabela</button>` : ''}` : ''}${!readOnly && (editing ? canUpdate : canCreate) ? `<button class="save-btn" type="submit" ${state.loading ? 'disabled' : ''}>Salvar</button>` : ''}</div></header>
+    <header><div><span class="hub-page-kicker">${readOnly ? 'Visualização da tabela' : editing ? 'Edição da tabela' : 'Cadastro da tabela'}</span></div><div class="simsaude-editor-actions">${editing && canCreate ? `<button class="secondary-btn" type="button" onclick="simsaudeDuplicar('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Duplicar</button>` : ''}${!readOnly && editing ? `<button class="secondary-btn" type="button" onclick="simsaudeVerHistorico('${esc(draft.id)}')">Histórico</button>${canUpdate ? draft.status === 'inativo' ? `<button class="secondary-btn" type="button" onclick="simsaudeAtivar('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Ativar tabela</button>` : `<button class="secondary-btn" type="button" onclick="simsaudeInativar('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Inativar</button>` : ''}${context.pode?.('simulador_saude.catalogo', 'delete') ? `<button class="secondary-btn simsaude-delete-link" type="button" onclick="simsaudeExcluir('${esc(draft.id)}')" ${state.loading ? 'disabled' : ''}>Excluir tabela</button>` : ''}` : ''}${!readOnly && (editing ? canUpdate : canCreate) ? `<button class="save-btn" type="submit" ${state.loading ? 'disabled' : ''}>Salvar</button>` : ''}</div></header>
     <fieldset class="simsaude-editor-fields" ${readOnly ? 'disabled' : ''}><div class="simsaude-form-grid">
       ${renderTablePlanFields(draft)}
       ${field('Nome da tabela', 'nome', draft.nome, 'text', { required: true })}
@@ -312,7 +359,7 @@ function renderEditor(draft, readOnly = false) {
       ${field('Código interno', 'codigo_interno', draft.codigo_interno || '', 'text')}
       ${field('Início da vigência', 'vigencia_inicio', formatDateForField(draft.vigencia_inicio), 'text', { required: draft.status === 'vigente', placeholder: 'DD/MM/AAAA', maxlength: 10 })}
       ${field('Fim da vigência', 'vigencia_fim', formatDateForField(draft.vigencia_fim), 'text', { placeholder: 'DD/MM/AAAA', maxlength: 10 })}
-      ${field('Status', 'status', editing && draft.status === 'vigente' ? 'em_revisao' : (draft.status || 'em_revisao'), 'select', { options: statusOptions, className: 'simsaude-status-field' })}
+      ${field('Status', 'status', draft.status || 'em_revisao', 'select', { options: statusOptions, className: 'simsaude-status-field' })}
       ${field('Observações desta tabela', 'observacoes', draft.observacoes || '', 'text', { wide: true })}
     </div><section class="simsaude-band-editor"><div><h4>Preços por faixa etária</h4><p>${individual ? 'Cada acomodação agrupa as tarifas por quantidade de vidas. A tarifa de 2 ou mais vidas é opcional; quando preenchida, deve conter as dez faixas.' : 'Cada acomodação tem uma coluna de valor por vida, para as dez faixas etárias.'} Use vírgula ou ponto nos centavos (ex.: 123,45 ou 123.45).</p></div><div>${priceGrid}</div></section></fieldset>
   </form>`;
@@ -332,7 +379,7 @@ function renderTableEditorScreen() {
     disabled: state.loading
   });
   const content = `${pageHeader}${renderMessage()}${state.data.plans.length ? `<section class="simsaude-card">${renderEditor(state.draft, readOnly)}</section>` : `<section class="simsaude-card"><h3>Cadastre uma operadora e um plano antes de criar a tabela</h3><p class="simsaude-muted">As tabelas de preços precisam estar vinculadas a um plano.</p><button class="save-btn" type="button" onclick="simsaudeMudarVisao('operators')">Ir para operadoras</button></section>`}`;
-  return context.renderShell({ tituloPagina: `${title} de Preços`, descricaoPagina: 'Cadastre ou edite uma oferta e seus preços por faixa etária.', classeConteudo: 'simulador-saude-page', conteudo: content });
+  return context.renderShell({ tituloPagina: `${title} de Preços`, descricaoPagina: 'Cadastre ou edite uma oferta e seus preços por faixa etária.', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${content}</section>` });
 }
 
 function renderHistory() {
@@ -510,10 +557,10 @@ function csvRowsToPreview(text, fileName) {
 
 function renderPage() {
   if (!context.pode?.('simulador_saude.catalogo', 'view')) return context.renderShell({ tituloPagina: 'Catálogo de Planos e Preços', descricaoPagina: 'Acesso controlado pelas permissões do Hub.', classeConteudo: 'simulador-saude-page', conteudo: '<section class="admin-panel"><h2>Acesso não autorizado</h2><p>É necessária a permissão Visualizar catálogo.</p></section>' });
-  if (state.editorRoute && !state.draft) return context.renderShell({ tituloPagina: 'Tabela de Preços', descricaoPagina: 'Carregando cadastro da tabela.', classeConteudo: 'simulador-saude-page', conteudo: renderLoading() });
+  if (state.editorRoute && !state.draft) return context.renderShell({ tituloPagina: 'Tabela de Preços', descricaoPagina: 'Carregando cadastro da tabela.', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${renderLoading()}</section>` });
   if (state.editorRoute && state.draft) return renderTableEditorScreen();
   if (state.view === 'operators') return renderOperatorPage();
-  if (state.loading && !state.data.tables.length && !state.error) return context.renderShell({ tituloPagina: 'Catálogo de Planos e Preços', descricaoPagina: 'Gerencie os planos, tabelas e preços utilizados nas cotações.', classeConteudo: 'simulador-saude-page', conteudo: renderLoading() });
+  if (state.loading && !state.data.tables.length && !state.error) return context.renderShell({ tituloPagina: 'Catálogo de Planos e Preços', descricaoPagina: 'Gerencie os planos, tabelas e preços utilizados nas cotações.', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${renderLoading()}</section>` });
   const rows = filteredTables(); const start = (state.page - 1) * state.pageSize; const pageRows = rows.slice(start, start + state.pageSize);
   const operators = state.data.operators;
   const modalities = [...new Set(state.data.plans.map(item => item.modalidade).filter(Boolean))].sort();
@@ -521,10 +568,11 @@ function renderPage() {
   const activeFilterCount = [state.operator, state.modality, state.accommodation, state.copay, state.date, state.status].filter(Boolean).length;
   const title = renderHubRecordHeader({ onBack: 'simsaudeVoltarInicio()', backAriaLabel: 'Voltar ao Simulador Saúde', className: 'simsaude-page-head simsaude-catalog-page-head hub-record-header', backClassName: 'icon-btn hub-record-back-button', contentClassName: 'hub-record-header-content simsaude-page-title', content: '<span class="saude-title-icon" aria-hidden="true"><i data-lucide="heart-pulse"></i></span><div><h2>Catálogo de Planos e Preços</h2></div>', disabled: state.loading });
   const filters = state.filterModalOpen ? `<div class="modal-backdrop simsaude-filter-backdrop" role="presentation" onclick="simsaudeFecharFiltros(event)"><section id="simsaude-filter-modal" class="small-modal simsaude-filter-modal" role="dialog" aria-modal="true" aria-labelledby="simsaude-filter-title" tabindex="-1" onclick="event.stopPropagation()"><header class="small-modal-header"><div><span class="hub-page-kicker">Catálogo</span><h3 id="simsaude-filter-title">Filtrar planos e tabelas</h3><p>Escolha os critérios e aplique para atualizar a lista.</p></div><button class="icon-btn simsaude-filter-close" type="button" onclick="simsaudeFecharFiltros()" aria-label="Fechar filtros" title="Fechar filtros"><i data-lucide="x" aria-hidden="true"></i></button></header><form class="simsaude-filters" onsubmit="simsaudeFiltrar(event)"><label><span>Operadora</span><select name="operator">${selectedOptions(operators.map(x => ({ value: x.id, label: x.nome })), state.operator)}</select></label><label><span>Modalidade</span><select name="modality">${selectedOptions(modalities.map(x => ({ value: x, label: x })), state.modality)}</select></label><label><span>Acomodação</span><select name="accommodation">${selectedOptions(['Apartamento', 'Enfermaria'].map(x => ({ value: x, label: x })), state.accommodation)}</select></label><label><span>Coparticipação</span><select name="copay">${selectedOptions([{ value: 'true', label: 'Sim' }, { value: 'false', label: 'Não' }], state.copay)}</select></label><label><span>Vigência</span><span class="simsaude-date-control"><input type="date" name="date" value="${esc(state.date)}"></span></label><label><span>Status</span><select name="status">${selectedOptions(['Vigente', 'Em revisão', 'Inativo', 'Vencido'].map(x => ({ value: x, label: x })), state.status)}</select></label><footer class="small-modal-actions simsaude-filter-actions"><button class="secondary-btn" type="button" onclick="simsaudeLimparFiltros()"><i data-lucide="rotate-ccw" aria-hidden="true"></i> Limpar filtros</button><div><button class="secondary-btn" type="button" onclick="simsaudeFecharFiltros()">Cancelar</button><button class="save-btn" type="submit"><i data-lucide="filter" aria-hidden="true"></i> Aplicar filtros</button></div></footer></form></section></div>` : '';
-  const table = `<section class="simsaude-card simsaude-table-card"><div class="simsaude-table-wrap"><table class="hub-data-table simsaude-catalog-table"><thead><tr><th>Operadora</th><th>Plano</th><th>Tabela</th><th>Modalidade</th><th>Copart</th><th>Abrangência</th></tr></thead><tbody>${pageRows.length ? pageRows.map(renderTableRow).join('') : `<tr><td colspan="6" class="simsaude-empty">${state.data.tables.length ? 'Nenhum registro corresponde aos filtros selecionados.' : 'Nenhum plano/tabela cadastrado.'}</td></tr>`}</tbody></table></div><footer class="simsaude-pagination"><span>Exibindo ${rows.length ? start + 1 : 0}–${Math.min(start + state.pageSize, rows.length)} de ${rows.length} registros</span><label><span>Por página</span><select onchange="simsaudeMudarPagina(this.value)">${[10, 25, 50, 100].map(size => `<option value="${size}" ${state.pageSize === size ? 'selected' : ''}>${size}</option>`).join('')}</select></label><button type="button" onclick="simsaudePagina(-1)" aria-label="Página anterior" ${state.page <= 1 ? 'disabled' : ''}>‹</button><span class="simsaude-current-page">${state.page}</span><button type="button" onclick="simsaudePagina(1)" aria-label="Próxima página" ${start + state.pageSize >= rows.length ? 'disabled' : ''}>›</button></footer></section>`;
+  const table = `<section class="simsaude-card simsaude-table-card"><div class="simsaude-table-wrap"><table class="hub-data-table simsaude-catalog-table"><thead><tr><th>Operadora</th><th>Plano</th><th>Tabela</th><th>Status</th><th>Tipo de contratação</th><th>Modalidade</th><th>Copart</th><th>Abrangência</th></tr></thead><tbody>${pageRows.length ? pageRows.map(renderTableRow).join('') : `<tr><td colspan="8" class="simsaude-empty">${state.data.tables.length ? 'Nenhum registro corresponde aos filtros selecionados.' : 'Nenhum plano/tabela cadastrado.'}</td></tr>`}</tbody></table></div><footer class="simsaude-pagination"><span>Exibindo ${rows.length ? start + 1 : 0}–${Math.min(start + state.pageSize, rows.length)} de ${rows.length} registros</span><label><span>Por página</span><select onchange="simsaudeMudarPagina(this.value)">${[10, 25, 50, 100].map(size => `<option value="${size}" ${state.pageSize === size ? 'selected' : ''}>${size}</option>`).join('')}</select></label><button type="button" onclick="simsaudePagina(-1)" aria-label="Página anterior" ${state.page <= 1 ? 'disabled' : ''}>‹</button><span class="simsaude-current-page">${state.page}</span><button type="button" onclick="simsaudePagina(1)" aria-label="Próxima página" ${start + state.pageSize >= rows.length ? 'disabled' : ''}>›</button></footer></section>`;
   const actions = `<div class="simsaude-page-actions"><form class="simsaude-toolbar-search" role="search" aria-label="Buscar planos e tabelas" onsubmit="simsaudeBuscar(event)"><span class="simsaude-search-control"><i data-lucide="search" aria-hidden="true"></i><input type="search" name="search" value="${esc(state.search)}" aria-label="Nome da tabela, plano ou operadora"></span><button class="icon-btn" type="submit" aria-label="Buscar" title="Buscar"><i data-lucide="search" aria-hidden="true"></i></button></form><button class="secondary-btn simsaude-filter-trigger" type="button" onclick="simsaudeAbrirFiltros()" aria-haspopup="dialog" aria-controls="simsaude-filter-modal" aria-expanded="${state.filterModalOpen}"><i data-lucide="sliders-horizontal" aria-hidden="true"></i> Filtros${activeFilterCount ? `<span class="simsaude-filter-count">${activeFilterCount}</span>` : ''}</button>${canCreate ? '<button class="secondary-btn" type="button" onclick="simsaudeNovaTabela()"><i data-lucide="plus" aria-hidden="true"></i> Nova Tabela</button><button class="secondary-btn" type="button" onclick="document.getElementById(\'simsaude-csv-file\').click()"><i data-lucide="upload-cloud" aria-hidden="true"></i> Importar</button><input id="simsaude-csv-file" class="simsaude-file-input" type="file" accept=".csv,text/csv" onchange="simsaudeSelecionarArquivo(event)">' : ''}<button class="secondary-btn" type="button" onclick="simsaudeExportar()"><i data-lucide="download" aria-hidden="true"></i> Exportar</button></div>`;
-  const content = `${title}<div class="simsaude-catalog-toolbar"><button class="secondary-btn simsaude-operators-trigger" type="button" onclick="simsaudeMudarVisao('operators')"><i data-lucide="building-2" aria-hidden="true"></i> Operadoras</button>${actions}</div>${renderMessage()}<div class="simsaude-layout">${table}</div>${filters}${renderHistory()}${renderImportPreview()}`;
-  return context.renderShell({ tituloPagina: 'Catálogo de Planos e Preços', classeConteudo: 'simulador-saude-page', conteudo: content });
+  const content = `${title}<div class="simsaude-catalog-toolbar"><button class="secondary-btn simsaude-operators-trigger" type="button" onclick="simsaudeMudarVisao('operators')"><i data-lucide="building-2" aria-hidden="true"></i> Operadoras</button>${actions}</div>${renderMessage()}<div class="simsaude-layout">${table}</div>`;
+  const overlays = `${filters}${renderHistory()}${renderImportPreview()}`;
+  return context.renderShell({ tituloPagina: 'Catálogo de Planos e Preços', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${content}</section>${overlays}` });
 }
 
 function rerender() { const root = document.getElementById('app'); if (root) root.innerHTML = renderPage(); document.body.classList.toggle('modal-is-open', Boolean(state.filterModalOpen || state.historyId || state.importPreview)); }
@@ -655,6 +703,35 @@ window.simsaudeCopartRemoverLinha = button => {
   row.remove();
 };
 
+window.simsaudeCarenciaAdicionarLinha = button => {
+  const editor = button.closest('.simsaude-carencia-editor');
+  if (!editor) return;
+  const row = createCarenciaRow();
+  const table = editor.querySelector('tbody');
+  if (!table) return;
+  table.insertAdjacentHTML('beforeend', `<tr data-carencia-row="${esc(row.id)}"><td><input type="text" data-carencia-cell="regra" aria-label="Procedimento" maxlength="300" placeholder="Ex.: exames especiais"></td><td><input type="text" data-carencia-cell="prazo" aria-label="Prazo de carência" maxlength="120" placeholder="Ex.: 90 dias"></td><td class="simsaude-copart-row-actions"><button class="simsaude-copart-remove" type="button" aria-label="Remover regra de carência" onclick="simsaudeCarenciaRemoverLinha(this)">Remover</button></td></tr>`);
+  editor.querySelector(`[data-carencia-row="${row.id}"] [data-carencia-cell="regra"]`)?.focus();
+};
+
+window.simsaudeCarenciaRemoverLinha = button => {
+  const row = button.closest('[data-carencia-row]');
+  if (!row) return;
+  const hasValues = [...row.querySelectorAll('[data-carencia-cell]')].some(input => input.value.trim());
+  if (hasValues && !window.confirm('Esta regra de carência contém valores. Remover a linha?')) return;
+  row.remove();
+};
+
+window.simsaudeCarenciaReplicar = button => {
+  const editor = button.closest('.simsaude-carencia-editor');
+  const sourceId = editor?.querySelector('[data-carencia-source]')?.value;
+  const source = state.data.plans.find(plan => plan.id === sourceId);
+  const operatorId = state.planDraft?.operadora_id || state.selectedOperatorId;
+  if (!editor || !source || source.operadora_id !== operatorId || source.id === state.planDraft?.plano_id) return;
+  const current = readCarenciaEditor(editor);
+  if (current.linhas.length && !window.confirm(`As regras de carência atuais serão substituídas pelas regras do plano “${source.nome}”. Continuar?`)) return;
+  editor.outerHTML = renderCarenciaEditor(source.detalhes?.carencias, state.planDraft, source.id);
+};
+
 window.simsaudeTipoContratacaoAlterar = select => {
   const previousType = select.dataset.previousType || 'Empresarial (PJ)';
   const nextType = select.value;
@@ -777,11 +854,12 @@ window.simsaudeSalvarPlano = async event => {
   const form = event.currentTarget;
   const values = Object.fromEntries(new FormData(form).entries());
   const coparticipacao = readCoparticipacaoEditor(form.querySelector('.simsaude-copart-editor'));
+  const carencias = readCarenciaEditor(form.querySelector('.simsaude-carencia-editor'));
   const details = {
     coberturas: String(values.coberturas_texto || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     rede: String(values.rede_texto || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     coparticipacao,
-    carencias: String(values.carencias_texto || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
+    carencias,
     adicionais: String(values.adicionais_texto || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean),
     observacoes: String(values.observacoes_plano || '').trim()
   };
@@ -945,17 +1023,43 @@ window.simsaudeSalvar = async event => {
     const overlap = matchingPlan && state.data.tables.some(table => table.id !== draft.id && table.plano_id === matchingPlan.id && norm(table.codigo_interno) === norm(draft.codigo_interno) && table.tipo_contratacao === draft.tipo_contratacao && accommodationsFor(table).some(accommodation => draft.acomodacoes.includes(accommodation)) && Boolean(table.coparticipacao) === Boolean(draft.coparticipacao) && table.status === 'vigente' && table.vigencia_inicio <= (draft.vigencia_fim || '9999-12-31') && (table.vigencia_fim || '9999-12-31') >= draft.vigencia_inicio);
     if (overlap && !window.confirm('Já existe uma tabela vigente para este plano e modalidade em período sobreposto. Deseja continuar mesmo assim?')) return;
   }
-  if (draft.id && current?.status === 'vigente') draft.status = 'em_revisao';
   state.draft = draft; state.loading = true; state.error = ''; state.notice = ''; rerender();
   try {
     const response = await chamarApi('saveSimuladorSaudeTable', draft);
     if (!response.ok) throw new Error(response.message);
-    state.notice = draft.status === 'vigente' ? 'Tabela salva e validada como vigente.' : 'Tabela salva em revisão.';
+    state.notice = draft.status === 'vigente' ? 'Tabela salva e validada como vigente.' : draft.status === 'inativo' ? 'Tabela salva como inativa.' : 'Tabela salva em revisão.';
     restoreCatalogRouteAfterSave(); await loadCatalog();
   } catch (error) { state.error = error.message; state.draft = draft; }
   finally { state.loading = false; rerender(); }
 };
-window.simsaudeInativar = async id => { const message = state.editorDirty ? 'Há alterações não salvas. Descartá-las e inativar esta tabela?' : 'Inativar esta tabela? Ela deixará de ser usada em novas cotações.'; if (!window.confirm(message)) return; state.editorDirty = false; const response = await chamarApi('setSimuladorSaudeTableStatus', { id, status: 'inativo' }); if (!response.ok) { state.error = response.message; rerender(); return; } state.notice = 'Tabela inativada.'; restoreCatalogRouteAfterSave(); await loadCatalog(); };
+window.simsaudeAtivar = id => {
+  if (state.loading || !context.pode?.('simulador_saude.catalogo', 'update')) return;
+  const form = document.querySelector('.simsaude-table-editor');
+  if (!form || form.elements.id?.value !== id) return;
+  form.elements.status.value = 'vigente';
+  state.editorDirty = true;
+  form.requestSubmit();
+};
+window.simsaudeInativar = async id => {
+  if (state.loading || !context.pode?.('simulador_saude.catalogo', 'update')) return;
+  const table = state.data.tables.find(item => item.id === id);
+  if (!table || table.status === 'inativo') return;
+  const message = state.editorDirty ? 'Há alterações não salvas. Descartá-las e inativar esta tabela?' : 'Inativar esta tabela? Ela deixará de ser usada em novas cotações.';
+  if (!window.confirm(message)) return;
+  state.loading = true; state.editorDirty = false; state.error = ''; state.notice = ''; rerender();
+  try {
+    const response = await chamarApi('setSimuladorSaudeTableStatus', { id, status: 'inativo' });
+    if (!response.ok) throw new Error(response.message || 'Não foi possível inativar a tabela.');
+    state.notice = 'Tabela inativada.';
+    restoreCatalogRouteAfterSave();
+    await loadCatalog();
+  } catch (error) {
+    state.error = error.message || 'Não foi possível inativar a tabela.';
+  } finally {
+    state.loading = false;
+    rerender();
+  }
+};
 window.simsaudeExcluir = async id => {
   if (state.loading || !context.pode?.('simulador_saude.catalogo', 'delete')) return;
   const table = state.data.tables.find(item => item.id === id);
@@ -981,7 +1085,6 @@ window.simsaudeFecharHistorico = () => { state.historyId = ''; rerender(); };
 window.simsaudeFecharImportacao = () => { if (state.loading) return; state.importPreview = null; rerender(); };
 window.simsaudeSelecionarArquivo = async event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (!file) return; state.error = ''; try { state.importPreview = csvRowsToPreview(await file.text(), file.name); } catch (error) { state.error = error.message || 'Não foi possível ler o CSV.'; } rerender(); };
 window.simsaudeImportarConfirmado = async () => { const preview = state.importPreview; if (!preview?.validRows.length || state.loading) return; state.loading = true; state.error = ''; rerender(); const failed = []; let imported = 0; try { for (const row of preview.validRows) { const response = await chamarApi('saveSimuladorSaudeTable', row); if (response.ok) imported += 1; else failed.push(`linha ${row.line}: ${response.message}`); } } finally { state.loading = false; state.importPreview = null; } state.notice = `${imported} tabela(s) importada(s).${failed.length ? ` ${failed.length} falha(s): ${failed.join(' · ')}` : ''}`; await loadCatalog(); };
-window.simsaudeFecharAviso = () => { state.error = ''; state.notice = ''; rerender(); };
 window.simsaudeRecarregar = () => loadCatalog();
 window.simsaudeBuscar = event => { event.preventDefault(); const values = new FormData(event.currentTarget); state.search = values.get('search') || ''; state.page = 1; rerender(); };
 window.simsaudeAbrirFiltros = () => { state.filterModalOpen = true; rerender(); document.getElementById('simsaude-filter-modal')?.querySelector('select')?.focus(); };

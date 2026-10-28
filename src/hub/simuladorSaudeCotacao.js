@@ -4,11 +4,12 @@ import { SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
 import { renderHubRecordHeader } from './recordWorkflow.js';
 import { formatCoparticipacaoTable, isCoparticipacaoTable, normalizeCoparticipacaoTable } from './simuladorSaudeCoparticipacao.js';
+import { isCarenciaTable, normalizeCarenciaTable } from './simuladorSaudeCarencias.js';
 import { consultarCnpj } from './services/cnpjService.js';
 
 const BANDS = ['0-18', '19-23', '24-28', '29-33', '34-38', '39-43', '44-48', '49-53', '54-58', '59+'];
 const ACCOMMODATIONS = ['Apartamento', 'Enfermaria', 'Ambulatorial'];
-const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', citySource: 'unset', cnpjLookupLoading: false, cnpjLookupError: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
+const quote = { id: '', code: '', version: 0, company: '', cnpj: '', city: '', citySource: 'unset', cnpjLookupLoading: false, cnpjLookupError: '', type: 'Empresarial (PJ)', effectiveDate: '', lives: [], plans: [], expandedGroups: new Set(), operatorFilter: '', accommodationFilter: '', copayFilter: '', modal: '', planPicker: { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }, manualIofPreview: null, manualPlanMode: false, manualPlanEditingId: '', manualPlanOperatorId: '', manualPlanCatalogId: '', inlineLives: [], batchEditingLives: false, removedInlineLifeIds: [], catalogError: '', catalog: { operators: [], plans: [], tables: [], bands: [] }, notice: '', saving: false, loading: false, savedSignature: '', initialized: false, importText: '', importPreview: null };
 let context = {};
 let quoteToastKey = '';
 let cnpjLookupTimer = null;
@@ -74,6 +75,13 @@ function coparticipacaoProposalTable(value) {
   const rows = table.linhas.filter(row => columns.some(column => String(row.celulas[column.id] || '').trim()));
   if (!columns.length || !rows.length) return '';
   return `<div class="copay-detail-table-wrap"><table class="copay-detail-table"><thead><tr>${columns.map(column => `<th>${esc(column.label || '—')}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(column => `<td>${esc(row.celulas[column.id] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function carenciaProposalTable(value) {
+  if (!isCarenciaTable(value)) return '';
+  const table = normalizeCarenciaTable(value);
+  const rows = table.linhas.filter(row => row.celulas.prazo.trim() || row.celulas.regra.trim());
+  if (!rows.length) return '';
+  return `<div class="copay-detail-table-wrap"><table class="copay-detail-table"><thead><tr><th>Procedimento</th><th>Prazo</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.celulas.regra || '—')}</td><td>${esc(row.celulas.prazo || '—')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function ageOf(birth, reference = quote.effectiveDate || today()) {
   if (!birth) return null;
@@ -392,11 +400,23 @@ function renderPlanPicker() {
   const available = planPickerTables();
   if (quote.manualPlanMode) {
     const editing = quote.manualPlanEditingId ? quotePlanEntry(quote.manualPlanEditingId) : null;
-    const currentOperator = normalizeImportToken(editing?.operator_snapshot?.nome || '').includes('bradesco') ? 'manual-bradesco' : 'manual-sulamerica';
     const currentPlan = editing?.plan_snapshot || {};
     const currentTable = editing?.table_snapshot || {};
     const currentPrices = editing?.prices_base_snapshot || editing?.prices_snapshot || {};
-    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required><option value="manual-sulamerica" ${currentOperator === 'manual-sulamerica' ? 'selected' : ''}>SulAmérica</option><option value="manual-bradesco" ${currentOperator === 'manual-bradesco' ? 'selected' : ''}>Bradesco</option></select></label><label class="saude-quote-field"><span>Nome do plano *</span><input name="planName" required maxlength="120" placeholder="Ex.: Executivo Nacional" value="${esc(currentPlan.nome || '')}"></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => `<tr><th>${band}</th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)">${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
+    const operators = quote.catalog.operators;
+    const savedOperatorId = editing?.operator_snapshot?.id || currentPlan.operadora_id || '';
+    const selectedOperatorId = operators.some(operator => operator.id === quote.manualPlanOperatorId) ? quote.manualPlanOperatorId : operators.some(operator => operator.id === savedOperatorId) ? savedOperatorId : operators[0]?.id || '';
+    const availableManualPlans = quote.catalog.plans.filter(plan => plan.operadora_id === selectedOperatorId);
+    const savedPlanId = currentPlan.catalog_plan_id || quote.catalog.plans.find(plan => plan.operadora_id === savedOperatorId && normalizeImportToken(plan.nome) === normalizeImportToken(currentPlan.nome))?.id || '';
+    const selectedPlanId = availableManualPlans.some(plan => plan.id === quote.manualPlanCatalogId) ? quote.manualPlanCatalogId : availableManualPlans.some(plan => plan.id === savedPlanId) ? savedPlanId : editing ? '' : availableManualPlans[0]?.id || '';
+    const selectedManualPlan = availableManualPlans.find(plan => plan.id === selectedPlanId) || {};
+    quote.manualPlanOperatorId = selectedOperatorId;
+    quote.manualPlanCatalogId = selectedPlanId;
+    const operatorOptions = operators.map(operator => `<option value="${esc(operator.id)}" ${operator.id === selectedOperatorId ? 'selected' : ''}>${esc(operator.nome)}</option>`).join('');
+    const planOptions = availableManualPlans.map(plan => `<option value="${esc(plan.id)}" ${plan.id === selectedPlanId ? 'selected' : ''}>${esc(plan.nome)}</option>`).join('');
+    const operatorPlaceholder = operators.length ? 'Selecione uma operadora' : 'Nenhuma operadora cadastrada';
+    const planPlaceholder = !selectedOperatorId ? 'Selecione uma operadora primeiro' : availableManualPlans.length ? 'Selecione um plano' : 'Nenhum plano cadastrado para esta operadora';
+    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Selecione uma operadora e um plano do catálogo. Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required onchange="saudeQuoteManualOperatorChanged(this.value)" ${operators.length ? '' : 'disabled'}><option value="">${operatorPlaceholder}</option>${operatorOptions}</select></label><label class="saude-quote-field"><span>Nome do plano *</span><select name="planId" required onchange="saudeQuoteManualPlanChanged(this.value)" ${availableManualPlans.length ? '' : 'disabled'}><option value="">${planPlaceholder}</option>${planOptions}</select></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(selectedManualPlan.abrangencia || currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4><p>Preencha somente as faixas que deseja informar; as demais podem ficar em branco.</p></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => `<tr><th>${band}</th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
   }
   const picker = quote.planPicker;
   const operators = [...new Map(available.map(table => {
@@ -437,7 +457,7 @@ function operatorMonogram(name = '') {
 function renderResult() {
   const plans = selectedPlans(); const allPlans = quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
   const options = items => items.map(item => `<option value="${esc(item.value)}" ${item.value === item.current ? 'selected' : ''}>${esc(item.label)}</option>`).join('');
-  const header = `<div class="saude-quote-result-tools"><div class="saude-result-title"><h3><i data-lucide="file-text" aria-hidden="true"></i> Resultado da Cotação</h3><p>Valores calculados pela idade na data de vigência informada.</p></div><div class="saude-quote-filters"><label><span>Operadoras</span><select onchange="saudeQuoteFilter('operatorFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.operatorFilter }, ...quoteOperators().map(item => ({ value: item.id, label: item.nome, current: quote.operatorFilter }))])}</select></label><label><span>Acomodação</span><select onchange="saudeQuoteFilter('accommodationFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.accommodationFilter }, ...['Apartamento', 'Enfermaria', 'Ambulatorial'].map(value => ({ value, label: value, current: quote.accommodationFilter }))])}</select></label><label><span>Coparticipação</span><select onchange="saudeQuoteFilter('copayFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.copayFilter }, { value: 'true', label: 'Sim', current: quote.copayFilter }, { value: 'false', label: 'Não', current: quote.copayFilter }])}</select></label><button class="save-btn" type="button" onclick="saudeQuoteOpenModal('plan')"><i data-lucide="plus" aria-hidden="true"></i> Adicionar Plano</button></div></div>`;
+  const header = `<div class="saude-quote-result-tools"><div class="saude-result-title"><h3><i data-lucide="file-text" aria-hidden="true"></i> Resultado da Cotação</h3></div><div class="saude-quote-filters"><label><span>Operadoras</span><select onchange="saudeQuoteFilter('operatorFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.operatorFilter }, ...quoteOperators().map(item => ({ value: item.id, label: item.nome, current: quote.operatorFilter }))])}</select></label><label><span>Acomodação</span><select onchange="saudeQuoteFilter('accommodationFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.accommodationFilter }, ...['Apartamento', 'Enfermaria', 'Ambulatorial'].map(value => ({ value, label: value, current: quote.accommodationFilter }))])}</select></label><label><span>Coparticipação</span><select onchange="saudeQuoteFilter('copayFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.copayFilter }, { value: 'true', label: 'Sim', current: quote.copayFilter }, { value: 'false', label: 'Não', current: quote.copayFilter }])}</select></label><button class="save-btn" type="button" onclick="saudeQuoteOpenModal('plan')"><i data-lucide="plus" aria-hidden="true"></i> Plano</button></div></div>`;
   if (!allPlans.length) return `<section class="saude-quote-card">${header}<div class="saude-quote-empty">Adicione planos do catálogo vigente para comparar valores.</div></section>`;
   const columns = plans.map(item => {
     const brand = operatorVisualClass(item.operator.nome);
@@ -463,9 +483,10 @@ function renderResult() {
 
 function renderPage() {
   if (!context.pode?.('simulador_saude', 'view')) return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Acesso controlado pelas permissões do Hub.', classeConteudo: 'simulador-saude-page', conteudo: '<section class="admin-panel"><h2>Acesso não autorizado</h2><p>É necessária a permissão Visualizar Simulador - Saúde.</p></section>' });
-  if (quote.loading) return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Abrindo cotação salva.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: '<section class="saude-quote-card"><div class="saude-quote-empty" role="status">Carregando cotação salva…</div></section>' });
-  const content = `${renderHeader()}${renderCompany()}${renderLives()}${renderResult()}${renderPlanPicker()}${renderImportModal()}`;
-  return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Monte e compare cotações de planos de saúde.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: content });
+  if (quote.loading) return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Abrindo cotação salva.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: '<section class="admin-panel"><section class="saude-quote-card"><div class="saude-quote-empty" role="status">Carregando cotação salva…</div></section></section>' });
+  const content = `${renderHeader()}${renderCompany()}${renderLives()}${renderResult()}`;
+  const overlays = `${renderPlanPicker()}${renderImportModal()}`;
+  return context.renderShell({ tituloPagina: 'Cotação de Plano de Saúde', descricaoPagina: 'Monte e compare cotações de planos de saúde.', classeConteudo: 'simulador-saude-page saude-quote-page', conteudo: `<section class="admin-panel">${content}</section>${overlays}` });
 }
 function rerender() { const root = document.getElementById('app'); if (root) root.innerHTML = renderPage(); syncQuoteToast(); }
 async function loadCatalog() { try { const response = await chamarApi('getSimuladorSaudeCatalog'); if (!response.ok) throw new Error(response.message); quote.catalog = response.data; quote.catalogError = ''; } catch (error) { quote.catalogError = error.message || 'Não foi possível carregar o catálogo de planos.'; } rerender(); }
@@ -796,8 +817,27 @@ window.saudeQuoteToggleManualIOF = checked => {
     if (toggle) toggle.checked = false;
   }
 };
-window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
-window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
+window.saudeQuoteManualOperatorChanged = operatorId => {
+  quote.manualPlanOperatorId = String(operatorId || '');
+  const plans = quote.catalog.plans.filter(plan => plan.operadora_id === quote.manualPlanOperatorId);
+  quote.manualPlanCatalogId = plans[0]?.id || '';
+  const select = document.querySelector('.saude-manual-plan-modal select[name="planId"]');
+  if (!select) return;
+  select.innerHTML = `<option value="">${quote.manualPlanOperatorId ? plans.length ? 'Selecione um plano' : 'Nenhum plano cadastrado para esta operadora' : 'Selecione uma operadora primeiro'}</option>${plans.map(plan => `<option value="${esc(plan.id)}" ${plan.id === quote.manualPlanCatalogId ? 'selected' : ''}>${esc(plan.nome)}</option>`).join('')}`;
+  select.disabled = plans.length === 0;
+  const coverage = document.querySelector('.saude-manual-plan-modal input[name="coverage"]');
+  if (coverage) coverage.value = plans[0]?.abrangencia || '';
+  const submit = document.querySelector('.saude-manual-plan-modal button[onclick*="saudeQuoteAddManualPlan"]');
+  if (submit) submit.disabled = plans.length === 0;
+};
+window.saudeQuoteManualPlanChanged = planId => {
+  quote.manualPlanCatalogId = String(planId || '');
+  const plan = quote.catalog.plans.find(item => item.id === quote.manualPlanCatalogId);
+  const coverage = document.querySelector('.saude-manual-plan-modal input[name="coverage"]');
+  if (coverage) coverage.value = plan?.abrangencia || '';
+};
+window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
+window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
 window.saudeQuoteAddManualPlan = source => {
   if (source instanceof Event) source.preventDefault();
   const form = source?.matches?.('.saude-manual-plan-modal')
@@ -812,12 +852,13 @@ window.saudeQuoteAddManualPlan = source => {
   const values = new FormData(form);
   const operatorId = String(values.get('operatorId') || '');
   if (!operatorId) { showQuoteToast('Selecione uma operadora para adicionar o plano.', { isError: true }); form.elements.operatorId?.focus(); return; }
-  const operatorNeedle = operatorId === 'manual-bradesco' ? 'bradesco' : 'sulamerica';
-  const operatorName = operatorId === 'manual-bradesco' ? 'Bradesco' : 'SulAmérica';
-  const catalogOperator = quote.catalog.operators.find(operator => normalizeImportToken(operator.nome).includes(operatorNeedle));
-  const resolvedOperatorId = catalogOperator?.id || operatorId;
-  const planName = String(values.get('planName') || '').trim();
-  if (!planName) { showQuoteToast('Informe o nome do plano para adicioná-lo à cotação.', { isError: true }); form.elements.planName?.focus(); return; }
+  const catalogOperator = quote.catalog.operators.find(operator => operator.id === operatorId);
+  if (!catalogOperator) { showQuoteToast('A operadora selecionada não está mais cadastrada no catálogo.', { isError: true }); form.elements.operatorId?.focus(); return; }
+  const catalogPlanId = String(values.get('planId') || '');
+  const catalogPlan = quote.catalog.plans.find(plan => plan.id === catalogPlanId && plan.operadora_id === operatorId);
+  if (!catalogPlan) { showQuoteToast('Selecione um plano cadastrado para esta operadora.', { isError: true }); form.elements.planId?.focus(); return; }
+  const planName = catalogPlan.nome;
+  const operatorName = catalogOperator.nome;
 
   const basePrices = {};
   let invalidPrice = false;
@@ -829,8 +870,6 @@ window.saudeQuoteAddManualPlan = source => {
     else basePrices[band] = price;
   });
   if (invalidPrice) { showQuoteToast('Confira os valores. Os preços precisam ser números iguais ou maiores que zero.', { isError: true }); return; }
-  if (!Object.keys(basePrices).length) { showQuoteToast('Informe ao menos um valor por faixa etária para adicionar o plano.', { isError: true }); return; }
-
   const hasCurrentIof = quote.manualIofPreview && JSON.stringify(quote.manualIofPreview.base) === JSON.stringify(basePrices);
   const prices = hasCurrentIof ? { ...quote.manualIofPreview.values } : { ...basePrices };
   const pricingSnapshot = { prices_snapshot: prices, prices_base_snapshot: { ...basePrices }, iof_applied: Boolean(hasCurrentIof), iof_percent: hasCurrentIof ? 2.38 : 0 };
@@ -840,16 +879,18 @@ window.saudeQuoteAddManualPlan = source => {
   const accommodation = String(values.get('accommodation') || '');
   const coparticipation = values.get('coparticipation') === 'true';
   const table = { id: manualId, nome: 'Valores informados manualmente', acomodacao: accommodation, coparticipacao: coparticipation, status: 'vigente', vigencia_inicio: quote.effectiveDate || today(), vigencia_fim: null, origem: 'manual' };
-  const plan = { id: `${manualId}-plan`, operadora_id: resolvedOperatorId, nome: planName, modalidade: quote.type, abrangencia: String(values.get('coverage') || '').trim(), origem: 'manual' };
+  const plan = { ...catalogPlan, id: `${manualId}-plan`, catalog_plan_id: catalogPlan.id, operadora_id: catalogOperator.id, nome: planName, modalidade: quote.type, abrangencia: String(values.get('coverage') || '').trim() || catalogPlan.abrangencia || '', origem: 'manual' };
   if (editingPlan) {
-    Object.assign(editingPlan, { table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, ...pricingSnapshot });
+    Object.assign(editingPlan, { table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: catalogOperator.id, nome: catalogOperator.nome }, ...pricingSnapshot });
   } else {
-    quote.plans.push({ tableId: manualId, selected: true, table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: resolvedOperatorId, nome: catalogOperator?.nome || operatorName }, ...pricingSnapshot });
+    quote.plans.push({ tableId: manualId, selected: true, table_snapshot: table, plan_snapshot: plan, operator_snapshot: { id: catalogOperator.id, nome: catalogOperator.nome }, ...pricingSnapshot });
   }
   quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = '';
   quote.modal = '';
   quote.manualPlanMode = false;
   quote.manualPlanEditingId = '';
+  quote.manualPlanOperatorId = '';
+  quote.manualPlanCatalogId = '';
   quote.manualIofPreview = null;
   quote.notice = editingPlan ? `Valores manuais do plano da ${operatorName} atualizados.` : `Plano manual da ${operatorName} adicionado a esta cotação.`;
   rerender();
@@ -861,6 +902,8 @@ window.saudeQuoteEditManualPlan = tableId => {
   const entry = quotePlanEntry(tableId);
   if (!entry?.table_snapshot || entry.table_snapshot.origem !== 'manual') return;
   quote.manualPlanEditingId = tableId;
+  quote.manualPlanOperatorId = entry.operator_snapshot?.id || entry.plan_snapshot.operadora_id || '';
+  quote.manualPlanCatalogId = entry.plan_snapshot.catalog_plan_id || quote.catalog.plans.find(plan => plan.operadora_id === quote.manualPlanOperatorId && normalizeImportToken(plan.nome) === normalizeImportToken(entry.plan_snapshot.nome))?.id || '';
   quote.manualIofPreview = entry.iof_applied ? { base: { ...(entry.prices_base_snapshot || entry.prices_snapshot || {}) }, values: { ...(entry.prices_snapshot || {}) } } : null;
   quote.manualPlanMode = true;
   quote.modal = 'plan';
@@ -922,6 +965,7 @@ window.saudeQuoteClear = () => {
 
 function proposalHtml(branding, saved, { autoPrint = true } = {}) {
   const plans = quote.plans.filter(item => item.selected).map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
+  const copayPlans = plans.filter(item => item.table.coparticipacao === true || item.table.coparticipacao === 'true');
   const planSectionTitle = plans.length === 1 ? 'Cotação' : 'Cotações';
   const brokerName = branding.nome_fantasia || branding.razao_social || 'Transmares Corretora de Seguros';
   const logo = branding.logo_url || document.querySelector('.brand-logo-slot img')?.src || '';
@@ -953,31 +997,13 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
   const compositionDetailsWidth = (5 / (5 + plans.length)) * 60;
   const compositionPlanColumns = plans.map(() => `<col style="width:${(100 - compositionDetailsWidth) / Math.max(plans.length, 1)}%">`).join('');
   const comparisonHeaders = plans.map(item => `<th class="brand-${operatorVisualClass(item.operator.nome)}">${esc(item.operator.nome || 'Operadora')}<small>${esc(item.plan.nome || 'Plano')}</small></th>`).join('');
-  const conditions = [
+  const networkRows = [
     ['Modalidade', item => item.plan.modalidade || 'Não informada'],
     ['Acomodação', item => item.table.acomodacao || 'Não informada'],
     ['Coparticipação', item => item.table.coparticipacao ? 'Sim' : 'Não'],
     ['Abrangência', item => item.plan.abrangencia || 'Não informada'],
-    ['Coparticipação por procedimento', item => {
-      return proposalDetail(item, 'coparticipacao') || 'Valores não informados para este plano.';
-    }],
     ['Coberturas e serviços', item => proposalDetail(item, 'coberturas') || 'Não informadas.'],
-    ['Carências', item => proposalDetail(item, 'carencias') || 'Não informadas neste plano.'],
     ['Adicionais', item => proposalDetail(item, 'adicionais') || 'Não informados neste plano.'],
-    ['Origem dos valores', item => item.table.origem === 'manual' ? 'Informados manualmente nesta cotação' : `${item.table.nome || 'Tabela cadastrada'}${item.table.vigencia_inicio ? ` · ${dateLabel(item.table.vigencia_inicio)}` : ' · início de vigência pendente'}`]
-  ];
-  const conditionRows = conditions.map(([label, getValue]) => `<tr><th>${esc(label)}</th>${plans.map(item => {
-    if (label === 'Coparticipação por procedimento') {
-      const coparticipacao = item.plan?.detalhes?.coparticipacao ?? item.table?.condicoes?.coparticipacao;
-      const tableMarkup = coparticipacaoProposalTable(coparticipacao);
-      if (tableMarkup) return `<td class="copay-procedure-cell">${tableMarkup}</td>`;
-    }
-    return `<td>${esc(getValue(item))}</td>`;
-  }).join('')}</tr>`).join('');
-  const conditionSection = `<section><div class="section-heading"><h2>Principais condições dos planos</h2><p>Resumo das características cadastradas para facilitar a análise.</p></div><table class="proposal-table conditions-table"><thead><tr><th>Característica</th>${plans.map(item => `<th class="brand-${operatorVisualClass(item.operator.nome)}">${esc(item.operator.nome || 'Operadora')} – ${esc(item.plan.nome || 'Plano')}</th>`).join('')}</tr></thead><tbody>${conditionRows}</tbody></table></section>`;
-  const secondPageConditions = conditionSection;
-  const networkRows = [
-    ['Abrangência cadastrada', item => item.plan.abrangencia || 'Não informada'],
     ['Prestadores e unidades', item => proposalDetail(item, 'rede') || 'A relação nominal não está cadastrada neste plano.'],
     ['Conferência recomendada', () => `Confirme a rede disponível para ${quote.city || 'a região do contrato'} diretamente com a operadora.`]
   ].map(([label, getValue]) => `<tr><th>${esc(label)}</th>${plans.map(item => `<td>${esc(getValue(item))}</td>`).join('')}</tr>`).join('');
@@ -988,7 +1014,7 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
     ['Adicionais por vida', item => proposalDetail(item, 'adicionais') || 'Não informados neste plano.']
   ];
   const copayColumns = [];
-  plans.forEach(item => {
+  copayPlans.forEach(item => {
     const operatorClass = operatorVisualClass(item.operator.nome);
     const existing = operatorClass === 'hapvida' ? copayColumns.find(column => column.operatorClass === 'hapvida') : null;
     if (existing) existing.items.push(item);
@@ -1010,11 +1036,19 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
       const tableMarkup = coparticipacaoProposalTable(coparticipacao);
       if (tableMarkup) return `<td class="copay-procedure-cell"${colspan}>${tableMarkup}</td>`;
     }
+    if (label === 'Carências') {
+      const carencias = item.plan?.detalhes?.carencias ?? item.table?.condicoes?.carencias;
+      const tableMarkup = carenciaProposalTable(carencias);
+      if (tableMarkup) return `<td class="copay-procedure-cell"${colspan}>${tableMarkup}</td>`;
+    }
     return `<td${colspan}>${esc(getValue(item))}</td>`;
   }).join('')}</tr>`).join('');
+  const copaySection = copayPlans.length
+    ? `<section><div class="section-heading"><h2>Regras de coparticipação</h2><p>Este catálogo registra se o plano prevê coparticipação; valores por serviço dependem das condições da operadora.</p></div><div class="proposal-data-table-wrap"><table class="proposal-table copay-table"><thead><tr><th>Informação</th>${copayHeaders}</tr></thead><tbody>${copayRowsHtml}</tbody></table></div></section>`
+    : '';
   const logoMarkup = logo ? `<img src="${esc(logo)}" alt="Logo ${esc(brokerName)}" onerror="this.style.display='none'">` : `<strong class="brand-fallback">${esc(brokerName)}</strong>`;
   const header = (title, subtitle) => `<header class="proposal-header"><div class="proposal-brand">${logoMarkup}</div><div class="proposal-heading"><h1>${title}</h1><p>${subtitle}</p></div></header>`;
-  const footer = page => `<footer class="proposal-footer"><div class="footer-lines"><strong>${esc(footerLineOne)}</strong>${footerLineTwo ? `<span>${esc(footerLineTwo)}</span>` : ''}${address ? `<span>${esc(address)}</span>` : ''}</div><span class="page-number">${page}/3</span></footer>`;
+  const footer = page => `<footer class="proposal-footer"><div class="footer-lines"><strong>${esc(footerLineOne)}</strong>${footerLineTwo ? `<span>${esc(footerLineTwo)}</span>` : ''}${address ? `<span>${esc(address)}</span>` : ''}</div><span class="page-number">${page}/2</span></footer>`;
   const currentQuoteMeta = `${saved.codigo ? `Cotação #${esc(saved.codigo)}` : 'Cotação'} · Emitida em ${currentDate}`;
   const printOnLoad = autoPrint ? `<script>window.addEventListener('load',()=>{const imgs=[...document.images];Promise.all(imgs.map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r}))).then(()=>setTimeout(()=>window.print(),300))})</script>` : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposta de Plano de Saúde${quote.code ? ` - ${esc(quote.code)}` : ''}</title><style>
@@ -1024,21 +1058,28 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
       ${header('Proposta de Plano de Saúde', currentQuoteMeta)}
       <section class="client-strip"><div class="client-item"><span class="client-icon">▦</span><div><span>Cliente / Empresa</span><strong>${esc(quote.company || '—')}</strong><small>${quote.cnpj ? `CNPJ ${esc(quote.cnpj)}` : ''}${quote.city ? `${quote.cnpj ? ' · ' : ''}${esc(quote.city)}` : ''}</small></div></div><div class="client-item"><span class="client-icon">♟</span><div><span>Total de vidas</span><strong>${quote.lives.length}</strong><small>${selectedLives} titular${selectedLives === 1 ? '' : 'es'} · ${dependents} dependente${dependents === 1 ? '' : 's'}</small></div></div><div class="client-item"><span class="client-icon">▤</span><div><span>Tipo de contratação</span><strong>${esc(quote.type)}</strong></div></div><div class="client-item"><span class="client-icon">▣</span><div><span>Vigência desejada</span><strong>${dateLabel(quote.effectiveDate)}</strong></div></div></section>
       <section><div class="section-heading"><h2>${planSectionTitle}</h2></div><div class="plan-grid" style="--plan-columns:${Math.min(plans.length, 6)}">${planCards}</div></section>
-      <section><div class="section-heading"><h2>Composição da cotação</h2></div><table class="proposal-table composition-table"><colgroup><col style="width:${compositionDetailsWidth * 0.15}%"><col style="width:${compositionDetailsWidth * 0.35}%"><col style="width:${compositionDetailsWidth * 0.15}%"><col style="width:${compositionDetailsWidth * 0.35}%">${compositionPlanColumns}</colgroup><thead><tr><th>Grupo</th><th>Nome</th><th>Tipo</th><th>Faixa Etária</th>${comparisonHeaders}</tr></thead><tbody>${comparisonRows}<tr class="grand-total"><td colspan="2">Total da cotação</td><td colspan="2">${quote.lives.length} vidas</td>${totalCells}</tr></tbody></table></section>
+      <section><div class="section-heading"><h2>Composição da cotação</h2></div><div class="proposal-data-table-wrap"><table class="proposal-table composition-table"><colgroup><col style="width:${compositionDetailsWidth * 0.15}%"><col style="width:${compositionDetailsWidth * 0.35}%"><col style="width:${compositionDetailsWidth * 0.15}%"><col style="width:${compositionDetailsWidth * 0.35}%">${compositionPlanColumns}</colgroup><thead><tr><th>Grupo</th><th>Nome</th><th>Tipo</th><th>Faixa Etária</th>${comparisonHeaders}</tr></thead><tbody>${comparisonRows}<tr class="grand-total"><td colspan="2">Total da cotação</td><td colspan="2">${quote.lives.length} vidas</td>${totalCells}</tr></tbody></table></div></section>
       <div class="info-note">Valores estimados conforme as faixas etárias e a tabela cadastrada. Os valores podem ser alterados sem aviso prévio, conforme condições de cada operadora. Consulte a página das condições de contratação.</div>
       <div class="supplemental-grid"><section class="supplemental-card supplemental-observations"><h2>Observações importantes</h2><ul class="important-list"><li>Esta proposta é indicativa e não constitui oferta vinculante de contratação.</li><li>A aceitação está sujeita à análise de elegibilidade e às regras comerciais da operadora.</li><li>Rede credenciada, carências e condições podem variar conforme região e contrato.</li><li>Confirme valores e disponibilidade na data efetiva da contratação.</li></ul></section></div>
       ${footer(1)}
     </section>
     <section class="proposal-page">
-      ${header('Informações complementares', 'Página 2 · Resumo de rede e coparticipação')}
-      <section><div class="section-heading"><h2>Resumo de rede credenciada</h2><p>A abrangência cadastrada está resumida abaixo. A disponibilidade completa deve ser confirmada para a região e o contrato.</p></div><table class="proposal-table network-table"><thead><tr><th>Item</th>${comparisonHeaders}</tr></thead><tbody>${networkRows}</tbody></table></section>
-      <section><div class="section-heading"><h2>Regras de coparticipação</h2><p>Este catálogo registra se o plano prevê coparticipação; valores por serviço dependem das condições da operadora.</p></div><table class="proposal-table copay-table"><thead><tr><th>Informação</th>${copayHeaders}</tr></thead><tbody>${copayRowsHtml}</tbody></table></section>
+      ${header('Informações complementares', 'Página 2 · Condições dos planos')}
+      <style>
+        .proposal-data-table-wrap { border: 1px solid #dce5ef; border-radius: 10px; box-shadow: 0 3px 12px #0f27420d; overflow: hidden; }
+        .proposal-data-table-wrap .proposal-table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+        .proposal-data-table-wrap .proposal-table th, .proposal-data-table-wrap .proposal-table td { border: 0; border-bottom: 1px solid #e5ebf2; font-size: 9px; line-height: 1.25; padding: 6px 8px; text-align: left; vertical-align: top; }
+        .proposal-data-table-wrap .proposal-table thead th { font-size: 8px; font-weight: 700; letter-spacing: .04em; padding: 7px 8px; text-transform: uppercase; vertical-align: middle; }
+        .proposal-data-table-wrap .proposal-table thead th:not([class^="brand-"]) { background: #f3f6fa; color: #52657d; }
+        .proposal-data-table-wrap .proposal-table tbody th { background: #f8fafc; color: #23415f; font-size: 9px; font-weight: 700; }
+        .proposal-data-table-wrap .proposal-table td.copay-procedure-cell { padding: 3px; }
+        .proposal-data-table-wrap .proposal-table tbody tr:not(.group-total):not(.grand-total):nth-child(even) td { background: #f8fafc; }
+        .proposal-data-table-wrap .proposal-table tbody tr:last-child th, .proposal-data-table-wrap .proposal-table tbody tr:last-child td { border-bottom: 0; }
+        @media print { .proposal-data-table-wrap { box-shadow: none; } }
+      </style>
+      <section><div class="section-heading"><h2>Principais condições do plano</h2><p>Características cadastradas para os planos comparados. A rede disponível deve ser confirmada para a região e o contrato.</p></div><div class="proposal-data-table-wrap"><table class="proposal-table network-table"><thead><tr><th>Item</th>${comparisonHeaders}</tr></thead><tbody>${networkRows}</tbody></table></div></section>
+      ${copaySection}
       ${footer(2)}
-    </section>
-    <section class="proposal-page">
-      ${header('Informações complementares', 'Página 3 · Principais condições dos planos')}
-      ${secondPageConditions}
-      ${footer(3)}
     </section>
     <div class="actions"><button onclick="window.print()">▣ &nbsp; Imprimir / Salvar em PDF</button></div>
     ${printOnLoad}

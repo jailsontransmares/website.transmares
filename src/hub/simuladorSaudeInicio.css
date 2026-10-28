@@ -3,6 +3,7 @@
 .saude-home-header h2 { margin: 3px 0; }
 .saude-home-header p, .saude-home-card > header p { color: var(--texto-suave); font-size: 12px; margin: 4px 0 0; }
 .saude-home-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.simulador-saude-page .icon-btn svg { flex: 0 0 16px; height: 16px; width: 16px; }
 .saude-home-search { align-items: center; background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-input, 8px); color: var(--texto-suave); display: inline-flex; gap: 8px; height: 36px; min-width: 220px; padding: 0 10px; }
 .saude-home-search:focus-within { border-color: color-mix(in srgb, var(--cor-principal) 55%, var(--borda)); }
 .saude-home-search > svg { flex: 0 0 15px; height: 15px; width: 15px; }
@@ -31,9 +32,12 @@
 .saude-home-status-cell { align-items: center; display: flex; gap: 6px; white-space: nowrap; }
 .saude-home-open { align-items: center; background: none; border: 0; color: var(--cor-principal); cursor: pointer; display: inline-flex; font: inherit; font-weight: 700; gap: 6px; padding: 4px 6px; }
 .saude-home-open svg { height: 14px; width: 14px; }
+.saude-home-client-open { color: var(--texto); padding: 2px 0; text-align: left; white-space: normal; }
+.saude-home-client-open:hover { color: var(--cor-principal); text-decoration: underline; }
+.saude-home-client-open:focus-visible { border-radius: 3px; outline: 2px solid color-mix(in srgb, var(--cor-principal) 45%, transparent); outline-offset: 2px; }
 .saude-home-row-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
 .saude-home-row-actions .saude-home-row-action, .saude-home-status-cell .saude-home-row-action { flex: 0 0 28px; height: 28px; min-height: 28px; padding: 0; width: 28px; }
-.saude-home-row-action svg { height: 14px; width: 14px; }
+.simulador-saude-page .saude-home-row-action svg { height: 14px; width: 14px; }
 .saude-home-row-action:disabled { cursor: wait; opacity: .55; }
 .saude-home-notice { color: #087c38; font-size: 12px; margin: 10px 14px 0; }
 .saude-home-state, .saude-home-empty { align-items: center; color: var(--texto-suave); display: flex; flex-direction: column; gap: 10px; justify-content: center; min-height: 210px; padding: 24px; text-align: center; }

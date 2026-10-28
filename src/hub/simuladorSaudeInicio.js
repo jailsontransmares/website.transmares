@@ -72,7 +72,7 @@ function renderTable() {
     ].filter(Boolean).join('');
     return `<tr data-status="${esc(quote.status || 'rascunho')}" data-search="${esc([quote.codigo, quote.cliente_nome, quote.cliente_cnpj].filter(Boolean).join(' '))}" data-search-digits="${esc([quote.codigo, quote.cliente_cnpj].filter(Boolean).join('').replace(/\D/g, ''))}" data-search-identifier="${esc([quote.codigo, quote.cliente_cnpj].filter(Boolean).join('').toUpperCase().replace(/[^A-Z0-9]/g, ''))}">
       <td class="saude-home-code"><button class="saude-home-open" type="button" onclick="saudeHomeOpenQuote('${esc(quote.id)}')" aria-label="Abrir cotação #${esc(quote.codigo ?? '—')}" title="Abrir cotação #${esc(quote.codigo ?? '—')}"><i data-lucide="search" aria-hidden="true"></i><span>#${esc(quote.codigo ?? '—')}</span></button></td>
-      <td><strong>${esc(quote.cliente_nome || 'Cliente não informado')}</strong>${quote.cliente_cidade ? `<small>${esc(quote.cliente_cidade)}</small>` : ''}</td>
+      <td><button class="saude-home-open saude-home-client-open" type="button" onclick="saudeHomeOpenQuote('${esc(quote.id)}')" aria-label="Abrir cotação #${esc(quote.codigo ?? '—')} de ${esc(quote.cliente_nome || 'Cliente não informado')}" title="Abrir cotação #${esc(quote.codigo ?? '—')}"><strong>${esc(quote.cliente_nome || 'Cliente não informado')}</strong></button>${quote.cliente_cidade ? `<small>${esc(quote.cliente_cidade)}</small>` : ''}</td>
       <td>${livesCount}</td>
       <td><div class="saude-home-status-cell">${quote.status === 'proposta' ? `<button class="icon-btn saude-home-row-action" type="button" onclick="saudeHomeViewProposal('${esc(quote.id)}')" aria-label="Visualizar proposta da cotação #${esc(quote.codigo ?? '')}" title="Visualizar proposta"><i data-lucide="eye" aria-hidden="true"></i></button>` : ''}<span class="saude-home-status is-${esc(quote.status || 'rascunho')}">${statusLabel(quote.status)}</span></div></td>
       <td><div class="saude-home-row-actions">${actions}</div></td>
@@ -99,7 +99,7 @@ function renderPage() {
       ${state.notice ? `<p class="saude-home-notice" role="status">${esc(state.notice)}</p>` : ''}${renderTable()}
     </section>
   </section>`;
-  return context.renderShell({ tituloPagina: 'Simulador - Saúde', descricaoPagina: 'Consulte e crie cotações de planos de saúde.', classeConteudo: 'simulador-saude-page', conteudo: content });
+  return context.renderShell({ tituloPagina: 'Simulador - Saúde', descricaoPagina: 'Consulte e crie cotações de planos de saúde.', classeConteudo: 'simulador-saude-page', conteudo: `<section class="admin-panel">${content}</section>` });
 }
 
 function rerender() {
