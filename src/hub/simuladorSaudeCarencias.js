@@ -56,14 +56,25 @@ export function normalizeCarenciaTable(value) {
     };
   }
 
+  const columnsById = new Map((Array.isArray(value.colunas) ? value.colunas : [])
+    .filter(column => column && typeof column === 'object')
+    .map(column => [String(column.id || ''), String(column.label || '').trim().toLocaleLowerCase('pt-BR')]));
+  const valueFor = (row, aliases) => {
+    const cells = row.celulas && typeof row.celulas === 'object' ? row.celulas : {};
+    for (const alias of aliases) {
+      if (cells[alias] != null && String(cells[alias]).trim()) return String(cells[alias]);
+    }
+    const matchingId = [...columnsById].find(([, label]) => aliases.some(alias => label === alias || label.includes(alias)))?.[0];
+    return matchingId && cells[matchingId] != null ? String(cells[matchingId]) : '';
+  };
   const linhas = (Array.isArray(value.linhas) ? value.linhas : [])
     .filter(row => row && typeof row === 'object')
     .map(row => ({
       id: String(row.id || makeId()),
-      celulas: Object.fromEntries(COLUMNS.map(column => [
-        column.id,
-        String(row.celulas?.[column.id] ?? '')
-      ]))
+      celulas: {
+        regra: valueFor(row, ['regra', 'procedimento', 'cobertura', 'descricao']),
+        prazo: valueFor(row, ['prazo', 'período', 'periodo', 'carência', 'carencia', 'duração', 'duracao'])
+      }
     }));
   return { formato: CARENCIA_TABLE_FORMAT, versao: CARENCIA_TABLE_VERSION, colunas: COLUMNS, linhas };
 }
