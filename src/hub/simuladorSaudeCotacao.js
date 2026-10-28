@@ -16,7 +16,6 @@ let cnpjLookupTimer = null;
 let cnpjLookupRequestId = 0;
 let manualOcrWorkerPromise = null;
 let manualOcrBusy = false;
-let manualOcrPendingPrices = null;
 
 function esc(value = '') { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
 function normalizeCnpj(value) {
@@ -110,6 +109,82 @@ function manualOcrRows(data) {
   });
   return rows.map(row => [...new Map(row.parts.sort((a, b) => a.x0 - b.x0).map(part => [part.text.trim(), part.text.trim()])).values()].join(' '));
 }
+function manualOcrPositionedRows(data) {
+  const words = (data?.blocks || []).flatMap(block => (block.paragraphs || []).flatMap(paragraph => (paragraph.lines || []).flatMap(line => {
+    const lineWords = (line.words || []).filter(word => word.text?.trim() && word.bbox);
+    if (lineWords.length) return lineWords.map(word => ({ text: word.text.trim(), ...word.bbox }));
+    return line.text?.trim() && line.bbox ? [{ text: line.text.trim(), ...line.bbox }] : [];
+  }))).filter(word => Number.isFinite(word.x0) && Number.isFinite(word.x1) && Number.isFinite(word.y0) && Number.isFinite(word.y1));
+  if (!words.length) return [];
+  words.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const rows = [];
+  words.forEach(word => {
+    const height = Math.max(1, word.y1 - word.y0);
+    const center = (word.y0 + word.y1) / 2;
+    const row = rows.find(candidate => {
+      const overlap = Math.min(candidate.y1, word.y1) - Math.max(candidate.y0, word.y0);
+      return overlap / Math.min(candidate.height, height) >= 0.35
+        || Math.abs(candidate.center - center) <= Math.max(5, Math.min(candidate.height, height) * 0.9);
+    });
+    if (row) {
+      row.words.push(word);
+      row.y0 = Math.min(row.y0, word.y0);
+      row.y1 = Math.max(row.y1, word.y1);
+      row.center = (row.center * (row.words.length - 1) + center) / row.words.length;
+      row.height = Math.max(row.height, height);
+    } else rows.push({ y0: word.y0, y1: word.y1, center, height, words: [word] });
+  });
+  return rows.map(row => {
+    let offset = 0;
+    const tokens = row.words.sort((a, b) => a.x0 - b.x0).map(word => {
+      const token = { ...word, start: offset, end: offset + word.text.length };
+      offset = token.end + 1;
+      return token;
+    });
+    return { ...row, tokens, text: tokens.map(token => token.text).join(' ') };
+  });
+}
+function manualOcrPositionForSpan(row, start, end) {
+  const tokens = row.tokens.filter(token => token.end > start && token.start < end);
+  if (!tokens.length) return null;
+  return tokens.reduce((sum, token) => sum + (token.x0 + token.x1) / 2, 0) / tokens.length;
+}
+function parseManualOcrColumnPrices(data) {
+  const rows = manualOcrPositionedRows(data).map(row => ({ ...row, normalized: normalizeManualOcrNumericText(row.text) }));
+  const header = rows.map(row => ({
+    row,
+    bands: BANDS.flatMap(band => {
+      const match = manualOcrBandPattern(band).exec(row.normalized);
+      if (!match) return [];
+      const x = manualOcrPositionForSpan(row, match.index, match.index + match[0].length);
+      return x === null ? [] : [{ band, x }];
+    })
+  })).filter(item => item.bands.length >= 2).sort((a, b) => b.bands.length - a.bands.length)[0];
+  if (!header) return {};
+
+  const amountsByBand = Object.fromEntries(BANDS.map(band => [band, []]));
+  const currencyPattern = /R\s*[$S5]\s*((?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,.]\d{1,2})?)/gi;
+  const decimalPattern = /(?:\d{1,3}(?:[.\s]\d{3})+|\d+)[,.]\d{1,2}/g;
+  const headerBands = [...header.bands].sort((a, b) => a.x - b.x);
+  for (const row of rows) {
+    if (row.y0 <= header.row.y1) continue;
+    const currencyMatches = [...row.normalized.matchAll(currencyPattern)];
+    const matches = currencyMatches.length ? currencyMatches : [...row.normalized.matchAll(decimalPattern)];
+    for (const match of matches) {
+      const start = match.index + (currencyMatches.length ? match[0].lastIndexOf(match[1]) : 0);
+      const x = manualOcrPositionForSpan(row, start, start + (currencyMatches.length ? match[1].length : match[0].length));
+      if (x === null) continue;
+      const closestIndex = headerBands.reduce((best, item, index) => Math.abs(item.x - x) < Math.abs(headerBands[best].x - x) ? index : best, 0);
+      const band = headerBands[closestIndex].band;
+      const amount = parseManualOcrPrice(currencyMatches.length ? match[1] : match[0]);
+      if (Number.isFinite(amount) && amount >= 0) amountsByBand[band].push({ amount, distance: Math.abs(row.center - header.row.y1) });
+    }
+  }
+  return Object.fromEntries(BANDS.flatMap(band => {
+    const candidates = amountsByBand[band].sort((a, b) => a.distance - b.distance);
+    return candidates.length ? [[band, candidates[0].amount]] : [];
+  }));
+}
 function manualOcrDetectedBands(data) {
   return new Set(manualOcrRows(data).flatMap(row => {
     const line = normalizeManualOcrNumericText(row);
@@ -135,26 +210,21 @@ function parseManualOcrPrices(data) {
     const perLifeMatch = perLifePattern.exec(remaining);
     const currencyMatches = [...remaining.matchAll(currencyPattern)];
     const decimalMatches = [...remaining.matchAll(decimalPattern)];
-    const monetaryMatches = currencyMatches.length ? currencyMatches : decimalMatches;
     currencyPattern.lastIndex = 0;
     decimalPattern.lastIndex = 0;
     let rawAmount = perLifeMatch?.[1] || (currencyMatches.length ? currencyMatches.at(-1)?.[1] : decimalMatches.at(-1)?.[0]) || '';
-    const quantityMatch = remaining.match(/^\s*(?:(?:qtd|qtde|quantidade)\s*[:=]?\s*)?(\d{1,2})(?=\s|R|$)/i);
-    const quantity = quantityMatch ? Number(quantityMatch[1]) : null;
     if (!rawAmount) {
       const integers = [...remaining.matchAll(/\b\d{2,6}\b/g)];
       if (integers.length === 1) rawAmount = integers[0][0];
     }
     let amount = parseManualOcrPrice(rawAmount);
-    if (Number.isFinite(amount) && !perLifeMatch && monetaryMatches.length === 1 && quantity > 1) {
-      amount = Math.round((amount / quantity + Number.EPSILON) * 100) / 100;
-    }
     if (rawAmount && Number.isFinite(amount) && amount >= 0) candidates[band].push(amount);
   }
-  return Object.fromEntries(BANDS.flatMap(band => {
+  const rowPrices = Object.fromEntries(BANDS.flatMap(band => {
     const values = [...new Set(candidates[band])];
     return values.length === 1 ? [[band, values[0]]] : [];
   }));
+  return { ...rowPrices, ...parseManualOcrColumnPrices(data) };
 }
 function setManualOcrStatus(message, isError = false) {
   const status = document.querySelector('[data-manual-ocr-status]');
@@ -162,14 +232,48 @@ function setManualOcrStatus(message, isError = false) {
   status.textContent = message;
   status.classList.toggle('is-error', isError);
 }
-function renderManualOcrReview(prices) {
-  manualOcrPendingPrices = prices;
-  const review = document.querySelector('[data-manual-ocr-review]');
-  const rows = document.querySelector('[data-manual-ocr-review-rows]');
-  if (!review || !rows) return;
-  const bands = BANDS.filter(band => Object.hasOwn(prices || {}, band));
-  rows.innerHTML = bands.map(band => `<tr><th scope="row">${band}</th><td>${money(prices[band])}</td></tr>`).join('');
-  review.hidden = !bands.length;
+function fillManualOcrPrices(prices) {
+  const form = document.querySelector('.saude-manual-plan-modal');
+  if (!form) return 0;
+  let applied = 0;
+  BANDS.forEach((band, index) => {
+    if (!Object.hasOwn(prices || {}, band)) return;
+    const input = form.querySelector(`[name="price_${index}"]`);
+    if (!input) return;
+    input.value = prices[band].toFixed(2).replace('.', ',');
+    applied += 1;
+  });
+  if (applied) window.saudeQuoteManualPriceChanged();
+  return applied;
+}
+function renderManualPriceTable(currentPrices, requiredBands) {
+  const ageHeading = band => `<th class="${requiredBands.has(band) ? 'is-required' : ''}">${band}</th>`;
+  const priceInput = (band, index) => `<input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}${requiredBands.has(band) ? ', necessária conforme as idades informadas' : ''}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}">`;
+  const iofToggle = `<label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label>`;
+  const iofValue = band => quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : '';
+  return `<table class="saude-manual-price-table"><thead><tr><th>Faixa etária</th><th>Valor original</th><th>${iofToggle}</th></tr></thead><tbody>${BANDS.map((band, index) => `<tr class="${requiredBands.has(band) ? 'is-required' : ''}"><th><span>${band}</span></th><td>${priceInput(band, index)}</td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${iofValue(band)}</td></tr>`).join('')}</tbody></table>`;
+}
+async function manualOcrOpenAiImage(canvas) {
+  let source = canvas;
+  let blob = await new Promise(resolve => source.toBlob(resolve, 'image/jpeg', 0.86));
+  for (let attempt = 0; blob && blob.size > 3_800_000 && attempt < 2; attempt += 1) {
+    const scale = 0.75;
+    const resized = document.createElement('canvas');
+    resized.width = Math.max(1, Math.round(source.width * scale));
+    resized.height = Math.max(1, Math.round(source.height * scale));
+    const context = resized.getContext('2d');
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(source, 0, 0, resized.width, resized.height);
+    source = resized;
+    blob = await new Promise(resolve => source.toBlob(resolve, 'image/jpeg', 0.78));
+  }
+  if (!blob) throw new Error('Não foi possível preparar a imagem para análise.');
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return { imageBase64: btoa(binary), mimeType: 'image/jpeg' };
 }
 async function getManualOcrWorker() {
   if (!manualOcrWorkerPromise) {
@@ -257,29 +361,44 @@ async function recognizeManualPriceImage(file) {
   }
   if (manualOcrBusy) return;
   manualOcrBusy = true;
-  renderManualOcrReview(null);
   const details = document.querySelector('[data-manual-ocr-details]');
   const transcript = document.querySelector('[data-manual-ocr-text]');
   if (details) details.hidden = true;
   if (transcript) transcript.textContent = '';
   setManualOcrStatus('Ajustando contraste e resolução da imagem…');
   try {
-    const worker = await getManualOcrWorker();
     const variants = await createManualOcrVariants(file);
     const readings = [];
-    for (let imageIndex = 0; imageIndex < variants.length; imageIndex += 1) {
-      for (const pageMode of ['6', '11']) {
-        setManualOcrStatus(`Tentativa ${imageIndex * 2 + (pageMode === '6' ? 1 : 2)} de 4: lendo tabela…`);
-        await worker.setParameters({ tessedit_pageseg_mode: pageMode, preserve_interword_spaces: '1' });
-        try {
-          const result = await worker.recognize(variants[imageIndex], { rotateAuto: true }, { text: true, blocks: true });
-          readings.push(result.data);
-        } catch {
-          // Uma tentativa com outra segmentação/processamento ainda pode reconhecer a tabela.
+    let aiPrices = {};
+    let aiUnavailable = false;
+    try {
+      setManualOcrStatus('Analisando a tabela com ChatGPT…');
+      const image = await manualOcrOpenAiImage(variants[0]);
+      const response = await chamarApi('recognizeManualPlanPrices', image);
+      if (!response.ok) throw new Error(response.message || 'ChatGPT indisponível.');
+      aiPrices = Object.fromEntries(Object.entries(response.data?.prices || {}).filter(([band, price]) => BANDS.includes(band) && Number.isFinite(Number(price)) && Number(price) >= 0));
+    } catch {
+      aiUnavailable = true;
+    }
+
+    try {
+      const worker = await getManualOcrWorker();
+      for (let imageIndex = 0; imageIndex < variants.length; imageIndex += 1) {
+        for (const pageMode of ['6', '11']) {
+          setManualOcrStatus(`Tentativa ${imageIndex * 2 + (pageMode === '6' ? 1 : 2)} de 4: ${Object.keys(aiPrices).length ? 'conferindo a leitura' : 'lendo tabela'}…`);
+          await worker.setParameters({ tessedit_pageseg_mode: pageMode, preserve_interword_spaces: '1' });
+          try {
+            const result = await worker.recognize(variants[imageIndex], { rotateAuto: true }, { text: true, blocks: true });
+            readings.push(result.data);
+          } catch {
+            // Uma tentativa com outra segmentação/processamento ainda pode reconhecer a tabela.
+          }
         }
       }
+    } catch (error) {
+      if (!Object.keys(aiPrices).length) throw error;
     }
-    if (!readings.length) throw new Error('Nenhuma leitura OCR foi concluída.');
+    if (!readings.length && !Object.keys(aiPrices).length) throw new Error('Nenhuma leitura OCR foi concluída.');
     const possibleValues = Object.fromEntries(BANDS.map(band => [band, new Set()]));
     const detectedBands = new Set();
     readings.forEach(data => {
@@ -287,44 +406,31 @@ async function recognizeManualPriceImage(file) {
       Object.entries(prices).forEach(([band, price]) => possibleValues[band].add(price));
       manualOcrDetectedBands(data).forEach(band => detectedBands.add(band));
     });
-    const recognizedPrices = Object.fromEntries(BANDS.flatMap(band => possibleValues[band].size === 1 ? [[band, [...possibleValues[band]][0]]] : []));
+    Object.keys(aiPrices).forEach(band => detectedBands.add(band));
+    const localPrices = Object.fromEntries(BANDS.flatMap(band => possibleValues[band].size === 1 ? [[band, [...possibleValues[band]][0]]] : []));
+    // Quando o OCR local associa um valor de forma consistente à faixa, esse é
+    // o valor impresso na tabela. Não deixe a interpretação do modelo (que pode
+    // confundir "2 vidas" com uma instrução para dividir) sobrescrevê-lo.
+    const recognizedPrices = { ...aiPrices, ...localPrices };
     const bestReading = readings.sort((a, b) => parseManualOcrPrices(b).length - parseManualOcrPrices(a).length)[0];
     if (details && transcript) { transcript.textContent = bestReading?.text || 'Nenhum texto foi reconhecido.'; details.hidden = false; }
     const form = document.querySelector('.saude-manual-plan-modal');
     if (!form) return;
-    renderManualOcrReview(recognizedPrices);
+    const appliedCount = fillManualOcrPrices(recognizedPrices);
     const unmatchedBands = [...detectedBands].filter(band => !Object.hasOwn(recognizedPrices, band)).length;
     const recognizedCount = Object.keys(recognizedPrices).length;
-    setManualOcrStatus(recognizedCount
-      ? `${recognizedCount} valor(es) aguardando conferência.${unmatchedBands ? ` Não associei preço a ${unmatchedBands} faixa(s); confira o texto reconhecido.` : ''} Use “Adicionar valores” para preencher os campos.`
+    const fallbackNote = aiUnavailable ? ' ChatGPT indisponível; usei o reconhecimento local.' : '';
+    setManualOcrStatus(appliedCount
+      ? `${appliedCount} valor(es) preenchidos automaticamente.${unmatchedBands ? ` Não associei preço a ${unmatchedBands} faixa(s); confira os campos restantes.` : ''} Confira os valores antes de salvar.${fallbackNote}`
       : detectedBands.size
-        ? 'Reconheci as faixas, mas não consegui associar os preços às mesmas linhas. Confira o texto reconhecido ou preencha manualmente.'
-        : 'Não consegui relacionar valores às faixas. Tente uma imagem mais nítida ou preencha os campos manualmente.', !recognizedCount);
+        ? `Reconheci as faixas, mas não consegui associar os preços. Confira o texto reconhecido ou preencha manualmente.${fallbackNote}`
+        : `Não consegui relacionar valores às faixas. Tente uma imagem mais nítida ou preencha os campos manualmente.${fallbackNote}`, !recognizedCount);
   } catch (error) {
     setManualOcrStatus('Não foi possível reconhecer a imagem. Confira sua conexão e tente novamente.', true);
   } finally {
     manualOcrBusy = false;
   }
 }
-window.saudeQuoteApplyManualOcrValues = () => {
-  const form = document.querySelector('.saude-manual-plan-modal');
-  if (!form || !manualOcrPendingPrices) return;
-  let applied = 0;
-  BANDS.forEach((band, index) => {
-    if (!Object.hasOwn(manualOcrPendingPrices, band)) return;
-    const input = form.querySelector(`[name="price_${index}"]`);
-    if (!input) return;
-    input.value = manualOcrPendingPrices[band].toFixed(2).replace('.', ',');
-    applied += 1;
-  });
-  renderManualOcrReview(null);
-  window.saudeQuoteManualPriceChanged();
-  setManualOcrStatus(`${applied} valor(es) adicionados aos campos. Confira antes de salvar.`);
-};
-window.saudeQuoteDiscardManualOcrValues = () => {
-  renderManualOcrReview(null);
-  setManualOcrStatus('Valores reconhecidos descartados; os campos não foram alterados.');
-};
 window.saudeQuoteOpenManualImagePicker = () => document.querySelector('.saude-manual-ocr-input')?.click();
 window.saudeQuoteManualImageSelected = event => {
   const input = event.currentTarget;
@@ -753,8 +859,8 @@ function renderPlanPicker() {
     const planOptions = availableManualPlans.map(plan => `<option value="${esc(plan.id)}" ${plan.id === selectedPlanId ? 'selected' : ''}>${esc(plan.nome)}</option>`).join('');
     const operatorPlaceholder = operators.length ? 'Selecione uma operadora' : 'Nenhuma operadora cadastrada';
     const planPlaceholder = !selectedOperatorId ? 'Selecione uma operadora primeiro' : availableManualPlans.length ? 'Selecione um plano' : 'Nenhum plano cadastrado para esta operadora';
-    const manualOcrControl = `<section class="saude-manual-ocr"><input class="saude-manual-ocr-input" type="file" accept="image/*" hidden onchange="saudeQuoteManualImageSelected(event)"><div class="saude-manual-ocr-dropzone" tabindex="0" role="group" aria-label="Área para colar ou soltar a imagem da tabela de preços" onpaste="saudeQuotePasteManualImage(event)" ondragover="event.preventDefault()" ondrop="saudeQuoteDropManualImage(event)"><i data-lucide="scan-text" aria-hidden="true"></i><span><strong>Preencher valores por imagem</strong><small>Selecione, cole (Ctrl+V) ou solte uma imagem da tabela.</small></span><button class="secondary-btn" type="button" onclick="saudeQuoteOpenManualImagePicker()">Selecionar imagem</button></div><p data-manual-ocr-status role="status" aria-live="polite">A imagem será reconhecida no navegador. Revise os valores antes de salvar.</p><div class="saude-manual-ocr-review" data-manual-ocr-review hidden><p>Confira os valores identificados. Ao adicionar, os campos correspondentes serão preenchidos.</p><div class="saude-manual-ocr-review-table-wrap"><table><thead><tr><th>Faixa etária</th><th>Valor identificado</th></tr></thead><tbody data-manual-ocr-review-rows></tbody></table></div><div class="saude-manual-ocr-review-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteDiscardManualOcrValues()">Descartar</button><button class="save-btn" type="button" onclick="saudeQuoteApplyManualOcrValues()">Adicionar valores</button></div></div><details class="saude-manual-ocr-details" data-manual-ocr-details hidden><summary>Conferir texto reconhecido</summary><pre data-manual-ocr-text></pre></details></section>`;
-    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Selecione uma operadora e um plano do catálogo. Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required onchange="saudeQuoteManualOperatorChanged(this.value)" ${operators.length ? '' : 'disabled'}><option value="">${operatorPlaceholder}</option>${operatorOptions}</select></label><label class="saude-quote-field"><span>Nome do plano *</span><select name="planId" required onchange="saudeQuoteManualPlanChanged(this.value)" ${availableManualPlans.length ? '' : 'disabled'}><option value="">${planPlaceholder}</option>${planOptions}</select></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(selectedManualPlan.abrangencia || currentPlan.abrangencia || '')}"></label></div>${manualOcrControl}<section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4><p>${requiredBands.size ? 'Faixas destacadas são necessárias conforme a distribuição de vidas; as demais podem ficar em branco.' : 'Adicione vidas com idade válida para destacar as faixas necessárias; as demais podem ficar em branco.'}</p></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => { const isRequired = requiredBands.has(band); return `<tr class="${isRequired ? 'is-required' : ''}"><th><span>${band}</span></th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}${isRequired ? ', necessária conforme as idades informadas' : ''}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`; }).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
+    const manualOcrControl = `<section class="saude-manual-ocr"><input class="saude-manual-ocr-input" type="file" accept="image/*" hidden onchange="saudeQuoteManualImageSelected(event)"><div class="saude-manual-ocr-dropzone" tabindex="0" role="group" aria-label="Área para colar ou soltar a imagem da tabela de preços" onpaste="saudeQuotePasteManualImage(event)" ondragover="event.preventDefault()" ondrop="saudeQuoteDropManualImage(event)"><i data-lucide="scan-text" aria-hidden="true"></i><span><strong>Preencher valores por imagem</strong><small>Selecione, cole (Ctrl+V) ou solte uma imagem da tabela.</small></span><button class="secondary-btn" type="button" onclick="saudeQuoteOpenManualImagePicker()">Selecionar imagem</button></div><p data-manual-ocr-status role="status" aria-live="polite">A imagem será reconhecida no navegador e os valores identificados serão preenchidos automaticamente.</p><details class="saude-manual-ocr-details" data-manual-ocr-details hidden><summary>Conferir texto reconhecido</summary><pre data-manual-ocr-text></pre></details></section>`;
+    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required onchange="saudeQuoteManualOperatorChanged(this.value)" ${operators.length ? '' : 'disabled'}><option value="">${operatorPlaceholder}</option>${operatorOptions}</select></label><label class="saude-quote-field"><span>Nome do plano *</span><select name="planId" required onchange="saudeQuoteManualPlanChanged(this.value)" ${availableManualPlans.length ? '' : 'disabled'}><option value="">${planPlaceholder}</option>${planOptions}</select></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(selectedManualPlan.abrangencia || currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><h4>Preço por faixa etária</h4></header><div class="saude-manual-price-content"><div class="saude-manual-price-table-wrap">${renderManualPriceTable(currentPrices, requiredBands)}</div>${manualOcrControl}</div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="secondary-btn" type="button" onclick="saudeQuoteDuplicateManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}><i data-lucide="copy" aria-hidden="true"></i> Duplicar plano</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
   }
   const picker = quote.planPicker;
   const operators = [...new Map(available.map(table => {
@@ -960,7 +1066,7 @@ window.saudeQuoteField = (key, value) => {
   if (key === 'effectiveDate' || key === 'type') rerender();
 };
 window.saudeQuoteOpenModal = mode => { quote.modal = mode; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; if (mode === 'plan') quote.planPicker = { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }; rerender(); };
-window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; manualOcrPendingPrices = null; rerender(); };
+window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; rerender(); };
 window.saudeQuoteOpenImport = () => { if (quote.inlineLives.length || quote.removedInlineLifeIds.length) { showQuoteToast('Salve ou cancele as linhas em edição antes de importar vidas.', { isError: true }); return; } quote.modal = 'import'; quote.importPreview = null; quote.importText = ''; rerender(); };
 window.saudeQuoteValidateImport = event => { event.preventDefault(); quote.importText = new FormData(event.currentTarget).get('importText') || ''; quote.importPreview = previewLifeImport(quote.importText); rerender(); };
 window.saudeQuoteRevisarImport = () => { quote.importPreview = null; rerender(); };
@@ -1159,6 +1265,40 @@ window.saudeQuoteToggleManualIOF = checked => {
     if (toggle) toggle.checked = false;
   }
 };
+window.saudeQuoteDuplicateManualPlan = source => {
+  const form = source?.closest?.('.saude-manual-plan-modal');
+  if (!form) { showQuoteToast('Não foi possível localizar o formulário do plano manual.', { isError: true }); return; }
+  const values = new FormData(form);
+  const operatorId = String(values.get('operatorId') || '');
+  const catalogOperator = quote.catalog.operators.find(operator => operator.id === operatorId);
+  if (!catalogOperator) { showQuoteToast('Selecione uma operadora cadastrada antes de duplicar o plano.', { isError: true }); form.elements.operatorId?.focus(); return; }
+  const catalogPlanId = String(values.get('planId') || '');
+  const catalogPlan = quote.catalog.plans.find(plan => plan.id === catalogPlanId && plan.operadora_id === operatorId);
+  if (!catalogPlan) { showQuoteToast('Selecione um plano cadastrado para esta operadora antes de duplicar.', { isError: true }); form.elements.planId?.focus(); return; }
+
+  const basePrices = {};
+  let invalidPrice = false;
+  BANDS.forEach((band, index) => {
+    const raw = String(values.get(`price_${index}`) ?? '').trim();
+    if (!raw) return;
+    const price = parseManualPrice(raw);
+    if (!Number.isFinite(price) || price < 0) invalidPrice = true;
+    else basePrices[band] = price;
+  });
+  if (invalidPrice) { showQuoteToast('Confira os valores antes de duplicar. Os preços precisam ser números iguais ou maiores que zero.', { isError: true }); return; }
+
+  const hasCurrentIof = quote.manualIofPreview && JSON.stringify(quote.manualIofPreview.base) === JSON.stringify(basePrices);
+  const prices = hasCurrentIof ? { ...quote.manualIofPreview.values } : { ...basePrices };
+  const manualId = `manual-${nextId()}`;
+  const table = { id: manualId, nome: 'Valores informados manualmente', acomodacao: String(values.get('accommodation') || ''), coparticipacao: values.get('coparticipation') === 'true', status: 'vigente', vigencia_inicio: quote.effectiveDate || today(), vigencia_fim: null, origem: 'manual' };
+  const plan = { ...catalogPlan, id: `${manualId}-plan`, catalog_plan_id: catalogPlan.id, operadora_id: catalogOperator.id, nome: catalogPlan.nome, modalidade: quote.type, abrangencia: String(values.get('coverage') || '').trim() || catalogPlan.abrangencia || '', origem: 'manual' };
+  quote.plans.push({ tableId: manualId, selected: true, table_snapshot: table, plan_snapshot: plan, operator_snapshot: { ...catalogOperator }, prices_snapshot: prices, prices_base_snapshot: { ...basePrices }, iof_applied: Boolean(hasCurrentIof), iof_percent: hasCurrentIof ? 2.38 : 0 });
+  quote.operatorFilter = ''; quote.accommodationFilter = ''; quote.copayFilter = '';
+  quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = '';
+  quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null;
+  quote.notice = `Plano manual da ${catalogOperator.nome} duplicado na cotação.`;
+  rerender();
+};
 window.saudeQuoteManualOperatorChanged = operatorId => {
   quote.manualPlanOperatorId = String(operatorId || '');
   const plans = quote.catalog.plans.filter(plan => plan.operadora_id === quote.manualPlanOperatorId);
@@ -1178,8 +1318,8 @@ window.saudeQuoteManualPlanChanged = planId => {
   const coverage = document.querySelector('.saude-manual-plan-modal input[name="coverage"]');
   if (coverage) coverage.value = plan?.abrangencia || '';
 };
-window.saudeQuoteShowManualPlan = () => { manualOcrPendingPrices = null; quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
-window.saudeQuoteManualPlanBack = () => { manualOcrPendingPrices = null; quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
+window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
+window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
 window.saudeQuoteAddManualPlan = source => {
   if (source instanceof Event) source.preventDefault();
   const form = source?.matches?.('.saude-manual-plan-modal')
@@ -1243,7 +1383,7 @@ window.saudeQuoteAddManualPlan = source => {
 window.saudeQuoteEditManualPlan = tableId => {
   const entry = quotePlanEntry(tableId);
   if (!entry?.table_snapshot || entry.table_snapshot.origem !== 'manual') return;
-  manualOcrPendingPrices = null;
+
   quote.manualPlanEditingId = tableId;
   quote.manualPlanOperatorId = entry.operator_snapshot?.id || entry.plan_snapshot.operadora_id || '';
   quote.manualPlanCatalogId = entry.plan_snapshot.catalog_plan_id || quote.catalog.plans.find(plan => plan.operadora_id === quote.manualPlanOperatorId && normalizeImportToken(plan.nome) === normalizeImportToken(entry.plan_snapshot.nome))?.id || '';

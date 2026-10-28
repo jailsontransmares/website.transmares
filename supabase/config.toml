@@ -19,6 +19,9 @@ verify_jwt = true
 [functions.cnpj-lookup]
 verify_jwt = true
 
+[functions.gemini-plan-price-ocr]
+verify_jwt = true
+
 [api]
 enabled = true
 # Port to use for the API URL.

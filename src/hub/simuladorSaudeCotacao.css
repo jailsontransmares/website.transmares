@@ -105,31 +105,25 @@
 .saude-manual-plan-fields { display: grid; gap: 8px; grid-template-columns: repeat(3,minmax(0,1fr)); }
 .saude-manual-plan-fields .saude-quote-field { gap: 4px; }
 .saude-manual-plan-fields .saude-quote-field input, .saude-manual-plan-fields .saude-quote-field select { height: 32px; padding: 0 7px; }
-.saude-manual-ocr { display: flex; flex-direction: column; gap: 5px; }
-.saude-manual-ocr-dropzone { align-items: center; background: color-mix(in srgb, var(--cor-principal) 4%, var(--card)); border: 1px dashed color-mix(in srgb, var(--cor-principal) 35%, var(--borda)); border-radius: 7px; display: flex; gap: 10px; min-width: 0; padding: 9px 11px; }
+.saude-manual-price-content { align-items: start; display: grid; gap: 12px; grid-template-columns: minmax(0,1.65fr) minmax(200px,.9fr); }
+.saude-manual-ocr { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.saude-manual-ocr-dropzone { align-items: flex-start; background: color-mix(in srgb, var(--cor-principal) 4%, var(--card)); border: 1px dashed color-mix(in srgb, var(--cor-principal) 35%, var(--borda)); border-radius: 7px; display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 8px; }
 .saude-manual-ocr-dropzone:focus-visible { outline: 2px solid var(--cor-principal); outline-offset: 2px; }
 .saude-manual-ocr-dropzone > i { color: var(--cor-principal); display: inline-flex; flex: 0 0 20px; height: 20px; width: 20px; }
-.saude-manual-ocr-dropzone > span { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
+.saude-manual-ocr-dropzone > span { display: flex; flex: 0 1 auto; flex-direction: column; gap: 2px; min-width: 0; }
 .saude-manual-ocr-dropzone strong { font-size: 11px; }
 .saude-manual-ocr-dropzone small { color: var(--texto-suave); font-size: 10px; }
-.saude-manual-ocr-dropzone .secondary-btn { flex: 0 0 auto; }
+.saude-manual-ocr-dropzone .secondary-btn { flex: 0 0 auto; width: 100%; }
 .saude-manual-ocr [data-manual-ocr-status] { color: var(--texto-suave); font-size: 10px; margin: 0; }
 .saude-manual-ocr [data-manual-ocr-status].is-error { color: var(--cor-erro, #a51e2b); }
-.saude-manual-ocr-review { background: color-mix(in srgb, var(--cor-principal) 4%, var(--card)); border: 1px solid var(--borda); border-radius: 7px; padding: 9px 11px; }
-.saude-manual-ocr-review > p { color: var(--texto-suave); font-size: 10px; margin: 0 0 6px; }
-.saude-manual-ocr-review-table-wrap { max-height: 150px; overflow: auto; }
-.saude-manual-ocr-review table { border-collapse: collapse; font-size: 11px; min-width: 260px; width: 100%; }
-.saude-manual-ocr-review th, .saude-manual-ocr-review td { border-bottom: 1px solid var(--borda); padding: 4px 7px; text-align: left; }
-.saude-manual-ocr-review thead th { color: var(--texto-suave); font-size: 9px; text-transform: uppercase; }
-.saude-manual-ocr-review-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; margin-top: 8px; }
 .saude-manual-ocr-details { color: var(--texto-suave); font-size: 10px; }
 .saude-manual-ocr-details summary { cursor: pointer; width: fit-content; }
 .saude-manual-ocr-details pre { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); border: 1px solid var(--borda); border-radius: 5px; font: inherit; margin: 5px 0 0; max-height: 120px; overflow: auto; padding: 7px; white-space: pre-wrap; }
 .saude-manual-price-section { border-top: 1px solid var(--borda); padding-top: 11px; }
 .saude-manual-price-section > header h4 { font-size: 13px; margin: 0; }
-.saude-manual-price-section > header p { color: var(--texto-suave); font-size: 11px; margin: 4px 0 10px; }
+.saude-manual-price-section > header { margin-bottom: 8px; }
 .saude-manual-price-table-wrap { overflow-x: auto; }
-.saude-manual-price-table { border-collapse: collapse; margin: 0 auto; min-width: 300px; table-layout: fixed; width: 49%; }
+.saude-manual-price-table { border-collapse: collapse; min-width: 300px; table-layout: fixed; width: 100%; }
 .saude-manual-price-table th, .saude-manual-price-table td { border-bottom: 1px solid var(--borda); font-size: 10px; padding: 3px 5px; text-align: right; white-space: nowrap; }
 .saude-manual-price-table thead th { background: color-mix(in srgb, var(--cor-principal) 5%, var(--card)); color: var(--texto-suave); }
 .saude-manual-price-table th:first-child, .saude-manual-price-table td:first-child { text-align: left; }
@@ -149,7 +143,8 @@
 .saude-import-preview { border-top: 1px solid var(--borda); display: grid; font-size: 10px; gap: 4px; margin-top: 8px; padding-top: 8px; }
 @media (max-width: 1050px) { .saude-quote-company-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } .saude-quote-lives-layout { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .saude-quote-header { align-items: start; flex-direction: column; } .saude-quote-company-grid, .saude-manual-plan-fields { grid-template-columns: repeat(2,minmax(0,1fr)); } .saude-quote-card > header { align-items: start; flex-direction: column; } .saude-quote-result-tools { align-items: start; flex-direction: column; } .saude-quote-filters { width: 100%; } .saude-quote-filters label { flex: 1 1 140px; } }
-@media (max-width: 480px) { .saude-quote-company-grid, .saude-manual-plan-fields, .saude-plan-picker-filters { grid-template-columns: 1fr; } .saude-quote-actions { width: 100%; } .saude-plan-catalog-modal > header { align-items: start; } .saude-plan-selection-count { align-self: center; } .saude-manual-ocr-dropzone { align-items: flex-start; flex-wrap: wrap; } .saude-manual-ocr-dropzone > span { flex-basis: calc(100% - 32px); } .saude-manual-ocr-dropzone .secondary-btn { margin-left: 30px; } }
+@media (max-width: 560px) { .saude-manual-price-content { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .saude-quote-company-grid, .saude-manual-plan-fields, .saude-plan-picker-filters { grid-template-columns: 1fr; } .saude-quote-actions { width: 100%; } .saude-plan-catalog-modal > header { align-items: start; } .saude-plan-selection-count { align-self: center; } }
 
 /* Ajustes locais do Simulador - Saúde para aproximar as telas da referência. */
 .simulador-saude-page .icon-btn svg { flex: 0 0 16px; height: 16px; width: 16px; }

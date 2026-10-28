@@ -65,6 +65,7 @@ import {
   salvarPasswordItem
 } from './services/passwordService.js';
 import { isSupabaseConfigured } from './supabaseClient.js';
+import { reconhecerPrecosPlanoComOpenAI } from './services/openaiPlanPriceOcrService.js';
 import {
   createConsultoria360Atendimento,
   addConsultoria360Event,
@@ -178,6 +179,7 @@ export async function chamarApi(action, payload = {}) {
     if (action === 'deleteSimuladorSaudePlan') return { ok: true, data: await deleteSimuladorSaudePlan(payload.id) };
     if (action === 'setSimuladorSaudePlanStatus') return { ok: true, data: await setSimuladorSaudePlanStatus(payload.id, payload.status) };
     if (action === 'getSimuladorSaudeBrokerBranding') return { ok: true, data: await getSimuladorSaudeBrokerBranding() };
+    if (action === 'recognizeManualPlanPrices') return { ok: true, data: await reconhecerPrecosPlanoComOpenAI(payload) };
     if (action === 'saveSimuladorSaudeTable') return { ok: true, data: await saveSimuladorSaudeTable(payload) };
     if (action === 'deleteSimuladorSaudeTable') return { ok: true, data: await deleteSimuladorSaudeTable(payload.id) };
     if (action === 'setSimuladorSaudeTableStatus') return { ok: true, data: await setSimuladorSaudeTableStatus(payload.id, payload.status) };
