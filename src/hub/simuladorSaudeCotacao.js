@@ -14,6 +14,9 @@ let context = {};
 let quoteToastKey = '';
 let cnpjLookupTimer = null;
 let cnpjLookupRequestId = 0;
+let manualOcrWorkerPromise = null;
+let manualOcrBusy = false;
+let manualOcrPendingPrices = null;
 
 function esc(value = '') { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
 function normalizeCnpj(value) {
@@ -46,6 +49,306 @@ function parseManualPrice(value) {
   const price = Number(normalized);
   return Number.isFinite(price) ? price : NaN;
 }
+function manualOcrBandPattern(band) {
+  if (band === '59+') return /\b[5S]9(?!\d)(?:\s*(?:\+|anos?\s*(?:ou|e)\s*mais|[o0]u\s+mais|e\s+mais))?/i;
+  const [start, end] = band.split('-');
+  const fuzzy = digits => digits.split('').map(digit => ({ 0: '[0Oo]', 1: '[1Il|]', 5: '[5S]' })[digit] || digit).join('');
+  const startPattern = `0?${fuzzy(start)}`;
+  const endPattern = `0?${fuzzy(end)}`;
+  const separated = `${startPattern}\\s*(?:anos?\\s*)?(?:-|/|\\\\|\\.|:|~|a(?:te)?|\\s+)\\s*${endPattern}`;
+  const compact = `${startPattern}(?:2)?${endPattern}`;
+  return new RegExp(`\\b(?:${separated}|${compact})(?!\\d)`, 'i');
+}
+function normalizeManualOcrNumericText(text) {
+  return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[–—−‐‑‒]/g, '-')
+    .replace(/[Oo](?=[\d\s\-.,/+])/g, '0')
+    .replace(/[Il|](?=[\d\s\-.,/+])/g, '1')
+    .replace(/[Ss](?=\s*\$?\s*\d)/g, '5');
+}
+function parseManualOcrPrice(value) {
+  let normalized = String(value || '').replace(/R\s*[$S5]\s*/i, '').replace(/\s/g, '');
+  const comma = normalized.lastIndexOf(',');
+  const period = normalized.lastIndexOf('.');
+  if (comma >= 0 && period >= 0) {
+    normalized = comma > period
+      ? normalized.replace(/\./g, '').replace(',', '.')
+      : normalized.replace(/,/g, '');
+  } else if (comma >= 0) {
+    normalized = /,\d{3}$/.test(normalized) ? normalized.replace(/,/g, '') : normalized.replace(',', '.');
+  } else if (period >= 0 && /\.\d{3}$/.test(normalized)) {
+    normalized = normalized.replace(/\./g, '');
+  }
+  const price = Number(normalized);
+  return Number.isFinite(price) ? price : NaN;
+}
+function manualOcrRows(data) {
+  const lines = (data?.blocks || []).flatMap(block => (block.paragraphs || []).flatMap(paragraph => (paragraph.lines || []).map(line => ({
+    text: line.text || (line.words || []).map(word => word.text).join(' '),
+    x0: line.bbox?.x0 ?? Math.min(...(line.words || []).map(word => word.bbox?.x0 ?? 0)),
+    y0: line.bbox?.y0 ?? Math.min(...(line.words || []).map(word => word.bbox?.y0 ?? 0)),
+    y1: line.bbox?.y1 ?? Math.max(...(line.words || []).map(word => word.bbox?.y1 ?? 0))
+  })))).filter(line => line.text.trim());
+  if (!lines.length) return String(data?.text || '').split(/\r?\n/).filter(line => line.trim());
+  lines.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const rows = [];
+  lines.forEach(line => {
+    const height = Math.max(1, line.y1 - line.y0);
+    const center = (line.y0 + line.y1) / 2;
+    const row = rows.find(candidate => {
+      const overlap = Math.min(candidate.y1, line.y1) - Math.max(candidate.y0, line.y0);
+      const centerDistance = Math.abs(candidate.center - center);
+      return overlap / Math.min(candidate.height, height) >= 0.4
+        || centerDistance <= Math.max(7, Math.min(candidate.height, height) * 1.35);
+    });
+    if (row) {
+      row.parts.push(line);
+      row.y0 = Math.min(row.y0, line.y0);
+      row.y1 = Math.max(row.y1, line.y1);
+      row.center = (row.center * (row.parts.length - 1) + center) / row.parts.length;
+      row.height = Math.max(row.height, height);
+    } else rows.push({ y0: line.y0, y1: line.y1, center, height, parts: [line] });
+  });
+  return rows.map(row => [...new Map(row.parts.sort((a, b) => a.x0 - b.x0).map(part => [part.text.trim(), part.text.trim()])).values()].join(' '));
+}
+function manualOcrDetectedBands(data) {
+  return new Set(manualOcrRows(data).flatMap(row => {
+    const line = normalizeManualOcrNumericText(row);
+    return BANDS.filter(band => manualOcrBandPattern(band).test(line));
+  }));
+}
+function parseManualOcrPrices(data) {
+  const candidates = Object.fromEntries(BANDS.map(band => [band, []]));
+  const ocrAmount = '((?:\\d{1,3}(?:[.\\s]\\d{3})+|\\d+)(?:[,.]\\d{1,2})?)';
+  const perLifePattern = new RegExp(`(?:R\\s*[$S5]\\s*)?${ocrAmount}\\s*(?:/|por)\\s*v[i1l|]d[a4]`, 'i');
+  const currencyPattern = /R\s*[$S5]\s*((?:\d{1,3}(?:[.\s]\d{3})+|\d+)(?:[,.]\d{1,2})?)/gi;
+  const decimalPattern = /(?:\d{1,3}(?:[.\s]\d{3})+|\d+)[,.]\d{1,2}/g;
+  for (const originalLine of manualOcrRows(data)) {
+    const line = normalizeManualOcrNumericText(originalLine);
+    const rowBands = BANDS.flatMap(band => {
+      const pattern = manualOcrBandPattern(band);
+      const match = pattern.exec(line);
+      return match ? [{ band, match }] : [];
+    });
+    if (rowBands.length !== 1) continue;
+    const [{ band, match: bandMatch }] = rowBands;
+    const remaining = `${line.slice(0, bandMatch.index)} ${line.slice(bandMatch.index + bandMatch[0].length)}`;
+    const perLifeMatch = perLifePattern.exec(remaining);
+    const currencyMatches = [...remaining.matchAll(currencyPattern)];
+    const decimalMatches = [...remaining.matchAll(decimalPattern)];
+    const monetaryMatches = currencyMatches.length ? currencyMatches : decimalMatches;
+    currencyPattern.lastIndex = 0;
+    decimalPattern.lastIndex = 0;
+    let rawAmount = perLifeMatch?.[1] || (currencyMatches.length ? currencyMatches.at(-1)?.[1] : decimalMatches.at(-1)?.[0]) || '';
+    const quantityMatch = remaining.match(/^\s*(?:(?:qtd|qtde|quantidade)\s*[:=]?\s*)?(\d{1,2})(?=\s|R|$)/i);
+    const quantity = quantityMatch ? Number(quantityMatch[1]) : null;
+    if (!rawAmount) {
+      const integers = [...remaining.matchAll(/\b\d{2,6}\b/g)];
+      if (integers.length === 1) rawAmount = integers[0][0];
+    }
+    let amount = parseManualOcrPrice(rawAmount);
+    if (Number.isFinite(amount) && !perLifeMatch && monetaryMatches.length === 1 && quantity > 1) {
+      amount = Math.round((amount / quantity + Number.EPSILON) * 100) / 100;
+    }
+    if (rawAmount && Number.isFinite(amount) && amount >= 0) candidates[band].push(amount);
+  }
+  return Object.fromEntries(BANDS.flatMap(band => {
+    const values = [...new Set(candidates[band])];
+    return values.length === 1 ? [[band, values[0]]] : [];
+  }));
+}
+function setManualOcrStatus(message, isError = false) {
+  const status = document.querySelector('[data-manual-ocr-status]');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('is-error', isError);
+}
+function renderManualOcrReview(prices) {
+  manualOcrPendingPrices = prices;
+  const review = document.querySelector('[data-manual-ocr-review]');
+  const rows = document.querySelector('[data-manual-ocr-review-rows]');
+  if (!review || !rows) return;
+  const bands = BANDS.filter(band => Object.hasOwn(prices || {}, band));
+  rows.innerHTML = bands.map(band => `<tr><th scope="row">${band}</th><td>${money(prices[band])}</td></tr>`).join('');
+  review.hidden = !bands.length;
+}
+async function getManualOcrWorker() {
+  if (!manualOcrWorkerPromise) {
+    manualOcrWorkerPromise = import('tesseract.js')
+      .then(({ createWorker }) => createWorker('por', 1, {
+        logger: progress => {
+          if (!document.querySelector('.saude-manual-plan-modal')) return;
+          const percent = Number.isFinite(progress.progress) ? ` ${Math.round(progress.progress * 100)}%` : '';
+          const label = progress.status === 'recognizing text' ? 'Lendo texto da imagem' : 'Preparando reconhecimento';
+          setManualOcrStatus(`${label}${percent}…`);
+        }
+      }))
+      .catch(error => {
+        manualOcrWorkerPromise = null;
+        throw error;
+      });
+  }
+  return manualOcrWorkerPromise;
+}
+async function createManualOcrVariants(file) {
+  const bitmap = await createImageBitmap(file);
+  const sourceWidth = bitmap.width;
+  const sourceHeight = bitmap.height;
+  const scale = Math.min(2.2, 2800 / Math.max(sourceWidth, sourceHeight), Math.sqrt(7_500_000 / (sourceWidth * sourceHeight)));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const enhanced = document.createElement('canvas');
+  enhanced.width = width;
+  enhanced.height = height;
+  const context = enhanced.getContext('2d', { willReadFrequently: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  const pixels = context.getImageData(0, 0, width, height);
+  const histogram = new Uint32Array(256);
+  const grayValues = new Uint8Array(width * height);
+  for (let index = 0, pixel = 0; index < pixels.data.length; index += 4, pixel += 1) {
+    const gray = Math.max(0, Math.min(255, Math.round((pixels.data[index] * 0.299 + pixels.data[index + 1] * 0.587 + pixels.data[index + 2] * 0.114 - 128) * 1.35 + 128)));
+    grayValues[pixel] = gray;
+    histogram[gray] += 1;
+    pixels.data[index] = pixels.data[index + 1] = pixels.data[index + 2] = gray;
+  }
+  context.putImageData(pixels, 0, 0);
+  let sum = 0;
+  for (let value = 0; value < 256; value += 1) sum += value * histogram[value];
+  let backgroundWeight = 0;
+  let backgroundSum = 0;
+  let bestVariance = 0;
+  let threshold = 170;
+  const total = grayValues.length;
+  for (let value = 0; value < 256; value += 1) {
+    backgroundWeight += histogram[value];
+    if (!backgroundWeight) continue;
+    const foregroundWeight = total - backgroundWeight;
+    if (!foregroundWeight) break;
+    backgroundSum += value * histogram[value];
+    const meanBackground = backgroundSum / backgroundWeight;
+    const meanForeground = (sum - backgroundSum) / foregroundWeight;
+    const variance = backgroundWeight * foregroundWeight * (meanBackground - meanForeground) ** 2;
+    if (variance > bestVariance) { bestVariance = variance; threshold = value; }
+  }
+  const thresholded = document.createElement('canvas');
+  thresholded.width = width;
+  thresholded.height = height;
+  const thresholdContext = thresholded.getContext('2d');
+  const binary = thresholdContext.createImageData(width, height);
+  for (let pixel = 0; pixel < grayValues.length; pixel += 1) {
+    const value = grayValues[pixel] > threshold ? 255 : 0;
+    const index = pixel * 4;
+    binary.data[index] = binary.data[index + 1] = binary.data[index + 2] = value;
+    binary.data[index + 3] = 255;
+  }
+  thresholdContext.putImageData(binary, 0, 0);
+  return [enhanced, thresholded];
+}
+async function recognizeManualPriceImage(file) {
+  if (!(file instanceof Blob) || !file.type.startsWith('image/')) {
+    setManualOcrStatus('Selecione uma imagem PNG, JPEG ou WebP.', true);
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    setManualOcrStatus('A imagem deve ter no máximo 12 MB.', true);
+    return;
+  }
+  if (manualOcrBusy) return;
+  manualOcrBusy = true;
+  renderManualOcrReview(null);
+  const details = document.querySelector('[data-manual-ocr-details]');
+  const transcript = document.querySelector('[data-manual-ocr-text]');
+  if (details) details.hidden = true;
+  if (transcript) transcript.textContent = '';
+  setManualOcrStatus('Ajustando contraste e resolução da imagem…');
+  try {
+    const worker = await getManualOcrWorker();
+    const variants = await createManualOcrVariants(file);
+    const readings = [];
+    for (let imageIndex = 0; imageIndex < variants.length; imageIndex += 1) {
+      for (const pageMode of ['6', '11']) {
+        setManualOcrStatus(`Tentativa ${imageIndex * 2 + (pageMode === '6' ? 1 : 2)} de 4: lendo tabela…`);
+        await worker.setParameters({ tessedit_pageseg_mode: pageMode, preserve_interword_spaces: '1' });
+        try {
+          const result = await worker.recognize(variants[imageIndex], { rotateAuto: true }, { text: true, blocks: true });
+          readings.push(result.data);
+        } catch {
+          // Uma tentativa com outra segmentação/processamento ainda pode reconhecer a tabela.
+        }
+      }
+    }
+    if (!readings.length) throw new Error('Nenhuma leitura OCR foi concluída.');
+    const possibleValues = Object.fromEntries(BANDS.map(band => [band, new Set()]));
+    const detectedBands = new Set();
+    readings.forEach(data => {
+      const prices = parseManualOcrPrices(data);
+      Object.entries(prices).forEach(([band, price]) => possibleValues[band].add(price));
+      manualOcrDetectedBands(data).forEach(band => detectedBands.add(band));
+    });
+    const recognizedPrices = Object.fromEntries(BANDS.flatMap(band => possibleValues[band].size === 1 ? [[band, [...possibleValues[band]][0]]] : []));
+    const bestReading = readings.sort((a, b) => parseManualOcrPrices(b).length - parseManualOcrPrices(a).length)[0];
+    if (details && transcript) { transcript.textContent = bestReading?.text || 'Nenhum texto foi reconhecido.'; details.hidden = false; }
+    const form = document.querySelector('.saude-manual-plan-modal');
+    if (!form) return;
+    renderManualOcrReview(recognizedPrices);
+    const unmatchedBands = [...detectedBands].filter(band => !Object.hasOwn(recognizedPrices, band)).length;
+    const recognizedCount = Object.keys(recognizedPrices).length;
+    setManualOcrStatus(recognizedCount
+      ? `${recognizedCount} valor(es) aguardando conferência.${unmatchedBands ? ` Não associei preço a ${unmatchedBands} faixa(s); confira o texto reconhecido.` : ''} Use “Adicionar valores” para preencher os campos.`
+      : detectedBands.size
+        ? 'Reconheci as faixas, mas não consegui associar os preços às mesmas linhas. Confira o texto reconhecido ou preencha manualmente.'
+        : 'Não consegui relacionar valores às faixas. Tente uma imagem mais nítida ou preencha os campos manualmente.', !recognizedCount);
+  } catch (error) {
+    setManualOcrStatus('Não foi possível reconhecer a imagem. Confira sua conexão e tente novamente.', true);
+  } finally {
+    manualOcrBusy = false;
+  }
+}
+window.saudeQuoteApplyManualOcrValues = () => {
+  const form = document.querySelector('.saude-manual-plan-modal');
+  if (!form || !manualOcrPendingPrices) return;
+  let applied = 0;
+  BANDS.forEach((band, index) => {
+    if (!Object.hasOwn(manualOcrPendingPrices, band)) return;
+    const input = form.querySelector(`[name="price_${index}"]`);
+    if (!input) return;
+    input.value = manualOcrPendingPrices[band].toFixed(2).replace('.', ',');
+    applied += 1;
+  });
+  renderManualOcrReview(null);
+  window.saudeQuoteManualPriceChanged();
+  setManualOcrStatus(`${applied} valor(es) adicionados aos campos. Confira antes de salvar.`);
+};
+window.saudeQuoteDiscardManualOcrValues = () => {
+  renderManualOcrReview(null);
+  setManualOcrStatus('Valores reconhecidos descartados; os campos não foram alterados.');
+};
+window.saudeQuoteOpenManualImagePicker = () => document.querySelector('.saude-manual-ocr-input')?.click();
+window.saudeQuoteManualImageSelected = event => {
+  const input = event.currentTarget;
+  const file = input?.files?.[0];
+  if (file) recognizeManualPriceImage(file);
+  if (input) input.value = '';
+};
+window.saudeQuotePasteManualImage = event => {
+  const image = [...(event.clipboardData?.items || [])]
+    .find(item => item.kind === 'file' && item.type.startsWith('image/'))
+    ?.getAsFile();
+  if (!image) return;
+  event.preventDefault();
+  recognizeManualPriceImage(image);
+};
+window.saudeQuoteDropManualImage = event => {
+  event.preventDefault();
+  const image = [...(event.dataTransfer?.files || [])].find(file => file.type.startsWith('image/'));
+  if (!image) {
+    setManualOcrStatus('Solte um arquivo de imagem para reconhecer os valores.', true);
+    return;
+  }
+  recognizeManualPriceImage(image);
+};
 function proposalDetail(item, key) {
   const value = item.plan?.detalhes?.[key] ?? item.table?.condicoes?.[key];
   if (key === 'coparticipacao') {
@@ -162,7 +465,17 @@ function accommodationVariants() {
 }
 function planFor(tableId) { return quotePlanEntry(tableId).table_snapshot || accommodationVariants().find(table => table.id === tableId) || quote.catalog.tables.find(table => table.id === tableId) || {}; }
 function planInfo(table) { return quotePlanEntry(table.id).plan_snapshot || quote.catalog.plans.find(plan => plan.id === table.plano_id) || {}; }
-function operatorInfo(plan) { return quotePlanEntry(quote.plans.find(item => item.plan_snapshot?.id === plan.id)?.tableId || '').operator_snapshot || quote.catalog.operators.find(operator => operator.id === plan.operadora_id) || {}; }
+function operatorInfo(plan) {
+  const entry = quote.plans.find(item => item.plan_snapshot?.id === plan.id);
+  const catalogOperator = quote.catalog.operators.find(operator => operator.id === plan.operadora_id) || {};
+  const snapshot = entry?.operator_snapshot || {};
+  return { ...catalogOperator, ...snapshot, logo_url: snapshot.logo_url || catalogOperator.logo_url, cor_marca: snapshot.cor_marca || catalogOperator.cor_marca };
+}
+function operatorForEntry(item, plan = planInfo(planFor(item.tableId))) {
+  const catalogOperator = quote.catalog.operators.find(operator => operator.id === plan.operadora_id) || {};
+  const snapshot = item.operator_snapshot || {};
+  return { ...catalogOperator, ...snapshot, logo_url: snapshot.logo_url || catalogOperator.logo_url, cor_marca: snapshot.cor_marca || catalogOperator.cor_marca };
+}
 function normalizeQuotePlanEntry(entry) {
   const table = { ...(entry.table_snapshot || {}) };
   const plan = { ...(entry.plan_snapshot || {}) };
@@ -215,14 +528,14 @@ function planPrice(tableId, life) {
 function totalsFor(tableId, groupId) { const members = livesInGroup(groupId); const values = members.map(life => planPrice(tableId, life)); return { total: values.every(Number.isFinite) ? values.reduce((sum, value) => sum + value, 0) : null, incomplete: members.filter((life, index) => !Number.isFinite(values[index])).map(life => `${lifeDisplayName(life)} (${lifeBand(life) || 'idade inválida'})`) }; }
 function planTotal(tableId) { if (!quote.lives.length) return null; const totals = groupIds().map(id => totalsFor(tableId, id)); return totals.every(item => Number.isFinite(item.total)) ? totals.reduce((sum, item) => sum + item.total, 0) : null; }
 function selectedPlans() {
-  return quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }))
+  return quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: operatorForEntry(item) }))
     .filter(item => item.table.id)
     .filter(item => !quote.operatorFilter || item.operator.id === quote.operatorFilter)
     .filter(item => !quote.accommodationFilter || item.table.acomodacao === quote.accommodationFilter)
     .filter(item => !quote.copayFilter || String(item.table.coparticipacao) === quote.copayFilter);
 }
 function quoteOperators() {
-  const operators = [...quote.catalog.operators, ...quote.plans.map(item => item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))))];
+  const operators = [...quote.catalog.operators, ...quote.plans.map(item => operatorForEntry(item))];
   const seen = new Set();
   return operators.filter(operator => operator?.id && !seen.has(operator.id) && seen.add(operator.id));
 }
@@ -440,7 +753,8 @@ function renderPlanPicker() {
     const planOptions = availableManualPlans.map(plan => `<option value="${esc(plan.id)}" ${plan.id === selectedPlanId ? 'selected' : ''}>${esc(plan.nome)}</option>`).join('');
     const operatorPlaceholder = operators.length ? 'Selecione uma operadora' : 'Nenhuma operadora cadastrada';
     const planPlaceholder = !selectedOperatorId ? 'Selecione uma operadora primeiro' : availableManualPlans.length ? 'Selecione um plano' : 'Nenhum plano cadastrado para esta operadora';
-    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Selecione uma operadora e um plano do catálogo. Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required onchange="saudeQuoteManualOperatorChanged(this.value)" ${operators.length ? '' : 'disabled'}><option value="">${operatorPlaceholder}</option>${operatorOptions}</select></label><label class="saude-quote-field"><span>Nome do plano *</span><select name="planId" required onchange="saudeQuoteManualPlanChanged(this.value)" ${availableManualPlans.length ? '' : 'disabled'}><option value="">${planPlaceholder}</option>${planOptions}</select></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(selectedManualPlan.abrangencia || currentPlan.abrangencia || '')}"></label></div><section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4><p>${requiredBands.size ? 'Faixas destacadas são necessárias conforme a distribuição de vidas; as demais podem ficar em branco.' : 'Adicione vidas com idade válida para destacar as faixas necessárias; as demais podem ficar em branco.'}</p></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => { const isRequired = requiredBands.has(band); return `<tr class="${isRequired ? 'is-required' : ''}"><th><span>${band}</span></th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}${isRequired ? ', necessária conforme as idades informadas' : ''}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`; }).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
+    const manualOcrControl = `<section class="saude-manual-ocr"><input class="saude-manual-ocr-input" type="file" accept="image/*" hidden onchange="saudeQuoteManualImageSelected(event)"><div class="saude-manual-ocr-dropzone" tabindex="0" role="group" aria-label="Área para colar ou soltar a imagem da tabela de preços" onpaste="saudeQuotePasteManualImage(event)" ondragover="event.preventDefault()" ondrop="saudeQuoteDropManualImage(event)"><i data-lucide="scan-text" aria-hidden="true"></i><span><strong>Preencher valores por imagem</strong><small>Selecione, cole (Ctrl+V) ou solte uma imagem da tabela.</small></span><button class="secondary-btn" type="button" onclick="saudeQuoteOpenManualImagePicker()">Selecionar imagem</button></div><p data-manual-ocr-status role="status" aria-live="polite">A imagem será reconhecida no navegador. Revise os valores antes de salvar.</p><div class="saude-manual-ocr-review" data-manual-ocr-review hidden><p>Confira os valores identificados. Ao adicionar, os campos correspondentes serão preenchidos.</p><div class="saude-manual-ocr-review-table-wrap"><table><thead><tr><th>Faixa etária</th><th>Valor identificado</th></tr></thead><tbody data-manual-ocr-review-rows></tbody></table></div><div class="saude-manual-ocr-review-actions"><button class="secondary-btn" type="button" onclick="saudeQuoteDiscardManualOcrValues()">Descartar</button><button class="save-btn" type="button" onclick="saudeQuoteApplyManualOcrValues()">Adicionar valores</button></div></div><details class="saude-manual-ocr-details" data-manual-ocr-details hidden><summary>Conferir texto reconhecido</summary><pre data-manual-ocr-text></pre></details></section>`;
+    return `<div class="saude-quote-overlay" role="presentation" onclick="saudeQuoteCloseModal()"><form class="saude-quote-modal saude-manual-plan-modal" role="dialog" aria-modal="true" aria-labelledby="saude-manual-plan-title" onsubmit="saudeQuoteAddManualPlan(event)" onclick="event.stopPropagation()"><header><div><h3 id="saude-manual-plan-title">${editing ? 'Editar valores manuais' : 'Adicionar plano manualmente'}</h3><p>Selecione uma operadora e um plano do catálogo. Os valores serão salvos somente nesta cotação.</p></div><button class="secondary-btn" type="button" onclick="saudeQuoteCloseModal()">Fechar</button></header><div class="saude-manual-plan-fields"><label class="saude-quote-field"><span>Operadora *</span><select name="operatorId" required onchange="saudeQuoteManualOperatorChanged(this.value)" ${operators.length ? '' : 'disabled'}><option value="">${operatorPlaceholder}</option>${operatorOptions}</select></label><label class="saude-quote-field"><span>Nome do plano *</span><select name="planId" required onchange="saudeQuoteManualPlanChanged(this.value)" ${availableManualPlans.length ? '' : 'disabled'}><option value="">${planPlaceholder}</option>${planOptions}</select></label><label class="saude-quote-field"><span>Acomodação</span><select name="accommodation"><option value="" ${!currentTable.acomodacao ? 'selected' : ''}>Não informado</option><option ${currentTable.acomodacao === 'Apartamento' ? 'selected' : ''}>Apartamento</option><option ${currentTable.acomodacao === 'Enfermaria' ? 'selected' : ''}>Enfermaria</option><option ${currentTable.acomodacao === 'Ambulatorial' ? 'selected' : ''}>Ambulatorial</option></select></label><label class="saude-quote-field"><span>Coparticipação</span><select name="coparticipation"><option value="false" ${!currentTable.coparticipacao ? 'selected' : ''}>Não</option><option value="true" ${currentTable.coparticipacao ? 'selected' : ''}>Sim</option></select></label><label class="saude-quote-field"><span>Abrangência (opcional)</span><input name="coverage" maxlength="120" placeholder="Ex.: Nacional" value="${esc(selectedManualPlan.abrangencia || currentPlan.abrangencia || '')}"></label></div>${manualOcrControl}<section class="saude-manual-price-section"><header><div><h4>Preço por faixa etária</h4><p>${requiredBands.size ? 'Faixas destacadas são necessárias conforme a distribuição de vidas; as demais podem ficar em branco.' : 'Adicione vidas com idade válida para destacar as faixas necessárias; as demais podem ficar em branco.'}</p></div></header><div class="saude-manual-price-table-wrap"><table class="saude-manual-price-table"><thead><tr><th>Faixa Etária</th><th>Valor Original</th><th><label class="saude-manual-iof-toggle"><input type="checkbox" data-manual-iof-toggle onchange="saudeQuoteToggleManualIOF(this.checked)" ${quote.manualIofPreview ? 'checked' : ''}><span>Valor com IOF</span></label></th></tr></thead><tbody>${BANDS.map((band, index) => { const isRequired = requiredBands.has(band); return `<tr class="${isRequired ? 'is-required' : ''}"><th><span>${band}</span></th><td><input class="saude-manual-price-input" name="price_${index}" type="text" oninput="saudeQuoteManualPriceChanged()" inputmode="decimal" placeholder="0,00" aria-label="Valor original da faixa ${band}${isRequired ? ', necessária conforme as idades informadas' : ''}" value="${Number.isFinite(Number(currentPrices[band])) ? esc(currentPrices[band]) : ''}"></td><td class="saude-manual-iof-value" data-manual-iof-value="${esc(band)}">${quote.manualIofPreview && Number.isFinite(quote.manualIofPreview.values[band]) ? money(quote.manualIofPreview.values[band]) : ''}</td></tr>`; }).join('')}</tbody></table></div></section><footer><button class="secondary-btn" type="button" onclick="saudeQuoteManualPlanBack()">Voltar</button><button class="save-btn" type="button" onclick="window.saudeQuoteAddManualPlan(this)" ${selectedPlanId ? '' : 'disabled'}>${editing ? 'Salvar alterações' : 'Adicionar à cotação'}</button></footer></form></div>`;
   }
   const picker = quote.planPicker;
   const operators = [...new Map(available.map(table => {
@@ -472,6 +786,10 @@ function operatorVisualClass(name = '') {
   if (token.includes('unimed')) return 'unimed';
   return 'default';
 }
+function proposalOperatorVisualClass(name = '') {
+  const visualClass = operatorVisualClass(name);
+  return visualClass === 'sulamerica' ? 'default' : visualClass;
+}
 
 function operatorMonogram(name = '') {
   const brand = operatorVisualClass(name);
@@ -479,7 +797,7 @@ function operatorMonogram(name = '') {
 }
 
 function renderResult() {
-  const plans = selectedPlans(); const allPlans = quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
+  const plans = selectedPlans(); const allPlans = quote.plans.map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: operatorForEntry(item) }));
   const options = items => items.map(item => `<option value="${esc(item.value)}" ${item.value === item.current ? 'selected' : ''}>${esc(item.label)}</option>`).join('');
   const header = `<div class="saude-quote-result-tools"><div class="saude-result-title"><h3><i data-lucide="file-text" aria-hidden="true"></i> Resultado da Cotação</h3></div><div class="saude-quote-filters"><label><span>Operadoras</span><select onchange="saudeQuoteFilter('operatorFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.operatorFilter }, ...quoteOperators().map(item => ({ value: item.id, label: item.nome, current: quote.operatorFilter }))])}</select></label><label><span>Acomodação</span><select onchange="saudeQuoteFilter('accommodationFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.accommodationFilter }, ...['Apartamento', 'Enfermaria', 'Ambulatorial'].map(value => ({ value, label: value, current: quote.accommodationFilter }))])}</select></label><label><span>Coparticipação</span><select onchange="saudeQuoteFilter('copayFilter', this.value)">${options([{ value: '', label: 'Todas', current: quote.copayFilter }, { value: 'true', label: 'Sim', current: quote.copayFilter }, { value: 'false', label: 'Não', current: quote.copayFilter }])}</select></label><button class="save-btn" type="button" onclick="saudeQuoteOpenModal('plan')"><i data-lucide="plus" aria-hidden="true"></i> Plano</button></div></div>`;
   if (!allPlans.length) return `<section class="saude-quote-card">${header}<div class="saude-quote-empty">Adicione planos do catálogo vigente para comparar valores.</div></section>`;
@@ -521,7 +839,7 @@ function serializeSnapshot() {
     cliente: { nome: quote.company, cnpj: quote.cnpj, cidade: quote.city, tipo_contratacao: quote.type, vigencia: quote.effectiveDate },
     vidas: quote.lives.map(life => ({ ...life })),
     planos: quote.plans.map(item => {
-      const table = planFor(item.tableId); const plan = planInfo(table); const operator = item.operator_snapshot || operatorInfo(plan);
+      const table = planFor(item.tableId); const plan = planInfo(table); const operator = operatorForEntry(item, plan);
       return { tableId: item.tableId, selected: Boolean(item.selected), table_snapshot: { ...table }, plan_snapshot: { ...plan }, operator_snapshot: { ...operator }, prices_snapshot: { ...pricesFor(item.tableId) }, ...(item.iof_applied ? { prices_base_snapshot: { ...(item.prices_base_snapshot || {}) }, iof_applied: true, iof_percent: item.iof_percent || 2.38 } : {}) };
     })
   };
@@ -642,7 +960,7 @@ window.saudeQuoteField = (key, value) => {
   if (key === 'effectiveDate' || key === 'type') rerender();
 };
 window.saudeQuoteOpenModal = mode => { quote.modal = mode; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; if (mode === 'plan') quote.planPicker = { operatorId: '', coparticipacoes: ['true', 'false'], accommodations: [...ACCOMMODATIONS], selectedTableIds: [] }; rerender(); };
-window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; rerender(); };
+window.saudeQuoteCloseModal = () => { quote.modal = ''; quote.manualPlanMode = false; quote.manualPlanEditingId = ''; quote.manualIofPreview = null; manualOcrPendingPrices = null; rerender(); };
 window.saudeQuoteOpenImport = () => { if (quote.inlineLives.length || quote.removedInlineLifeIds.length) { showQuoteToast('Salve ou cancele as linhas em edição antes de importar vidas.', { isError: true }); return; } quote.modal = 'import'; quote.importPreview = null; quote.importText = ''; rerender(); };
 window.saudeQuoteValidateImport = event => { event.preventDefault(); quote.importText = new FormData(event.currentTarget).get('importText') || ''; quote.importPreview = previewLifeImport(quote.importText); rerender(); };
 window.saudeQuoteRevisarImport = () => { quote.importPreview = null; rerender(); };
@@ -860,8 +1178,8 @@ window.saudeQuoteManualPlanChanged = planId => {
   const coverage = document.querySelector('.saude-manual-plan-modal input[name="coverage"]');
   if (coverage) coverage.value = plan?.abrangencia || '';
 };
-window.saudeQuoteShowManualPlan = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
-window.saudeQuoteManualPlanBack = () => { quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
+window.saudeQuoteShowManualPlan = () => { manualOcrPendingPrices = null; quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = true; quote.notice = ''; rerender(); };
+window.saudeQuoteManualPlanBack = () => { manualOcrPendingPrices = null; quote.manualPlanEditingId = ''; quote.manualPlanOperatorId = ''; quote.manualPlanCatalogId = ''; quote.manualIofPreview = null; quote.manualPlanMode = false; rerender(); };
 window.saudeQuoteAddManualPlan = source => {
   if (source instanceof Event) source.preventDefault();
   const form = source?.matches?.('.saude-manual-plan-modal')
@@ -925,6 +1243,7 @@ window.saudeQuoteAddManualPlan = source => {
 window.saudeQuoteEditManualPlan = tableId => {
   const entry = quotePlanEntry(tableId);
   if (!entry?.table_snapshot || entry.table_snapshot.origem !== 'manual') return;
+  manualOcrPendingPrices = null;
   quote.manualPlanEditingId = tableId;
   quote.manualPlanOperatorId = entry.operator_snapshot?.id || entry.plan_snapshot.operadora_id || '';
   quote.manualPlanCatalogId = entry.plan_snapshot.catalog_plan_id || quote.catalog.plans.find(plan => plan.operadora_id === quote.manualPlanOperatorId && normalizeImportToken(plan.nome) === normalizeImportToken(entry.plan_snapshot.nome))?.id || '';
@@ -988,7 +1307,8 @@ window.saudeQuoteClear = () => {
 };
 
 function proposalHtml(branding, saved, { autoPrint = true } = {}) {
-  const plans = quote.plans.filter(item => item.selected).map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: item.operator_snapshot || operatorInfo(planInfo(planFor(item.tableId))) }));
+  const plans = quote.plans.filter(item => item.selected).map(item => ({ ...item, table: planFor(item.tableId), plan: planInfo(planFor(item.tableId)), operator: operatorForEntry(item) }));
+  const operatorClass = item => proposalOperatorVisualClass(item.operator.nome);
   const proposalOperatorKey = item => String(item.operator?.id || item.operator?.nome || '').trim().toLocaleLowerCase('pt-BR');
   const sameProposalOperator = (left, right) => proposalOperatorKey(left) === proposalOperatorKey(right);
   const plansForOperator = item => plans.filter(candidate => sameProposalOperator(candidate, item));
@@ -1015,20 +1335,20 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
   const dependents = quote.lives.filter(life => life.tipo === 'dependente').length;
   const comparisonRows = groupIds().map(groupId => {
     const members = livesInGroup(groupId);
-    const lifeRows = members.map(life => `<tr class="composition-life-row"><td class="group-cell">Grupo ${groupNumber(groupId)}</td><td>${esc(lifeDisplayName(life))}</td><td>${lifeBand(life) || '—'}</td>${plans.map(item => { const price = planPrice(item.tableId, life); return `<td class="price-${operatorVisualClass(item.operator.nome)} ${price === null ? 'is-incomplete' : ''}">${price === null ? 'Preço indisponível' : money(price)}</td>`; }).join('')}</tr>`).join('');
-    const groupTotals = plans.map(item => { const result = totalsFor(item.tableId, groupId); return `<td class="price-${operatorVisualClass(item.operator.nome)} ${result.total === null ? 'is-incomplete' : ''}">${result.total === null ? 'Cotação incompleta' : money(result.total)}</td>`; }).join('');
+    const lifeRows = members.map(life => `<tr class="composition-life-row"><td class="group-cell">Grupo ${groupNumber(groupId)}</td><td>${esc(lifeDisplayName(life))}</td><td>${lifeBand(life) || '—'}</td>${plans.map(item => { const price = planPrice(item.tableId, life); return `<td class="price-${operatorClass(item)} ${price === null ? 'is-incomplete' : ''}">${price === null ? 'Preço indisponível' : money(price)}</td>`; }).join('')}</tr>`).join('');
+    const groupTotals = plans.map(item => { const result = totalsFor(item.tableId, groupId); return `<td class="price-${operatorClass(item)} ${result.total === null ? 'is-incomplete' : ''}">${result.total === null ? 'Cotação incompleta' : money(result.total)}</td>`; }).join('');
     return `${lifeRows}<tr class="group-total"><td colspan="3">Total do Grupo ${groupNumber(groupId)} · ${members.length} vidas</td>${groupTotals}</tr>`;
   }).join('');
   const totalCells = plans.map(item => {
     const total = planTotal(item.tableId);
     const missing = quote.lives.filter(life => planPrice(item.tableId, life) === null).map(life => `${lifeDisplayName(life)} (${lifeBand(life) || 'idade inválida'})`);
-    return `<td class="price-${operatorVisualClass(item.operator.nome)} ${total === null ? 'is-incomplete' : ''}">${total === null ? `<strong>Cotação incompleta</strong><small>${esc(missing.join(', '))}</small>` : `<strong>${money(total)}</strong>`}</td>`;
+    return `<td class="price-${operatorClass(item)} ${total === null ? 'is-incomplete' : ''}">${total === null ? `<strong>Cotação incompleta</strong><small>${esc(missing.join(', '))}</small>` : `<strong>${money(total)}</strong>`}</td>`;
   }).join('');
   const compositionDetailsWidth = (4 / (4 + plans.length)) * 60;
   const compositionPlanColumns = plans.map(() => `<col style="width:${(100 - compositionDetailsWidth) / Math.max(plans.length, 1)}%">`).join('');
-  const comparisonHeaders = plans.map(item => `<th class="brand-${operatorVisualClass(item.operator.nome)}"><span class="proposal-operator-name">${esc(item.operator.nome || 'Operadora')}</span><small class="proposal-plan-name">${esc(item.plan.nome || 'Plano')}</small></th>`).join('');
+  const comparisonHeaders = plans.map(item => `<th class="brand-${operatorClass(item)}"><span class="proposal-operator-name">${esc(item.operator.nome || 'Operadora')}</span><small class="proposal-plan-name">${esc(item.plan.nome || 'Plano')}</small></th>`).join('');
   const compositionOperatorHeaders = plans.map(item => {
-    const brand = operatorVisualClass(item.operator.nome);
+    const brand = operatorClass(item);
     const mark = item.operator.logo_url
       ? `<img src="${esc(item.operator.logo_url)}" alt="Logomarca ${esc(item.operator.nome || 'operadora')}" class="composition-operator-logo">`
       : `<span class="operator-mark" style="background:${esc(item.operator.cor_marca || '#174A8B')}">${esc(operatorMonogram(item.operator.nome))}</span>`;
@@ -1038,7 +1358,7 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
     ['Acomodação', item => item.table.acomodacao || 'Não informada'],
     ['Coparticipação', item => item.table.coparticipacao === true || item.table.coparticipacao === 'true' ? 'Sim' : 'Não'],
     ['Abrangência', item => item.plan.abrangencia || 'Não informada']
-  ].map(([label, getValue]) => `<tr class="composition-condition-row"><th class="composition-condition-label" colspan="3" scope="row">${esc(label)}</th>${plans.map(item => `<td class="price-${operatorVisualClass(item.operator.nome)}">${esc(getValue(item))}</td>`).join('')}</tr>`).join('');
+  ].map(([label, getValue]) => `<tr class="composition-condition-row"><th class="composition-condition-label" colspan="3" scope="row">${esc(label)}</th>${plans.map(item => `<td class="price-${operatorClass(item)}">${esc(getValue(item))}</td>`).join('')}</tr>`).join('');
   const networkRows = [
     ['Modalidade', item => item.plan.modalidade || 'Não informada'],
     ['Coberturas e serviços', item => proposalDetail(item, 'coberturas') || 'Não informadas.'],
@@ -1089,12 +1409,12 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
   const currentQuoteMeta = `${saved.codigo ? `Cotação #${esc(saved.codigo)}` : 'Cotação'} · Emitida em ${currentDate}`;
   const printOnLoad = autoPrint ? `<script>window.addEventListener('load',()=>{const imgs=[...document.images];Promise.all(imgs.map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r}))).then(()=>setTimeout(()=>window.print(),300))})</script>` : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Proposta de Plano de Saúde${quote.code ? ` - ${esc(quote.code)}` : ''}</title><style>
-    @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{background:#f1f4f8;color:#0b1b3c;font-family:Arial,Helvetica,sans-serif;margin:0}.proposal-page{background:#fff;margin:18px auto;width:297mm;max-width:calc(100% - 32px);display:flex;flex-direction:column;min-height:210mm;padding:10mm 10mm 22mm;position:relative}.proposal-header{align-items:center;border-bottom:1px solid #dce5ef;display:flex;gap:20px;justify-content:space-between;margin-bottom:10px;padding:0 0 9px}.proposal-brand{align-items:center;display:flex;flex:0 0 220px;min-height:32px}.proposal-brand img{max-height:36px;max-width:190px;object-fit:contain;object-position:left center}.brand-fallback{color:#294895;font-size:14px}.proposal-heading{text-align:right}.proposal-heading h1{font-size:20px;letter-spacing:-.3px;margin:0}.proposal-heading p{color:#536987;font-size:10px;margin:4px 0 0}.client-strip{background:linear-gradient(110deg,#f4f7fb,#f8fafc);border:1px solid #dce5ef;border-radius:7px;display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1fr;margin-bottom:10px;padding:7px 12px}.client-item{align-items:center;border-right:1px solid #e0e8f1;display:flex;gap:10px;min-width:0;padding:1px 12px}.client-item:first-child{padding-left:2px}.client-item:last-child{border:0}.client-icon{color:#244875;flex:0 0 21px;font-size:19px;font-weight:bold;text-align:center}.client-item span,.client-item strong{display:block}.client-item span{color:#536987;font-size:9px;margin-bottom:3px}.client-item strong{font-size:11px}.client-item small{color:#536987;display:block;font-size:8px;margin-top:2px}.section-heading{margin:11px 0 7px}.section-heading h2{font-size:16px;letter-spacing:-.2px;margin:0}.section-heading p{color:#536987;font-size:9px;margin:3px 0 0}.plan-grid{display:grid;gap:8px;grid-template-columns:repeat(var(--plan-columns,3),minmax(0,1fr));margin-bottom:11px}.plan-card{border:1px solid #dce5ef;border-radius:7px;min-width:0;overflow:hidden}.plan-card.is-sulamerica{border-color:#f27612}.plan-card>header{align-items:center;background:#f4f7fb;display:flex;gap:7px;justify-content:center;min-height:36px;padding:6px 9px}.plan-card.is-sulamerica>header{background:#fff7ef}.plan-card.is-unimed>header{background:#f0faf4}.plan-card.is-hapvida>header{background:#f1f8ff}.plan-card.is-bradesco>header{background:#fff3f4}.operator-mark{align-items:center;background:#294895;border-radius:50%;color:#fff;display:inline-flex;flex:0 0 22px;font-size:10px;font-weight:bold;height:22px;justify-content:center}.is-sulamerica .operator-mark{background:#f27612}.is-unimed .operator-mark{background:#079447}.is-hapvida .operator-mark{background:#268ee8}.is-bradesco .operator-mark{background:#c41426}.plan-card>header strong{font-size:11px}.plan-card>header small{color:#536987;flex:1;font-size:9px;font-weight:700;min-width:0;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}.plan-price{color:#294895;font-size:20px;font-weight:800;line-height:1.1;padding:4px 9px 0;text-align:center}.plan-price small{color:#536987;font-size:9px;font-weight:400;margin-left:3px}.plan-card.is-sulamerica .plan-price{color:#f27612}.plan-card.is-unimed .plan-price{color:#078a3c}.plan-card.is-hapvida .plan-price{color:#075ed2}.plan-card.is-bradesco .plan-price{color:#d20d1b}.plan-price.is-incomplete{color:#9a6200!important;font-size:12px}.plan-features{border-top:1px solid #e5ebf2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:6px 3px}.plan-features>div{align-items:center;border-right:1px solid #e5ebf2;display:flex;gap:5px;min-width:0;padding:2px 5px}.plan-features>div:last-child{border:0}.feature-symbol{color:#244875;flex:0 0 14px;font-size:14px;text-align:center}.plan-features span:last-child{color:#536987;font-size:8px;line-height:1.2}.plan-features strong{color:#0b1b3c;display:block;font-size:8px;margin-top:2px}.proposal-table{border-collapse:collapse;table-layout:fixed;width:100%}.composition-table th,.composition-table td{line-height:1.1;padding:2px 4px}.composition-table th:nth-child(-n+3),.composition-table td:nth-child(-n+3){font-size:7px;padding:1px 2px}.composition-table .life-type{padding:2px 3px;white-space:normal}.proposal-table th,.proposal-table td{border:1px solid #dce5ef;font-size:8px;overflow-wrap:anywhere;padding:5px 6px;text-align:center;vertical-align:middle}.proposal-table thead th{background:#f0f4f9;color:#0b1b3c;font-size:8px}.proposal-table th:first-child,.proposal-table td:first-child{text-align:left}.proposal-table .brand-sulamerica{background:#f27612;color:#fff}.proposal-table .brand-unimed{background:#079447;color:#fff}.proposal-table .brand-hapvida{background:#268ee8;color:#fff}.proposal-table .brand-bradesco{background:#c41426;color:#fff}.proposal-table .brand-default{background:#294895;color:#fff}.proposal-table thead small{display:block;font-size:7px;font-weight:500;margin-top:2px}.proposal-table .group-cell{font-weight:700;white-space:nowrap}.life-type{background:#dcecff;border-radius:4px;color:#0759c7;display:inline-block;padding:3px 6px}.life-type.dependente{background:#d9f7e5;color:#087b39}.price-sulamerica{color:#d85800}.price-unimed{color:#078a3c}.price-hapvida{color:#075ed2}.price-bradesco{color:#c41426}.proposal-table td.is-incomplete{color:#9a6200!important}.proposal-table .group-total td{background:#fff7e3;font-weight:700}.proposal-table .grand-total td{background:#f0f5fc;font-size:9px;font-weight:700}.proposal-table .grand-total td.price-sulamerica{background:#fff3e5;color:#d85800}.proposal-table .grand-total td.price-unimed{background:#eaf7ef;color:#078a3c}.proposal-table .grand-total td.price-hapvida{background:#edf6ff;color:#075ed2}.proposal-table .grand-total td.price-bradesco{background:#fff0f2;color:#c41426}.proposal-table .grand-total small{display:block;font-size:7px;font-weight:400;margin-top:2px}.conditions-table th:first-child{width:21%}.conditions-table td{text-align:left;white-space:pre-line}.network-table th:first-child,.copay-table th:first-child{width:24%}.network-table td{text-align:left}.copay-table td{text-align:left;white-space:pre-line}.copay-table td.copay-procedure-cell,.conditions-table td.copay-procedure-cell{padding:3px;white-space:normal}.copay-detail-table{border-collapse:collapse;table-layout:fixed;width:100%}.copay-detail-table th,.copay-detail-table td{border:1px solid #dce5ef;font-size:7px;line-height:1.15;overflow-wrap:anywhere;padding:2px 3px;text-align:left;vertical-align:top}.copay-detail-table th{background:#f0f4f9;font-weight:700}.supplemental-grid{display:grid;grid-template-columns:1fr;margin-top:auto}.important-list{display:grid;grid-auto-flow:column;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,auto);column-gap:16px}.supplemental-card{border:1px solid #dce5ef;border-radius:6px;overflow:hidden}.supplemental-card h2{font-size:12px;margin:0;padding:5px 8px}.interpretation-list{list-style:none;margin:0;padding:0}.interpretation-list li{align-items:flex-start;border-top:1px solid #e5ebf2;display:flex;font-size:8px;gap:6px;line-height:1.2;padding:3px 8px}.interpretation-list b{align-items:center;background:#e8f2ff;border-radius:50%;color:#0759c7;display:flex;flex:0 0 14px;height:14px;justify-content:center}.important-list{list-style:none;margin:0;padding:0}.important-list li{border-top:1px solid #e5ebf2;font-size:8px;line-height:1.2;padding:3px 8px}.important-list li:before{color:#294895;content:'ⓘ';font-weight:bold;margin-right:6px}.info-note{background:#f2f7fc;border-left:3px solid #294895;color:#435977;font-size:8px;line-height:1.4;margin:8px 0;padding:7px 9px}.proposal-footer{align-items:end;border-top:1px solid #bfcfe0;bottom:10mm;color:#435977;display:flex;font-size:7px;justify-content:space-between;left:10mm;margin-top:0;padding-top:6px;position:absolute;right:10mm}.proposal-footer strong,.proposal-footer span{display:block}.proposal-footer .footer-lines{flex:1;min-width:0}.proposal-footer span{margin-top:2px;max-width:900px}.proposal-footer .footer-lines span{max-width:none}.page-number{font-size:9px!important;margin:0!important;white-space:nowrap}.actions{background:#fff;margin:12px auto;width:210mm;max-width:calc(100% - 32px);padding:8px 14mm;text-align:right}.actions button{background:#0864c9;border:0;border-radius:5px;color:white;cursor:pointer;font-size:11px;font-weight:bold;padding:9px 14px}@media print{body{background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}.proposal-page{break-after:page;margin:0;width:auto;max-width:none;min-height:190mm;padding:0 0 14mm}.proposal-page:last-of-type{break-after:auto}.actions{display:none}.proposal-footer{bottom:0;left:0;right:0}.plan-card,.supplemental-card,.info-note{break-inside:avoid}.section-heading{break-after:avoid}.proposal-table thead{display:table-header-group}.proposal-table tr{break-inside:avoid}}@media screen{.proposal-page{box-shadow:0 3px 16px #1b345014}.actions{position:sticky;bottom:0}.client-strip{grid-template-columns:1.4fr 1.2fr 1fr 1fr}}@media screen and (max-width:760px){.proposal-page{padding:18px}.proposal-header{align-items:flex-start;flex-direction:column;gap:8px}.proposal-heading{text-align:left}.proposal-brand{flex-basis:auto}.client-strip{grid-template-columns:1fr 1fr}.client-item:nth-child(2){border-right:0}.plan-grid{grid-template-columns:1fr}.supplemental-grid{grid-template-columns:1fr}.important-list{grid-auto-flow:row;grid-template-columns:1fr;grid-template-rows:none}}
+    @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{background:#f1f4f8;color:#0b1b3c;font-family:Arial,Helvetica,sans-serif;margin:0}.proposal-page{background:#fff;margin:18px auto;width:297mm;max-width:calc(100% - 32px);display:flex;flex-direction:column;min-height:210mm;padding:10mm 10mm 22mm;position:relative}.proposal-header{align-items:center;border-bottom:1px solid #dce5ef;display:flex;gap:20px;justify-content:space-between;margin-bottom:10px;padding:0 0 9px}.proposal-brand{align-items:center;display:flex;flex:0 0 220px;min-height:32px}.proposal-brand img{display:block;height:auto;max-height:36px;max-width:min(190px,100%);object-fit:contain;object-position:left center;width:auto}.brand-fallback{color:#294895;font-size:14px}.proposal-heading{text-align:right}.proposal-heading h1{font-size:20px;letter-spacing:-.3px;margin:0}.proposal-heading p{color:#536987;font-size:10px;margin:4px 0 0}.client-strip{background:linear-gradient(110deg,#f4f7fb,#f8fafc);border:1px solid #dce5ef;border-radius:7px;display:grid;grid-template-columns:1.4fr 1.2fr 1fr 1fr;margin-bottom:10px;padding:7px 12px}.client-item{align-items:center;border-right:1px solid #e0e8f1;display:flex;gap:10px;min-width:0;padding:1px 12px}.client-item:first-child{padding-left:2px}.client-item:last-child{border:0}.client-icon{color:#244875;flex:0 0 21px;font-size:19px;font-weight:bold;text-align:center}.client-item span,.client-item strong{display:block}.client-item span{color:#536987;font-size:9px;margin-bottom:3px}.client-item strong{font-size:11px}.client-item small{color:#536987;display:block;font-size:8px;margin-top:2px}.section-heading{margin:11px 0 7px}.section-heading h2{font-size:16px;letter-spacing:-.2px;margin:0}.section-heading p{color:#536987;font-size:9px;margin:3px 0 0}.plan-grid{display:grid;gap:8px;grid-template-columns:repeat(var(--plan-columns,3),minmax(0,1fr));margin-bottom:11px}.plan-card{border:1px solid #dce5ef;border-radius:7px;min-width:0;overflow:hidden}.plan-card>header{align-items:center;background:#f4f7fb;display:flex;gap:7px;justify-content:center;min-height:36px;padding:6px 9px}.plan-card.is-unimed>header{background:#f0faf4}.plan-card.is-hapvida>header{background:#f1f8ff}.plan-card.is-bradesco>header{background:#fff3f4}.operator-mark{align-items:center;background:#294895;border-radius:50%;color:#fff;display:inline-flex;flex:0 0 22px;font-size:10px;font-weight:bold;height:22px;justify-content:center}.is-unimed .operator-mark{background:#079447}.is-hapvida .operator-mark{background:#268ee8}.is-bradesco .operator-mark{background:#c41426}.plan-card>header strong{font-size:11px}.plan-card>header small{color:#536987;flex:1;font-size:9px;font-weight:700;min-width:0;overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap}.plan-price{color:#294895;font-size:20px;font-weight:800;line-height:1.1;padding:4px 9px 0;text-align:center}.plan-price small{color:#536987;font-size:9px;font-weight:400;margin-left:3px}.plan-card.is-unimed .plan-price{color:#078a3c}.plan-card.is-hapvida .plan-price{color:#075ed2}.plan-card.is-bradesco .plan-price{color:#d20d1b}.plan-price.is-incomplete{color:#9a6200!important;font-size:12px}.plan-features{border-top:1px solid #e5ebf2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:6px 3px}.plan-features>div{align-items:center;border-right:1px solid #e5ebf2;display:flex;gap:5px;min-width:0;padding:2px 5px}.plan-features>div:last-child{border:0}.feature-symbol{color:#244875;flex:0 0 14px;font-size:14px;text-align:center}.plan-features span:last-child{color:#536987;font-size:8px;line-height:1.2}.plan-features strong{color:#0b1b3c;display:block;font-size:8px;margin-top:2px}.proposal-table{border-collapse:collapse;table-layout:fixed;width:100%}.composition-table th,.composition-table td{line-height:1.1;padding:2px 4px}.composition-table th:nth-child(-n+3),.composition-table td:nth-child(-n+3){font-size:7px;padding:1px 2px}.composition-table .life-type{padding:2px 3px;white-space:normal}.proposal-table th,.proposal-table td{border:1px solid #dce5ef;font-size:8px;overflow-wrap:anywhere;padding:5px 6px;text-align:center;vertical-align:middle}.proposal-table thead th{background:#f0f4f9;color:#0b1b3c;font-size:8px}.proposal-table th:first-child,.proposal-table td:first-child{text-align:left}.proposal-table .brand-unimed{background:#079447;color:#fff}.proposal-table .brand-hapvida{background:#268ee8;color:#fff}.proposal-table .brand-bradesco{background:#c41426;color:#fff}.proposal-table .brand-default{background:#294895;color:#fff}.proposal-table thead small{display:block;font-size:7px;font-weight:500;margin-top:2px}.proposal-table .group-cell{font-weight:700;white-space:nowrap}.life-type{background:#dcecff;border-radius:4px;color:#0759c7;display:inline-block;padding:3px 6px}.life-type.dependente{background:#d9f7e5;color:#087b39}.price-unimed{color:#078a3c}.price-hapvida{color:#075ed2}.price-bradesco{color:#c41426}.proposal-table td.is-incomplete{color:#9a6200!important}.proposal-table .group-total td{background:#fff7e3;font-weight:700}.proposal-table .grand-total td{background:#f0f5fc;font-size:9px;font-weight:700}.proposal-table .grand-total td.price-unimed{background:#eaf7ef;color:#078a3c}.proposal-table .grand-total td.price-hapvida{background:#edf6ff;color:#075ed2}.proposal-table .grand-total td.price-bradesco{background:#fff0f2;color:#c41426}.proposal-table .grand-total small{display:block;font-size:7px;font-weight:400;margin-top:2px}.conditions-table th:first-child{width:21%}.conditions-table td{text-align:left;white-space:pre-line}.network-table th:first-child,.copay-table th:first-child{width:24%}.network-table td{text-align:left}.copay-table td{text-align:left;white-space:pre-line}.copay-table td.copay-procedure-cell,.conditions-table td.copay-procedure-cell{padding:3px;white-space:normal}.copay-detail-table{border-collapse:collapse;table-layout:fixed;width:100%}.copay-detail-table th,.copay-detail-table td{border:1px solid #dce5ef;font-size:7px;line-height:1.15;overflow-wrap:anywhere;padding:2px 3px;text-align:left;vertical-align:top}.copay-detail-table th{background:#f0f4f9;font-weight:700}.supplemental-grid{display:grid;grid-template-columns:1fr;margin-top:auto}.important-list{display:grid;grid-auto-flow:column;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,auto);column-gap:16px}.supplemental-card{border:1px solid #dce5ef;border-radius:6px;overflow:hidden}.supplemental-card h2{font-size:12px;margin:0;padding:5px 8px}.interpretation-list{list-style:none;margin:0;padding:0}.interpretation-list li{align-items:flex-start;border-top:1px solid #e5ebf2;display:flex;font-size:8px;gap:6px;line-height:1.2;padding:3px 8px}.interpretation-list b{align-items:center;background:#e8f2ff;border-radius:50%;color:#0759c7;display:flex;flex:0 0 14px;height:14px;justify-content:center}.important-list{list-style:none;margin:0;padding:0}.important-list li{border-top:1px solid #e5ebf2;font-size:8px;line-height:1.2;padding:3px 8px}.important-list li:before{color:#294895;content:'ⓘ';font-weight:bold;margin-right:6px}.info-note{background:#f2f7fc;border-left:3px solid #294895;color:#435977;font-size:8px;line-height:1.4;margin:8px 0;padding:7px 9px}.proposal-footer{align-items:end;border-top:1px solid #bfcfe0;bottom:10mm;color:#435977;display:flex;font-size:7px;justify-content:space-between;left:10mm;margin-top:0;padding-top:6px;position:absolute;right:10mm}.proposal-footer strong,.proposal-footer span{display:block}.proposal-footer .footer-lines{flex:1;min-width:0}.proposal-footer span{margin-top:2px;max-width:900px}.proposal-footer .footer-lines span{max-width:none}.page-number{font-size:9px!important;margin:0!important;white-space:nowrap}.actions{background:#fff;margin:12px auto;width:210mm;max-width:calc(100% - 32px);padding:8px 14mm;text-align:right}.actions button{background:#0864c9;border:0;border-radius:5px;color:white;cursor:pointer;font-size:11px;font-weight:bold;padding:9px 14px}@media print{body{background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}.proposal-page{break-after:page;margin:0;width:auto;max-width:none;min-height:190mm;padding:0 0 14mm}.proposal-page:last-of-type{break-after:auto}.actions{display:none}.proposal-footer{bottom:0;left:0;right:0}.plan-card,.supplemental-card,.info-note{break-inside:avoid}.section-heading{break-after:avoid}.proposal-table thead{display:table-header-group}.proposal-table tr{break-inside:avoid}}@media screen{.proposal-page{box-shadow:0 3px 16px #1b345014}.actions{position:sticky;bottom:0}.client-strip{grid-template-columns:1.4fr 1.2fr 1fr 1fr}}@media screen and (max-width:760px){.proposal-page{padding:18px}.proposal-header{align-items:flex-start;flex-direction:column;gap:8px}.proposal-heading{text-align:left}.proposal-brand{flex-basis:auto}.client-strip{grid-template-columns:1fr 1fr}.client-item:nth-child(2){border-right:0}.plan-grid{grid-template-columns:1fr}.supplemental-grid{grid-template-columns:1fr}.important-list{grid-auto-flow:row;grid-template-columns:1fr;grid-template-rows:none}}
   </style></head><body>
     <section class="proposal-page">
       ${header('Proposta de Plano de Saúde', currentQuoteMeta)}
       <section class="client-strip"><div class="client-item"><span class="client-icon">▦</span><div><span>Cliente / Empresa</span><strong>${esc(quote.company || '—')}</strong><small>${quote.cnpj ? `CNPJ ${esc(quote.cnpj)}` : ''}${quote.city ? `${quote.cnpj ? ' · ' : ''}${esc(quote.city)}` : ''}</small></div></div><div class="client-item"><span class="client-icon">♟</span><div><span>Total de vidas</span><strong>${quote.lives.length}</strong><small>${selectedLives} titular${selectedLives === 1 ? '' : 'es'} · ${dependents} dependente${dependents === 1 ? '' : 's'}</small></div></div><div class="client-item"><span class="client-icon">▤</span><div><span>Tipo de contratação</span><strong>${esc(quote.type)}</strong></div></div><div class="client-item"><span class="client-icon">▣</span><div><span>Vigência desejada</span><strong>${dateLabel(quote.effectiveDate)}</strong></div></div></section>
-      <section><div class="section-heading"><h2>Cotação</h2></div><div class="proposal-data-table-wrap"><table class="proposal-table composition-table"><colgroup><col style="width:${compositionDetailsWidth * 0.2}%"><col style="width:${compositionDetailsWidth * 0.45}%"><col style="width:${compositionDetailsWidth * 0.35}%">${compositionPlanColumns}</colgroup><thead><tr><th class="composition-plan-stub" colspan="3" aria-hidden="true"></th>${compositionOperatorHeaders}</tr></thead><tbody>${compositionSummaryRows}<tr class="composition-life-headers"><th>Grupo</th><th>Nome</th><th>Faixa Etária</th>${plans.map(item => `<th class="brand-${operatorVisualClass(item.operator.nome)} proposal-plan-name-cell">${esc(item.plan.nome || 'Plano')}</th>`).join('')}</tr>${comparisonRows}<tr class="grand-total"><td colspan="2">Total da cotação</td><td>${quote.lives.length} vidas</td>${totalCells}</tr></tbody></table></div></section>
+      <section><div class="section-heading"><h2>Cotação</h2></div><div class="proposal-data-table-wrap"><table class="proposal-table composition-table"><colgroup><col style="width:${compositionDetailsWidth * 0.2}%"><col style="width:${compositionDetailsWidth * 0.45}%"><col style="width:${compositionDetailsWidth * 0.35}%">${compositionPlanColumns}</colgroup><thead><tr><th class="composition-plan-stub" colspan="3" aria-hidden="true"></th>${compositionOperatorHeaders}</tr></thead><tbody>${compositionSummaryRows}<tr class="composition-life-headers"><th>Grupo</th><th>Nome</th><th>Faixa Etária</th>${plans.map(item => `<th class="brand-${operatorClass(item)} proposal-plan-name-cell">${esc(item.plan.nome || 'Plano')}</th>`).join('')}</tr>${comparisonRows}<tr class="grand-total"><td colspan="2">Total da cotação</td><td>${quote.lives.length} vidas</td>${totalCells}</tr></tbody></table></div></section>
       <div class="info-note">Valores estimados conforme as faixas etárias e a tabela cadastrada. Os valores podem ser alterados sem aviso prévio, conforme condições de cada operadora. Consulte a página das condições de contratação.</div>
       <div class="supplemental-grid"><section class="supplemental-card supplemental-observations"><h2>Observações importantes</h2><ul class="important-list"><li>Esta proposta é indicativa e não constitui oferta vinculante de contratação.</li><li>A aceitação está sujeita à análise de elegibilidade e às regras comerciais da operadora.</li><li>Rede credenciada, carências e condições podem variar conforme região e contrato.</li><li>Confirme valores e disponibilidade na data efetiva da contratação.</li></ul></section></div>
       ${footer(1)}
@@ -1109,11 +1429,10 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
         .composition-table thead .proposal-operator-name { font-weight: 400; }
         .composition-table thead .proposal-plan-name { font-weight: 700; }
         .composition-table thead .composition-operator-header { background: #f4f7fb !important; padding: 5px 6px !important; text-align: center; vertical-align: middle; }
-        .composition-table thead .composition-operator-header.is-sulamerica { background: #fff7ef !important; }
         .composition-table thead .composition-operator-header.is-unimed { background: #f0faf4 !important; }
         .composition-table thead .composition-operator-header.is-hapvida { background: #f1f8ff !important; }
         .composition-table thead .composition-operator-header.is-bradesco { background: #fff3f4 !important; }
-        .composition-operator-logo { display: block; height: 24px; margin: 0 auto; max-width: 100%; object-fit: contain; width: 76px; }
+        .composition-operator-logo { display: block; height: auto; margin: 0 auto; max-height: 24px; max-width: min(76px, 100%); object-fit: contain; object-position: center; vertical-align: middle; width: auto; }
         .proposal-data-table-wrap .proposal-table thead th:not([class^="brand-"]) { background: #f3f6fa; color: #52657d; }
         .proposal-data-table-wrap .proposal-table tbody th { background: #f8fafc; color: #23415f; font-size: 9px; font-weight: 700; }
         .plan-price { font-size: 16px; }
@@ -1121,7 +1440,6 @@ function proposalHtml(branding, saved, { autoPrint = true } = {}) {
         .composition-condition-row td { font-size: 8px !important; font-weight: 500; }
         .composition-life-headers th, .composition-life-headers td { background: #f0f4f9 !important; color: #52657d; font-size: 8px !important; font-weight: 500 !important; letter-spacing: .04em; padding: 4px 6px !important; text-transform: uppercase; }
         .composition-life-headers .proposal-plan-name-cell { font-weight: 700 !important; }
-        .composition-life-headers .brand-sulamerica { background: #f27612 !important; color: #fff !important; }
         .composition-life-headers .brand-unimed { background: #079447 !important; color: #fff !important; }
         .composition-life-headers .brand-hapvida { background: #268ee8 !important; color: #fff !important; }
         .composition-life-headers .brand-bradesco { background: #c41426 !important; color: #fff !important; }

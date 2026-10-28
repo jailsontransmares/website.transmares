@@ -11,6 +11,9 @@ export default defineConfig({
       input: resolve(__dirname, 'hub/index.html'),
       output: {
         manualChunks(id) {
+          if (id.includes('tesseract.js') || id.includes('tesseract.js-core') || id.includes('wasm-feature-detect')) {
+            return 'ocr';
+          }
           if (id.includes('node_modules')) {
             return 'vendor';
           }
