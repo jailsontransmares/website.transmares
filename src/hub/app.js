@@ -1,4 +1,5 @@
 import './style.css';
+import './hubNativeSelects.js';
 import './hubToast.js';
 import './crm2Phase2.css';
 import './hubTableSorting.js';
@@ -2620,6 +2621,24 @@ function renderModuloIndisponivel(idModulo) {
 
 let rhDpController = null;
 let financeiroController = null;
+let cobrancaController = null;
+
+async function obterCobrancaController() {
+  if (!cobrancaController) {
+    const { criarCobrancaController } = await import('./cobrancaPage.js');
+    cobrancaController = criarCobrancaController({
+      renderShell: renderHubShell,
+      pode,
+      renderUnavailable: renderModuloIndisponivel,
+      escapeHtml,
+      escapeAttr,
+      navegarParaRota,
+      usuario: () => state.usuario
+    });
+  }
+
+  return cobrancaController;
+}
 
 async function obterRhDpController() {
   if (!rhDpController) {
@@ -16819,6 +16838,7 @@ function obterIconeMenuHub(item = {}) {
     dashboards: 'layout-dashboard',
     'central-senhas': 'key-round',
     operacoes: 'workflow',
+    'operacoes-cobranca': 'receipt-text',
     financeiro: 'landmark',
     'rh-dp': 'users-round',
     administracao: 'settings'
@@ -17535,6 +17555,12 @@ const renderizarRotaAtualHubPhase2 = async function() {
       renderShell: renderHubShell,
       navegarParaRota
     });
+    return;
+  }
+
+  if (rotaRelativa === 'operacoes/cobranca') {
+    const controller = await obterCobrancaController();
+    await controller.abrir();
     return;
   }
 
@@ -18492,12 +18518,12 @@ document.addEventListener('click', fecharMenusAoClicarForaHub);
 function focarModalParceiroIndicacaoAdmin() {
   window.requestAnimationFrame(() => {
     const modal = document.querySelector('[data-partner-modal]');
-    modal?.querySelector('.partner-modal-tab, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])')?.focus();
+    modal?.querySelector('.partner-modal-tab, input:not([disabled]), select:not([disabled]):not(.hub-native-select-native), textarea:not([disabled]), button:not([disabled])')?.focus();
   });
 }
 
 function obterElementosFocaveisModalParceiro(modal) {
-  return Array.from(modal?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || [])
+  return Array.from(modal?.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]):not(.hub-native-select-native), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || [])
     .filter(item => item.offsetParent !== null);
 }
 

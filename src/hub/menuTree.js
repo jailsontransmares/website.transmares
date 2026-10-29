@@ -58,6 +58,14 @@ export const HUB_MENU_TREE = [
         status: 'active'
       },
       {
+        id: 'operacoes-cobranca',
+        label: 'Cobrança',
+        type: 'route',
+        route: '/operacoes/cobranca',
+        permission: { resource: 'financeiro.lancamentos', action: 'view' },
+        status: 'active'
+      },
+      {
         id: 'operacoes-corretora',
         label: 'Corretora',
         type: 'group',

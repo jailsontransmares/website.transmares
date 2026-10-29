@@ -5,7 +5,7 @@ const FOCUSABLE_SELECTOR = [
   'area[href]',
   'button:not([disabled])',
   'input:not([disabled]):not([type="hidden"])',
-  'select:not([disabled])',
+  'select:not([disabled]):not(.hub-native-select-native)',
   'textarea:not([disabled])',
   'iframe',
   '[contenteditable="true"]',
@@ -67,7 +67,7 @@ function updateScrollLock() {
 }
 
 function focusInitialElement(dialog) {
-  const target = dialog.querySelector('[autofocus], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])') || dialog;
+  const target = dialog.querySelector('[autofocus], input:not([type="hidden"]):not([disabled]), select:not([disabled]):not(.hub-native-select-native), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])') || dialog;
   target.focus({ preventScroll: true });
 }
 

@@ -129,6 +129,7 @@ const COLUNAS_LANCAMENTO = `
   id,
   empresa_id,
   pessoa_id,
+  cliente_nome,
   conta_id,
   categoria_id,
   centro_custo_id,
@@ -2372,6 +2373,7 @@ export async function salvarLancamentoFinanceiro(payload) {
   const lancamentoPayload = {
     empresa_id: payload.empresa_id,
     pessoa_id: payload.pessoa_id || null,
+    cliente_nome: String(payload.cliente_nome || '').trim() || null,
     conta_id: payload.conta_id || null,
     categoria_id: payload.categoria_id || null,
     centro_custo_id: payload.centro_custo_id || null,

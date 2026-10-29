@@ -192,7 +192,7 @@ export function inicializarMenusAcoesGlobais(root = document) {
           return;
         }
         if (key === 'Tab' && menu.open) {
-          const tabStops = Array.from(document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'))
+          const tabStops = Array.from(document.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]):not(.hub-native-select-native), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'))
             .filter(item => item.offsetParent !== null && !popover.contains(item));
           const triggerIndex = tabStops.indexOf(trigger);
           const nextIndex = triggerIndex + (event.shiftKey ? -1 : 1);

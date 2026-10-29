@@ -2417,6 +2417,182 @@ body.dark .integration-log-status-success {
   outline: 0;
 }
 
+.hub-native-select-native {
+  clip-path: inset(50%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  z-index: -1 !important;
+}
+
+.hub-native-select-shell {
+  align-items: stretch;
+  box-sizing: border-box;
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  position: relative;
+  vertical-align: middle;
+}
+
+.hub-native-select-shell:focus-within,
+.hub-native-select-shell.is-open {
+  border-color: color-mix(in srgb, var(--color-primary) 48%, var(--borda));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  outline: 0;
+}
+
+.hub-native-select-shell.is-invalid {
+  border-color: var(--color-danger, #dc2626) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger, #dc2626) 14%, transparent) !important;
+}
+
+.hub-native-select-shell.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.hub-native-select-shell > .hub-native-select-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 auto;
+  font: inherit;
+  justify-content: flex-start;
+  min-height: 0;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  text-align: left;
+  text-transform: inherit;
+  width: 100%;
+}
+
+.hub-native-select-shell > .hub-native-select-trigger:disabled {
+  cursor: not-allowed;
+}
+
+.hub-native-select-value {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.hub-native-select-clear {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--texto-suave);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 26px;
+  height: 26px;
+  justify-content: center;
+  margin: auto 3px auto 0;
+  padding: 0;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+}
+
+.hub-native-select-clear[hidden] {
+  display: none;
+}
+
+.hub-native-select-clear:hover,
+.hub-native-select-clear:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  color: var(--color-primary);
+  outline: 0;
+}
+
+.hub-native-select-clear svg {
+  height: 14px;
+  width: 14px;
+}
+
+.hub-native-select-menu {
+  max-height: min(320px, calc(100dvh - 16px));
+  z-index: 28000;
+}
+
+.hub-native-select-option {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 31px;
+  padding: 6px 9px;
+}
+
+.hub-native-select-option.is-selected::after {
+  border-bottom: 1.7px solid currentColor;
+  border-right: 1.7px solid currentColor;
+  content: '';
+  height: 8px;
+  margin-left: auto;
+  transform: rotate(45deg) translateY(-2px);
+  width: 5px;
+}
+
+.hub-native-select-option[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.hub-native-select-option.is-active {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  outline: 0;
+}
+
+.hub-native-select-group-label {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 7px 9px 3px;
+  text-transform: uppercase;
+}
+
+.hub-native-select-shell + svg {
+  display: none !important;
+}
+
+.password-manager .password-manager-input-shell > .hub-native-select-shell.config-input {
+  padding-right: 10px;
+}
+
+.password-manager .password-manager-status-select > .hub-native-select-shell.config-input {
+  padding-left: 34px;
+}
+
+.saude-home-filter-menu .hub-native-select-shell {
+  min-height: 34px;
+}
+
+.saude-quote-field .hub-native-select-shell,
+.saude-quote-filters .hub-native-select-shell,
+.simsaude-filters .hub-native-select-shell,
+.simsaude-field .hub-native-select-shell {
+  min-width: 0;
+  width: 100%;
+}
+
+.crm2-opp-sort-control .hub-native-select-shell {
+  flex: 0 1 auto;
+}
+
 .admin-logs-clear-btn {
   min-height: 38px;
 }
