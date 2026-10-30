@@ -8,13 +8,14 @@ const ADDRESS_FIELDS_VIACEP = {
 };
 const ADDRESS_FIELD_IDS = Object.keys(ADDRESS_FIELDS_VIACEP);
 const WRAPPED_FLAG = '__hubCompanySettingsMasksWrapped';
-const CEP_MESSAGE_ID = 'company-settings-cep-message';
-const CEP_STYLE_ID = 'company-settings-cep-status-style';
+const CEP_TOAST_KEY = 'company-settings-cep';
 
 let ultimoCepConsultado = '';
 let cepEmConsulta = '';
 let ultimoCepInformado = '';
 let aplicandoEnderecoAutomatico = false;
+let sequenciaConsultaCep = 0;
+let controladorConsultaCep = null;
 
 function apenasDigitos(valor = '') {
   return String(valor || '').replace(/\D+/g, '');
@@ -100,88 +101,23 @@ function obterCepAtual() {
   return apenasDigitos(obterInput('cc_endereco_cep')?.value || '');
 }
 
-function injetarEstilosCep() {
-  if (document.getElementById(CEP_STYLE_ID)) return;
-
-  const style = document.createElement('style');
-  style.id = CEP_STYLE_ID;
-  style.textContent = `
-    .company-settings-cep-message {
-      grid-column: 1 / -1;
-      margin: -6px 0 2px !important;
-      padding: 8px 10px;
-      border-radius: 12px;
-      font-size: 0.78rem !important;
-      font-weight: 700;
-      line-height: 1.35;
-      background: rgba(41, 72, 149, 0.08);
-      color: var(--cor-principal, #294895) !important;
-    }
-
-    .company-settings-cep-message.is-hidden {
-      display: none !important;
-    }
-
-    .company-settings-cep-message.is-error,
-    .company-settings-cep-message.is-warning {
-      background: rgba(220, 38, 38, 0.09);
-      color: #b91c1c !important;
-    }
-
-    .company-settings-cep-message.is-success {
-      background: rgba(22, 163, 74, 0.1);
-      color: #15803d !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function obterMensagemCep() {
-  const cepInput = obterInput('cc_endereco_cep');
-  const cepLabel = cepInput?.closest('label');
-  const grid = cepLabel?.parentElement;
-
-  if (!cepLabel || !grid) return null;
-
-  let mensagem = document.getElementById(CEP_MESSAGE_ID);
-
-  if (!mensagem) {
-    mensagem = document.createElement('p');
-    mensagem.id = CEP_MESSAGE_ID;
-    mensagem.className = 'company-settings-cep-message is-hidden';
-    mensagem.setAttribute('aria-live', 'polite');
-    cepLabel.insertAdjacentElement('afterend', mensagem);
-  }
-
-  return mensagem;
-}
-
 function definirMensagemCep(texto = '', tipo = 'info') {
-  injetarEstilosCep();
-
-  const mensagem = obterMensagemCep();
-  if (!mensagem) return;
-
   if (!texto) {
-    mensagem.textContent = '';
-    mensagem.className = 'company-settings-cep-message is-hidden';
+    window.hubToast?.dismiss(CEP_TOAST_KEY);
     return;
   }
 
-  mensagem.textContent = texto;
-  mensagem.className = `company-settings-cep-message is-${tipo}`;
+  window.hubToast?.show(texto, {
+    type: tipo,
+    dedupeKey: CEP_TOAST_KEY
+  });
 }
 
 function atualizarMensagemCepParcial() {
   const cep = obterCepAtual();
 
-  if (!cep) {
+  if (!cep || cep.length < 8) {
     definirMensagemCep('');
-    return;
-  }
-
-  if (cep.length < 8) {
-    definirMensagemCep('Informe um CEP com 8 dígitos.', 'warning');
   }
 }
 
@@ -191,6 +127,10 @@ function moverCepParaInicioEndereco() {
   const grid = cepLabel?.parentElement;
 
   if (!cepLabel || !grid) return;
+
+  if (cepInput.dataset.cepValorAnterior === undefined) {
+    cepInput.dataset.cepValorAnterior = apenasDigitos(cepInput.value);
+  }
 
   if (cepLabel.dataset.cepReposicionado !== 'true') {
     grid.insertBefore(cepLabel, grid.firstElementChild);
@@ -250,6 +190,18 @@ function preencherCampoEndereco(id, valor = '', cep = '', options = {}) {
   return true;
 }
 
+function limparEnderecoParaNovoCep() {
+  ADDRESS_FIELD_IDS.forEach(id => {
+    const input = obterInput(id);
+    if (!input) return;
+
+    input.value = '';
+    delete input.dataset.cepAutoPreenchido;
+    delete input.dataset.cepOrigem;
+    delete input.dataset.cepEditadoManualmente;
+  });
+}
+
 function aplicarEnderecoViaCep(dados, cep, options = {}) {
   if (!dados || dados.erro) return 0;
 
@@ -266,18 +218,26 @@ function aplicarEnderecoViaCep(dados, cep, options = {}) {
 }
 
 async function consultarCepSeCompleto({ forcar = false } = {}) {
-  if (!estaNaRotaCorretora()) return;
-
   const cepInput = obterInput('cc_endereco_cep');
+  if (!cepInput) return;
+
   const cep = apenasDigitos(cepInput?.value || '');
 
   if (!cep) {
+    sequenciaConsultaCep += 1;
+    controladorConsultaCep?.abort();
+    controladorConsultaCep = null;
+    cepEmConsulta = '';
     ultimoCepInformado = '';
     definirMensagemCep('');
     return;
   }
 
   if (cep.length !== 8) {
+    sequenciaConsultaCep += 1;
+    controladorConsultaCep?.abort();
+    controladorConsultaCep = null;
+    cepEmConsulta = '';
     atualizarMensagemCepParcial();
     return;
   }
@@ -288,14 +248,20 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
   if (cep === cepEmConsulta) return;
   if (!forcar && cep === ultimoCepConsultado) return;
 
+  controladorConsultaCep?.abort();
+  const controlador = new AbortController();
+  controladorConsultaCep = controlador;
+  const sequencia = ++sequenciaConsultaCep;
   cepEmConsulta = cep;
   definirMensagemCep('Buscando CEP...', 'info');
 
   try {
-    const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: controlador.signal });
     if (!response.ok) throw new Error('Falha ao consultar CEP.');
 
     const dados = await response.json();
+    if (sequencia !== sequenciaConsultaCep || obterCepAtual() !== cep) return;
+
     ultimoCepConsultado = cep;
 
     if (dados?.erro) {
@@ -311,11 +277,36 @@ async function consultarCepSeCompleto({ forcar = false } = {}) {
       definirMensagemCep('CEP encontrado. Mantive os campos já preenchidos ou editados manualmente.', 'success');
     }
   } catch (erro) {
+    if (sequencia !== sequenciaConsultaCep || erro.name === 'AbortError') return;
+
     definirMensagemCep('Não foi possível consultar o CEP agora. Preencha manualmente.', 'error');
     console.warn('Não foi possível consultar o CEP informado:', erro);
   } finally {
-    cepEmConsulta = '';
+    if (sequencia === sequenciaConsultaCep) {
+      cepEmConsulta = '';
+      controladorConsultaCep = null;
+    }
   }
+}
+
+function consultarCepPeloCampo(event) {
+  const input = event?.target;
+  if (input?.id !== 'cc_endereco_cep') return;
+
+  const cep = apenasDigitos(input.value);
+  const cepAnterior = input.dataset.cepValorAnterior || ultimoCepInformado;
+  const enderecoExistente = ADDRESS_FIELD_IDS.some(id => String(obterInput(id)?.value || '').trim());
+
+  if (cep.length === 8 && (cepAnterior ? cepAnterior !== cep : enderecoExistente)) {
+    limparEnderecoParaNovoCep();
+  }
+
+  if (cep.length === 8) {
+    input.dataset.cepValorAnterior = cep;
+  }
+
+  aplicarMascara(input);
+  return consultarCepSeCompleto();
 }
 
 function aplicarMascarasCorretora() {
@@ -361,7 +352,7 @@ window.addEventListener('input', event => {
   aplicarMascara(event.target);
 
   if (id === 'cc_endereco_cep') {
-    consultarCepSeCompleto({ forcar: true });
+    return;
   }
 }, true);
 
@@ -373,11 +364,19 @@ document.addEventListener('change', event => {
   const id = event.target?.id || '';
   if (!MASK_FIELDS.includes(id)) return;
 
-  aplicarMascara(event.target);
-
   if (id === 'cc_endereco_cep') {
-    consultarCepSeCompleto({ forcar: true });
+    consultarCepPeloCampo(event);
+    return;
   }
+
+  aplicarMascara(event.target);
+}, true);
+
+window.addEventListener('focusin', event => {
+  const input = event.target;
+  if (input?.id !== 'cc_endereco_cep') return;
+
+  input.dataset.cepValorAnterior = apenasDigitos(input.value);
 }, true);
 
 if (document.readyState === 'loading') {
@@ -385,3 +384,5 @@ if (document.readyState === 'loading') {
 } else {
   agendarAplicacao();
 }
+
+window.hubCompanySettingsCepInput = consultarCepPeloCampo;

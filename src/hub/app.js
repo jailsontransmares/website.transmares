@@ -47,6 +47,7 @@ import { HOME_SUBMODULE_GROUPS, HOME_SUBMODULES } from './homeSubmodules.js';
 import { HUB_ADMIN_ROUTE_TABS, HUB_ROUTE_ALIASES, obterBaseHub, obterRotaAdminPorAba } from './routeConfig.js';
 import { resolveCrm2CadastroTab } from './crm2CadastroRoute.js';
 import { renderCrm2CadastroPagination } from './crm2CadastroUi.js';
+import { renderHubDataTable } from './hubDataTable.js';
 import { abrirMenuAcaoGlobal, limparMenusAcoesGlobais } from './actionMenuPortal.js';
 import {
   inicializarNotificacoesHub,
@@ -575,10 +576,12 @@ const state = {
     },
     pendentes: [],
     paginaPendentes: 1,
+    tamanhoPaginaPendentes: 15,
     ordenacaoPendentes: { campo: 'data', direcao: 'desc' },
     selecionados: [],
     recibos: [],
     paginaRecibos: 1,
+    tamanhoPaginaRecibos: 15,
     filtrosRecibos: { numero: '', parceiro: '', pedido: '', cliente: '', status: 'emitido' },
     reciboAtivo: null,
     impostos: {
@@ -682,6 +685,22 @@ const state = {
 },
   temaAtual: 'claro'
 };
+
+window.addEventListener('hub:table-pagination-change', event => {
+  const { key, page, pageSize } = event.detail || {};
+  if (!key) return;
+
+  if (key === 'admin-parceiros-indicacao') {
+    state.admin.paginaParceirosIndicacao = page;
+    state.admin.limiteParceirosIndicacao = pageSize;
+  } else if (key === 'ar-validacoes-pendentes') {
+    state.ar.validacoes.paginaPendentes = page;
+    state.ar.validacoes.tamanhoPaginaPendentes = pageSize;
+  } else if (key === 'ar-validacoes-recibos') {
+    state.ar.validacoes.paginaRecibos = page;
+    state.ar.validacoes.tamanhoPaginaRecibos = pageSize;
+  }
+});
 
 const ADMIN_PARTNER_COLUMNS_STORAGE_KEY = 'hub-admin-partners-visible-columns-v1';
 let renderizarRotaAtual;
@@ -2708,7 +2727,7 @@ function renderAniversariantes() {
       : '';
 
     return `
-      <p><strong>${escapeHtml(item.nome || '')}</strong> ${escapeHtml(formatarDataAniversario(item.data))}${escapeHtml(quando)}</p>
+      <p><strong>${escapeHtml(item.nome || '')}</strong>${item.origem === 'rh_dependentes' ? ' <small>(dependente)</small>' : ''} ${escapeHtml(formatarDataAniversario(item.data))}${escapeHtml(quando)}</p>
     `;
   }).join('');
 }
@@ -3592,19 +3611,12 @@ function renderParceirosIndicacaoAdmin() {
   garantirColunasParceirosIndicacaoAdmin();
   const podeCriar = pode('admin.parceiros_indicacao', 'create');
   const filtrados = obterParceirosIndicacaoFiltradosAdmin(records);
-  const limite = Math.max(1, Number(state.admin.limiteParceirosIndicacao) || 15);
-  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / limite));
-  const paginaAtual = Math.min(Math.max(1, Number(state.admin.paginaParceirosIndicacao) || 1), totalPaginas);
-  const inicio = (paginaAtual - 1) * limite;
-  const recordsPagina = filtrados.slice(inicio, inicio + limite);
   const resumo = records.reduce((acc, parceiro) => {
     const status = parceiro.status === 'inativo' || parceiro.status === 'arquivado' ? parceiro.status : 'ativo';
     acc.total += 1;
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, { total: 0, ativo: 0, inativo: 0, arquivado: 0 });
-
-  state.admin.paginaParceirosIndicacao = paginaAtual;
 
   return `
     <section class="admin-panel crm2-pessoas-page crm2-cadastro-directory-page crm2-parceiros-directory-page">
@@ -3649,8 +3661,7 @@ function renderParceirosIndicacaoAdmin() {
       ${state.admin.seletorColunasParceirosAberto ? renderSeletorColunasParceirosIndicacaoAdmin() : ''}
       ${state.admin.message ? `<p class="admin-message">${escapeHtml(state.admin.message)}</p>` : ''}
       ${renderBarraLoteParceirosIndicacaoAdmin()}
-      ${state.admin.loading ? renderHubLoading('Carregando parceiros...') : renderListaParceirosIndicacaoAdmin(recordsPagina)}
-      ${state.admin.loading || !filtrados.length ? '' : renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, filtrados.length)}
+      ${state.admin.loading ? renderHubLoading('Carregando parceiros...') : renderListaParceirosIndicacaoAdmin(filtrados)}
       </div>
       ${renderModalParceiroIndicacaoAdmin()}
     </section>
@@ -3777,9 +3788,12 @@ function renderListaParceirosIndicacaoAdmin(records) {
   const larguraSelecaoPercentual = modoLote ? 5 : 0;
   const larguraColunasPercentual = 100 - larguraSelecaoPercentual;
 
-  return `
-    <div class="admin-table-wrap admin-partners-table-wrap">
-      <table class="hub-data-table admin-partners-data-table" aria-label="Parceiros de indicação">
+  return renderHubDataTable({
+    wrapperClass: 'admin-table-wrap admin-partners-table-wrap',
+    itemLabel: 'parceiros',
+    ariaLabel: 'Paginação de parceiros de indicação',
+    tableHtml: `
+      <table class="hub-data-table admin-partners-data-table" aria-label="Parceiros de indicação" data-hub-pagination-key="admin-parceiros-indicacao">
         <colgroup>
           ${modoLote ? `<col style="width:${larguraSelecaoPercentual}%">` : ''}
           ${colunas.map(coluna => `<col style="width:${(larguraColunasPercentual * (parseFloat(coluna.size) || 1) / pesoColunas).toFixed(3)}%">`).join('')}
@@ -3794,8 +3808,8 @@ function renderListaParceirosIndicacaoAdmin(records) {
           ${records.map(parceiro => renderParceiroIndicacaoAdmin(parceiro, colunas, { selecao: modoLote })).join('')}
         </tbody>
       </table>
-    </div>
-  `;
+    `
+  });
 }
 
 function renderParceiroIndicacaoAdmin(parceiro, colunas = obterColunasVisiveisParceirosIndicacaoAdmin(), { selecao = false } = {}) {
@@ -4287,28 +4301,6 @@ function aplicarBuscaParceirosIndicacaoAdmin() {
   state.admin.buscaParceirosIndicacaoAplicada = state.admin.buscaParceirosIndicacaoDigitada;
   state.admin.paginaParceirosIndicacao = 1;
   renderAdministracao();
-}
-
-function selecionarPaginaParceirosIndicacaoAdmin(pagina) {
-  const totalPaginas = Math.max(
-    1,
-    Math.ceil(obterParceirosIndicacaoFiltradosAdmin(state.admin.parceirosIndicacao || []).length / (Math.max(1, Number(state.admin.limiteParceirosIndicacao) || 15)))
-  );
-
-  state.admin.paginaParceirosIndicacao = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
-  renderAdministracao();
-}
-
-function renderPaginacaoParceirosIndicacaoAdmin(totalPaginas, paginaAtual, totalResultados) {
-  return renderCrm2CadastroPagination({
-    label: 'parceiros de indicação',
-    page: paginaAtual,
-    totalPages: totalPaginas,
-    totalItems: totalResultados,
-    previousAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual - 1})`,
-    nextAction: `selecionarPaginaParceirosIndicacaoAdmin(${paginaAtual + 1})`,
-    hidePreviousOnFirstPage: true
-  });
 }
 
 function renderModalParceiroIndicacaoAdmin() {
@@ -11755,12 +11747,6 @@ function renderTabelaValidacoesPendentesAr() {
   const { pendentes, selecionados, loading } = state.ar.validacoes;
   const { campo: campoOrdenado, direcao } = state.ar.validacoes.ordenacaoPendentes;
   const pendentesOrdenados = ordenarListaPendentesValidacoesAr(pendentes, campoOrdenado, direcao);
-  const itensPorPagina = 30;
-  const totalPaginas = Math.max(1, Math.ceil(pendentesOrdenados.length / itensPorPagina));
-  const paginaAtual = Math.min(Math.max(1, Number(state.ar.validacoes.paginaPendentes) || 1), totalPaginas);
-  const inicio = (paginaAtual - 1) * itensPorPagina;
-  const pendentesPagina = pendentesOrdenados.slice(inicio, inicio + itensPorPagina);
-  state.ar.validacoes.paginaPendentes = paginaAtual;
   const todosSelecionados = pendentes.length > 0 && pendentes.every(item => selecionados.includes(item.id));
   const cabecalhoOrdenavel = (rotulo, campo) => {
     const ativo = campoOrdenado === campo;
@@ -11775,9 +11761,12 @@ function renderTabelaValidacoesPendentesAr() {
     return '<p class="quick-link-empty">Nenhum lançamento pendente encontrado.</p>';
   }
 
-  return `
-    <div class="ar-validacoes-table-wrap">
-      <table class="hub-data-table ar-validacoes-data-table">
+  return renderHubDataTable({
+    wrapperClass: 'ar-validacoes-table-wrap',
+    itemLabel: 'lançamentos',
+    ariaLabel: 'Paginação de lançamentos pendentes',
+    tableHtml: `
+      <table class="hub-data-table ar-validacoes-data-table" data-hub-pagination-key="ar-validacoes-pendentes" data-hub-pagination-data-change-page="${state.ar.validacoes.paginaPendentes}">
         <thead>
           <tr>
             <th><input type="checkbox" ${todosSelecionados ? 'checked' : ''} onchange="alternarTodasValidacoesVisiveisAr(this.checked)" aria-label="Selecionar todos os lançamentos pendentes em todas as páginas"></th>
@@ -11790,7 +11779,7 @@ function renderTabelaValidacoesPendentesAr() {
           </tr>
         </thead>
         <tbody>
-          ${pendentesPagina.map(item => `
+          ${pendentesOrdenados.map(item => `
             <tr class="${selecionados.includes(item.id) ? 'selected' : ''}">
               <td><input type="checkbox" ${selecionados.includes(item.id) ? 'checked' : ''} onchange="alternarValidacaoSelecionadaAr('${escapeAttr(item.id)}')" aria-label="Selecionar lançamento de ${escapeAttr(obterNomeParceiroValidacaoAr(item) || 'parceiro')}"></td>
               <td title="${escapeAttr([obterNomeParceiroValidacaoAr(item) || '-', item.cod_vendedor].filter(Boolean).join(' · '))}"><strong>${escapeHtml(obterNomeParceiroValidacaoAr(item) || '-')}</strong>${item.cod_vendedor ? `<small>${escapeHtml(item.cod_vendedor)}</small>` : ''}</td>
@@ -11803,16 +11792,8 @@ function renderTabelaValidacoesPendentesAr() {
           `).join('')}
         </tbody>
       </table>
-    </div>
-    <div class="ar-validacoes-pagination">
-      <span>Mostrando ${inicio + 1}–${Math.min(inicio + itensPorPagina, pendentes.length)} de ${pendentes.length} registros</span>
-      <div>
-        <button class="secondary-btn" type="button" onclick="selecionarPaginaPendentesValidacoesAr(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''}>Anterior</button>
-        <strong>Página ${paginaAtual} de ${totalPaginas}</strong>
-        <button class="secondary-btn" type="button" onclick="selecionarPaginaPendentesValidacoesAr(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>Próxima</button>
-      </div>
-    </div>
-  `;
+    `
+  });
 }
 
 function renderLancamentoManualValidacoesAr() {
@@ -11932,20 +11913,16 @@ function limparFiltrosRecibosValidacoesAr() {
 
 function renderTabelaRecibosAr(recibos, temFiltros = false) {
   const podeCancelar = pode('painel_ar.validacoes', 'cancelar_recibo');
-  const itensPorPagina = 15;
-  const totalPaginas = Math.max(1, Math.ceil(recibos.length / itensPorPagina));
-  const paginaAtual = Math.min(Math.max(1, Number(state.ar.validacoes.paginaRecibos) || 1), totalPaginas);
-  const inicio = (paginaAtual - 1) * itensPorPagina;
-  const recibosPagina = recibos.slice(inicio, inicio + itensPorPagina);
-  state.ar.validacoes.paginaRecibos = paginaAtual;
-
   if (!recibos.length) {
     return temFiltros ? '<p class="quick-link-empty">Nenhum recibo corresponde aos filtros informados.</p>' : '<p class="quick-link-empty">Nenhum recibo emitido até agora.</p>';
   }
 
-  return `
-    <div class="ar-recibos-table">
-      <table class="hub-data-table ar-recibos-data-table">
+  return renderHubDataTable({
+    wrapperClass: 'ar-recibos-table',
+    itemLabel: 'recibos',
+    ariaLabel: 'Paginação de recibos',
+    tableHtml: `
+      <table class="hub-data-table ar-recibos-data-table" data-hub-pagination-key="ar-validacoes-recibos">
         <thead>
           <tr>
             <th>Número</th>
@@ -11957,7 +11934,7 @@ function renderTabelaRecibosAr(recibos, temFiltros = false) {
           </tr>
         </thead>
         <tbody>
-          ${recibosPagina.map(recibo => `
+          ${recibos.map(recibo => `
             <tr>
               <td>${escapeHtml(recibo.numero || '-')}</td>
               <td title="${escapeAttr(recibo.parceiro_nome || '-')}">${escapeHtml(recibo.parceiro_nome || '-')}</td>
@@ -11973,24 +11950,8 @@ function renderTabelaRecibosAr(recibos, temFiltros = false) {
           `).join('')}
         </tbody>
       </table>
-    </div>
-    <div class="ar-validacoes-pagination">
-      <span>Mostrando ${inicio + 1}–${Math.min(inicio + itensPorPagina, recibos.length)} de ${recibos.length} recibos</span>
-      <div>
-        <button class="secondary-btn" type="button" onclick="selecionarPaginaRecibosValidacoesAr(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''}>Anterior</button>
-        <strong>Página ${paginaAtual} de ${totalPaginas}</strong>
-        <button class="secondary-btn" type="button" onclick="selecionarPaginaRecibosValidacoesAr(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''}>Próxima</button>
-      </div>
-    </div>
-  `;
-}
-
-function selecionarPaginaRecibosValidacoesAr(pagina) {
-  const validacoes = state.ar.validacoes;
-  const recibosFiltrados = filtrarListaRecibosAr(validacoes.recibos, validacoes.filtrosRecibos);
-  const totalPaginas = Math.max(1, Math.ceil(recibosFiltrados.length / 15));
-  validacoes.paginaRecibos = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
-  renderPainelAr();
+    `
+  });
 }
 
 function formatarEnderecoCorretoraReciboAr(configuracao, erro = false) {
@@ -14933,7 +14894,7 @@ async function carregarValidacoesAr(manterMensagem = false, pendenteAlvoId = '')
     state.ar.validacoes.pendentes = response.data.pendentes || [];
     state.ar.validacoes.paginaPendentes = Math.min(
       state.ar.validacoes.paginaPendentes,
-      Math.max(1, Math.ceil(state.ar.validacoes.pendentes.length / 30))
+      Math.max(1, Math.ceil(state.ar.validacoes.pendentes.length / state.ar.validacoes.tamanhoPaginaPendentes))
     );
     if (pendenteAlvoId) {
       const ordenados = ordenarListaPendentesValidacoesAr(
@@ -14942,7 +14903,7 @@ async function carregarValidacoesAr(manterMensagem = false, pendenteAlvoId = '')
         state.ar.validacoes.ordenacaoPendentes.direcao
       );
       const indiceAlvo = ordenados.findIndex(item => String(item.id) === String(pendenteAlvoId));
-      if (indiceAlvo >= 0) state.ar.validacoes.paginaPendentes = Math.floor(indiceAlvo / 30) + 1;
+      if (indiceAlvo >= 0) state.ar.validacoes.paginaPendentes = Math.floor(indiceAlvo / state.ar.validacoes.tamanhoPaginaPendentes) + 1;
     }
     state.ar.validacoes.recibos = response.data.recibos || [];
     state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => {
@@ -14980,12 +14941,6 @@ function alternarTodasValidacoesVisiveisAr(marcar) {
     state.ar.validacoes.selecionados = state.ar.validacoes.selecionados.filter(id => !idsPendentes.includes(id));
   }
 
-  renderPainelAr();
-}
-
-function selecionarPaginaPendentesValidacoesAr(pagina) {
-  const totalPaginas = Math.max(1, Math.ceil(state.ar.validacoes.pendentes.length / 30));
-  state.ar.validacoes.paginaPendentes = Math.min(Math.max(1, Number(pagina) || 1), totalPaginas);
   renderPainelAr();
 }
 
@@ -18219,6 +18174,7 @@ function obterMensagemApi(response, fallback) {
 Object.assign(window, {
   hubRenderizarTopbarPadrao: renderHubTopbar,
   hubRenderizarSidebarPadrao: renderHubSidebar,
+  hubRenderizarBreadcrumbPadrao: renderHubBreadcrumb,
   hubRenderLoading: renderHubLoading,
   navegarLogoParaHomeHub,
   hubAtualizarLayoutEspecial: atualizarLayoutHubEspecial,
@@ -18287,7 +18243,6 @@ Object.assign(window, {
   selecionarFiltroModulosHome,
   selecionarPerfilModulosHome,
   selecionarPaginaPerfisAdmin,
-  selecionarPaginaParceirosIndicacaoAdmin,
   alternarTodosModulosPermissoesPerfil,
   aplicarLoteGlobalPermissoesPerfil,
   salvarPermissoesPerfilAdmin,
@@ -18339,7 +18294,6 @@ Object.assign(window, {
   abrirBuscaSidebarHub,
   alternarStatusModuloAdmin,
   alternarTodasValidacoesVisiveisAr,
-  selecionarPaginaPendentesValidacoesAr,
   ordenarPendentesValidacoesAr,
   alternarValidacaoSelecionadaAr,
   alternarProdutoListaSelecionadoAr,
@@ -18492,7 +18446,6 @@ Object.assign(window, {
   aplicarFiltrosRecibosValidacoesAr,
   limparFiltrosRecibosValidacoesAr,
   alterarStatusFiltroRecibosValidacoesAr,
-  selecionarPaginaRecibosValidacoesAr,
   selecionarParceiroAr,
   selecionarProdutoAr,
   selecionarProdutoCompletoAr,

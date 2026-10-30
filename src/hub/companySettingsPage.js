@@ -1,4 +1,5 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
+import { salvarCorretoraViaRpc } from './companySettingsSaveRpcFix.js';
 import { hasPermission, normalizarPermissoes } from './services/permissionService.js';
 import {
   aguardarContextoAcessoHub,
@@ -8,8 +9,6 @@ import {
 const COMPANY_ROUTE = 'configuracoes/corretora';
 let renderizadoPara = '';
 let carregando = false;
-let mensagem = '';
-let mensagemTipo = 'info';
 let registroAtual = null;
 let brandingUploadUrl = '';
 
@@ -69,79 +68,139 @@ function injetarEstilos() {
       width: 100%;
       max-width: 100%;
       min-width: 0;
-      margin: 0;
       display: grid;
       gap: 14px;
       box-sizing: border-box;
+      margin: 0;
     }
 
     .company-settings-card {
+      box-sizing: border-box;
       min-width: 0;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      background: rgba(255, 255, 255, 0.84);
-      backdrop-filter: blur(18px);
-      border-radius: 24px;
-      box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
-      padding: 22px;
+      padding: 16px;
     }
 
-    body.dark .company-settings-card {
-      background: rgba(15, 23, 42, 0.76);
-      border-color: rgba(148, 163, 184, 0.18);
+    .company-settings-card-header {
+      border-bottom: 1px solid color-mix(in srgb, var(--cor-principal) 10%, transparent);
+      display: grid;
+      gap: 3px;
+      margin-bottom: 12px;
+      min-width: 0;
+      padding-bottom: 10px;
     }
 
-    .company-settings-card h2 {
-      margin: 0 0 4px;
-      font-size: 1.05rem;
+    .company-settings-card-header h2 {
+      color: var(--texto);
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+      margin: 0;
+      overflow-wrap: anywhere;
     }
 
-    .company-settings-card p {
-      margin: 0 0 18px;
-      color: var(--text-muted, #64748b);
+    .company-settings-heading {
+      max-width: calc(100% - 208px);
+      min-width: 0;
+    }
+
+    .company-settings-branding {
+      position: absolute;
+      right: 26px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 1;
+    }
+
+    .company-settings-branding {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .company-settings-branding .company-settings-logo-preview {
+      width: 148px;
+    }
+
+    .company-settings-upload {
+      flex: 0 0 38px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .company-settings-upload:focus-within {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-principal) 18%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--cor-principal) 42%, transparent);
+      outline-offset: 2px;
+    }
+
+    .company-settings-upload input[type="file"] {
+      cursor: pointer;
+      height: 100%;
+      inset: 0;
+      opacity: 0;
+      position: absolute;
+      width: 100%;
     }
 
     .company-settings-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+      gap: 10px 12px;
       align-items: start;
+    }
+
+    .company-settings-grid-identification {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .company-settings-grid-address {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+
+    .company-settings-address-row-one {
+      grid-column: span 4;
+    }
+
+    .company-settings-address-row-two {
+      grid-column: span 4;
+    }
+
+    .company-settings-address-city-uf {
+      display: grid;
+      gap: 10px 12px;
+      grid-column: span 4;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      min-width: 0;
     }
 
     .company-settings-grid label {
       display: grid;
-      gap: 6px;
+      gap: 4px;
       min-width: 0;
     }
 
-    .company-settings-grid label span {
-      font-size: 0.78rem;
-      font-weight: 800;
-      color: var(--text-muted, #64748b);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+    .company-settings-grid label > span {
+      color: var(--texto-suave);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
 
-    .company-settings-field-full {
-      grid-column: 1 / -1;
-    }
-
-    .company-settings-logo-row {
-      display: grid;
-      grid-template-columns: minmax(140px, 160px) minmax(0, 1fr);
-      gap: 18px;
-      align-items: center;
-    }
-
-    .company-settings-logo-row > div,
-    .company-settings-logo-row label {
-      min-width: 0;
+    .company-settings-grid .config-input {
+      box-sizing: border-box;
+      font-size: 13px;
+      min-height: 34px;
+      padding: 6px 9px;
+      width: 100%;
     }
 
     .company-settings-logo-preview {
       width: 100%;
-      max-width: 160px;
-      height: 112px;
-      border-radius: 22px;
+      max-width: 148px;
+      height: 96px;
+      border-radius: var(--radius-card-compact, 14px);
       border: 1px solid rgba(148, 163, 184, 0.28);
       background: rgba(248, 250, 252, 0.9);
       display: grid;
@@ -150,7 +209,8 @@ function injetarEstilos() {
       color: var(--text-muted, #64748b);
       font-weight: 800;
       text-align: center;
-      padding: 12px;
+      padding: 10px;
+      box-sizing: border-box;
     }
 
     body.dark .company-settings-logo-preview {
@@ -163,37 +223,88 @@ function injetarEstilos() {
       object-fit: contain;
     }
 
-    .company-settings-message {
-      margin: 12px 0 0;
-      padding: 12px 14px;
-      border-radius: 16px;
-      background: rgba(41, 72, 149, 0.1);
-      color: var(--cor-principal, #294895);
-      font-weight: 700;
-    }
-
-    .company-settings-message.error {
-      background: rgba(220, 38, 38, 0.1);
-      color: #b91c1c;
-    }
-
-    .company-settings-message.success {
-      background: rgba(22, 163, 74, 0.12);
-      color: #15803d;
-    }
-
     .company-settings-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 18px;
+      margin-top: 4px;
       flex-wrap: wrap;
     }
 
-    @media (max-width: 880px) {
-      .company-settings-grid,
-      .company-settings-logo-row {
+    @media (max-width: 900px) {
+      .company-settings-grid {
         grid-template-columns: 1fr;
+      }
+
+      .company-settings-grid-identification {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .company-settings-grid-address {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .company-settings-address-row-two {
+        grid-column: span 1;
+      }
+
+      .company-settings-address-row-one {
+        grid-column: span 1;
+      }
+
+      .company-settings-address-city-uf {
+        grid-column: 1 / -1;
+      }
+
+      .company-settings-logo-preview {
+        width: min(100%, 148px);
+      }
+    }
+
+    @media (max-width: 680px) {
+      .company-settings-heading {
+        max-width: none;
+      }
+
+      .company-settings-branding {
+        margin-top: 12px;
+        position: relative;
+        right: auto;
+        justify-self: start;
+        top: auto;
+        transform: none;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .company-settings-grid-identification {
+        grid-template-columns: 1fr;
+      }
+
+      .company-settings-grid-address {
+        grid-template-columns: 1fr;
+      }
+
+      .company-settings-address-row-one,
+      .company-settings-address-row-two {
+        grid-column: span 1;
+      }
+
+      .company-settings-address-city-uf {
+        grid-column: span 1;
+        grid-template-columns: 1fr;
+      }
+
+      .company-settings-card {
+        padding: 12px;
+      }
+
+      .company-settings-actions {
+        justify-content: stretch;
+      }
+
+      .company-settings-actions > button {
+        flex: 1 1 120px;
       }
     }
   `;
@@ -261,9 +372,9 @@ function renderTopo() {
   return window.hubRenderizarTopbarPadrao?.() || '';
 }
 
-function campo(id, rotulo, valor = '', attrs = '') {
+function campo(id, rotulo, valor = '', attrs = '', classeLabel = '') {
   return `
-    <label>
+    <label${classeLabel ? ` class="${escapeAttr(classeLabel)}"` : ''}>
       <span>${escapeHtml(rotulo)}</span>
       <input id="${escapeAttr(id)}" class="config-input" type="text" value="${escapeAttr(valor || '')}" ${attrs}>
     </label>
@@ -293,16 +404,26 @@ function renderFormulario() {
       <div class="hub-shell">
         ${window.hubRenderizarSidebarPadrao?.() || ''}
         <section class="hub-page-content company-settings-shell">
+          ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
           <section class="hub-page-intro">
-            <span class="hub-page-kicker">Configurações</span>
-            <h2>Dados da corretora</h2>
-            <p>Centralize os dados institucionais e a identidade visual usada no Hub.</p>
+            <div class="company-settings-heading">
+              <span class="hub-page-kicker">Configurações</span>
+              <h2>Dados da corretora</h2>
+            </div>
+            <div class="company-settings-branding">
+              ${renderPreviewLogo()}
+              <label class="icon-btn company-settings-upload" title="Selecionar logo da corretora" aria-label="Selecionar logo da corretora">
+                <i data-lucide="upload-cloud" aria-hidden="true"></i>
+                <input id="cc_logo_file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Selecionar arquivo da logo da corretora">
+              </label>
+            </div>
           </section>
 
-        <section class="company-settings-card">
-          <h2>Identificação</h2>
-          <p>Dados principais da empresa.</p>
-          <div class="company-settings-grid">
+        <section class="admin-panel company-settings-card">
+          <header class="company-settings-card-header">
+            <h2>Identificação</h2>
+          </header>
+          <div class="company-settings-grid company-settings-grid-identification">
             ${campo('cc_razao_social', 'Razão social', r.razao_social)}
             ${campo('cc_nome_fantasia', 'Nome fantasia', r.nome_fantasia)}
             ${campo('cc_cnpj', 'CNPJ', r.cnpj)}
@@ -312,9 +433,10 @@ function renderFormulario() {
           </div>
         </section>
 
-        <section class="company-settings-card">
-          <h2>Contato</h2>
-          <p>Informações usadas em comunicações e exibição institucional.</p>
+        <section class="admin-panel company-settings-card">
+          <header class="company-settings-card-header">
+            <h2>Contato</h2>
+          </header>
           <div class="company-settings-grid">
             ${campo('cc_email', 'E-mail', r.email, 'type="email"')}
             ${campo('cc_telefone', 'Telefone', r.telefone)}
@@ -323,43 +445,26 @@ function renderFormulario() {
           </div>
         </section>
 
-        <section class="company-settings-card">
-          <h2>Endereço</h2>
-          <p>Dados de localização da corretora.</p>
-          <div class="company-settings-grid">
-            <label class="company-settings-field-full">
-              <span>Logradouro</span>
-              <input id="cc_endereco_logradouro" class="config-input" type="text" value="${escapeAttr(r.endereco_logradouro || '')}">
-            </label>
-            ${campo('cc_endereco_numero', 'Número', r.endereco_numero)}
-            ${campo('cc_endereco_complemento', 'Complemento', r.endereco_complemento)}
-            ${campo('cc_endereco_bairro', 'Bairro', r.endereco_bairro)}
-            ${campo('cc_endereco_cidade', 'Cidade', r.endereco_cidade)}
-            ${campo('cc_endereco_uf', 'UF', r.endereco_uf)}
-            ${campo('cc_endereco_cep', 'CEP', r.endereco_cep)}
-          </div>
-        </section>
-
-        <section class="company-settings-card">
-          <h2>Identidade visual</h2>
-          <p>A logo enviada aqui será aplicada ao Hub e à tela de login.</p>
-          <div class="company-settings-logo-row">
-            ${renderPreviewLogo()}
-            <div>
-              <label>
-                <span>Logo da corretora</span>
-                <input id="cc_logo_file" class="config-input" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-              </label>
-              <p class="company-settings-message">Formatos aceitos: PNG, JPG, WEBP ou SVG. Limite do bucket: 5 MB.</p>
+        <section class="admin-panel company-settings-card">
+          <header class="company-settings-card-header">
+            <h2>Endereço</h2>
+          </header>
+          <div class="company-settings-grid company-settings-grid-address">
+            ${campo('cc_endereco_cep', 'CEP', r.endereco_cep, 'oninput="hubCompanySettingsCepInput(event)"', 'company-settings-address-row-one')}
+            ${campo('cc_endereco_logradouro', 'Logradouro', r.endereco_logradouro, '', 'company-settings-address-row-one')}
+            ${campo('cc_endereco_numero', 'Número', r.endereco_numero, '', 'company-settings-address-row-one')}
+            ${campo('cc_endereco_complemento', 'Complemento', r.endereco_complemento, '', 'company-settings-address-row-two')}
+            ${campo('cc_endereco_bairro', 'Bairro', r.endereco_bairro, '', 'company-settings-address-row-two')}
+            <div class="company-settings-address-city-uf">
+              ${campo('cc_endereco_cidade', 'Cidade', r.endereco_cidade)}
+              ${campo('cc_endereco_uf', 'UF', r.endereco_uf)}
             </div>
           </div>
         </section>
 
-        ${mensagem ? `<p class="company-settings-message ${escapeAttr(mensagemTipo)}">${escapeHtml(mensagem)}</p>` : ''}
-
           <div class="company-settings-actions">
             <button class="secondary-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Cancelar</button>
-            <button class="save-btn" type="button" onclick="hubCorretoraSalvar()">Salvar dados</button>
+            <button class="save-btn" type="button" data-company-settings-save>Salvar</button>
           </div>
         </section>
       </div>
@@ -377,6 +482,7 @@ function renderErro(mensagemErro) {
       <div class="hub-shell">
         ${window.hubRenderizarSidebarPadrao?.() || ''}
         <section class="hub-page-content company-settings-shell">
+          ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
           <section class="error-card">
             <h1>Dados da corretora indisponíveis</h1>
             <p>${escapeHtml(mensagemErro || 'Não foi possível carregar esta área.')}</p>
@@ -503,9 +609,6 @@ async function sincronizarConfiguracaoLogo(logoUrl) {
 
 async function salvarCorretora() {
   try {
-    mensagem = '';
-    mensagemTipo = 'info';
-
     await garantirAcesso();
     const logo = await uploadLogoSeInformada();
     const usuarioId = await obterUsuarioPublicoAtual();
@@ -549,13 +652,11 @@ async function salvarCorretora() {
     await sincronizarConfiguracaoLogo(data.logo_url);
     await window.hubRecarregarBranding?.();
 
-    mensagem = 'Dados da corretora salvos com sucesso.';
-    mensagemTipo = 'success';
+    window.hubToast?.success('Dados da corretora salvos com sucesso.', { dedupeKey: 'company-settings-save' });
     renderizadoPara = '';
     await renderizarPagina({ force: true });
   } catch (erro) {
-    mensagem = erro.message || 'Erro ao salvar os dados da corretora.';
-    mensagemTipo = 'error';
+    window.hubToast?.error(erro.message || 'Erro ao salvar os dados da corretora.', { dedupeKey: 'company-settings-save' });
     renderizadoPara = '';
     await renderizarPagina({ force: true });
   }
@@ -569,6 +670,18 @@ function iniciar() {
 window.hubCorretoraSalvar = salvarCorretora;
 window.hubCorretoraVoltarConfiguracoes = navegarParaConfiguracoes;
 window.hubRenderizarPaginaCorretora = renderizarPagina;
+window.dispatchEvent(new Event('hub:company-settings-ready'));
+
+document.addEventListener('click', event => {
+  const botao = event.target instanceof Element
+    ? event.target.closest('[data-company-settings-save]')
+    : null;
+
+  if (!botao) return;
+
+  event.preventDefault();
+  salvarCorretoraViaRpc();
+}, true);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', iniciar);

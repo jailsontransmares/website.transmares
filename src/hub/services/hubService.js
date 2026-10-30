@@ -344,7 +344,7 @@ export async function carregarDadosIniciaisSupabase() {
     };
   }
 
-  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, recursosSubmodulos] = await Promise.all([
+  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, dependentesRhDp, recursosSubmodulos] = await Promise.all([
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
@@ -353,6 +353,9 @@ export async function carregarDadosIniciaisSupabase() {
     selecionarTabelaOpcional('aniversarios'),
     selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
     selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status')),
+    selecionarTabelaOpcional('rh_dependentes', query => query
+      .select('id, nome_completo, data_nascimento, ativo')
+      .eq('ativo', true)),
     selecionarTabelaOpcional('recursos_acesso', query => query
       .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
       .in('chave', HOME_SUBMODULES.map(item => item.key)))
@@ -372,7 +375,8 @@ export async function carregarDadosIniciaisSupabase() {
   });
   const aniversariantesCadastros = [
     ...parceirosIndicacao.map(item => ({ ...item, origem_cadastro: 'parceiros_indicacao' })),
-    ...colaboradoresRhDp.map(item => ({ ...item, origem_cadastro: 'rh_colaboradores' }))
+    ...colaboradoresRhDp.map(item => ({ ...item, origem_cadastro: 'rh_colaboradores' })),
+    ...dependentesRhDp.map(item => ({ ...item, origem_cadastro: 'rh_dependentes' }))
   ];
 
   return {

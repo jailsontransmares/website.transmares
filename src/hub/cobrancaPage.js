@@ -1,5 +1,6 @@
 import { carregarContextoFinanceiro } from './services/financeiroService.js';
 import { atualizarCobrancaOperacional, atualizarTituloFinanceiro, carregarDadosCobranca, carregarUsuariosAtivosCobranca, criarCobrancaOperacional, definirEstadoCobranca, excluirCobrancaOperacional, registrarInteracaoCobranca } from './services/cobrancaService.js';
+import { renderHubDataTable } from './hubDataTable.js';
 
 const PRODUTOS_COBRANCA = ['AUTO', 'RESIDENCIA', 'CONDOMINIO', 'EMPRESARIAL', 'VIDA', 'PREVIDENCIA', 'CONSÓRCIO'];
 
@@ -144,9 +145,12 @@ export function criarCobrancaController({ renderShell, pode, renderUnavailable, 
 
   function renderTabela() {
     const titulos = titulosFiltrados();
-    return `
-      <div class="admin-table-wrap">
-        <table class="admin-table hub-data-table">
+    const tabela = renderHubDataTable({
+      wrapperClass: 'admin-table-wrap',
+      itemLabel: 'cobranças',
+      ariaLabel: 'Paginação de cobranças',
+      tableHtml: `
+        <table class="admin-table hub-data-table" aria-label="Cobranças" data-hub-pagination-key="financeiro-cobrancas">
           <thead><tr><th>Produto</th><th>Cliente</th><th>Descrição</th><th style="text-align:center">Vencimento</th><th style="text-align:center">Dias em atraso</th><th>Status</th><th>Cobrança</th></tr></thead>
           <tbody>
             ${titulos.length ? titulos.map(titulo => {
@@ -172,9 +176,9 @@ export function criarCobrancaController({ renderShell, pode, renderUnavailable, 
             }).join('') : '<tr><td colspan="7">Nenhum título corresponde aos filtros informados.</td></tr>'}
           </tbody>
         </table>
-      </div>
-      <p>${titulos.length} título${titulos.length === 1 ? '' : 's'} encontrado${titulos.length === 1 ? '' : 's'}.</p>
-    `;
+      `
+    });
+    return `${tabela}<p>${titulos.length} título${titulos.length === 1 ? '' : 's'} encontrado${titulos.length === 1 ? '' : 's'}.</p>`;
   }
 
   function renderDetalhe() {

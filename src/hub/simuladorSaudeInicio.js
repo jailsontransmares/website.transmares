@@ -3,6 +3,7 @@ import { chamarApi } from './api.js';
 import { SIMULADOR_SAUDE_CATALOGO_ROUTE, SIMULADOR_SAUDE_COTACAO_ROUTE, SIMULADOR_SAUDE_ROUTE } from './simuladorSaudeRoutes.js';
 import { obterBaseHub } from './routeConfig.js';
 import { carregarPropostaSalvaSimuladorSaude } from './simuladorSaudeCotacao.js';
+import { renderHubDataTable } from './hubDataTable.js';
 
 const state = { quotes: [], loading: false, error: '', notice: '', busyId: '', requestId: 0, search: '', statusFilter: 'todas' };
 let context = {};
@@ -79,7 +80,13 @@ function renderTable() {
     </tr>`;
   }).join('');
 
-  return `<div class="saude-home-filter-empty saude-home-empty" role="status" hidden><h3>Nenhuma cotação encontrada</h3><p>Ajuste a busca ou o filtro de status.</p></div><div class="saude-home-table-wrap"><table class="hub-data-table saude-home-table"><thead><tr><th>Cotação</th><th>Cliente</th><th>Vidas</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const table = renderHubDataTable({
+    wrapperClass: 'saude-home-table-wrap',
+    itemLabel: 'cotações',
+    ariaLabel: 'Paginação de cotações',
+    tableHtml: `<table class="hub-data-table saude-home-table" aria-label="Cotações salvas" data-hub-pagination-key="simsaude-cotacoes"><thead><tr><th>Cotação</th><th>Cliente</th><th>Vidas</th><th>Status</th><th>Ações</th></tr></thead><tbody>${rows}</tbody></table>`
+  });
+  return `<div class="saude-home-filter-empty saude-home-empty" role="status" hidden><h3>Nenhuma cotação encontrada</h3><p>Ajuste a busca ou o filtro de status.</p></div>${table}`;
 }
 
 function renderPage() {

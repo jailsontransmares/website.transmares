@@ -27,21 +27,10 @@ function estaNaRotaCorretora() {
 }
 
 function definirMensagem(texto, tipo = 'info') {
-  const mensagemExistente = document.querySelector('.company-settings-message.success, .company-settings-message.error');
-  const container = document.querySelector('.company-settings-actions')?.parentElement;
-
-  if (mensagemExistente) {
-    mensagemExistente.className = `company-settings-message ${tipo}`;
-    mensagemExistente.textContent = texto;
-    return;
-  }
-
-  if (!container) return;
-
-  const mensagem = document.createElement('p');
-  mensagem.className = `company-settings-message ${tipo}`;
-  mensagem.textContent = texto;
-  container.insertBefore(mensagem, container.querySelector('.company-settings-actions'));
+  window.hubToast?.show(texto, {
+    type: tipo,
+    dedupeKey: 'company-settings-save'
+  });
 }
 
 async function carregarRegistroAtual() {
@@ -160,13 +149,13 @@ function montarPayload(registroAtual, usuarioId, logo) {
   };
 }
 
-async function salvarCorretoraViaRpc() {
+export async function salvarCorretoraViaRpc() {
   if (!estaNaRotaCorretora()) {
     return window.__hubCorretoraSalvarOriginal?.();
   }
 
   const botaoSalvar = document.querySelector('.company-settings-actions .save-btn');
-  const textoOriginal = botaoSalvar?.textContent || 'Salvar dados';
+  const textoOriginal = botaoSalvar?.textContent || 'Salvar';
 
   try {
     if (botaoSalvar) {
@@ -215,6 +204,7 @@ function instalarOverride() {
 
 window.addEventListener('load', instalarOverride);
 window.addEventListener('popstate', () => window.setTimeout(instalarOverride, 0));
+window.addEventListener('hub:company-settings-ready', instalarOverride);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', instalarOverride);

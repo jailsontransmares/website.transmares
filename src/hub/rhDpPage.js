@@ -38,8 +38,7 @@ import { obterRotuloStatusHub } from './statusLabels.js';
 import { renderHubStatusDot, renderHubStatusLegend } from './statusIndicators.js';
 import { registerHubRecordShortcutHandler, renderHubRecordHeader, renderHubRecordEditButton, renderHubRecordFormFooter, removeHubRecordWorkflowFooter } from './recordWorkflow.js';
 import { removeHubFormFooterPortals } from './formFooterPortal.js';
-
-const LIMITE_POR_PAGINA = 10;
+import { renderHubDataTable } from './hubDataTable.js';
 const VIA_CEP_ENDPOINT = 'https://viacep.com.br/ws';
 
 function novoColaborador() {
@@ -314,7 +313,6 @@ export function criarRhDpController({
     busca: '',
     filtroStatus: 'ativo',
     syncingSpreadsheet: false,
-    pagina: 1,
     modal: criarEstadoModal()
   };
 
@@ -1045,10 +1043,7 @@ export function criarRhDpController({
 
   function renderTabela() {
     const filtrados = colaboradoresFiltrados();
-    const totalPaginas = Math.max(1, Math.ceil(filtrados.length / LIMITE_POR_PAGINA));
-    state.pagina = Math.min(state.pagina, totalPaginas);
-    const inicio = (state.pagina - 1) * LIMITE_POR_PAGINA;
-    const pagina = filtrados.slice(inicio, inicio + LIMITE_POR_PAGINA);
+    const pagina = filtrados;
 
     if (!pagina.length) {
       return `
@@ -1063,37 +1058,22 @@ export function criarRhDpController({
       `;
     }
 
-    return `
-      <div class="rh-table-wrap">
-        <div class="rh-table rh-table-header" role="row">
-          <span>Colaborador</span>
-          <span>Contato</span>
-          <span>Nascimento</span>
-          <span>Última atualização</span>
-        </div>
-        ${pagina.map(item => renderLinha(item)).join('')}
-      </div>
-      <div class="rh-pagination">
-        <span>Mostrando ${inicio + 1}–${Math.min(inicio + pagina.length, filtrados.length)} de ${filtrados.length} colaboradores</span>
-        <div>
-          <button class="secondary-btn" type="button" aria-label="Página anterior" onclick="hubRhDpSelecionarPagina(${state.pagina - 1})" ${state.pagina <= 1 ? 'disabled' : ''}>‹</button>
-          <span>Página ${state.pagina} de ${totalPaginas}</span>
-          <button class="secondary-btn" type="button" aria-label="Próxima página" onclick="hubRhDpSelecionarPagina(${state.pagina + 1})" ${state.pagina >= totalPaginas ? 'disabled' : ''}>›</button>
-        </div>
-      </div>
-      ${renderHubStatusLegend([
+    return renderHubDataTable({
+      wrapperClass: 'admin-table-wrap',
+      itemLabel: 'colaboradores',
+      ariaLabel: 'Paginação de colaboradores',
+      tableHtml: `
+        <table class="admin-table hub-data-table" aria-label="Colaboradores cadastrados" data-hub-pagination-key="rh-colaboradores">
+          <thead>
+            <tr><th scope="col">Colaborador</th><th scope="col">CPF</th><th scope="col">Nascimento</th><th scope="col">Contato</th></tr>
+          </thead>
+          <tbody>${pagina.map(item => renderLinha(item)).join('')}</tbody>
+        </table>
+      `
+    }) + renderHubStatusLegend([
         { status: 'ativo', rotulo: 'Ativo' },
         { status: 'inativo', rotulo: 'Inativo' }
-      ], 'Legenda de status dos colaboradores')}
-    `;
-  }
-
-  function iniciaisColaborador(nome) {
-    const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
-    if (!partes.length) return '?';
-    const primeira = partes[0][0];
-    const ultima = partes.length > 1 ? partes[partes.length - 1][0] : partes[0][1] || '';
-    return `${primeira}${ultima}`.toLocaleUpperCase('pt-BR');
+      ], 'Legenda de status dos colaboradores');
   }
 
   function renderLinha(item) {
@@ -1103,18 +1083,15 @@ export function criarRhDpController({
     const colaboradorCodigo = escapeAttr(item.codigo || item.id);
 
     return `
-      <article class="rh-table rh-table-row" role="row">
-        <div class="rh-person-cell">
-          <span class="rh-person-avatar" aria-hidden="true">${escapeHtml(iniciaisColaborador(item.nome_completo))}</span>
-          <div class="rh-person-name-row">
-            ${renderHubStatusDot(status, 'do colaborador')}
-            <button class="rh-person-name" type="button" aria-label="Visualizar cadastro de ${escapeAttr(item.nome_completo || 'colaborador')}" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">${escapeHtml(item.nome_completo || '-')}</button>
-          </div>
-        </div>
-        <span>${escapeHtml(contato)}</span>
-        <span>${escapeHtml(formatarData(item.data_nascimento))}${idade == null ? '' : `<small>${idade} anos</small>`}</span>
-        <span>${escapeHtml(formatarDataHora(item.updated_at))}</span>
-      </article>
+      <tr>
+        <td><div class="rh-person-name-row">
+          ${renderHubStatusDot(status, 'do colaborador')}
+          <button class="rh-person-name" type="button" aria-label="Visualizar cadastro de ${escapeAttr(item.nome_completo || 'colaborador')}" onclick="hubRhDpAbrirCadastro('${colaboradorCodigo}', 'view')">${escapeHtml(item.nome_completo || '-')}</button>
+        </div></td>
+        <td>${escapeHtml(formatarCpf(item.cpf_busca || '') || '—')}</td>
+        <td>${escapeHtml(formatarData(item.data_nascimento))}${idade == null ? '' : `<small>${idade} anos</small>`}</td>
+        <td>${escapeHtml(contato)}</td>
+      </tr>
     `;
   }
 
@@ -3322,7 +3299,6 @@ export function criarRhDpController({
 
   function filtrarBusca(valor) {
     state.busca = valor;
-    state.pagina = 1;
     render();
     const input = document.getElementById('rh_dp_busca');
     input?.focus();
@@ -3331,12 +3307,6 @@ export function criarRhDpController({
 
   function filtrarStatus(valor) {
     state.filtroStatus = ['ativo', 'inativo'].includes(valor) ? valor : 'todos';
-    state.pagina = 1;
-    render();
-  }
-
-  function selecionarPagina(pagina) {
-    state.pagina = Math.max(1, Number(pagina) || 1);
     render();
   }
 
@@ -3424,7 +3394,6 @@ export function criarRhDpController({
     hubRhDpAbrirArquivo: abrirArquivo,
     hubRhDpFiltrarBusca: filtrarBusca,
     hubRhDpFiltrarStatus: filtrarStatus,
-    hubRhDpSelecionarPagina: selecionarPagina,
     hubRhDpAplicarMascara: aplicarMascara,
     hubRhDpBuscarEnderecoCep: buscarEnderecoCep
     ,hubRhDpSalvarMovimentacao: salvarMovimentacao

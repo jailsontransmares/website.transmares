@@ -400,6 +400,7 @@ function renderizarPerfil({ usuario }) {
       <div class="hub-shell">
         ${window.hubRenderizarSidebarPadrao?.() || ''}
         <section class="hub-page-content hub-profile-page-content">
+          ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
           <section class="hub-profile-shell">
         <section class="hub-page-intro">
           <span class="hub-page-kicker">Conta do usuário</span>
@@ -491,6 +492,7 @@ function renderizarPerfilErro(mensagem) {
       <div class="hub-shell">
         ${window.hubRenderizarSidebarPadrao?.() || ''}
         <section class="hub-page-content hub-profile-page-content">
+          ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
           <section class="error-card">
             <h1>Perfil indisponível</h1>
             <p>${escapeHtml(mensagem || 'Não foi possível carregar seu perfil.')}</p>
@@ -527,6 +529,7 @@ async function renderizarRotaPerfil({ force = false } = {}) {
         <div class="hub-shell">
           ${window.hubRenderizarSidebarPadrao?.() || ''}
           <section class="hub-page-content hub-profile-page-content">
+            ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
             <section class="admin-panel hub-profile-loading">
               <div class="hub-page-intro">
                 <span class="hub-page-kicker">Conta do usuário</span>

@@ -1,3 +1,5 @@
+import { prepararPaginacaoTabelasGlobais } from './hubPagination.js';
+
 const estadosOrdenacao = new WeakMap();
 const ROTULOS_NAO_ORDENAVEIS = new Set(['acao', 'acoes', 'opcao', 'opcoes']);
 
@@ -15,6 +17,7 @@ function cabecalhoPodeOrdenar(cabecalho) {
 }
 
 function prepararTabelasGlobais(raiz = document) {
+  prepararPaginacaoTabelasGlobais(raiz);
   raiz.querySelectorAll?.('table.hub-data-table thead th').forEach((cabecalho) => {
     if (cabecalho.dataset.hubSortReady) return;
     cabecalho.dataset.hubSortReady = 'true';
@@ -89,6 +92,7 @@ function ordenarTabela(cabecalho) {
     item.setAttribute('aria-sort', item === cabecalho ? direcao : 'none');
   });
   estadosOrdenacao.set(tabela, { indice, direcao });
+  prepararPaginacaoTabelasGlobais(tabela);
 }
 
 document.addEventListener('click', (evento) => {

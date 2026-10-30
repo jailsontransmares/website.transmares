@@ -540,7 +540,7 @@ export function renderizarPagina() {
       <div class="hub-shell">
         ${sidebar}
         <section class="hub-page-content">
-          <nav class="hub-breadcrumb" aria-label="Caminho da página"><a href="${obterRotaHub('/')}" onclick="event.preventDefault(); navegarParaRota('${obterRotaHub('/')}')">Início</a><span class="hub-breadcrumb-separator">&gt;</span><span class="hub-breadcrumb-current">Notificações</span></nav>
+          ${window.hubRenderizarBreadcrumbPadrao?.() || ''}
           <div class="hub-notifications-page">
             <section class="hub-page-intro">
               <span class="hub-page-kicker">Central de atualizações</span>
