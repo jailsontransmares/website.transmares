@@ -344,7 +344,7 @@ export async function carregarDadosIniciaisSupabase() {
     };
   }
 
-  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, dependentesRhDp, recursosSubmodulos] = await Promise.all([
+  const [perfis, grupos, configuracoes, itens, avisosInternos, aniversarios, parceirosIndicacao, colaboradoresRhDp, dependentesRhDp, recursosSubmodulos, configuracoesCorretora] = await Promise.all([
     selecionarTabelaOpcional('perfis'),
     selecionarTabelaOpcional('grupos'),
     selecionarTabelaOpcional('configuracoes'),
@@ -358,7 +358,12 @@ export async function carregarDadosIniciaisSupabase() {
       .eq('ativo', true)),
     selecionarTabelaOpcional('recursos_acesso', query => query
       .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
-      .in('chave', HOME_SUBMODULES.map(item => item.key)))
+      .in('chave', HOME_SUBMODULES.map(item => item.key))),
+    selecionarTabelaOpcional('corretora_configuracoes', query => query
+      .select('socios')
+      .eq('status', 'ativo')
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(1))
   ]);
 
   const config = normalizarConfiguracoes(configuracoes);
@@ -376,7 +381,15 @@ export async function carregarDadosIniciaisSupabase() {
   const aniversariantesCadastros = [
     ...parceirosIndicacao.map(item => ({ ...item, origem_cadastro: 'parceiros_indicacao' })),
     ...colaboradoresRhDp.map(item => ({ ...item, origem_cadastro: 'rh_colaboradores' })),
-    ...dependentesRhDp.map(item => ({ ...item, origem_cadastro: 'rh_dependentes' }))
+    ...dependentesRhDp.map(item => ({ ...item, origem_cadastro: 'rh_dependentes' })),
+    ...configuracoesCorretora.flatMap(configuracao => Array.isArray(configuracao.socios)
+      ? configuracao.socios.map((socio, indice) => ({
+        id: socio.id || `corretora-socio-${indice}`,
+        nome: socio.nome || '',
+        data_nascimento: socio.nascimento || '',
+        origem_cadastro: 'corretora_socios'
+      }))
+      : [])
   ];
 
   return {

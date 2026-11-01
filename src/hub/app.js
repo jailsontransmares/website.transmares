@@ -2727,7 +2727,7 @@ function renderAniversariantes() {
       : '';
 
     return `
-      <p><strong>${escapeHtml(item.nome || '')}</strong>${item.origem === 'rh_dependentes' ? ' <small>(dependente)</small>' : ''} ${escapeHtml(formatarDataAniversario(item.data))}${escapeHtml(quando)}</p>
+      <p><strong>${escapeHtml(item.nome || '')}</strong>${item.origem === 'rh_dependentes' ? ' <small>(dependente)</small>' : item.origem === 'corretora_socios' ? ' <small>(sócio)</small>' : ''} ${escapeHtml(formatarDataAniversario(item.data))}${escapeHtml(quando)}</p>
     `;
   }).join('');
 }

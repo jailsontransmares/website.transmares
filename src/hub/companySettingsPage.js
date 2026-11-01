@@ -1,4 +1,5 @@
 import { supabase, exigirSupabaseConfigurado } from './supabaseClient.js';
+import { createIcons, Plus, Trash2 } from 'lucide';
 import { salvarCorretoraViaRpc } from './companySettingsSaveRpcFix.js';
 import { hasPermission, normalizarPermissoes } from './services/permissionService.js';
 import {
@@ -11,6 +12,7 @@ let renderizadoPara = '';
 let carregando = false;
 let registroAtual = null;
 let brandingUploadUrl = '';
+let sociosDraft = [];
 
 function escapeHtml(texto) {
   return String(texto || '')
@@ -96,6 +98,67 @@ function injetarEstilos() {
       line-height: 1.25;
       margin: 0;
       overflow-wrap: anywhere;
+    }
+
+    .company-settings-card-header-with-action {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .company-settings-card-header-with-action .secondary-btn {
+      align-items: center;
+      display: inline-flex;
+      gap: 7px;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .company-settings-partners-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .company-settings-partner-row {
+      align-items: end;
+      display: grid;
+      gap: 10px 12px;
+      grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) minmax(145px, 1fr) minmax(145px, 1.2fr) 32px;
+      min-width: 0;
+    }
+
+    .company-settings-partner-row label {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .company-settings-partner-row label > span {
+      color: var(--texto-suave);
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.25;
+    }
+
+    .company-settings-partner-row .config-input {
+      box-sizing: border-box;
+      min-height: 34px;
+      width: 100%;
+    }
+
+    .company-settings-partner-remove {
+      font-size: 15px;
+      height: 30px;
+      margin-bottom: 2px;
+      width: 30px;
+    }
+
+    .company-settings-partners-empty {
+      color: var(--texto-suave);
+      font-size: 13px;
+      margin: 0;
+      padding: 4px 0;
     }
 
     .company-settings-heading {
@@ -259,6 +322,15 @@ function injetarEstilos() {
       .company-settings-logo-preview {
         width: min(100%, 148px);
       }
+
+      .company-settings-partner-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) 32px;
+      }
+
+      .company-settings-partner-remove {
+        grid-column: 3;
+        grid-row: 1;
+      }
     }
 
     @media (max-width: 680px) {
@@ -305,6 +377,19 @@ function injetarEstilos() {
 
       .company-settings-actions > button {
         flex: 1 1 120px;
+      }
+
+      .company-settings-partner-row {
+        grid-template-columns: minmax(0, 1fr) 32px;
+      }
+
+      .company-settings-partner-remove {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .company-settings-card-header-with-action {
+        align-items: flex-start;
       }
     }
   `;
@@ -378,6 +463,138 @@ function campo(id, rotulo, valor = '', attrs = '', classeLabel = '') {
       <span>${escapeHtml(rotulo)}</span>
       <input id="${escapeAttr(id)}" class="config-input" type="text" value="${escapeAttr(valor || '')}" ${attrs}>
     </label>
+  `;
+}
+
+function normalizarSocios(socios) {
+  if (!Array.isArray(socios)) return [];
+
+  return socios.map(socio => ({
+    nome: String(socio?.nome || ''),
+    cpf: String(socio?.cpf || ''),
+    nascimento: formatarDataNascimentoExibicao(socio?.nascimento || ''),
+    telefone: String(socio?.telefone || '')
+  }));
+}
+
+function formatarDataNascimentoExibicao(valor = '') {
+  const texto = String(valor || '').trim();
+  const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  return formatarDataNascimento(texto);
+}
+
+function formatarDataNascimento(valor = '') {
+  const digitos = String(valor || '').replace(/\D+/g, '').slice(0, 8);
+  return digitos
+    .replace(/^(\d{2})(\d)/, '$1/$2')
+    .replace(/^(\d{2})\/(\d{2})(\d)/, '$1/$2/$3');
+}
+
+function formatarDataNascimentoParaSalvar(valor = '') {
+  const texto = String(valor || '').trim();
+  const dataBrasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (dataBrasileira) return `${dataBrasileira[3]}-${dataBrasileira[2]}-${dataBrasileira[1]}`;
+  return texto || null;
+}
+
+function obterSociosDaLista() {
+  const lista = document.getElementById('cc_socios_lista');
+  if (!lista) return normalizarSocios(sociosDraft);
+
+  return Array.from(lista.querySelectorAll('[data-company-settings-socio-row]')).map(linha => ({
+    nome: linha.querySelector('[data-socio-field="nome"]')?.value || '',
+    cpf: linha.querySelector('[data-socio-field="cpf"]')?.value || '',
+    nascimento: linha.querySelector('[data-socio-field="nascimento"]')?.value || '',
+    telefone: linha.querySelector('[data-socio-field="telefone"]')?.value || ''
+  }));
+}
+
+function obterSociosParaSalvar() {
+  return obterSociosDaLista()
+    .map(socio => ({
+      nome: socio.nome.trim(),
+      cpf: socio.cpf.trim(),
+      nascimento: formatarDataNascimentoParaSalvar(socio.nascimento),
+      telefone: socio.telefone.trim()
+    }))
+    .filter(socio => socio.nome || socio.cpf || socio.nascimento || socio.telefone);
+}
+
+function renderListaSocios() {
+  if (!sociosDraft.length) {
+    return '<p class="company-settings-partners-empty">Nenhum sócio cadastrado.</p>';
+  }
+
+  return sociosDraft.map((socio, indice) => `
+    <div class="company-settings-partner-row" data-company-settings-socio-row>
+      <label>
+        <span>Nome</span>
+        <input class="config-input" type="text" autocomplete="name" data-socio-field="nome" value="${escapeAttr(socio.nome)}">
+      </label>
+      <label>
+        <span>CPF</span>
+        <input class="config-input" type="text" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" data-socio-field="cpf" data-socio-mask="cpf" value="${escapeAttr(socio.cpf)}">
+      </label>
+      <label>
+        <span>Nascimento</span>
+        <input class="config-input" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="DD/MM/AAAA" data-socio-field="nascimento" data-socio-mask="nascimento" value="${escapeAttr(socio.nascimento)}">
+      </label>
+      <label>
+        <span>Telefone</span>
+        <input class="config-input" type="tel" inputmode="tel" autocomplete="tel" maxlength="15" placeholder="(00) 00000-0000" data-socio-field="telefone" data-socio-mask="telefone" value="${escapeAttr(socio.telefone)}">
+      </label>
+      <button class="icon-btn danger company-settings-partner-remove" type="button" data-company-settings-remove-socio="${indice}" aria-label="Excluir sócio ${indice + 1}" title="Excluir sócio">
+        <i data-lucide="trash-2" aria-hidden="true"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function atualizarListaSocios({ focarUltimo = false } = {}) {
+  const lista = document.getElementById('cc_socios_lista');
+  if (!lista) return;
+
+  lista.innerHTML = renderListaSocios();
+  createIcons({
+    icons: { Plus, Trash2 },
+    root: document.querySelector('.company-settings-page') || lista,
+    attrs: { 'stroke-width': 1.9 }
+  });
+
+  if (focarUltimo && sociosDraft.length) {
+    lista.querySelector(`[data-company-settings-socio-row]:last-child [data-socio-field="nome"]`)?.focus();
+  }
+}
+
+function formatarCpfSocio(valor = '') {
+  return String(valor).replace(/\D+/g, '').slice(0, 11)
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+}
+
+function formatarTelefoneSocio(valor = '') {
+  const digitos = String(valor).replace(/\D+/g, '').slice(0, 11);
+  if (digitos.length <= 10) {
+    return digitos.replace(/^(\d{2})(\d)/, '($1) $2').replace(/^(\(\d{2}\) \d{4})(\d)/, '$1-$2');
+  }
+
+  return digitos.replace(/^(\d{2})(\d)/, '($1) $2').replace(/^(\(\d{2}\) \d{5})(\d)/, '$1-$2');
+}
+
+function renderCardSocios() {
+  return `
+    <section class="admin-panel company-settings-card">
+      <header class="company-settings-card-header company-settings-card-header-with-action">
+        <h2>Sócios</h2>
+        <button class="secondary-btn" type="button" data-company-settings-add-socio>
+          <i data-lucide="plus" aria-hidden="true"></i>
+          <span>Sócio</span>
+        </button>
+      </header>
+      <div class="company-settings-partners-list" id="cc_socios_lista">${renderListaSocios()}</div>
+    </section>
   `;
 }
 
@@ -462,6 +679,8 @@ function renderFormulario() {
           </div>
         </section>
 
+        ${renderCardSocios()}
+
           <div class="company-settings-actions">
             <button class="secondary-btn" type="button" onclick="hubCorretoraVoltarConfiguracoes()">Cancelar</button>
             <button class="save-btn" type="button" data-company-settings-save>Salvar</button>
@@ -516,6 +735,7 @@ async function renderizarPagina({ force = false } = {}) {
     renderizadoPara = chave;
     await garantirAcesso();
     registroAtual = await carregarRegistroCorretora();
+    sociosDraft = normalizarSocios(registroAtual?.socios);
 
     const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (!estaNaRotaCorretora() || chaveAtual !== chave) return;
@@ -523,6 +743,7 @@ async function renderizarPagina({ force = false } = {}) {
     injetarEstilos();
     app.dataset.companySettingsPage = 'true';
     app.innerHTML = renderFormulario();
+    atualizarListaSocios();
   } catch (erro) {
     const chaveAtual = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     if (!estaNaRotaCorretora() || chaveAtual !== chave) return;
@@ -631,6 +852,7 @@ async function salvarCorretora() {
       endereco_cidade: obterValor('cc_endereco_cidade').trim() || null,
       endereco_uf: obterValor('cc_endereco_uf').trim() || null,
       endereco_cep: obterValor('cc_endereco_cep').trim() || null,
+      socios: obterSociosParaSalvar(),
       logo_url: logo.logo_url,
       logo_path: logo.logo_path,
       status: normalizarStatus(registroAtual?.status || 'ativo'),
@@ -668,11 +890,34 @@ function iniciar() {
 }
 
 window.hubCorretoraSalvar = salvarCorretora;
+window.hubCorretoraObterSocios = obterSociosParaSalvar;
 window.hubCorretoraVoltarConfiguracoes = navegarParaConfiguracoes;
 window.hubRenderizarPaginaCorretora = renderizarPagina;
 window.dispatchEvent(new Event('hub:company-settings-ready'));
 
 document.addEventListener('click', event => {
+  const alvo = event.target instanceof Element ? event.target : null;
+  const botaoAdicionarSocio = alvo?.closest('[data-company-settings-add-socio]');
+
+  if (botaoAdicionarSocio) {
+    event.preventDefault();
+    sociosDraft = obterSociosDaLista();
+    sociosDraft.push({ nome: '', cpf: '', nascimento: '', telefone: '' });
+    atualizarListaSocios({ focarUltimo: true });
+    return;
+  }
+
+  const botaoExcluirSocio = alvo?.closest('[data-company-settings-remove-socio]');
+  if (botaoExcluirSocio) {
+    event.preventDefault();
+    sociosDraft = obterSociosDaLista();
+    const indice = Number(botaoExcluirSocio.dataset.companySettingsRemoveSocio);
+    if (!Number.isInteger(indice) || indice < 0 || indice >= sociosDraft.length) return;
+    sociosDraft.splice(indice, 1);
+    atualizarListaSocios();
+    return;
+  }
+
   const botao = event.target instanceof Element
     ? event.target.closest('[data-company-settings-save]')
     : null;
@@ -681,6 +926,18 @@ document.addEventListener('click', event => {
 
   event.preventDefault();
   salvarCorretoraViaRpc();
+}, true);
+
+document.addEventListener('input', event => {
+  const input = event.target instanceof HTMLInputElement
+    ? event.target
+    : null;
+  const mascara = input?.dataset?.socioMask;
+  if (!mascara) return;
+
+  if (mascara === 'cpf') input.value = formatarCpfSocio(input.value);
+  else if (mascara === 'telefone') input.value = formatarTelefoneSocio(input.value);
+  else if (mascara === 'nascimento') input.value = formatarDataNascimento(input.value);
 }, true);
 
 if (document.readyState === 'loading') {

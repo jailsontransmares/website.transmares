@@ -142,6 +142,7 @@ function montarPayload(registroAtual, usuarioId, logo) {
     endereco_cidade: obterValor('cc_endereco_cidade').trim() || null,
     endereco_uf: obterValor('cc_endereco_uf').trim() || null,
     endereco_cep: obterValor('cc_endereco_cep').trim() || null,
+    socios: window.hubCorretoraObterSocios?.() || [],
     logo_url: logo.logo_url,
     logo_path: logo.logo_path,
     status: normalizarStatus(registroAtual?.status || 'ativo'),
