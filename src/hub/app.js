@@ -926,33 +926,33 @@ function limparDadosSessao() {
 
 function renderLogin() {
   document.getElementById('app').innerHTML = `
-    <section class="login-card">
-      <div class="login-logo" aria-label="Transmares Corretora de Seguros">
-        <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
-      </div>
+    <main class="login-screen">
+      <section class="login-card login-card--entry">
+        <div class="login-logo" aria-label="Transmares Corretora de Seguros">
+          <img src="${obterCaminhoAssetHub('assets/logo-transmares.png')}" alt="Transmares Corretora de Seguros">
+        </div>
 
-    <h1>Hub Transmares</h1>
-      <p>Entre com seu nome de usuário e senha para acessar o Hub.</p>
+        <h1>Hub Transmares</h1>
 
-      <form class="login-form" onsubmit="entrarNoHub(event)">
-        <label>
-          <span>Nome de usuário</span>
-          <input id="login_username" class="config-input" type="text" value="${escapeAttr(state.auth.identificador)}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-          <small>Enquanto sua conta não tiver nome de usuário cadastrado, você também pode entrar com o e-mail.</small>
-        </label>
+        <form class="login-form" onsubmit="entrarNoHub(event)">
+          <label>
+            <span>Nome de usuário</span>
+            <input id="login_username" class="config-input" type="text" value="${escapeAttr(state.auth.identificador)}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+          </label>
 
-        <label>
-          <span>Senha</span>
-          <input id="login_password" class="config-input" type="password" autocomplete="current-password" required>
-        </label>
+          <label>
+            <span>Senha</span>
+            <input id="login_password" class="config-input" type="password" autocomplete="current-password" required>
+          </label>
 
-        ${state.auth.message ? `<p class="admin-message">${escapeHtml(state.auth.message)}</p>` : ''}
+          ${state.auth.message ? `<p class="admin-message">${escapeHtml(state.auth.message)}</p>` : ''}
 
-        <button class="save-btn" type="submit" ${state.auth.loading ? 'disabled' : ''}>
-          ${state.auth.loading ? 'Entrando...' : 'Entrar'}
-        </button>
-      </form>
-    </section>
+          <button class="save-btn" type="submit" ${state.auth.loading ? 'disabled' : ''}>
+            ${state.auth.loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </section>
+    </main>
   `;
 }
 

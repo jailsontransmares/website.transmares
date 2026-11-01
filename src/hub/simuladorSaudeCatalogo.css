@@ -16,16 +16,17 @@
 .simsaude-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; justify-content: space-between; padding: 12px 14px; }
 .simsaude-card > header h3 { font-size: 15px; margin: 0; }
 .simsaude-card > header > span { color: var(--texto-suave); font-size: 12px; }
-.simsaude-table-wrap { overflow-x: auto; }
-.simsaude-table-card .simsaude-catalog-table { min-width: 1200px; }
+.simsaude-table-wrap { border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, transparent); border-radius: 14px; overflow-x: auto; }
+.simsaude-table-card + .hub-data-table-component { margin-top: 10px; }
+.simsaude-table-wrap .simsaude-catalog-table { min-width: 1200px; }
 .simsaude-status-pill { border-radius: 999px; display: inline-flex; font-size: 11px; font-weight: 700; line-height: 1.2; padding: 5px 9px; white-space: nowrap; }
 .simsaude-status-pill.is-current { background: color-mix(in srgb, #16a34a 13%, var(--card)); color: #15803d; }
 .simsaude-status-pill.is-review { background: color-mix(in srgb, #2563eb 12%, var(--card)); color: #1d4ed8; }
 .simsaude-status-pill.is-inactive { background: color-mix(in srgb, #64748b 14%, var(--card)); color: #64748b; }
 .simsaude-status-pill.is-expired { background: color-mix(in srgb, #d97706 14%, var(--card)); color: #a35a00; }
-.simsaude-table-card table { border-collapse: collapse; min-width: 1120px; width: 100%; }
-.simsaude-table-card td { border-top: 1px solid var(--borda); padding: 8px; vertical-align: middle; }
-.simsaude-table-card td small { color: var(--texto-suave); display: block; margin-top: 2px; }
+.simsaude-table-wrap table { border-collapse: collapse; min-width: 1120px; width: 100%; }
+.simsaude-table-wrap td { border-top: 1px solid var(--borda); padding: 8px; vertical-align: middle; }
+.simsaude-table-wrap td small { color: var(--texto-suave); display: block; margin-top: 2px; }
 .simsaude-table-card > header { align-items: center; gap: 12px; }
 .simsaude-plan-list-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .simsaude-bulk-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
@@ -166,9 +167,8 @@
 .simsaude-card > header { padding: 11px 13px; }
 .simsaude-card > header h3 { align-items: center; display: flex; font-size: 14px; gap: 7px; }
 .simsaude-card > header h3 svg { color: var(--cor-principal); height: 16px; width: 16px; }
-.simsaude-count-pill { background: color-mix(in srgb, var(--cor-principal) 7%, var(--card)); border-radius: 99px; color: var(--cor-principal); font-size: 10px; font-weight: 600; margin-left: 2px; padding: 4px 8px; }
-.simsaude-table-card table { min-width: 1050px; }
-.simsaude-table-card td { padding: 7px; }
+.simsaude-table-wrap table { min-width: 1050px; }
+.simsaude-table-wrap td { padding: 7px; }
 .simsaude-operator-name-link { max-width: 100%; white-space: normal; }
 .simsaude-operator-name-link > span { display: block; min-width: 0; }
 .simsaude-operator-name-link small { color: var(--texto-suave); display: block; font-size: 11px; font-weight: 400; margin-top: 2px; }

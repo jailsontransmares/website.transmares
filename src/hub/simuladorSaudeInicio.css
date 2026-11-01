@@ -17,10 +17,10 @@
 .saude-home-filter-menu label { color: var(--texto-suave); display: block; font-size: 11px; margin-bottom: 6px; }
 .saude-home-filter-menu select { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-input, 8px); color: var(--texto); font: inherit; font-size: 12px; min-height: 34px; padding: 5px 8px; width: 100%; }
 .saude-home-filter-empty[hidden], .saude-home-table-wrap[hidden] { display: none; }
-.saude-home-card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--radius-card); min-width: 0; overflow: hidden; }
+.saude-home-card { min-width: 0; }
 .saude-home-card > header { align-items: center; border-bottom: 1px solid var(--borda); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; padding: 12px 14px; }
 .saude-home-card > header h3 { font-size: 15px; margin: 0; }
-.saude-home-table-wrap { overflow-x: auto; }
+.saude-home-table-wrap { border: 1px solid color-mix(in srgb, var(--cor-principal) 10%, transparent); border-radius: 14px; overflow-x: auto; }
 .saude-home-table { border-collapse: collapse; min-width: 850px; width: 100%; }
 .saude-home-table td { border-top: 1px solid var(--borda); font-size: 12px; padding: 10px; vertical-align: middle; }
 .saude-home-table tbody tr:hover { background: color-mix(in srgb, var(--cor-principal) 3%, var(--card)); }
@@ -53,7 +53,6 @@
 .saude-home-title h2 { font-size: 21px; }
 .saude-home-title-icon { align-items: center; background: var(--cor-principal); border-radius: 50%; color: #fff; display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; width: 40px; }
 .saude-home-title-icon svg { height: 23px; width: 23px; }
-.saude-home-card { border-radius: 8px; }
 .saude-home-card > header { padding: 11px 13px; }
 .saude-home-table td { font-size: 11px; padding: 9px 10px; }
 @media (max-width: 620px) { .saude-home-title { align-items: flex-start; } .saude-home-title-icon { flex-basis: 34px; height: 34px; width: 34px; } }
