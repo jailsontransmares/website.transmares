@@ -1355,11 +1355,10 @@ function renderModalConfigurarModulosHome() {
         </div>
 
         <div class="small-modal-actions admin-user-permissions-actions">
-          <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
           <div class="home-modules-footer-actions">
-            <button class="secondary-btn" type="button" onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
+            <button class="secondary-btn" type="button" data-home-modules-cancel ${!alterado ? 'hidden' : ''} onclick="fecharModalConfigurarModulosHome()" ${modal.saving ? 'disabled' : ''}>Cancelar</button>
             <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${modal.saving || !alterado ? 'disabled' : ''}>
-              ${modal.saving ? 'Salvando...' : 'Salvar alterações'}
+              ${modal.saving ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </div>
@@ -1392,11 +1391,10 @@ function renderConteudoPaginaConfiguracaoModulosHome() {
         ${state.modulosHome.loading ? renderHubLoading('Carregando módulos...') : renderConteudoModalConfigurarModulosHome()}
       </div>
       <footer class="home-modules-page-actions">
-        <div class="home-modules-footer-note"><i data-lucide="info" aria-hidden="true"></i><span>As alterações serão aplicadas ao salvar.</span></div>
         <div class="home-modules-footer-actions">
-          <button class="secondary-btn" type="button" onclick="voltarDaPaginaConfiguracaoModulosHome()" ${state.modulosHome.saving ? 'disabled' : ''}>Cancelar</button>
+          <button class="secondary-btn" type="button" data-home-modules-cancel ${!verificarAlteracoesModulosHome() ? 'hidden' : ''} onclick="voltarDaPaginaConfiguracaoModulosHome()" ${state.modulosHome.saving ? 'disabled' : ''}>Cancelar</button>
           <button class="save-btn" type="button" onclick="salvarConfigModulosHome()" ${state.modulosHome.saving || !verificarAlteracoesModulosHome() ? 'disabled' : ''}>
-            ${state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações'}
+            ${state.modulosHome.saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </footer>
@@ -1444,10 +1442,9 @@ function renderConteudoModalConfigurarModulosHome() {
   `;
 }
 
-function renderResumoListaModulosHome(total = 0) {
+function renderResumoListaModulosHome() {
   return `
     <div class="home-modules-list-heading">
-      <div><h3>Módulos e submódulos</h3><p>${total} ${total === 1 ? 'item exibido' : 'itens exibidos'}</p></div>
       <div class="home-modules-availability-legend" aria-label="Legenda de status">
         <span><i class="is-available" aria-hidden="true"></i>Disponível</span>
         <span><i class="is-unavailable" aria-hidden="true"></i>Indisponível</span>
@@ -1656,12 +1653,9 @@ function renderListaModulosHomeModal() {
     return `<div class="home-modules-list">${renderResumoListaModulosHome()}<p class="home-modules-empty">${query ? 'Nenhum item encontrado.' : 'Nenhum módulo encontrado para este filtro.'}</p></div>`;
   }
 
-  const quantidadeExibida = grupos.reduce((total, area) => total + area.linhas.reduce((subtotal, linha) => subtotal
-    + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0), 0);
-
   return `
     <div class="home-modules-list">
-      ${renderResumoListaModulosHome(quantidadeExibida)}
+      ${renderResumoListaModulosHome()}
       <div class="home-modules-area-grid">
       ${grupos.map(area => {
         const quantidade = area.linhas.reduce((total, linha) => total + (linha.modulo.virtual ? 0 : 1) + linha.submodulos.length, 0);
@@ -1810,8 +1804,13 @@ function atualizarControlesModalModulosHome() {
 
   const salvar = raiz.querySelector('.home-modules-footer-actions .save-btn');
   if (salvar) {
-    salvar.disabled = state.modulosHome.saving || !verificarAlteracoesModulosHome();
-    salvar.textContent = state.modulosHome.saving ? 'Salvando...' : 'Salvar alterações';
+    const alterado = verificarAlteracoesModulosHome();
+    salvar.disabled = state.modulosHome.saving || !alterado;
+    salvar.textContent = state.modulosHome.saving ? 'Salvando...' : 'Salvar';
+    raiz.querySelectorAll('[data-home-modules-cancel]').forEach(botao => {
+      botao.hidden = !alterado;
+      botao.disabled = state.modulosHome.saving;
+    });
   }
 }
 
