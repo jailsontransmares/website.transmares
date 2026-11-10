@@ -351,11 +351,16 @@ export async function carregarDadosIniciaisSupabase() {
     selecionarTabelaOpcional('itens'),
     selecionarTabelaOpcional('avisos_internos'),
     selecionarTabelaOpcional('aniversarios'),
-    selecionarTabelaOpcional('parceiros', query => query.select('id, nome, nome_completo, data_aniversario, status')),
-    selecionarTabelaOpcional('rh_colaboradores', query => query.select('id, nome_completo, data_nascimento, status')),
+    selecionarTabelaOpcional('parceiros', query => query
+      .select('id, nome, nome_completo, data_aniversario, status')
+      .eq('status', 'ativo')),
+    selecionarTabelaOpcional('rh_colaboradores', query => query
+      .select('id, nome_completo, data_nascimento, status')
+      .eq('status', 'ativo')),
     selecionarTabelaOpcional('rh_dependentes', query => query
-      .select('id, nome_completo, data_nascimento, ativo')
-      .eq('ativo', true)),
+      .select('id, nome_completo, data_nascimento, ativo, rh_colaboradores!inner(status)')
+      .eq('ativo', true)
+      .eq('rh_colaboradores.status', 'ativo')),
     selecionarTabelaOpcional('recursos_acesso', query => query
       .select('chave, nome, tipo, recurso_pai, rota, ordem, status, exibir_home')
       .in('chave', HOME_SUBMODULES.map(item => item.key))),
