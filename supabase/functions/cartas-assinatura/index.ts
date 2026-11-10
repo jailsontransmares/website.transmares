@@ -5,7 +5,7 @@ import { pdflibAddPlaceholder } from "npm:@signpdf/placeholder-pdf-lib@4.0.0";
 import { P12Signer } from "npm:@signpdf/signer-p12@4.0.0";
 import { SignPdf } from "npm:@signpdf/signpdf@4.0.0";
 import { Buffer } from "node:buffer";
-import forge from "npm:node-forge@1.3.3";
+import forge from "npm:node-forge@1.4.3";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -30,16 +30,38 @@ const encode64 = (value: Uint8Array) => {
 };
 
 function lerCertificado(rawPfx: Uint8Array, passphrase: string) {
-  const p12Asn1 = forge.asn1.fromDer(Buffer.from(rawPfx).toString("binary"));
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, passphrase);
-  const certBags: Array<{ cert?: any }> = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] || [];
-  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
-  const privateKey = keyBags[0]?.key;
-  if (!privateKey) throw new Error("O PFX não contém uma chave privada compatível.");
+  let p12Asn1: any;
+  try {
+    p12Asn1 = forge.asn1.fromDer(Buffer.from(rawPfx).toString("binary"), true, { parseAllBytes: true });
+  } catch {
+    throw new Error("O arquivo não é um PFX/P12 válido ou está danificado.");
+  }
+
+  let p12: any;
+  try {
+    p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, passphrase);
+  } catch {
+    throw new Error("Não foi possível abrir o PFX. Confira a senha e tente exportar novamente o certificado no formato PFX/P12.");
+  }
+
+  let certBags: Array<{ cert?: any }> = [];
+  let keyBags: Array<{ key?: any }> = [];
+  try {
+    certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] || [];
+    const shrouded = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || [];
+    const unencrypted = p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || [];
+    keyBags = [...shrouded, ...unencrypted];
+  } catch {
+    throw new Error("A criptografia interna deste PFX não é compatível com a validação atual.");
+  }
+
+  const privateKey = keyBags.find(bag => bag.key)?.key;
+  if (!privateKey) throw new Error("O PFX foi aberto, mas não contém uma chave privada compatível. Exporte o certificado incluindo a chave privada.");
+  if (!privateKey.n || !privateKey.e) throw new Error("A chave deste certificado não é RSA; a assinatura de PDF desta área requer uma chave RSA.");
   const certificate = certBags.map(bag => bag.cert).find(cert =>
     cert?.publicKey?.n?.compareTo(privateKey.n) === 0 && cert?.publicKey?.e?.compareTo(privateKey.e) === 0
   );
-  if (!certificate) throw new Error("O certificado e a chave privada do PFX não correspondem.");
+  if (!certificate) throw new Error("A chave privada do PFX não corresponde a nenhum certificado incluído no arquivo.");
   const serialFields = certificate.subject.attributes
     .filter(attribute => attribute.name === "serialNumber" || attribute.shortName === "serialNumber" || attribute.type === "2.5.4.5")
     .map(attribute => String(attribute.value));
@@ -50,7 +72,7 @@ function lerCertificado(rawPfx: Uint8Array, passphrase: string) {
     const digits = match?.[1]?.replace(/\D/g, "") || "";
     if (digits.length === 11 || digits.length === 14) documentId = digits;
   }
-  if (!documentId) throw new Error("Não foi possível identificar se o certificado é e-CPF ou e-CNPJ.");
+  if (!documentId) throw new Error("O certificado foi aberto, mas não contém CPF/CNPJ identificável no campo SERIALNUMBER (OID 2.5.4.5).");
   const tipo = documentId.length === 11 ? "ecpf" : "ecnpj";
   const titular = String(certificate.subject.getField("CN")?.value || "Titular do certificado").slice(0, 180);
   const validity = certificate.validity.notAfter.toISOString();
@@ -164,7 +186,7 @@ Deno.serve(async request => {
       try {
         metadata = lerCertificado(rawPfx, passphrase);
         if (new Date(metadata.validade_ate).getTime() <= Date.now()) return reply({ error: "O certificado PFX já está vencido." }, 400);
-      } catch { return reply({ error: "Não foi possível validar o PFX. Confira a senha e se o certificado contém CPF ou CNPJ identificável." }, 400); }
+      } catch (error) { return reply({ error: error instanceof Error ? error.message : "Falha ao validar o PFX." }, 400); }
       const id = crypto.randomUUID();
       const pfxPath = `certificados/${id}/arquivo.enc`;
       const passPath = `certificados/${id}/senha.enc`;
@@ -196,7 +218,7 @@ Deno.serve(async request => {
       try {
         metadata = lerCertificado(rawPfx, passphrase);
         if (new Date(metadata.validade_ate).getTime() <= Date.now()) return reply({ error: "O certificado PFX já está vencido." }, 400);
-      } catch { return reply({ error: "Não foi possível validar o PFX. Confira a senha e se o certificado contém CPF ou CNPJ identificável." }, 400); }
+      } catch (error) { return reply({ error: error instanceof Error ? error.message : "Falha ao validar o PFX." }, 400); }
 
       const { data: existing, error: lookupError } = await admin.from("cartas_certificados")
         .select("id,pfx_path,senha_path")
