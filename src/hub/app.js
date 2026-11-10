@@ -17624,6 +17624,12 @@ const renderizarRotaAtualHubPhase2 = async function() {
     renderModuloIndisponivel('central-senhas');
     return;
   }
+
+  if (rotaRelativa === 'operacoes/cartas') {
+    await mountCartasPage({ renderShell: renderHubShell, pode, navegarParaRota });
+    return;
+  }
+
   const submoduloSolicitado = obterSubmoduloHomePelaRota(`${rotaRelativa}${window.location.hash || ''}`)
     || (rotaRelativa === 'painel-ar' && !window.location.hash
       ? obterSubmoduloArPorAba(state.ar.aba)
@@ -17649,11 +17655,6 @@ const renderizarRotaAtualHubPhase2 = async function() {
       pode,
       navegarParaRota
     });
-    return;
-  }
-
-  if (rotaRelativa === 'operacoes/cartas') {
-    await mountCartasPage({ renderShell: renderHubShell, pode, navegarParaRota });
     return;
   }
 

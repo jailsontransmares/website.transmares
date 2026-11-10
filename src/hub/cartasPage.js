@@ -36,14 +36,22 @@ function renderModal() {
 async function load() {
   if (!supabase || !has('view')) { render(); return; }
   busy = true; render();
-  const [d, c] = await Promise.all([
-    supabase.from('cartas_documentos').select('*').order('created_at', { ascending: false }),
-    supabase.from('cartas_certificados').select('id,nome,tipo,titular,validade_ate,ativo').eq('ativo', true).order('created_at', { ascending: false })
-  ]);
-  busy = false;
-  if (d.error || c.error) notice = d.error?.message || c.error?.message || 'Não foi possível carregar os dados.';
-  docs = d.data || []; certs = c.data || [];
-  render();
+  try {
+    const [d, c] = await Promise.all([
+      supabase.from('cartas_documentos').select('*').order('created_at', { ascending: false }),
+      supabase.from('cartas_certificados').select('id,nome,tipo,titular,validade_ate,ativo').eq('ativo', true).order('created_at', { ascending: false })
+    ]);
+    if (d.error || c.error) notice = d.error?.message || c.error?.message || 'Não foi possível carregar os dados.';
+    docs = d.data || [];
+    certs = c.data || [];
+  } catch (error) {
+    docs = [];
+    certs = [];
+    notice = error?.message || 'Não foi possível carregar os dados de Cartas.';
+  } finally {
+    busy = false;
+    render();
+  }
 }
 
 async function invoke(body, token) {
