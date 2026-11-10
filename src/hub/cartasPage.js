@@ -21,7 +21,7 @@ function render() {
     ${notice ? `<div class="cartas-notice" role="status">${esc(notice)}</div>` : ''}
     <section class="cartas-certificates"><div class="cartas-section-head"><div><h3>Certificado digital</h3><p>O arquivo PFX é guardado criptografado em armazenamento privado.</p></div></div>${certificates}</section>
     <section class="cartas-list"><h3>Documentos</h3><div class="cartas-table-wrap"><table class="cartas-table"><thead><tr><th>Documento</th><th>Destinatário</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead><tbody>${rows || `<tr><td colspan="5"><div class="cartas-empty">${busy ? 'Carregando cartas…' : 'Nenhuma carta cadastrada.'}</div></td></tr>`}</tbody></table></div></section></section>${renderModal()}`;
-  document.getElementById('app').innerHTML = ctx.renderShell({ tituloPagina: 'Cartas', descricaoPagina: 'Criação e assinatura digital de cartas.', classeConteudo: 'cartas-hub-page', conteudo });
+  document.getElementById('app').innerHTML = ctx.renderShell({ tituloPagina: 'Cartas', descricaoPagina: 'Criação e assinatura digital de cartas.', classeConteudo: 'cartas-hub-page', conteudo: content });
   window.createIcons?.();
 }
 
