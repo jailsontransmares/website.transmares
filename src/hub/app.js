@@ -17626,7 +17626,7 @@ const renderizarRotaAtualHubPhase2 = async function() {
   }
 
   if (rotaRelativa === 'operacoes/cartas') {
-    await mountCartasPage({ renderShell: renderHubShell, pode, navegarParaRota });
+    await mountCartasPage({ renderShell: renderHubShell, pode, navegarParaRota, usuario: state.usuario });
     return;
   }
 

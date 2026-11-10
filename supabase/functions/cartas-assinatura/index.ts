@@ -29,7 +29,47 @@ const encode64 = (value: Uint8Array) => {
   return btoa(binary);
 };
 
-function lerCertificado(rawPfx: Uint8Array, passphrase: string) {
+type TipoCertificado = "ecpf" | "ecnpj";
+const oidTitular = { ecpf: "2.16.76.1.3.1", ecnpj: "2.16.76.1.3.3" };
+
+function normalizarDocumento(value: unknown, tipo: TipoCertificado) {
+  const documento = text(value);
+  const formato = tipo === "ecpf" ? /^(?:\d{11}|\d{3}\.\d{3}\.\d{3}-\d{2})$/ : /^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/;
+  return formato.test(documento) ? documento.replace(/\D/g, "") : "";
+}
+
+function lerIdentificadorIcp(certificate: any, tipo: TipoCertificado) {
+  const extensaoSan = certificate.extensions?.find((extension: any) => extension.id === "2.5.29.17");
+  if (typeof extensaoSan?.value !== "string") return "";
+  const { Class, Type, fromDer, derToOid } = forge.asn1;
+  try {
+    const san = fromDer(extensaoSan.value);
+    if (!Array.isArray(san.value)) return "";
+    for (const otherName of san.value) {
+      if (otherName.tagClass !== Class.CONTEXT_SPECIFIC || otherName.type !== 0 || !Array.isArray(otherName.value)) continue;
+      let campos = otherName.value;
+      const primeiro = campos[0];
+      if (campos.length === 1 && primeiro?.tagClass === Class.UNIVERSAL && primeiro.type === Type.SEQUENCE && Array.isArray(primeiro.value)) campos = primeiro.value;
+      const [oid, wrapper] = campos;
+      if (oid?.tagClass !== Class.UNIVERSAL || oid.type !== Type.OID || typeof oid.value !== "string" || derToOid(oid.value) !== oidTitular[tipo]) continue;
+      if (wrapper?.tagClass !== Class.CONTEXT_SPECIFIC || wrapper.type !== 0 || !Array.isArray(wrapper.value)) continue;
+      const valor = wrapper.value[0];
+      if (valor?.tagClass !== Class.UNIVERSAL || typeof valor.value !== "string" ||
+          ![Type.OCTETSTRING, Type.UTF8, Type.PRINTABLESTRING, Type.IA5STRING].includes(valor.type)) continue;
+
+      // O otherName de pessoa física começa com 8 posições de nascimento e 11 de CPF.
+      const documento = tipo === "ecpf" ? valor.value.slice(8, 19) : valor.value;
+      const identificador = normalizarDocumento(documento, tipo);
+      if (identificador) return identificador;
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function lerCertificado(rawPfx: Uint8Array, passphrase: string, tipoSolicitado: string) {
+  if (tipoSolicitado && tipoSolicitado !== "ecpf" && tipoSolicitado !== "ecnpj") throw new Error("Selecione se o certificado é e-CPF ou e-CNPJ.");
   let p12Asn1: any;
   try {
     p12Asn1 = forge.asn1.fromDer(Buffer.from(rawPfx).toString("binary"), true, { parseAllBytes: true });
@@ -62,19 +102,22 @@ function lerCertificado(rawPfx: Uint8Array, passphrase: string) {
     cert?.publicKey?.n?.compareTo(privateKey.n) === 0 && cert?.publicKey?.e?.compareTo(privateKey.e) === 0
   );
   if (!certificate) throw new Error("A chave privada do PFX não corresponde a nenhum certificado incluído no arquivo.");
-  const serialFields = certificate.subject.attributes
-    .filter(attribute => attribute.name === "serialNumber" || attribute.shortName === "serialNumber" || attribute.type === "2.5.4.5")
-    .map(attribute => String(attribute.value));
-  let documentId = serialFields.map(value => value.replace(/\D/g, "")).find(value => value.length === 11 || value.length === 14) || "";
-  if (!documentId) {
-    const subject = certificate.subject.attributes.map(attribute => String(attribute.value)).join(" ");
-    const match = subject.match(/(?:CPF|CNPJ)\s*[:=]?\s*([\d./-]{11,18})/i);
-    const digits = match?.[1]?.replace(/\D/g, "") || "";
-    if (digits.length === 11 || digits.length === 14) documentId = digits;
+  const serialFields = certificate.subject.attributes.filter((attribute: { type: string }) => attribute.type === "2.5.4.5");
+  const lerDocumentoTitular = (esperado: TipoCertificado) =>
+    serialFields.some((field: { value: unknown }) => normalizarDocumento(field.value, esperado)) || Boolean(lerIdentificadorIcp(certificate, esperado));
+  const nomeComum = text(certificate.subject.getField("CN")?.value);
+  const tipos: TipoCertificado[] = ["ecpf", "ecnpj"];
+  let tiposIdentificados = tipos.filter(lerDocumentoTitular);
+  if (!tiposIdentificados.length) {
+    // Alguns certificados da cadeia da Receita Federal terminam o CN em :CPF ou :CNPJ.
+    const sufixo = nomeComum.match(/:\s*([\d./-]+)$/)?.[1];
+    tiposIdentificados = tipos.filter(esperado => normalizarDocumento(sufixo, esperado));
   }
-  if (!documentId) throw new Error("O certificado foi aberto, mas não contém CPF/CNPJ identificável no campo SERIALNUMBER (OID 2.5.4.5).");
-  const tipo = documentId.length === 11 ? "ecpf" : "ecnpj";
-  const titular = String(certificate.subject.getField("CN")?.value || "Titular do certificado").slice(0, 180);
+  if (!tiposIdentificados.length) throw new Error("O PFX foi aberto, mas não foi possível localizar o CPF ou CNPJ do titular nos campos do certificado.");
+  const tipo = tipoSolicitado || (tiposIdentificados.length === 1 ? tiposIdentificados[0] : undefined);
+  if (!tipo) throw new Error("O PFX contém mais de um tipo de documento do titular. Selecione se o certificado é e-CPF ou e-CNPJ.");
+  if (!tiposIdentificados.includes(tipo)) throw new Error(`O certificado contém ${tiposIdentificados[0] === "ecpf" ? "CPF" : "CNPJ"} de titular. Confira o tipo selecionado.`);
+  const titular = (nomeComum || "Titular do certificado").slice(0, 180);
   const validity = certificate.validity.notAfter.toISOString();
   const fingerprintDigest = forge.md.sha256.create();
   fingerprintDigest.update(forge.asn1.toDer(forge.pki.certificateToAsn1(certificate)).getBytes(), "raw");
@@ -162,7 +205,8 @@ Deno.serve(async request => {
         certificate: certificateValue ? JSON.parse(String(certificateValue)) : undefined,
         certificado_id: form.get("certificado_id"),
         pfx_file: form.get("pfx"),
-        senha: form.get("senha")
+        senha: form.get("senha"),
+        tipo: form.get("tipo")
       };
     } else {
       payload = await request.json();
@@ -184,7 +228,7 @@ Deno.serve(async request => {
       if (!text(certificate.nome) || text(certificate.nome).length > 120) return reply({ error: "Informe um nome de identificação válido para o certificado." }, 400);
       let metadata: ReturnType<typeof lerCertificado>;
       try {
-        metadata = lerCertificado(rawPfx, passphrase);
+        metadata = lerCertificado(rawPfx, passphrase, text(payload.tipo));
         if (new Date(metadata.validade_ate).getTime() <= Date.now()) return reply({ error: "O certificado PFX já está vencido." }, 400);
       } catch (error) { return reply({ error: error instanceof Error ? error.message : "Falha ao validar o PFX." }, 400); }
       const id = crypto.randomUUID();
@@ -216,7 +260,7 @@ Deno.serve(async request => {
       if (!id || rawPfx.length < 100 || rawPfx.length > 5 * 1024 * 1024 || !passphrase || passphrase.length > 512) return reply({ error: "Arquivo PFX ou senha inválidos. O limite do arquivo é 5 MB." }, 400);
       let metadata: ReturnType<typeof lerCertificado>;
       try {
-        metadata = lerCertificado(rawPfx, passphrase);
+        metadata = lerCertificado(rawPfx, passphrase, text(payload.tipo));
         if (new Date(metadata.validade_ate).getTime() <= Date.now()) return reply({ error: "O certificado PFX já está vencido." }, 400);
       } catch (error) { return reply({ error: error instanceof Error ? error.message : "Falha ao validar o PFX." }, 400); }
 
@@ -266,9 +310,14 @@ Deno.serve(async request => {
     }
 
     if (action === "sign_document") {
-      const claims = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-      const authTime = Number(claims.auth_time || 0);
-      if (!authTime || Math.floor(Date.now() / 1000) - authTime > 300) return reply({ error: "Confirme sua senha do Hub novamente antes de assinar." }, 401);
+      const confirmationPassword = String(payload.confirmacao_senha ?? "");
+      if (!confirmationPassword || !auth.user.email) return reply({ error: "Informe sua senha do Hub para confirmar a assinatura." }, 401);
+      const confirmationClient = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { data: confirmation, error: confirmationError } = await confirmationClient.auth.signInWithPassword({
+        email: auth.user.email,
+        password: confirmationPassword
+      });
+      if (confirmationError || confirmation.user?.id !== auth.user.id) return reply({ error: "Não foi possível confirmar a senha do Hub. Confira a senha atual e tente novamente." }, 401);
       const id = text(payload.documento_id);
       const { data: document, error: docError } = await admin.from("cartas_documentos").select("*").eq("id", id).maybeSingle();
       if (docError || !document || document.status !== "rascunho") return reply({ error: "Carta não encontrada ou não está mais em rascunho." }, 404);

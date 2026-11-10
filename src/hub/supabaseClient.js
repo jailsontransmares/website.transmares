@@ -28,6 +28,17 @@ export function exigirSupabaseConfigurado() {
   return supabase;
 }
 
+export function criarClienteAutenticacaoTemporaria() {
+  if (!isSupabaseConfigured) exigirSupabaseConfigurado();
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  });
+}
+
 export function obterUrlSupabase() {
   exigirSupabaseConfigurado();
   return supabaseUrl;

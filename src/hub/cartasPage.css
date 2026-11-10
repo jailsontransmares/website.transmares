@@ -27,9 +27,12 @@
 .cartas-dialog header, .cartas-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cartas-dialog header h2 { margin: 5px 0 0; font-size: 1.25rem; }
 .cartas-dialog label { display: grid; gap: 6px; font-size: .86rem; font-weight: 700; }
+.cartas-dialog .cartas-type-toggle { display: flex; align-items: center; gap: 10px; width: fit-content; cursor: pointer; }
+.cartas-dialog .cartas-type-toggle input[type="checkbox"] { width: 17px; height: 17px; margin: 0; accent-color: var(--cor-principal, #3157d5); }
 .cartas-dialog input, .cartas-dialog select, .cartas-dialog textarea { width: 100%; padding: 10px 12px; border: 1px solid rgba(148, 163, 184, .42); border-radius: 10px; color: inherit; background: transparent; font: inherit; }
 .cartas-dialog textarea { resize: vertical; }
 .cartas-security-note { margin: 0; color: var(--text-muted, #64748b); font-size: .8rem; line-height: 1.5; }
+.cartas-modal-error { margin: 0; padding: 11px 13px; border: 1px solid rgba(220, 38, 38, .25); border-radius: 10px; color: #b91c1c; background: rgba(254, 226, 226, .72); font-size: .86rem; line-height: 1.45; }
 .cartas-dialog footer { justify-content: flex-end; padding-top: 5px; }
 body.dark .cartas-cert-card, body.dark .cartas-dialog { background: var(--surface, #101827); }
 body.dark .cartas-table th { background: rgba(148, 163, 184, .1); }

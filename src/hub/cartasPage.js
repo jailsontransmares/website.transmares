@@ -8,6 +8,7 @@ let certs = [];
 let busy = false;
 let notice = '';
 let modal = '';
+let modalError = '';
 
 const esc = (value = '') => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const date = value => value ? new Date(value).toLocaleDateString('pt-BR') : '—';
@@ -27,10 +28,10 @@ function render() {
 
 function renderModal() {
   if (!modal) return '';
-  if (modal.startsWith('atualizar-certificado:')) { const id = modal.slice('atualizar-certificado:'.length); const cert = certs.find(item => item.id === id) || {}; return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog" onsubmit="hubCartasAtualizarCertificado(event, '${id}')"><header><div><span class="hub-page-kicker">Gerenciar certificado</span><h2>Atualizar PFX e senha</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><p>${esc(cert.nome)} · ${cert.tipo === 'ecpf' ? 'e-CPF' : 'e-CNPJ'} · ${esc(cert.titular)}</p><label>Novo arquivo PFX/P12<input name="pfx" type="file" accept=".pfx,.p12,application/x-pkcs12" required></label><label>Senha do novo arquivo<input name="senha" type="password" required autocomplete="new-password"></label><p class="cartas-security-note">O arquivo e a senha serão validados e armazenados criptografados. A senha não será exibida nem retornada ao navegador.</p><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy ? 'disabled' : ''}>Atualizar certificado</button></footer></form></div>`; }
+  if (modal.startsWith('atualizar-certificado:')) { const id = modal.slice('atualizar-certificado:'.length); const cert = certs.find(item => item.id === id) || {}; return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog" onsubmit="hubCartasAtualizarCertificado(event, '${id}')"><header><div><span class="hub-page-kicker">Gerenciar certificado</span><h2>Atualizar PFX e senha</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><p>${esc(cert.nome)} · ${cert.tipo === 'ecpf' ? 'e-CPF' : 'e-CNPJ'} · ${esc(cert.titular)}</p><label class="cartas-type-toggle"><input name="tipo" type="checkbox" value="ecnpj" ${cert.tipo === 'ecnpj' ? 'checked' : ''}><span>Este certificado é e-CNPJ</span></label><p class="cartas-security-note">Desmarcado, o certificado será tratado como e-CPF.</p><label>Novo arquivo PFX/P12<input name="pfx" type="file" accept=".pfx,.p12,application/x-pkcs12" required></label><label>Senha do novo arquivo<input name="senha" type="password" required autocomplete="new-password"></label><p class="cartas-security-note">O arquivo e a senha serão validados e armazenados criptografados. A senha não será exibida nem retornada ao navegador.</p><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy ? 'disabled' : ''}>Atualizar certificado</button></footer></form></div>`; }
   if (modal === 'carta' || modal.startsWith('editar:')) { const id = modal.startsWith('editar:') ? modal.slice(7) : ''; const item = docs.find(doc => doc.id === id) || {}; return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog" onsubmit="hubCartasSalvar(event, '${id}')"><header><div><span class="hub-page-kicker">${id ? 'Editar documento' : 'Novo documento'}</span><h2>${id ? 'Editar carta' : 'Criar carta'}</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><label>Título<input name="titulo" required maxlength="160" placeholder="Ex.: Carta de apresentação" value="${esc(item.titulo || '')}"></label><label>Destinatário<input name="destinatario" required maxlength="200" value="${esc(item.destinatario || '')}"></label><label>Assunto<input name="assunto" required maxlength="200" value="${esc(item.assunto || '')}"></label><label>Texto da carta<textarea name="corpo" required rows="10" maxlength="12000">${esc(item.corpo || '')}</textarea></label><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy ? 'disabled' : ''}>Salvar rascunho</button></footer></form></div>`; }
-  if (modal === 'certificado') return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog" onsubmit="hubCartasCertificado(event)"><header><div><span class="hub-page-kicker">Certificado digital</span><h2>Importar certificado PFX</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><label>Nome para identificação<input name="nome" required maxlength="120"></label><label>Arquivo PFX/P12<input name="pfx" type="file" accept=".pfx,.p12,application/x-pkcs12" required></label><label>Senha do certificado<input name="senha" type="password" required autocomplete="new-password"></label><p class="cartas-security-note">O tipo (e-CPF ou e-CNPJ), o titular e a validade serão identificados no próprio certificado. O arquivo e a senha serão criptografados no servidor.</p><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy ? 'disabled' : ''}>Importar certificado</button></footer></form></div>`;
-  if (modal.startsWith('assinar:')) return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog cartas-confirm-dialog" onsubmit="hubCartasConfirmarAssinatura(event, '${esc(modal.slice(8))}')"><header><div><span class="hub-page-kicker">Confirmação de segurança</span><h2>Assinar documento</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><label>Certificado<select name="certificado_id" required>${certs.filter(c => c.ativo).map(c => `<option value="${c.id}">${esc(c.nome)} · ${c.tipo === 'ecpf' ? 'e-CPF' : 'e-CNPJ'} · ${esc(c.titular)}</option>`).join('')}</select></label><p>Digite novamente sua senha de acesso ao Hub para confirmar a assinatura.</p><label>Senha do Hub<input name="senha" type="password" required autocomplete="current-password"></label><p class="cartas-security-note">Sua senha de acesso não será armazenada.</p><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy || !certs.some(c => c.ativo) ? 'disabled' : ''}>Confirmar assinatura</button></footer></form></div>`;
+  if (modal === 'certificado') return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog" onsubmit="hubCartasCertificado(event)"><header><div><span class="hub-page-kicker">Certificado digital</span><h2>Importar certificado PFX</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><label>Nome para identificação<input name="nome" required maxlength="120"></label><label class="cartas-type-toggle"><input name="tipo" type="checkbox" value="ecnpj"><span>Este certificado é e-CNPJ</span></label><p class="cartas-security-note">Desmarcado, o certificado será tratado como e-CPF. A escolha orienta a busca do CPF/CNPJ no SERIALNUMBER ou no SAN ICP-Brasil.</p><label>Arquivo PFX/P12<input name="pfx" type="file" accept=".pfx,.p12,application/x-pkcs12" required></label><label>Senha do certificado<input name="senha" type="password" required autocomplete="new-password"></label><p class="cartas-security-note">O arquivo e a senha serão criptografados no servidor.</p><footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy ? 'disabled' : ''}>Importar certificado</button></footer></form></div>`;
+  if (modal.startsWith('assinar:')) return `<div class="cartas-overlay" onclick="hubCartasFecharModal(event)"><form class="cartas-dialog cartas-confirm-dialog" onsubmit="hubCartasConfirmarAssinatura(event, '${esc(modal.slice(8))}')"><header><div><span class="hub-page-kicker">Confirmação de segurança</span><h2>Assinar documento</h2></div><button type="button" class="text-btn" onclick="hubCartasFecharModal()">Fechar</button></header><label>Certificado<select name="certificado_id" required>${certs.filter(c => c.ativo).map(c => `<option value="${c.id}">${esc(c.nome)} · ${c.tipo === 'ecpf' ? 'e-CPF' : 'e-CNPJ'} · ${esc(c.titular)}</option>`).join('')}</select></label><p>Digite novamente sua senha de acesso ao Hub para confirmar a assinatura.</p><label>Senha do Hub<input name="senha" type="password" required autocomplete="current-password"></label><p class="cartas-security-note">Sua senha de acesso não será armazenada.</p>${modalError ? `<p class="cartas-modal-error" role="alert">${esc(modalError)}</p>` : ''}<footer><button type="button" class="secondary-btn" onclick="hubCartasFecharModal()">Cancelar</button><button class="save-btn" ${busy || !certs.some(c => c.ativo) ? 'disabled' : ''}>${busy ? 'Validando e assinando…' : 'Confirmar assinatura'}</button></footer></form></div>`;
   return '';
 }
 
@@ -55,8 +56,8 @@ async function load() {
   }
 }
 
-async function invoke(body, token) {
-  const { data, error } = await supabase.functions.invoke('cartas-assinatura', { body, ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}) });
+async function invoke(body, token, client = supabase) {
+  const { data, error } = await client.functions.invoke('cartas-assinatura', { body, ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}) });
   if (error) {
     let message = '';
     if (error.context instanceof Response) {
@@ -70,7 +71,7 @@ async function invoke(body, token) {
 
 window.hubCartasAbrirModal = type => { if ((type === 'carta' && !has('create')) || (type === 'certificado' && !has('manage_certificate'))) return; modal = type; render(); };
 window.hubCartasAbrirAtualizacaoCertificado = id => { if (!has('manage_certificate') || !certs.some(item => item.id === id)) return; modal = `atualizar-certificado:${id}`; render(); };
-window.hubCartasFecharModal = event => { if (event && event.target !== event.currentTarget) return; modal = ''; render(); };
+window.hubCartasFecharModal = event => { if (event && event.target !== event.currentTarget) return; modal = ''; modalError = ''; render(); };
 window.hubCartasSalvar = async (event, id = '') => {
   event.preventDefault(); if (busy || (id ? !has('update') : !has('create'))) return;
   const data = Object.fromEntries(new FormData(event.currentTarget)); busy = true; render();
@@ -87,6 +88,7 @@ window.hubCartasCertificado = async event => {
     const body = new FormData();
     body.append('action', 'upload_certificate');
     body.append('certificate', JSON.stringify({ nome: form.get('nome') }));
+    body.append('tipo', form.get('tipo') === 'ecnpj' ? 'ecnpj' : 'ecpf');
     body.append('pfx', file, file.name);
     body.append('senha', String(form.get('senha') || ''));
     const result = await invoke(body);
@@ -103,6 +105,7 @@ window.hubCartasAtualizarCertificado = async (event, id) => {
     const body = new FormData();
     body.append('action', 'update_certificate');
     body.append('certificado_id', id);
+    body.append('tipo', form.get('tipo') === 'ecnpj' ? 'ecnpj' : 'ecpf');
     body.append('pfx', file, file.name);
     body.append('senha', String(form.get('senha') || ''));
     const result = await invoke(body);
@@ -112,20 +115,18 @@ window.hubCartasAtualizarCertificado = async (event, id) => {
   busy = false; await load();
 };
 window.hubCartasEditar = id => { if (!has('update')) return; modal = `editar:${id}`; render(); };
-window.hubCartasAssinar = id => { if (!has('sign') || !certs.some(c => c.ativo)) { notice = 'É necessário cadastrar um certificado ativo antes de assinar.'; render(); return; } modal = `assinar:${id}`; render(); };
+window.hubCartasAssinar = id => { if (!has('sign') || !certs.some(c => c.ativo)) { notice = 'É necessário cadastrar um certificado ativo antes de assinar.'; render(); return; } modalError = ''; modal = `assinar:${id}`; render(); };
 window.hubCartasConfirmarAssinatura = async (event, id) => {
   event.preventDefault(); if (busy || !has('sign')) return;
   const fields = new FormData(event.currentTarget); const senha = fields.get('senha'); const certificateId = fields.get('certificado_id');
-  const { data: current, error: currentError } = await supabase.auth.getUser();
-  if (currentError || !current?.user?.email) { notice = 'Não foi possível validar sua conta do Hub.'; modal = ''; render(); return; }
   busy = true; render();
   try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: current.user.email, password: senha });
-    if (authError || authData?.user?.id !== current.user.id) throw new Error('Senha do Hub incorreta.');
+    const { data: current, error: currentError } = await supabase.auth.getUser();
+    if (currentError || !current?.user?.email) throw new Error('Não foi possível validar sua conta do Hub. Atualize a página e entre novamente.');
     if (!docs.some(item => item.id === id)) throw new Error('Carta não encontrada.');
-    await invoke({ action: 'sign_document', documento_id: id, certificado_id: certificateId }, authData.session.access_token);
-    modal = ''; notice = 'Documento assinado digitalmente.';
-  } catch (error) { notice = error.message; }
+    await invoke({ action: 'sign_document', documento_id: id, certificado_id: certificateId, confirmacao_senha: String(senha || '') });
+    modal = ''; modalError = ''; notice = 'Documento assinado digitalmente.';
+  } catch (error) { modalError = error.message || 'Não foi possível concluir a assinatura.'; }
   busy = false; await load();
 };
 window.hubCartasExcluir = async id => {
