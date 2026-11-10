@@ -18,6 +18,11 @@ const reply = (body: Record<string, unknown>, status = 200) => new Response(JSON
 const text = (v: unknown) => String(v ?? "").trim();
 const pdfText = (v: unknown) => String(v ?? "").normalize("NFC").replace(/[^\u0000-\u00FF]/g, " ");
 const decode64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+const readPfx = async (payload: Record<string, unknown>) => {
+  const file = payload.pfx_file;
+  if (file instanceof File) return new Uint8Array(await file.arrayBuffer());
+  return decode64(text(payload.pfx));
+};
 const encode64 = (value: Uint8Array) => {
   let binary = "";
   for (let offset = 0; offset < value.length; offset += 0x8000) binary += String.fromCharCode(...value.subarray(offset, offset + 0x8000));
@@ -126,9 +131,23 @@ Deno.serve(async request => {
   const { data: auth, error: authError } = await userClient.auth.getUser(token);
   if (authError || !auth.user) return reply({ error: "Entre novamente no Hub." }, 401);
   let payload: Record<string, unknown>;
-  try { payload = await request.json(); } catch { return reply({ error: "Solicitação inválida." }, 400); }
+  try {
+    if (request.headers.get("content-type")?.toLowerCase().includes("multipart/form-data")) {
+      const form = await request.formData();
+      const certificateValue = form.get("certificate");
+      payload = {
+        action: form.get("action"),
+        certificate: certificateValue ? JSON.parse(String(certificateValue)) : undefined,
+        certificado_id: form.get("certificado_id"),
+        pfx_file: form.get("pfx"),
+        senha: form.get("senha")
+      };
+    } else {
+      payload = await request.json();
+    }
+  } catch { return reply({ error: "Solicitação inválida." }, 400); }
   const action = text(payload.action);
-  const permission = action === "upload_certificate" ? "manage_certificate" : action === "sign_document" ? "sign" : action === "deactivate_certificate" ? "delete" : "view";
+  const permission = ["upload_certificate", "update_certificate"].includes(action) ? "manage_certificate" : action === "sign_document" ? "sign" : action === "deactivate_certificate" ? "delete" : "view";
   const { data: allowed, error: permissionError } = await userClient.rpc("app_tem_permissao", { p_recurso: "operacoes.cartas", p_acao: permission });
   if (permissionError || allowed !== true) return reply({ error: "Seu perfil não tem permissão para esta ação." }, 403);
 
@@ -137,7 +156,7 @@ Deno.serve(async request => {
   try {
     if (action === "upload_certificate") {
       const certificate = payload.certificate as Record<string, unknown> | undefined;
-      const rawPfx = decode64(text(payload.pfx));
+      const rawPfx = await readPfx(payload);
       const passphrase = String(payload.senha ?? "");
       if (!certificate || rawPfx.length < 100 || rawPfx.length > 5 * 1024 * 1024 || !passphrase || passphrase.length > 512) return reply({ error: "Arquivo PFX ou senha inválidos. O limite do arquivo é 5 MB." }, 400);
       if (!text(certificate.nome) || text(certificate.nome).length > 120) return reply({ error: "Informe um nome de identificação válido para o certificado." }, 400);
@@ -165,6 +184,54 @@ Deno.serve(async request => {
       });
       if (error) { await admin.storage.from("cartas-private").remove([pfxPath, passPath]); return reply({ error: "Falha ao registrar o certificado." }, 500); }
       await log("certificado_importado", { certificado_id: id, tipo: metadata.tipo, fingerprint: metadata.fingerprint });
+      return reply({ ok: true, certificado_id: id, tipo: metadata.tipo });
+    }
+
+    if (action === "update_certificate") {
+      const id = text(payload.certificado_id);
+      const rawPfx = await readPfx(payload);
+      const passphrase = String(payload.senha ?? "");
+      if (!id || rawPfx.length < 100 || rawPfx.length > 5 * 1024 * 1024 || !passphrase || passphrase.length > 512) return reply({ error: "Arquivo PFX ou senha inválidos. O limite do arquivo é 5 MB." }, 400);
+      let metadata: ReturnType<typeof lerCertificado>;
+      try {
+        metadata = lerCertificado(rawPfx, passphrase);
+        if (new Date(metadata.validade_ate).getTime() <= Date.now()) return reply({ error: "O certificado PFX já está vencido." }, 400);
+      } catch { return reply({ error: "Não foi possível validar o PFX. Confira a senha e se o certificado contém CPF ou CNPJ identificável." }, 400); }
+
+      const { data: existing, error: lookupError } = await admin.from("cartas_certificados")
+        .select("id,pfx_path,senha_path")
+        .eq("id", id)
+        .maybeSingle();
+      if (lookupError || !existing) return reply({ error: "Certificado não encontrado para atualização." }, 404);
+
+      const version = crypto.randomUUID();
+      const pfxPath = `certificados/${id}/${version}/arquivo.enc`;
+      const passPath = `certificados/${id}/${version}/senha.enc`;
+      const [encryptedPfx, encryptedPassword] = await Promise.all([encrypt(rawPfx), encrypt(new TextEncoder().encode(passphrase))]);
+      const [pfxUpload, passUpload] = await Promise.all([
+        admin.storage.from("cartas-private").upload(pfxPath, encryptedPfx, { contentType: "application/octet-stream", upsert: false }),
+        admin.storage.from("cartas-private").upload(passPath, encryptedPassword, { contentType: "application/octet-stream", upsert: false })
+      ]);
+      if (pfxUpload.error || passUpload.error) {
+        await admin.storage.from("cartas-private").remove([pfxPath, passPath]);
+        return reply({ error: "Não foi possível guardar o certificado atualizado com segurança." }, 500);
+      }
+
+      const { error: updateError } = await admin.from("cartas_certificados").update({
+        ...metadata,
+        pfx_path: pfxPath,
+        senha_path: passPath,
+        ativo: true,
+        updated_at: new Date().toISOString()
+      }).eq("id", id);
+      if (updateError) {
+        await admin.storage.from("cartas-private").remove([pfxPath, passPath]);
+        return reply({ error: "Não foi possível atualizar os dados do certificado." }, 500);
+      }
+
+      const { error: cleanupError } = await admin.storage.from("cartas-private").remove([existing.pfx_path, existing.senha_path]);
+      if (cleanupError) console.error("cartas-assinatura: não foi possível remover os arquivos anteriores do certificado", id);
+      await log("certificado_atualizado", { certificado_id: id, tipo: metadata.tipo, fingerprint: metadata.fingerprint });
       return reply({ ok: true, certificado_id: id, tipo: metadata.tipo });
     }
 

@@ -17,6 +17,7 @@
 .cartas-actions { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
 .cartas-status { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #854d0e; background: #fef3c7; font-size: .76rem; font-weight: 750; }
 .cartas-status.is-signed { color: #166534; background: #dcfce7; }
+.cartas-status.is-inactive { color: #475569; background: #e2e8f0; }
 .cartas-empty, .cartas-empty-small { padding: 28px 16px; color: var(--text-muted, #64748b); text-align: center; }
 .cartas-empty-small { padding: 14px; border: 1px dashed rgba(148, 163, 184, .4); border-radius: 12px; }
 .cartas-notice { padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--cor-principal, #3157d5) 20%, transparent); border-radius: 12px; color: var(--text-strong, #0f172a); background: color-mix(in srgb, var(--cor-principal, #3157d5) 7%, transparent); }
