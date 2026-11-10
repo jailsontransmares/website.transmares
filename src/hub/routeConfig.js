@@ -44,7 +44,7 @@ export const HUB_SPECIAL_ROUTES = Object.freeze({
   'operacoes-corretora': 'operacoes/corretora'
 });
 
-export function obterBaseHub(pathname = '/') {
+export function obterBaseHub(pathname = (typeof window !== 'undefined' ? window.location.pathname : '/')) {
   return pathname === '/hub' || pathname.startsWith('/hub/') ? '/hub' : '';
 }
 
