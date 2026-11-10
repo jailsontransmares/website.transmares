@@ -11645,7 +11645,7 @@ function renderEmitirReciboAr() {
         <div class="ar-validacoes-toolbar-actions">
           <div class="ar-validacoes-header-actions">
             <button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr('consultar')">Recibos Emitidos</button>
-            ${pode('painel_ar.validacoes', 'importar') ? '<button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr(\'importacao\')">Importar recibos</button>' : ''}
+            ${pode('painel_ar.validacoes', 'importar') ? '<button class="secondary-btn" type="button" onclick="selecionarSubabaValidacoesAr(\'importacao\')">Importar planilha</button>' : ''}
             ${pode('painel_ar.validacoes', 'importar') ? '<button class="secondary-btn ar-validacoes-action-with-icon" type="button" onclick="abrirModalLancamentoManualValidacoesAr()"><i data-lucide="plus" aria-hidden="true"></i><span>Lançamento</span></button>' : ''}
             <button class="secondary-btn ar-validacoes-action-with-icon ar-validacoes-tax-action" type="button" onclick="abrirConfiguracaoImpostosValidacoesAr()" aria-label="Configurar impostos do recibo" title="Configurar impostos do recibo"><i data-lucide="settings" aria-hidden="true"></i><span class="ar-validacoes-action-copy"><strong>Impostos</strong></span></button>
           </div>
