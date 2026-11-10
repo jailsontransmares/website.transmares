@@ -4,6 +4,7 @@ const MODULE_RESOURCE_MAP = {
   'links-gestao': 'links_gestao',
   'central-senhas': 'central_senhas',
   'painel-ar': 'painel_ar',
+  'operacoes-cartas': 'operacoes.cartas',
   administracao: 'admin',
   admin: 'admin',
   'admin-usuarios': 'admin.usuarios',

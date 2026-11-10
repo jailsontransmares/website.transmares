@@ -26,6 +26,7 @@ export const HOME_SUBMODULES = [
   { key: 'operacoes.corretora.visao_geral', parent: 'operacoes-corretora', label: 'Visão geral', route: '/operacoes/corretora' },
   { key: 'operacoes.corretora.consultoria_360', parent: 'operacoes-corretora', label: 'Consultoria 360°', route: '/operacoes/corretora/consultoria-360', permission: 'consultoria_360' },
   { key: 'operacoes.corretora.simulador_saude', parent: 'operacoes', label: 'Simulador - Saúde', route: '/operacoes/corretora/simulador-saude', permission: 'simulador_saude' },
+  { key: 'operacoes.cartas', parent: 'operacoes', label: 'Cartas', route: '/operacoes/cartas', permission: 'operacoes.cartas' },
   { key: 'simulador_saude.catalogo', parent: 'operacoes', group: 'operacoes.corretora.simulador_saude', label: 'Catálogo de Planos e Preços', route: '/operacoes/corretora/simulador-saude/catalogo', permission: 'simulador_saude.catalogo' },
 
   { key: 'financeiro.dashboard', parent: 'financeiro', label: 'Dashboard', route: '/financeiro/dashboard', permission: 'financeiro.dashboard' },

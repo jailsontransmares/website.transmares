@@ -66,6 +66,15 @@ export const HUB_MENU_TREE = [
         status: 'active'
       },
       {
+        id: 'operacoes-cartas',
+        label: 'Cartas',
+        type: 'route',
+        route: '/operacoes/cartas',
+        moduleId: 'operacoes-cartas',
+        permission: { resource: 'operacoes.cartas', action: 'view' },
+        status: 'active'
+      },
+      {
         id: 'operacoes-corretora',
         label: 'Corretora',
         type: 'group',

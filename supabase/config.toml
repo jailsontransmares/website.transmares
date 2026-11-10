@@ -16,6 +16,9 @@ verify_jwt = false
 [functions.rh-export]
 verify_jwt = true
 
+[functions.cartas-assinatura]
+verify_jwt = true
+
 [functions.cnpj-lookup]
 verify_jwt = true
 

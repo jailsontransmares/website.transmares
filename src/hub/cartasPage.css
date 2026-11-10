@@ -1,0 +1,35 @@
+.cartas-hub-page .admin-panel-header { align-items: flex-start; gap: 18px; }
+.cartas-page { display: grid; gap: 24px; padding: clamp(18px, 2.4vw, 30px); }
+.cartas-toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+.cartas-certificates, .cartas-list { display: grid; gap: 12px; }
+.cartas-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cartas-page h3 { margin: 0; font-size: 1rem; color: var(--text-strong, #0f172a); }
+.cartas-section-head p, .cartas-cert-card small, .cartas-table small { display: block; margin: 5px 0 0; color: var(--text-muted, #64748b); font-size: .82rem; }
+.cartas-cert-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid rgba(148, 163, 184, .22); border-radius: 14px; background: var(--surface, rgba(255,255,255,.72)); }
+.cartas-cert-card > div { flex: 1; min-width: 0; }
+.cartas-cert-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #15803d; background: #dcfce7; font-weight: 800; }
+.cartas-table-wrap { overflow-x: auto; border: 1px solid rgba(148, 163, 184, .22); border-radius: 14px; }
+.cartas-table { width: 100%; border-collapse: collapse; min-width: 700px; }
+.cartas-table th, .cartas-table td { padding: 13px 15px; text-align: left; border-bottom: 1px solid rgba(148, 163, 184, .15); vertical-align: middle; }
+.cartas-table th { color: var(--text-muted, #64748b); background: rgba(148, 163, 184, .08); font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; }
+.cartas-table tr:last-child td { border-bottom: 0; }
+.cartas-table td:first-child { min-width: 210px; }
+.cartas-actions { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.cartas-status { display: inline-flex; padding: 5px 9px; border-radius: 999px; color: #854d0e; background: #fef3c7; font-size: .76rem; font-weight: 750; }
+.cartas-status.is-signed { color: #166534; background: #dcfce7; }
+.cartas-empty, .cartas-empty-small { padding: 28px 16px; color: var(--text-muted, #64748b); text-align: center; }
+.cartas-empty-small { padding: 14px; border: 1px dashed rgba(148, 163, 184, .4); border-radius: 12px; }
+.cartas-notice { padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--cor-principal, #3157d5) 20%, transparent); border-radius: 12px; color: var(--text-strong, #0f172a); background: color-mix(in srgb, var(--cor-principal, #3157d5) 7%, transparent); }
+.cartas-overlay { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 18px; background: rgba(15, 23, 42, .56); backdrop-filter: blur(4px); }
+.cartas-dialog { display: grid; gap: 15px; width: min(100%, 650px); max-height: min(90dvh, 850px); overflow: auto; padding: 24px; border: 1px solid rgba(148, 163, 184, .24); border-radius: 18px; color: var(--text-strong, #0f172a); background: var(--surface, #fff); box-shadow: 0 24px 70px rgba(15, 23, 42, .28); }
+.cartas-confirm-dialog { width: min(100%, 480px); }
+.cartas-dialog header, .cartas-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cartas-dialog header h2 { margin: 5px 0 0; font-size: 1.25rem; }
+.cartas-dialog label { display: grid; gap: 6px; font-size: .86rem; font-weight: 700; }
+.cartas-dialog input, .cartas-dialog select, .cartas-dialog textarea { width: 100%; padding: 10px 12px; border: 1px solid rgba(148, 163, 184, .42); border-radius: 10px; color: inherit; background: transparent; font: inherit; }
+.cartas-dialog textarea { resize: vertical; }
+.cartas-security-note { margin: 0; color: var(--text-muted, #64748b); font-size: .8rem; line-height: 1.5; }
+.cartas-dialog footer { justify-content: flex-end; padding-top: 5px; }
+body.dark .cartas-cert-card, body.dark .cartas-dialog { background: var(--surface, #101827); }
+body.dark .cartas-table th { background: rgba(148, 163, 184, .1); }
+@media (max-width: 720px) { .cartas-hub-page .admin-panel-header { flex-direction: column; } .cartas-toolbar { width: 100%; } .cartas-dialog { padding: 18px; } .cartas-cert-card { align-items: flex-start; flex-wrap: wrap; } }
