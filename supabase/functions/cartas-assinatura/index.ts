@@ -16,7 +16,13 @@ const reply = (body: Record<string, unknown>, status = 200) => new Response(JSON
   status, headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "no-store" }
 });
 const text = (v: unknown) => String(v ?? "").trim();
-const pdfText = (v: unknown) => String(v ?? "").normalize("NFC").replace(/[^\u0000-\u00FF]/g, " ");
+const htmlText = (value: unknown) => String(value ?? "")
+  .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+  .replace(/<\/(?:p|div|li|footer|hr)\s*>/gi, "\n")
+  .replace(/<li\b[^>]*>/gi, "• ")
+  .replace(/<[^>]*>/g, "")
+  .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+  .replace(/&quot;/gi, '"').replace(/&#0*39;/gi, "'").replace(/&#x([\da-f]+);/gi, (_match, code) => String.fromCodePoint(parseInt(code, 16)));
 const decode64 = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 const readPfx = async (payload: Record<string, unknown>) => {
   const file = payload.pfx_file;
@@ -133,26 +139,73 @@ async function gerarPdfCarta(document: Record<string, unknown>) {
   let page = pdf.addPage([595.28, 841.89]);
   let y = 760;
   const nextPage = () => { page = pdf.addPage([595.28, 841.89]); y = 770; };
-  const write = (value: string, size = 12, face = font) => {
-    const words = String(value || "").split(/\s+/);
-    let line = "";
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (line && face.widthOfTextAtSize(candidate, size) > 480) {
+  const writeRich = (value: string) => {
+    const stack: Array<{ bold: boolean; size: number; color: ReturnType<typeof rgb> }> = [{ bold: false, size: 12, color }];
+    let x = margin;
+    let lineHeight = 18;
+    const finishLine = () => { if (x > margin) y -= lineHeight; x = margin; lineHeight = 18; };
+    const drawWords = (raw: string) => {
+      const decoded = htmlText(raw).replace(/\s+/g, " ");
+      for (const word of decoded.split(" ").filter(Boolean)) {
+        const style = stack[stack.length - 1];
+        const face = style.bold ? bold : font;
+        const size = style.size;
+        const candidate = `${x > margin ? " " : ""}${word}`;
+        const width = face.widthOfTextAtSize(candidate, size);
+        if (x > margin && x + width > 537) finishLine();
         if (y < 70) nextPage();
-        page.drawText(line, { x: margin, y, size, font: face, color }); y -= size * 1.55;
-        line = word;
-      } else line = candidate;
+        const prefix = x > margin ? " " : "";
+        page.drawText(`${prefix}${word}`, { x, y, size, font: face, color: style.color });
+        x += face.widthOfTextAtSize(`${prefix}${word}`, size);
+        lineHeight = Math.max(lineHeight, size * 1.55);
+      }
+    };
+    for (const token of value.match(/<[^>]*>|[^<]+/g) || []) {
+      if (!token.startsWith("<")) { drawWords(token); continue; }
+      const tag = token.match(/^<\s*(\/?)\s*([a-z0-9]+)/i);
+      if (!tag) continue;
+      const closing = Boolean(tag[1]);
+      const name = tag[2].toLowerCase();
+      if (closing) {
+        if (["p", "div", "li", "footer", "hr"].includes(name)) finishLine();
+        if (stack.length > 1) stack.pop();
+        continue;
+      }
+      if (["br", "hr"].includes(name)) { finishLine(); continue; }
+      const current = stack[stack.length - 1];
+      const next = { ...current, bold: current.bold || ["strong", "b"].includes(name) };
+      const size = token.match(/font-size\s*:\s*(\d+(?:\.\d+)?)\s*(px|pt|em)/i);
+      if (size) next.size = Math.max(8, Math.min(24, Number(size[1]) * (size[2].toLowerCase() === "px" ? 0.75 : size[2].toLowerCase() === "em" ? 12 : 1)));
+      const fontSize = token.match(/\bsize=["']?([1-7])/i);
+      if (fontSize) next.size = [8, 9, 10, 12, 14, 18, 22][Number(fontSize[1]) - 1];
+      const hex = token.match(/(?:color\s*:\s*|\bcolor=["']?)(#[\da-f]{6})/i)?.[1];
+      if (hex) next.color = rgb(parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255);
+      stack.push(next);
     }
-    if (line) {
-      if (y < 70) nextPage();
-      page.drawText(line, { x: margin, y, size, font: face, color }); y -= size * 1.55;
-    }
+    finishLine();
   };
-  write(pdfText(document.titulo), 18, bold); y -= 16;
-  write(`Para: ${pdfText(document.destinatario)}`, 12, bold);
-  write(`Assunto: ${pdfText(document.assunto)}`, 12, bold); y -= 18;
-  for (const paragraph of pdfText(document.corpo).split(/\n+/)) { write(paragraph); y -= 8; }
+  const html = String(document.corpo ?? "");
+  const logoUrl = html.match(/<img\b[^>]*\bsrc=["'](https:\/\/[^"']+)["']/i)?.[1];
+  if (logoUrl) {
+    try {
+      const requested = new URL(logoUrl);
+      const configured = new URL(text(Deno.env.get("SUPABASE_URL")));
+      if (requested.origin === configured.origin) {
+        const response = await fetch(requested, { signal: AbortSignal.timeout(5000) });
+        const contentType = response.headers.get("content-type") || "";
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (response.ok && bytes.length <= 2 * 1024 * 1024) {
+          const image = contentType.includes("png") ? await pdf.embedPng(bytes) : contentType.includes("jpeg") || contentType.includes("jpg") ? await pdf.embedJpg(bytes) : null;
+          if (image) {
+            const scale = Math.min(190 / image.width, 70 / image.height, 1);
+            page.drawImage(image, { x: (595.28 - image.width * scale) / 2, y: 765, width: image.width * scale, height: image.height * scale });
+            y = 735;
+          }
+        }
+      }
+    } catch { /* Logo indisponível: a carta segue com o texto e os dados da corretora. */ }
+  }
+  writeRich(html.replace(/<img\b[^>]*>/gi, ""));
   if (y < 56) nextPage(); else y -= 18;
   page.drawText(`Emitido em ${new Date().toLocaleDateString("pt-BR")}`, { x: margin, y, size: 10, font, color: rgb(0.4, 0.44, 0.5) });
   return new Uint8Array(await pdf.save({ useObjectStreams: false }));

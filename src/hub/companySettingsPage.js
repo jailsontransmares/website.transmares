@@ -643,6 +643,7 @@ function renderFormulario() {
           <div class="company-settings-grid company-settings-grid-identification">
             ${campo('cc_razao_social', 'Razão social', r.razao_social)}
             ${campo('cc_nome_fantasia', 'Nome fantasia', r.nome_fantasia)}
+            ${campo('cc_slogan', 'Slogan', r.slogan)}
             ${campo('cc_cnpj', 'CNPJ', r.cnpj)}
             ${campo('cc_susep', 'SUSEP', r.susep)}
             ${campo('cc_inscricao_estadual', 'Inscrição estadual', r.inscricao_estadual)}
@@ -837,6 +838,7 @@ async function salvarCorretora() {
     const payload = {
       razao_social: obterValor('cc_razao_social').trim() || null,
       nome_fantasia: obterValor('cc_nome_fantasia').trim() || null,
+      slogan: obterValor('cc_slogan').trim() || null,
       cnpj: obterValor('cc_cnpj').trim() || null,
       inscricao_estadual: obterValor('cc_inscricao_estadual').trim() || null,
       inscricao_municipal: obterValor('cc_inscricao_municipal').trim() || null,
