@@ -82,7 +82,7 @@ Deno.serve(async (request) => {
     admin.from("rh_documentos_cadastrais").select("*").eq("colaborador_id", collaboratorId).maybeSingle(),
     admin.from("rh_vinculos_profissionais").select("*").eq("colaborador_id", collaboratorId).maybeSingle(),
     admin.from("rh_dependentes").select("*").eq("colaborador_id", collaboratorId).order("nome_completo"),
-    admin.from("rh_beneficios_colaboradores").select("*").eq("colaborador_id", collaboratorId).order("nome"),
+    admin.from("rh_beneficios_colaboradores").select("*").eq("colaborador_id", collaboratorId).neq("status", "encerrado").order("nome"),
     admin.from("rh_dados_bancarios_colaboradores").select("*").eq("colaborador_id", collaboratorId).maybeSingle(),
     admin.from("rh_movimentacoes_colaboradores").select("*").eq("colaborador_id", collaboratorId).order("data_efetivacao", { ascending: false }),
     admin.from("rh_checklist_admissional").select("*").eq("colaborador_id", collaboratorId).order("item_chave"),

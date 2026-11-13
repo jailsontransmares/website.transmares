@@ -2010,10 +2010,10 @@ export function criarRhDpController({
       .join('');
   }
 
-  function renderGrupoFichaPdf(titulo, registros, camposOcultos = []) {
+  function renderGrupoFichaPdf(titulo, registros, camposOcultos = [], classe = '') {
     const itens = (Array.isArray(registros) ? registros : registros ? [registros] : [])
       .map(registro => renderCamposFichaPdf(registro, camposOcultos)).filter(Boolean);
-    return `<section><h2>${escapeHtml(titulo)}</h2>${itens.length ? itens.map(campos => `<div class="record"><div class="fields">${campos}</div></div>`).join('') : '<p class="empty">Nenhum registro informado.</p>'}</section>`;
+    return `<section${classe ? ` class="${escapeAttr(classe)}"` : ''}><h2>${escapeHtml(titulo)}</h2>${itens.length ? itens.map(campos => `<div class="record"><div class="fields">${campos}</div></div>`).join('') : '<p class="empty">Nenhum registro informado.</p>'}</section>`;
   }
 
   function criarDocumentoFichaPdf(ficha, versao) {
@@ -2026,10 +2026,10 @@ export function criarRhDpController({
       ['Documentos cadastrais', ficha.documentos, camposTecnicosCadastro],
       ['Vínculo profissional', vinculo, camposTecnicosCadastro],
       ['Dependentes', ficha.dependentes, camposTecnicosCadastro],
-      ['Benefícios', ficha.beneficios],
-      ['Dados bancários', ficha.bancarios],
-      ['Movimentações e alterações', ficha.movimentacoes],
-      ['Férias', ficha.ferias, camposTecnicosCadastro],
+      ['Benefícios', ficha.beneficios, camposTecnicosCadastro],
+      ['Dados bancários', ficha.bancarios, camposTecnicosCadastro],
+      ['Movimentações e alterações', ficha.movimentacoes, camposTecnicosCadastro],
+      ['Férias', ficha.ferias, camposTecnicosCadastro, 'section-ferias-pdf'],
       ['Afastamentos', ficha.afastamentos, camposTecnicosCadastro],
       ['Ocorrências', ficha.ocorrencias, camposTecnicosCadastro],
       ['Desligamentos', ficha.desligamentos, camposTecnicosCadastro]
@@ -2053,7 +2053,7 @@ export function criarRhDpController({
     ];
     const titulo = completa ? 'FICHA CADASTRAL COMPLETA DO COLABORADOR' : 'FICHA FUNCIONAL SIMPLIFICADA';
     const dataEmissao = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' }).format(new Date());
-    const conteudo = grupos.map(([nome, registros, camposOcultos]) => renderGrupoFichaPdf(nome, registros, camposOcultos)).join('');
+    const conteudo = grupos.map(([nome, registros, camposOcultos, classe]) => renderGrupoFichaPdf(nome, registros, camposOcultos, classe)).join('');
     const metadadosCabecalho = completa
       ? `<div class="meta"><b>Status</b><span>${escapeHtml(valorFichaPdf(colaborador.status) || '—')}</span><small>Emitida em ${escapeHtml(dataEmissao)}</small></div>`
       : `<div class="meta"><b>Matrícula / eSocial</b><span>${escapeHtml(valorFichaPdf(colaborador.codigo) || '—')}</span></div><div class="meta"><b>Status</b><span>${escapeHtml(valorFichaPdf(colaborador.status) || '—')}</span><small>Emitida em ${escapeHtml(dataEmissao)}</small></div>`;
@@ -2082,6 +2082,10 @@ export function criarRhDpController({
       .field{min-width:0;min-height:8mm;padding:3px 6px;border-right:1px solid rgba(15,23,42,.12);border-bottom:1px solid rgba(15,23,42,.12);overflow-wrap:anywhere;break-inside:avoid}
       .field b{display:block;color:#64748B;font-size:6.5px;letter-spacing:.15px;text-transform:uppercase;margin-bottom:3px}
       .field span{display:block;font-size:8.5px;min-height:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+      .section-ferias-pdf .fields{grid-template-columns:repeat(12,minmax(0,1fr))}
+      .section-ferias-pdf .field{min-height:0;padding:2px 3px}
+      .section-ferias-pdf .field b{font-size:5px;letter-spacing:0;margin-bottom:2px}
+      .section-ferias-pdf .field span{font-size:6.5px;min-height:0}
       .empty{margin:5px 7px;padding:4px 0;color:#64748B;font-size:8px;font-style:italic}
       .footer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-left:1px solid rgba(15,23,42,.12)}
       .footer .field{min-height:25px}
