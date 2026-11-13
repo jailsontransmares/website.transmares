@@ -13630,6 +13630,65 @@ body.dark .rh-modal-backdrop {
   font-size: 12px;
 }
 
+.rh-operational-record-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rh-vacation-record {
+  min-width: 0;
+}
+
+.rh-operational-record > .rh-vacation-record-main {
+  align-items: center;
+  display: grid !important;
+  flex: 1;
+  gap: 10px;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(210px, 1.4fr) max-content max-content minmax(160px, 1.8fr);
+}
+
+.rh-operational-record > .rh-vacation-record-main.has-collaborator {
+  grid-template-columns: minmax(130px, 1fr) minmax(145px, 1.1fr) minmax(210px, 1.4fr) max-content max-content minmax(150px, 1.6fr);
+}
+
+.rh-operational-record > .rh-vacation-record-main > span {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rh-operational-record > .rh-vacation-record-main > span > b {
+  color: var(--texto-suave);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rh-vacation-gozo {
+  gap: 4px 8px !important;
+}
+
+.rh-vacation-planned {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.rh-vacation-planned input,
+.rh-vacation-planned-field input {
+  accent-color: var(--primary, #294895);
+  margin: 0;
+}
+
+.rh-vacation-observations {
+  overflow-wrap: anywhere;
+}
+
 .rh-operational-more {
   color: var(--texto-suave);
   font-size: 11px;
@@ -13651,6 +13710,11 @@ body.dark .rh-modal-backdrop {
 }
 
 @media (max-width: 900px) {
+  .rh-operational-record > .rh-vacation-record-main,
+  .rh-operational-record > .rh-vacation-record-main.has-collaborator {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .rh-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
