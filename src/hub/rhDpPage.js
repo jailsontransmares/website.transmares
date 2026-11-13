@@ -2029,10 +2029,10 @@ export function criarRhDpController({
       ['Benefícios', ficha.beneficios],
       ['Dados bancários', ficha.bancarios],
       ['Movimentações e alterações', ficha.movimentacoes],
-      ['Férias', ficha.ferias],
-      ['Afastamentos', ficha.afastamentos],
-      ['Ocorrências', ficha.ocorrencias],
-      ['Desligamentos', ficha.desligamentos]
+      ['Férias', ficha.ferias, camposTecnicosCadastro],
+      ['Afastamentos', ficha.afastamentos, camposTecnicosCadastro],
+      ['Ocorrências', ficha.ocorrencias, camposTecnicosCadastro],
+      ['Desligamentos', ficha.desligamentos, camposTecnicosCadastro]
     ] : [
       ['Identificação funcional', {
         codigo: colaborador.codigo,
